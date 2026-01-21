@@ -16,6 +16,12 @@ Some documentation content scraped from the DSPy website may lag behind current 
 1. prefer checking `../dspy` source, and
 2. use `asks.sh` to quickly locate relevant concepts/examples.
 
+This repo also includes a checkout of **Jido** at:
+
+- `../jido`
+
+Important: `dspy.ex` work that integrates with Jido should target the **Jido v2** line (currently published as a pre-release on Hex at `https://hex.pm/packages/jido/2.0.0-rc.1`), which corresponds to the **main branch** of `https://github.com/agentjido/jido`. The `v1.x` branch is the stable line but expected to be deprecated soon.
+
 ## Usage
 
 ### List available topics

@@ -12,6 +12,10 @@
 - **Jido** is a **runtime + orchestration framework** (state, supervision, side effects, messaging).
 - **dspy.ex** is a **prompt/program composition + optimization framework** (signatures, modules, teleprompters).
 
+### Status / Versioning Note (Jido)
+
+This document assumes **Jido v2** (currently published as `2.0.0-rc.1` on Hex: `https://hex.pm/packages/jido/2.0.0-rc.1`), which matches the **main branch** of `https://github.com/agentjido/jido`. The `v1.x` branch is the stable line but expected to be deprecated soon. This repo’s local checkout at `../jido` is the main branch.
+
 ### Diagram: High-Level Overlap
 
 ![Overlap Diagram](./overlap.svg)
