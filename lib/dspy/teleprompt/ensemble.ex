@@ -184,7 +184,10 @@ defmodule Dspy.Teleprompt.Ensemble do
           end
 
           train_single_member(base_type, program, config)
-        end, max_concurrency: num_threads, timeout: 300_000)
+        end,
+        max_concurrency: num_threads,
+        timeout: 300_000
+      )
       |> Enum.map(fn {:ok, result} -> result end)
       |> Enum.filter(fn
         {:ok, _member} -> true

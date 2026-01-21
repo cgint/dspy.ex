@@ -196,7 +196,10 @@ defmodule Dspy.Teleprompt.BootstrapFewShot do
       |> Task.async_stream(
         fn chunk ->
           bootstrap_chunk(teacher, chunk, metric, max_errors)
-        end, max_concurrency: num_threads, timeout: 30_000)
+        end,
+        max_concurrency: num_threads,
+        timeout: 30_000
+      )
       |> Enum.flat_map(fn {:ok, chunk_results} -> chunk_results end)
       |> Enum.filter(fn {_example, score} -> score > 0 end)
 
@@ -369,7 +372,10 @@ defmodule Dspy.Teleprompt.BootstrapFewShot do
             Evaluate.evaluate(candidate, validation_set, metric, num_threads: 1, progress: false)
 
           {candidate, result}
-        end, max_concurrency: num_threads, timeout: 60_000)
+        end,
+        max_concurrency: num_threads,
+        timeout: 60_000
+      )
       |> Enum.map(fn {:ok, result} -> result end)
 
     # Select best performing candidate

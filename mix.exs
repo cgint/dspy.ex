@@ -32,7 +32,10 @@ defmodule Dspy.MixProject do
       {:phoenix_pubsub, "~> 2.1"},
       {:plug_cowboy, "~> 2.7"},
       {:gen_stage, "~> 1.2"},
-      {:httpoison, "~> 2.2"}
+      {:httpoison, "~> 2.2"},
+
+      # LLM provider access (unified client; no provider maintenance in `dspy.ex`)
+      {:req_llm, "~> 1.3"}
     ]
   end
 end

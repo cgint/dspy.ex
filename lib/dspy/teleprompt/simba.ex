@@ -260,7 +260,10 @@ defmodule Dspy.Teleprompt.SIMBA do
       |> Task.async_stream(
         fn example ->
           generate_single_trajectory(program, example, trajectory_length, teleprompt.metric)
-        end, max_concurrency: num_threads, timeout: 30_000)
+        end,
+        max_concurrency: num_threads,
+        timeout: 30_000
+      )
       |> Enum.map(fn {:ok, trajectory} -> trajectory end)
       |> Enum.filter(&(&1 != nil))
 
@@ -738,7 +741,10 @@ defmodule Dspy.Teleprompt.SIMBA do
       fn candidate ->
         result = Evaluate.evaluate(candidate, eval_batch, metric, progress: false)
         {candidate, result.mean}
-      end, max_concurrency: num_threads, timeout: 60_000)
+      end,
+      max_concurrency: num_threads,
+      timeout: 60_000
+    )
     |> Enum.map(fn {:ok, result} -> result end)
   end
 

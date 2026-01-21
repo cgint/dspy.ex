@@ -21,7 +21,8 @@ Execution checklist (iterate/commit-friendly):
 - [x] Run `./precommit.sh` cleanly (passes; see notes below)
 - [x] Add/extend tests for “LM call shape” (prompt+opts → request-map normalization)
 - [x] Create a “tooling/health unblock” checkpoint commit
-- [ ] Introduce `req_llm` adapter (`Dspy.LM.ReqLLM`) + migrate call sites to request maps
+- [x] Introduce `req_llm` adapter (`Dspy.LM.ReqLLM`) + tests
+- [ ] Migrate LM call sites to request maps (stop using prompt+opts internally)
 - [ ] Revisit repo shape: relocate/gate `lib/dspy_web/*` + GenStage “godmode” modules into separate package/app
 
 Success criteria:
@@ -65,3 +66,4 @@ Notes:
 - **2026-01-21**: Unblocked compilation by adding missing deps/config for in-tree web modules; established “req_llm for providers, Jido v2 optional later”; added checklist to support small iterative commits.
 - **2026-01-21**: Made `mix compile --warnings-as-errors` + `./precommit.sh` pass; added a regression test for `Dspy.LM.generate/3` request-map normalization.
 - **2026-01-21**: Checkpointed current repo health so we can iterate in smaller, test-driven commits.
+- **2026-01-21**: Added `Dspy.LM.ReqLLM` adapter and tests; resolved `mix.lock` conflict by removing a stale locked `req` version so `req_llm` could resolve.

@@ -279,7 +279,10 @@ defmodule Dspy.Teleprompt.MIPROv2 do
             {:error, _} ->
               nil
           end
-        end, max_concurrency: num_threads, timeout: 30_000)
+        end,
+        max_concurrency: num_threads,
+        timeout: 30_000
+      )
       |> Enum.map(fn {:ok, result} -> result end)
       |> Enum.filter(&(&1 != nil))
       |> Enum.filter(fn {_example, score} -> is_number(score) and score > 0 end)

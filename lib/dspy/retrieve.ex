@@ -440,7 +440,9 @@ defmodule Dspy.Retrieve do
         documents,
         fn doc ->
           process_single_document(doc, embedding_provider, chunk_size, overlap)
-        end, max_concurrency: 4)
+        end,
+        max_concurrency: 4
+      )
       |> Enum.to_list()
       |> Enum.flat_map(fn
         {:ok, chunks} -> chunks

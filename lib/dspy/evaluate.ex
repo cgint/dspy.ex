@@ -81,7 +81,10 @@ defmodule Dspy.Evaluate do
       |> Task.async_stream(
         fn chunk ->
           evaluate_chunk(program, chunk, metric_fn, show_progress)
-        end, max_concurrency: num_threads, timeout: :infinity)
+        end,
+        max_concurrency: num_threads,
+        timeout: :infinity
+      )
       |> Enum.flat_map(fn {:ok, chunk_results} -> chunk_results end)
 
     # Separate scores and predictions
