@@ -1,6 +1,19 @@
+# Instructions
+
+Read `INSTRUCTIONS.md` in this directory for the instructions.
+
+
 # Status
 
 Goal: Keep `dspy.ex` docs aligned with the Jido ecosystem reality (v2 on main branch; v1.x stable but headed toward deprecation) and converge on a maintainable foundation: **`req_llm` for provider access**, **optional Jido v2 for orchestration**.
+
+Current health:
+- `mix test` passes, but only after adding missing dependencies needed by in-tree modules:
+  - Phoenix/LiveView stack for `lib/dspy_web/*`
+  - `GenStage` for coordination modules
+  - `HTTPoison` for existing HTTP usage
+- Added minimal `config/config.exs` defaults with `server: false` so the endpoint can boot without serving HTTP.
+- This is a **temporary “unblock compilation”** move; we still intend `dspy.ex` to be library-first and may relocate/gate web concerns later.
 
 Success criteria:
 - Docs in `docs/` clearly state that Jido integration targets **Jido v2** (`2.0.0-rc.1` on Hex) and that `../jido` is the main-branch checkout.
@@ -28,3 +41,9 @@ Verification run:
 - `git status --porcelain`
 - `git diff --stat`
 - `rg -n "req_llm|ReqLLM|Jido v2|2.0.0-rc.1|../jido|v1.x" docs/*.md`
+- `mix deps.get`
+- `mix test`
+
+## Log
+
+- **2026-01-21**: Initialized `docs/INSTRUCTIONS.md` with guidelines on maintaining documentation. Added `Log` section to `docs/STATUS.md` to track project evolution.
