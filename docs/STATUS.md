@@ -59,7 +59,7 @@ Verification run:
 
 Notes:
 - `./precommit.sh` currently warns about `mix.lock` containing unused deps (leftover lock entries) and `assets.deploy` task not existing; both are non-blocking.
-- The precommit TODO/FIXME scan flags `lib/dspy/teleprompt/mipro_v2.ex` because it contains the literal strings `"TODO"`/`"FIXME"` as part of input validation; this is also non-blocking.
+- `./precommit.sh` now only flags TODO/FIXME/XXX when they appear in comments (avoids false positives from literal strings).
 
 ## Log
 
@@ -70,3 +70,4 @@ Notes:
 - **2026-01-21**: Added `Dspy.LM.ReqLLM` adapter and tests; resolved `mix.lock` conflict by removing a stale locked `req` version so `req_llm` could resolve.
 - **2026-01-21**: Repaired legacy call sites by making `Dspy.LM.generate/3` return text (and added coverage).
 - **2026-01-21**: Migrated remaining internal LM call sites (`Dspy.Tools`, `Dspy.Retrieve`) to use request maps + `Dspy.LM.text_from_response/1`; added focused unit tests; `./precommit.sh` remains green.
+- **2026-01-21**: Tightened `./precommit.sh` checks to reduce noise: skip asset compilation when `assets.deploy` task is unavailable and only scan TODO/FIXME/XXX in comments.

@@ -187,10 +187,14 @@ if [ -f "assets/package.json" ]; then
     print_success "Assets compiled"
 else
     # Phoenix 1.7+ style
-    if ! mix assets.deploy; then
-        print_warning "Asset compilation had issues"
+    if mix help assets.deploy >/dev/null 2>&1; then
+        if ! mix assets.deploy; then
+            print_warning "Asset compilation had issues"
+        else
+            print_success "Assets compiled"
+        fi
     else
-        print_success "Assets compiled"
+        print_warning "assets.deploy not available, skipping asset compilation"
     fi
 fi
 
@@ -230,10 +234,10 @@ fi
 
 # 13. Check for TODO/FIXME comments
 print_status "Checking for TODO/FIXME comments..."
-TODO_COUNT=$(grep -r "TODO\|FIXME" lib test --exclude-dir=deps --exclude-dir=_build | wc -l)
+TODO_COUNT=$(grep -RInE "^[[:space:]]*#\\s*(TODO|FIXME|XXX)" lib test --exclude-dir=deps --exclude-dir=_build | wc -l)
 if [ "$TODO_COUNT" -gt 0 ]; then
     print_warning "Found $TODO_COUNT TODO/FIXME comments"
-    grep -r "TODO\|FIXME" lib test --exclude-dir=deps --exclude-dir=_build
+    grep -RInE "^[[:space:]]*#\\s*(TODO|FIXME|XXX)" lib test --exclude-dir=deps --exclude-dir=_build
 else
     print_success "No TODO/FIXME comments found"
 fi
