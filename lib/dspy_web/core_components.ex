@@ -9,7 +9,7 @@ defmodule DspyWeb.CoreComponents do
   @doc """
   Flash group component for displaying notifications.
   """
-  attr :flash, :map, required: true
+  attr(:flash, :map, required: true)
 
   def flash_group(assigns) do
     ~H"""
@@ -23,9 +23,9 @@ defmodule DspyWeb.CoreComponents do
   @doc """
   Flash message component.
   """
-  attr :flash, :map, required: true
-  attr :kind, :atom, values: [:info, :error], required: true
-  attr :title, :string, required: true
+  attr(:flash, :map, required: true)
+  attr(:kind, :atom, values: [:info, :error], required: true)
+  attr(:title, :string, required: true)
 
   def flash(%{kind: :info} = assigns) do
     ~H"""
@@ -72,8 +72,8 @@ defmodule DspyWeb.CoreComponents do
   @doc """
   Renders a custom title for the page with suffix support.
   """
-  attr :suffix, :string, default: ""
-  slot :inner_block, required: true
+  attr(:suffix, :string, default: "")
+  slot(:inner_block, required: true)
 
   def custom_live_title(assigns) do
     ~H"""

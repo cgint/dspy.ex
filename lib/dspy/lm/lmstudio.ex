@@ -1,13 +1,13 @@
 defmodule Dspy.LM.LMStudio do
   @moduledoc """
   LMStudio language model client with streaming and structured output support.
-  
+
   Integrates with LM Studio's local model server to provide streaming completions
   with JSON schema-based structured outputs.
   """
 
   @behaviour Dspy.LM
-  
+
   require Logger
 
   defstruct [
@@ -44,7 +44,7 @@ defmodule Dspy.LM.LMStudio do
   @impl true
   def generate(client, request) do
     messages = build_messages(request)
-    
+
     opts = [
       model: client.model,
       temperature: client.temperature || 0.7,
@@ -52,25 +52,28 @@ defmodule Dspy.LM.LMStudio do
     ]
 
     # Add structured output support via response_format
-    {opts, messages} = if request[:response_format] do
-      case request[:response_format] do
-        %{type: "json_schema", json_schema: schema} ->
-          # For structured output, we'll use a system prompt approach since
-          # LM Studio may not support OpenAI's response_format directly
-          schema_prompt = build_schema_prompt(schema)
-          updated_messages = prepend_schema_system_message(messages, schema_prompt)
-          {opts, updated_messages}
-        _ ->
-          {opts, messages}
+    {opts, messages} =
+      if request[:response_format] do
+        case request[:response_format] do
+          %{type: "json_schema", json_schema: schema} ->
+            # For structured output, we'll use a system prompt approach since
+            # LM Studio may not support OpenAI's response_format directly
+            schema_prompt = build_schema_prompt(schema)
+            updated_messages = prepend_schema_system_message(messages, schema_prompt)
+            {opts, updated_messages}
+
+          _ ->
+            {opts, messages}
+        end
+      else
+        {opts, messages}
       end
-    else
-      {opts, messages}
-    end
 
     # Make HTTP request to LMStudio API
     case make_http_request(client, messages, opts) do
       {:ok, response} ->
         parse_response(response)
+
       {:error, reason} ->
         {:error, reason}
     end
@@ -81,7 +84,7 @@ defmodule Dspy.LM.LMStudio do
   """
   def generate_stream(client, request, callback_fn) do
     messages = build_messages(request)
-    
+
     opts = [
       model: client.model,
       temperature: client.temperature || 0.7,
@@ -96,23 +99,26 @@ defmodule Dspy.LM.LMStudio do
     ]
 
     # Handle structured output in streaming mode
-    {opts, messages} = if request[:response_format] do
-      case request[:response_format] do
-        %{type: "json_schema", json_schema: schema} ->
-          schema_prompt = build_schema_prompt(schema)
-          updated_messages = prepend_schema_system_message(messages, schema_prompt)
-          {opts, updated_messages}
-        _ ->
-          {opts, messages}
+    {opts, messages} =
+      if request[:response_format] do
+        case request[:response_format] do
+          %{type: "json_schema", json_schema: schema} ->
+            schema_prompt = build_schema_prompt(schema)
+            updated_messages = prepend_schema_system_message(messages, schema_prompt)
+            {opts, updated_messages}
+
+          _ ->
+            {opts, messages}
+        end
+      else
+        {opts, messages}
       end
-    else
-      {opts, messages}
-    end
 
     # Make streaming HTTP request to LMStudio API
     case make_streaming_http_request(client, messages, opts) do
       {:ok, :stream_complete} ->
         {:ok, %{streaming: true}}
+
       {:error, reason} ->
         {:error, reason}
     end
@@ -124,34 +130,38 @@ defmodule Dspy.LM.LMStudio do
   """
   def generate_dual(client, request, stream_callback \\ nil) do
     # Start streaming generation for real-time feedback
-    streaming_task = if stream_callback do
-      Task.async(fn ->
-        generate_stream(client, request, stream_callback)
-      end)
-    else
-      nil
-    end
-    
+    streaming_task =
+      if stream_callback do
+        Task.async(fn ->
+          generate_stream(client, request, stream_callback)
+        end)
+      else
+        nil
+      end
+
     # Non-streaming generation for final structured output with multiple choices
-    final_request = Map.merge(request, %{
-      n: request[:n] || 4,
-      logprobs: request[:logprobs] || true,
-      stream: false
-    })
-    
+    final_request =
+      Map.merge(request, %{
+        n: request[:n] || 4,
+        logprobs: request[:logprobs] || true,
+        stream: false
+      })
+
     final_result = generate(client, final_request)
-    
+
     # Wait for streaming to complete if it was started
-    streaming_result = if streaming_task do
-      Task.await(streaming_task, :infinity)
-    else
-      {:ok, %{streaming: false}}
-    end
-    
-    {:ok, %{
-      streaming: streaming_result,
-      final: final_result
-    }}
+    streaming_result =
+      if streaming_task do
+        Task.await(streaming_task, :infinity)
+      else
+        {:ok, %{streaming: false}}
+      end
+
+    {:ok,
+     %{
+       streaming: streaming_result,
+       final: final_result
+     }}
   end
 
   @doc """
@@ -160,37 +170,43 @@ defmodule Dspy.LM.LMStudio do
   """
   def generate_dual_models(streaming_client, final_client, request, stream_callback \\ nil) do
     # Start streaming generation with first model for real-time feedback
-    streaming_task = if stream_callback do
-      Task.async(fn ->
-        generate_stream(streaming_client, request, stream_callback)
-      end)
-    else
-      nil
-    end
-    
+    streaming_task =
+      if stream_callback do
+        Task.async(fn ->
+          generate_stream(streaming_client, request, stream_callback)
+        end)
+      else
+        nil
+      end
+
     # Start non-streaming generation with second model for final structured output
-    final_task = Task.async(fn ->
-      final_request = Map.merge(request, %{
-        n: request[:n] || 4,
-        logprobs: request[:logprobs] || true,
-        stream: false
-      })
-      generate(final_client, final_request)
-    end)
-    
+    final_task =
+      Task.async(fn ->
+        final_request =
+          Map.merge(request, %{
+            n: request[:n] || 4,
+            logprobs: request[:logprobs] || true,
+            stream: false
+          })
+
+        generate(final_client, final_request)
+      end)
+
     # Wait for both to complete
     final_result = Task.await(final_task, :infinity)
-    
-    streaming_result = if streaming_task do
-      Task.await(streaming_task, :infinity)
-    else
-      {:ok, %{streaming: false}}
-    end
-    
-    {:ok, %{
-      streaming: %{result: streaming_result, model: streaming_client.model},
-      final: %{result: final_result, model: final_client.model}
-    }}
+
+    streaming_result =
+      if streaming_task do
+        Task.await(streaming_task, :infinity)
+      else
+        {:ok, %{streaming: false}}
+      end
+
+    {:ok,
+     %{
+       streaming: %{result: streaming_result, model: streaming_client.model},
+       final: %{result: final_result, model: final_client.model}
+     }}
   end
 
   @impl true
@@ -209,33 +225,40 @@ defmodule Dspy.LM.LMStudio do
 
   defp make_http_request(client, messages, opts) do
     url = "#{client.base_url}/v1/chat/completions"
-    
+
     # Use different accept header for streaming
-    headers = if opts[:stream] do
-      [
-        {~c"Content-Type", ~c"application/json"},
-        {~c"Accept", ~c"text/event-stream"}
-      ]
-    else
-      [
-        {~c"Content-Type", ~c"application/json"},
-        {~c"Accept", ~c"application/json"}
-      ]
-    end
-    
+    headers =
+      if opts[:stream] do
+        [
+          {~c"Content-Type", ~c"application/json"},
+          {~c"Accept", ~c"text/event-stream"}
+        ]
+      else
+        [
+          {~c"Content-Type", ~c"application/json"},
+          {~c"Accept", ~c"application/json"}
+        ]
+      end
+
     body = %{
       model: client.model,
       messages: messages,
       temperature: opts[:temperature] || client.temperature,
       max_tokens: opts[:max_tokens] || client.max_tokens
     }
-    
+
     # Add optional parameters
     body = if opts[:n] && opts[:n] > 1, do: Map.put(body, :n, opts[:n]), else: body
     body = if opts[:logprobs], do: Map.put(body, :logprobs, opts[:logprobs]), else: body
     body = if opts[:stream], do: Map.put(body, :stream, opts[:stream]), else: body
-    
-    case :httpc.request(:post, {String.to_charlist(url), headers, ~c"application/json", String.to_charlist(Jason.encode!(body))}, [], []) do
+
+    case :httpc.request(
+           :post,
+           {String.to_charlist(url), headers, ~c"application/json",
+            String.to_charlist(Jason.encode!(body))},
+           [],
+           []
+         ) do
       {:ok, {{_, 200, _}, _, response_body}} ->
         if opts[:stream] do
           # Handle SSE response
@@ -244,8 +267,10 @@ defmodule Dspy.LM.LMStudio do
           # Handle regular JSON response
           {:ok, Jason.decode!(response_body)}
         end
+
       {:ok, {{_, status, _}, _, response_body}} ->
         {:error, {:http_error, status, response_body}}
+
       {:error, reason} ->
         {:error, {:http_request_failed, reason}}
     end
@@ -255,7 +280,7 @@ defmodule Dspy.LM.LMStudio do
 
   defp make_streaming_http_request(client, messages, opts) do
     url = "#{client.base_url}/v1/chat/completions"
-    
+
     body = %{
       model: client.model,
       messages: messages,
@@ -263,11 +288,11 @@ defmodule Dspy.LM.LMStudio do
       max_tokens: opts[:max_tokens] || client.max_tokens,
       stream: true
     }
-    
+
     # Add optional parameters for streaming
     body = if opts[:n] && opts[:n] > 1, do: Map.put(body, :n, opts[:n]), else: body
     body = if opts[:logprobs], do: Map.put(body, :logprobs, opts[:logprobs]), else: body
-    
+
     # Use httpc for HTTP request (streaming not fully supported, fallback to regular request)
     case Jason.encode(body) do
       {:ok, json_body} ->
@@ -290,13 +315,13 @@ defmodule Dspy.LM.LMStudio do
           case :httpc.request(:post, request, http_options, []) do
             {:ok, {{_, 200, _}, _headers, response_body}} ->
               body_string = List.to_string(response_body)
-              
+
               if opts[:stream_callback] do
                 # Parse response and call callback
                 parse_and_stream_chunk("data: #{body_string}", opts[:stream_callback])
                 opts[:stream_callback].({:done, nil})
               end
-              
+
               {:ok, :stream_complete}
 
             {:ok, {{_, status, _}, _headers, error_body}} ->
@@ -345,7 +370,7 @@ defmodule Dspy.LM.LMStudio do
         # Combine with existing system message
         updated_content = system_msg.content <> "\n\n" <> schema_prompt
         [%{system_msg | content: updated_content} | rest]
-      
+
       _ ->
         # Add new system message
         [%{role: "system", content: schema_prompt} | messages]
@@ -361,7 +386,7 @@ defmodule Dspy.LM.LMStudio do
               message: choice["message"],
               finish_reason: choice["finish_reason"]
             }
-            
+
             # Add logprobs if present
             if choice["logprobs"] do
               Map.put(base_choice, :logprobs, choice["logprobs"])
@@ -374,9 +399,11 @@ defmodule Dspy.LM.LMStudio do
           choices: parsed_choices,
           usage: response["usage"]
         }
-        
+
         # Add model info if present
-        result = if response["model"], do: Map.put(result, :model, response["model"]), else: result
+        result =
+          if response["model"], do: Map.put(result, :model, response["model"]), else: result
+
         result = if response["id"], do: Map.put(result, :id, response["id"]), else: result
 
         {:ok, result}
@@ -391,9 +418,9 @@ defmodule Dspy.LM.LMStudio do
       # Parse SSE format - split by double newlines and extract data lines
       # Convert charlist to binary string first (httpc returns charlist)
       chunks = String.split(to_string(response_body), "\n\n")
-      
+
       # Extract and combine all delta content from SSE chunks
-      content_parts = 
+      content_parts =
         chunks
         |> Enum.flat_map(fn chunk ->
           chunk
@@ -406,21 +433,27 @@ defmodule Dspy.LM.LMStudio do
         |> Enum.reject(&is_nil/1)
 
       # Combine all content parts
-      combined_content = 
+      combined_content =
         content_parts
-        |> Enum.map(fn chunk -> 
+        |> Enum.map(fn chunk ->
           get_in(chunk, ["choices", Access.at(0), "delta", "content"]) || ""
         end)
         |> Enum.join("")
 
       # Return in standard format
-      {:ok, %{
-        "choices" => [%{
-          "message" => %{"content" => combined_content, "role" => "assistant"},
-          "finish_reason" => "stop"
-        }],
-        "usage" => %{"completion_tokens" => String.length(combined_content), "prompt_tokens" => 0}
-      }}
+      {:ok,
+       %{
+         "choices" => [
+           %{
+             "message" => %{"content" => combined_content, "role" => "assistant"},
+             "finish_reason" => "stop"
+           }
+         ],
+         "usage" => %{
+           "completion_tokens" => String.length(combined_content),
+           "prompt_tokens" => 0
+         }
+       }}
     rescue
       e -> {:error, {:sse_parse_error, e}}
     end
@@ -443,11 +476,14 @@ defmodule Dspy.LM.LMStudio do
     |> Enum.reject(&(&1 == "[DONE]" || &1 == ""))
     |> Enum.each(fn data_line ->
       case Jason.decode(data_line) do
-        {:ok, %{"choices" => [%{"delta" => %{"content" => content}} | _]}} when is_binary(content) ->
+        {:ok, %{"choices" => [%{"delta" => %{"content" => content}} | _]}}
+        when is_binary(content) ->
           callback.({:chunk, content})
+
         {:ok, _} ->
           # Other SSE messages (metadata, etc.)
           :ok
+
         {:error, _} ->
           # Invalid JSON in chunk
           :ok

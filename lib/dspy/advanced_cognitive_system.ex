@@ -91,21 +91,56 @@ defmodule Dspy.AdvancedCognitiveSystem do
 
     def new(module, opts \\ []) do
       # Handle signature parameter properly
-      signature = 
+      signature =
         case Keyword.get(opts, :signature) do
-          nil -> 
-            Dspy.Signature.new("QuantumCognitive", 
-              input_fields: [%{name: :input, type: :string, description: "Input text", required: true, default: nil}],
-              output_fields: [%{name: :output, type: :string, description: "Output text", required: true, default: nil}]
+          nil ->
+            Dspy.Signature.new("QuantumCognitive",
+              input_fields: [
+                %{
+                  name: :input,
+                  type: :string,
+                  description: "Input text",
+                  required: true,
+                  default: nil
+                }
+              ],
+              output_fields: [
+                %{
+                  name: :output,
+                  type: :string,
+                  description: "Output text",
+                  required: true,
+                  default: nil
+                }
+              ]
             )
+
           sig when is_binary(sig) ->
-            Dspy.Signature.new("QuantumCognitive", 
-              input_fields: [%{name: :input, type: :string, description: "Input text", required: true, default: nil}],
-              output_fields: [%{name: :output, type: :string, description: "Output text", required: true, default: nil}]
+            Dspy.Signature.new("QuantumCognitive",
+              input_fields: [
+                %{
+                  name: :input,
+                  type: :string,
+                  description: "Input text",
+                  required: true,
+                  default: nil
+                }
+              ],
+              output_fields: [
+                %{
+                  name: :output,
+                  type: :string,
+                  description: "Output text",
+                  required: true,
+                  default: nil
+                }
+              ]
             )
-          sig -> sig
+
+          sig ->
+            sig
         end
-      
+
       instance = apply(module, :new, [signature, opts])
 
       %__MODULE__{

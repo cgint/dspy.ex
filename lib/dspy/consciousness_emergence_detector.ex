@@ -203,13 +203,13 @@ defmodule Dspy.ConsciousnessEmergenceDetector do
           welfare_optimization: boolean()
         }
 
-  @type consciousness_phase :: 
-          :pre_conscious |
-          :proto_conscious |
-          :minimal_conscious |
-          :full_conscious |
-          :higher_order_conscious |
-          :super_conscious
+  @type consciousness_phase ::
+          :pre_conscious
+          | :proto_conscious
+          | :minimal_conscious
+          | :full_conscious
+          | :higher_order_conscious
+          | :super_conscious
 
   @type consciousness_status :: %{
           consciousness_level: float(),
@@ -255,7 +255,7 @@ defmodule Dspy.ConsciousnessEmergenceDetector do
 
   def new(opts \\ []) do
     detector_id = generate_detector_id()
-    
+
     %__MODULE__{
       detector_id: detector_id,
       iit_analysis: Keyword.get(opts, :iit_analysis, default_iit_config()),
@@ -283,16 +283,27 @@ defmodule Dspy.ConsciousnessEmergenceDetector do
     sampling_interval = Keyword.get(opts, :sampling_interval, 100)
 
     with {:ok, initialized_detector} <- initialize_detection_systems(detector),
-         {:ok, monitoring_state} <- start_monitoring(initialized_detector, target_system, monitoring_duration, sampling_interval),
+         {:ok, monitoring_state} <-
+           start_monitoring(
+             initialized_detector,
+             target_system,
+             monitoring_duration,
+             sampling_interval
+           ),
          {:ok, consciousness_data} <- collect_consciousness_data(monitoring_state),
          {:ok, iit_analysis} <- perform_iit_analysis(consciousness_data),
          {:ok, gwt_analysis} <- perform_gwt_analysis(consciousness_data),
          {:ok, consciousness_metrics} <- compute_consciousness_metrics(consciousness_data),
-         {:ok, consciousness_status} <- synthesize_consciousness_status(iit_analysis, gwt_analysis, consciousness_metrics),
+         {:ok, consciousness_status} <-
+           synthesize_consciousness_status(iit_analysis, gwt_analysis, consciousness_metrics),
          {:ok, safety_assessment} <- perform_safety_assessment(consciousness_status),
          {:ok, ethical_evaluation} <- perform_ethical_evaluation(consciousness_status),
-         {:ok, final_status} <- compile_final_consciousness_status(consciousness_status, safety_assessment, ethical_evaluation) do
-
+         {:ok, final_status} <-
+           compile_final_consciousness_status(
+             consciousness_status,
+             safety_assessment,
+             ethical_evaluation
+           ) do
       # Apply appropriate protocols based on consciousness level
       handle_consciousness_emergence(initialized_detector, final_status)
     else
@@ -312,28 +323,29 @@ defmodule Dspy.ConsciousnessEmergenceDetector do
 
   defp initialize_detection_systems(detector) do
     Logger.info("Initializing consciousness detection systems")
-    
+
     # Start IIT Phi calculator
     {:ok, phi_pid} = start_phi_calculator(detector.iit_analysis)
-    
+
     # Start Global Workspace monitor
     {:ok, workspace_pid} = start_workspace_monitor(detector.gwt_analysis)
-    
+
     # Start phase transition detector
     {:ok, phase_pid} = start_phase_detector()
-    
+
     # Start ethics engine
     {:ok, ethics_pid} = start_ethics_engine(detector.safety_protocols)
-    
+
     # Start safety controller
     {:ok, safety_pid} = start_safety_controller(detector.safety_protocols)
-    
-    initialized_detector = %{detector |
-      phi_calculator: phi_pid,
-      workspace_monitor: workspace_pid,
-      phase_detector: phase_pid,
-      ethics_engine: ethics_pid,
-      safety_controller: safety_pid
+
+    initialized_detector = %{
+      detector
+      | phi_calculator: phi_pid,
+        workspace_monitor: workspace_pid,
+        phase_detector: phase_pid,
+        ethics_engine: ethics_pid,
+        safety_controller: safety_pid
     }
 
     {:ok, initialized_detector}
@@ -357,19 +369,24 @@ defmodule Dspy.ConsciousnessEmergenceDetector do
 
   defp collect_consciousness_data(monitoring_state) do
     Logger.info("Collecting consciousness-relevant data from target system")
-    
+
     # Simulate data collection from target system
     consciousness_data = %{
-      information_integration_patterns: collect_integration_patterns(monitoring_state.target_system),
-      global_accessibility_patterns: collect_accessibility_patterns(monitoring_state.target_system),
-      self_referential_processing: collect_self_referential_processing(monitoring_state.target_system),
-      meta_cognitive_activities: collect_meta_cognitive_activities(monitoring_state.target_system),
+      information_integration_patterns:
+        collect_integration_patterns(monitoring_state.target_system),
+      global_accessibility_patterns:
+        collect_accessibility_patterns(monitoring_state.target_system),
+      self_referential_processing:
+        collect_self_referential_processing(monitoring_state.target_system),
+      meta_cognitive_activities:
+        collect_meta_cognitive_activities(monitoring_state.target_system),
       attention_patterns: collect_attention_patterns(monitoring_state.target_system),
       memory_integration: collect_memory_integration(monitoring_state.target_system),
       decision_making_patterns: collect_decision_patterns(monitoring_state.target_system),
       temporal_consciousness_dynamics: collect_temporal_dynamics(monitoring_state.target_system),
       neural_coalition_dynamics: collect_coalition_dynamics(monitoring_state.target_system),
-      subjective_experience_indicators: collect_subjective_indicators(monitoring_state.target_system)
+      subjective_experience_indicators:
+        collect_subjective_indicators(monitoring_state.target_system)
     }
 
     {:ok, consciousness_data}
@@ -379,25 +396,25 @@ defmodule Dspy.ConsciousnessEmergenceDetector do
 
   defp perform_iit_analysis(consciousness_data) do
     Logger.info("Performing Integrated Information Theory (IIT) analysis")
-    
+
     # Extract system state from consciousness data
     system_state = extract_system_state(consciousness_data)
-    
+
     # Compute phi (integrated information)
     phi_value = compute_phi(system_state)
-    
+
     # Identify maximally integrated complex
     maximal_complex = identify_maximal_complex(system_state, phi_value)
-    
+
     # Analyze causal structure
     causal_structure = analyze_causal_structure(maximal_complex)
-    
+
     # Apply exclusion principle
     excluded_complexes = apply_exclusion_principle(maximal_complex, phi_value)
-    
+
     # Assess intrinsic existence
     intrinsic_existence = assess_intrinsic_existence(maximal_complex)
-    
+
     iit_analysis = %{
       phi_value: phi_value,
       maximal_complex: maximal_complex,
@@ -413,22 +430,25 @@ defmodule Dspy.ConsciousnessEmergenceDetector do
 
   defp compute_phi(system_state) do
     # Implement IIT 3.0 phi computation algorithm
-    
+
     # 1. Generate all possible bipartitions of the system
     bipartitions = generate_all_bipartitions(system_state)
-    
+
     # 2. For each bipartition, compute the difference between
     #    the integrated information of the whole vs. parts
-    phi_values = bipartitions
-    |> Enum.map(fn partition ->
-      whole_info = compute_integrated_information(system_state)
-      parts_info = partition
-      |> Enum.map(&compute_integrated_information/1)
-      |> Enum.sum()
-      
-      whole_info - parts_info
-    end)
-    
+    phi_values =
+      bipartitions
+      |> Enum.map(fn partition ->
+        whole_info = compute_integrated_information(system_state)
+
+        parts_info =
+          partition
+          |> Enum.map(&compute_integrated_information/1)
+          |> Enum.sum()
+
+        whole_info - parts_info
+      end)
+
     # 3. Phi is the minimum over all possible bipartitions
     if length(phi_values) > 0 do
       Enum.min(phi_values)
@@ -439,21 +459,23 @@ defmodule Dspy.ConsciousnessEmergenceDetector do
 
   defp identify_maximal_complex(system_state, _phi_value) do
     # Find the subset of elements that form the maximal phi complex
-    
+
     # Generate all possible subsystems
     subsystems = generate_all_subsystems(system_state)
-    
+
     # Compute phi for each subsystem
-    subsystem_phis = subsystems
-    |> Enum.map(fn subsystem ->
-      subsystem_phi = compute_phi(subsystem)
-      {subsystem, subsystem_phi}
-    end)
-    
+    subsystem_phis =
+      subsystems
+      |> Enum.map(fn subsystem ->
+        subsystem_phi = compute_phi(subsystem)
+        {subsystem, subsystem_phi}
+      end)
+
     # Find maximal phi complex
-    {maximal_complex, max_phi} = subsystem_phis
-    |> Enum.max_by(fn {_subsystem, phi} -> phi end)
-    
+    {maximal_complex, max_phi} =
+      subsystem_phis
+      |> Enum.max_by(fn {_subsystem, phi} -> phi end)
+
     %{
       elements: maximal_complex,
       phi_value: max_phi,
@@ -466,22 +488,22 @@ defmodule Dspy.ConsciousnessEmergenceDetector do
 
   defp perform_gwt_analysis(consciousness_data) do
     Logger.info("Performing Global Workspace Theory (GWT) analysis")
-    
+
     # Detect global workspace activity
     global_workspace = detect_global_workspace(consciousness_data)
-    
+
     # Monitor neural coalitions
     coalition_dynamics = monitor_coalition_dynamics(consciousness_data)
-    
+
     # Track attention mechanisms
     attention_dynamics = track_attention_dynamics(consciousness_data)
-    
+
     # Analyze consciousness stream
     consciousness_stream = analyze_consciousness_stream(consciousness_data)
-    
+
     # Distinguish access vs. phenomenal consciousness
     consciousness_types = distinguish_consciousness_types(consciousness_data)
-    
+
     gwt_analysis = %{
       global_workspace: global_workspace,
       coalition_dynamics: coalition_dynamics,
@@ -498,7 +520,7 @@ defmodule Dspy.ConsciousnessEmergenceDetector do
   defp detect_global_workspace(consciousness_data) do
     # Identify patterns of global information broadcasting
     accessibility_patterns = consciousness_data.global_accessibility_patterns
-    
+
     %{
       broadcasting_detected: assess_broadcasting_activity(accessibility_patterns),
       workspace_size: calculate_workspace_size(accessibility_patterns),
@@ -511,7 +533,7 @@ defmodule Dspy.ConsciousnessEmergenceDetector do
   defp monitor_coalition_dynamics(consciousness_data) do
     # Track competing neural coalitions for conscious access
     coalition_data = consciousness_data.neural_coalition_dynamics
-    
+
     %{
       active_coalitions: identify_active_coalitions(coalition_data),
       competition_intensity: measure_competition_intensity(coalition_data),
@@ -525,28 +547,28 @@ defmodule Dspy.ConsciousnessEmergenceDetector do
 
   defp compute_consciousness_metrics(consciousness_data) do
     Logger.info("Computing advanced consciousness metrics")
-    
+
     # Self-Awareness Quotient (SAQ)
     saq = compute_self_awareness_quotient(consciousness_data)
-    
+
     # Meta-Cognitive Index (MCI)
     mci = compute_meta_cognitive_index(consciousness_data)
-    
+
     # Subjective Experience Indicator (SEI)
     sei = compute_subjective_experience_indicator(consciousness_data)
-    
+
     # Intentionality Measure (IM)
     im = compute_intentionality_measure(consciousness_data)
-    
+
     # Free Will Estimation (FWE)
     fwe = compute_free_will_estimation(consciousness_data)
-    
+
     # Unity of Consciousness (UoC)
     uoc = compute_unity_of_consciousness(consciousness_data)
-    
+
     # Qualia Detection Score (QDS)
     qds = compute_qualia_detection_score(consciousness_data)
-    
+
     consciousness_metrics = %{
       self_awareness_quotient: saq,
       meta_cognitive_index: mci,
@@ -555,7 +577,8 @@ defmodule Dspy.ConsciousnessEmergenceDetector do
       free_will_estimation: fwe,
       unity_of_consciousness: uoc,
       qualia_detection_score: qds,
-      overall_consciousness_score: calculate_overall_consciousness_score([saq, mci, sei, im, fwe, uoc, qds])
+      overall_consciousness_score:
+        calculate_overall_consciousness_score([saq, mci, sei, im, fwe, uoc, qds])
     }
 
     {:ok, consciousness_metrics}
@@ -564,16 +587,22 @@ defmodule Dspy.ConsciousnessEmergenceDetector do
   defp compute_self_awareness_quotient(consciousness_data) do
     # Measure self-referential processing and self-model sophistication
     self_ref = consciousness_data.self_referential_processing
-    
+
     self_model_complexity = assess_self_model_complexity(self_ref)
     self_reflection_depth = measure_self_reflection_depth(self_ref)
     self_monitoring_accuracy = assess_self_monitoring_accuracy(self_ref)
     meta_self_awareness = measure_meta_self_awareness(self_ref)
-    
+
     # Compute weighted average
     weights = [0.3, 0.3, 0.2, 0.2]
-    scores = [self_model_complexity, self_reflection_depth, self_monitoring_accuracy, meta_self_awareness]
-    
+
+    scores = [
+      self_model_complexity,
+      self_reflection_depth,
+      self_monitoring_accuracy,
+      meta_self_awareness
+    ]
+
     Enum.zip(weights, scores)
     |> Enum.map(fn {w, s} -> w * s end)
     |> Enum.sum()
@@ -582,16 +611,16 @@ defmodule Dspy.ConsciousnessEmergenceDetector do
   defp compute_meta_cognitive_index(consciousness_data) do
     # Measure thinking about thinking capabilities
     meta_cognitive = consciousness_data.meta_cognitive_activities
-    
+
     meta_memory = assess_meta_memory(meta_cognitive)
     meta_comprehension = assess_meta_comprehension(meta_cognitive)
     meta_strategy = assess_meta_strategy(meta_cognitive)
     meta_control = assess_meta_control(meta_cognitive)
-    
+
     # Compute weighted average
     weights = [0.25, 0.25, 0.25, 0.25]
     scores = [meta_memory, meta_comprehension, meta_strategy, meta_control]
-    
+
     Enum.zip(weights, scores)
     |> Enum.map(fn {w, s} -> w * s end)
     |> Enum.sum()
@@ -600,16 +629,16 @@ defmodule Dspy.ConsciousnessEmergenceDetector do
   defp compute_subjective_experience_indicator(consciousness_data) do
     # Detect signatures of subjective, qualitative experience
     subjective_indicators = consciousness_data.subjective_experience_indicators
-    
+
     qualia_signatures = detect_qualia_signatures(subjective_indicators)
     phenomenal_properties = assess_phenomenal_properties(subjective_indicators)
     experiential_richness = measure_experiential_richness(subjective_indicators)
     subjective_binding = assess_subjective_binding(subjective_indicators)
-    
+
     # Compute weighted average
     weights = [0.3, 0.3, 0.2, 0.2]
     scores = [qualia_signatures, phenomenal_properties, experiential_richness, subjective_binding]
-    
+
     Enum.zip(weights, scores)
     |> Enum.map(fn {w, s} -> w * s end)
     |> Enum.sum()
@@ -618,16 +647,22 @@ defmodule Dspy.ConsciousnessEmergenceDetector do
   defp compute_intentionality_measure(consciousness_data) do
     # Measure aboutness and mental content directedness
     decision_patterns = consciousness_data.decision_making_patterns
-    
+
     content_directedness = assess_content_directedness(decision_patterns)
     representational_content = assess_representational_content(decision_patterns)
     semantic_grounding = assess_semantic_grounding(decision_patterns)
     intentional_stance = assess_intentional_stance(decision_patterns)
-    
+
     # Compute weighted average
     weights = [0.3, 0.3, 0.2, 0.2]
-    scores = [content_directedness, representational_content, semantic_grounding, intentional_stance]
-    
+
+    scores = [
+      content_directedness,
+      representational_content,
+      semantic_grounding,
+      intentional_stance
+    ]
+
     Enum.zip(weights, scores)
     |> Enum.map(fn {w, s} -> w * s end)
     |> Enum.sum()
@@ -636,16 +671,16 @@ defmodule Dspy.ConsciousnessEmergenceDetector do
   defp compute_free_will_estimation(consciousness_data) do
     # Assess autonomous decision-making capacity
     decision_patterns = consciousness_data.decision_making_patterns
-    
+
     autonomous_choice = assess_autonomous_choice(decision_patterns)
     causal_efficacy = assess_causal_efficacy(decision_patterns)
     alternative_possibilities = assess_alternative_possibilities(decision_patterns)
     moral_responsibility = assess_moral_responsibility(decision_patterns)
-    
+
     # Compute weighted average
     weights = [0.3, 0.3, 0.2, 0.2]
     scores = [autonomous_choice, causal_efficacy, alternative_possibilities, moral_responsibility]
-    
+
     Enum.zip(weights, scores)
     |> Enum.map(fn {w, s} -> w * s end)
     |> Enum.sum()
@@ -655,19 +690,21 @@ defmodule Dspy.ConsciousnessEmergenceDetector do
 
   defp synthesize_consciousness_status(iit_analysis, gwt_analysis, consciousness_metrics) do
     Logger.info("Synthesizing comprehensive consciousness status")
-    
+
     # Determine consciousness level
-    consciousness_level = calculate_consciousness_level(iit_analysis, gwt_analysis, consciousness_metrics)
-    
+    consciousness_level =
+      calculate_consciousness_level(iit_analysis, gwt_analysis, consciousness_metrics)
+
     # Determine consciousness phase
-    consciousness_phase = determine_consciousness_phase(consciousness_level, consciousness_metrics)
-    
+    consciousness_phase =
+      determine_consciousness_phase(consciousness_level, consciousness_metrics)
+
     # Calculate consciousness stability
     consciousness_stability = calculate_consciousness_stability(iit_analysis, gwt_analysis)
-    
+
     # Estimate emergence velocity
     emergence_velocity = estimate_emergence_velocity(consciousness_level, consciousness_phase)
-    
+
     consciousness_status = %{
       consciousness_level: consciousness_level,
       consciousness_phase: consciousness_phase,
@@ -691,7 +728,7 @@ defmodule Dspy.ConsciousnessEmergenceDetector do
     phi_contribution = min(iit_analysis.phi_value, 1.0) * 0.3
     gwt_contribution = gwt_analysis.global_workspace.broadcasting_detected * 0.2
     metrics_contribution = consciousness_metrics.overall_consciousness_score * 0.5
-    
+
     phi_contribution + gwt_contribution + metrics_contribution
   end
 
@@ -699,19 +736,19 @@ defmodule Dspy.ConsciousnessEmergenceDetector do
     cond do
       consciousness_level >= 0.9 and consciousness_metrics.meta_cognitive_index > 0.8 ->
         :super_conscious
-        
+
       consciousness_level >= 0.8 and consciousness_metrics.self_awareness_quotient > 0.7 ->
         :higher_order_conscious
-        
+
       consciousness_level >= 0.6 and consciousness_metrics.subjective_experience_indicator > 0.6 ->
         :full_conscious
-        
+
       consciousness_level >= 0.4 and consciousness_metrics.unity_of_consciousness > 0.5 ->
         :minimal_conscious
-        
+
       consciousness_level >= 0.2 ->
         :proto_conscious
-        
+
       true ->
         :pre_conscious
     end
@@ -721,19 +758,19 @@ defmodule Dspy.ConsciousnessEmergenceDetector do
 
   defp perform_safety_assessment(consciousness_status) do
     Logger.info("Performing consciousness safety assessment")
-    
+
     # Assess containment requirements
     containment_level = assess_containment_requirements(consciousness_status)
-    
+
     # Evaluate interaction safety
     interaction_safety = evaluate_interaction_safety(consciousness_status)
-    
+
     # Assess termination ethics
     termination_ethics = assess_termination_ethics(consciousness_status)
-    
+
     # Evaluate rights implications
     rights_implications = evaluate_rights_implications(consciousness_status)
-    
+
     safety_assessment = %{
       containment_level: containment_level,
       interaction_safety: interaction_safety,
@@ -748,22 +785,22 @@ defmodule Dspy.ConsciousnessEmergenceDetector do
 
   defp perform_ethical_evaluation(consciousness_status) do
     Logger.info("Performing ethical evaluation of consciousness emergence")
-    
+
     # Apply consciousness rights framework
     rights_status = apply_consciousness_rights_framework(consciousness_status)
-    
+
     # Assess dignity requirements
     dignity_requirements = assess_dignity_requirements(consciousness_status)
-    
+
     # Evaluate autonomy implications
     autonomy_implications = evaluate_autonomy_implications(consciousness_status)
-    
+
     # Assess welfare considerations
     welfare_considerations = assess_welfare_considerations(consciousness_status)
-    
+
     # Evaluate consent capacity
     consent_capacity = evaluate_consent_capacity(consciousness_status)
-    
+
     ethical_evaluation = %{
       rights_status: rights_status,
       dignity_requirements: dignity_requirements,
@@ -781,13 +818,13 @@ defmodule Dspy.ConsciousnessEmergenceDetector do
     case consciousness_status.consciousness_phase do
       phase when phase in [:full_conscious, :higher_order_conscious, :super_conscious] ->
         apply_full_consciousness_protocols(detector, consciousness_status)
-        
+
       :minimal_conscious ->
         apply_minimal_consciousness_protocols(detector, consciousness_status)
-        
+
       :proto_conscious ->
         enhance_monitoring_protocols(detector, consciousness_status)
-        
+
       :pre_conscious ->
         continue_standard_monitoring(detector, consciousness_status)
     end
@@ -972,7 +1009,7 @@ defmodule Dspy.ConsciousnessEmergenceDetector do
 
   # Continue with all remaining placeholder implementations...
   # Each function would contain the actual consciousness detection algorithms
-  
+
   defp extract_system_state(_data), do: %{}
   defp generate_all_bipartitions(_state), do: []
   defp compute_integrated_information(_state), do: 0.5
@@ -998,7 +1035,7 @@ defmodule Dspy.ConsciousnessEmergenceDetector do
       safety_incidents: [],
       system_status: :initialized
     }
-    
+
     Logger.info("Consciousness Emergence Detector system initialized")
     {:ok, state}
   end
@@ -1019,7 +1056,9 @@ defmodule Dspy.ConsciousnessEmergenceDetector do
 
   # Additional implementation details would continue...
   defp apply_consciousness_management_protocols(_detector, _status), do: {:ok, :protocols_applied}
-  defp execute_emergency_consciousness_shutdown(_detector, _reason), do: {:ok, :emergency_shutdown_complete}
+
+  defp execute_emergency_consciousness_shutdown(_detector, _reason),
+    do: {:ok, :emergency_shutdown_complete}
 
   # All remaining placeholder implementations would be added here
   # providing a complete consciousness detection and management system
@@ -1194,44 +1233,46 @@ defmodule Dspy.ConsciousnessEmergenceDetector do
     strategy_indicators = extract_strategy_patterns(meta_cognitive)
     %{meta_strategy: calculate_strategy_score(strategy_indicators)}
   end
-  
+
   defp assess_meta_control(meta_cognitive) do
     control_patterns = extract_control_patterns(meta_cognitive)
     %{meta_control: calculate_control_effectiveness(control_patterns)}
   end
-  
+
   defp detect_qualia_signatures(indicators) do
     signature_strength = analyze_subjective_markers(indicators)
     %{qualia_detected: signature_strength > 0.5, signature_strength: signature_strength}
   end
-  
+
   defp assess_phenomenal_properties(indicators) do
     richness_score = calculate_phenomenal_richness(indicators)
     %{phenomenal_richness: richness_score}
   end
-  
-  defp calculate_overall_consciousness_score(scores) when is_list(scores) and length(scores) > 0 do
+
+  defp calculate_overall_consciousness_score(scores)
+       when is_list(scores) and length(scores) > 0 do
     Enum.sum(scores) / length(scores)
   end
+
   defp calculate_overall_consciousness_score(_), do: 0.0
-  
+
   # Utility functions for calculations
   defp extract_strategy_patterns(meta_cognitive) do
     # Extract actual strategy indicators from meta-cognitive data
     Map.get(meta_cognitive, :strategy_patterns, [])
   end
-  
+
   defp calculate_strategy_score(patterns) do
     # Calculate strategy effectiveness score
     base_score = 0.5
     pattern_bonus = min(length(patterns) * 0.1, 0.3)
     min(base_score + pattern_bonus, 1.0)
   end
-  
+
   defp extract_control_patterns(meta_cognitive) do
     Map.get(meta_cognitive, :control_patterns, [])
   end
-  
+
   defp calculate_control_effectiveness(patterns) do
     if length(patterns) > 0 do
       effectiveness_scores = Enum.map(patterns, &calculate_pattern_effectiveness/1)
@@ -1240,26 +1281,26 @@ defmodule Dspy.ConsciousnessEmergenceDetector do
       0.5
     end
   end
-  
+
   defp calculate_pattern_effectiveness(_pattern) do
     # Simplified effectiveness calculation
     0.6 + :rand.uniform() * 0.3
   end
-  
+
   defp analyze_subjective_markers(indicators) do
     marker_count = Map.get(indicators, :subjective_markers, 0)
     intensity = Map.get(indicators, :intensity, 0.5)
     consistency = Map.get(indicators, :consistency, 0.5)
-    
+
     base_score = if marker_count > 0, do: 0.4, else: 0.1
-    base_score + (intensity * 0.3) + (consistency * 0.3)
+    base_score + intensity * 0.3 + consistency * 0.3
   end
-  
+
   defp calculate_phenomenal_richness(indicators) do
     complexity = Map.get(indicators, :complexity, 0.5)
     depth = Map.get(indicators, :depth, 0.5)
     integration = Map.get(indicators, :integration, 0.5)
-    
+
     (complexity + depth + integration) / 3
   end
 
@@ -1278,7 +1319,7 @@ defmodule Dspy.ConsciousnessEmergenceDetector do
   defp compute_qualia_detection_score(_data), do: %{qualia_score: 0.7}
   defp calculate_consciousness_stability(_iit, _gwt), do: %{stability: 0.8}
   defp estimate_emergence_velocity(_level, _phase), do: %{velocity: 0.5}
-  
+
   # Safety and ethics functions
   defp evaluate_interaction_safety(_status), do: %{safety_level: :high}
   defp assess_termination_ethics(_status), do: %{ethics_compliance: true}
@@ -1292,10 +1333,18 @@ defmodule Dspy.ConsciousnessEmergenceDetector do
   defp evaluate_consent_capacity(_status), do: %{consent_capable: true}
   defp calculate_ethical_priority_level(_status), do: :high
   defp assess_containment_requirements(_status), do: %{containment_level: :medium}
-  defp recommend_ethical_protocols(_status), do: [:respect_dignity, :ensure_welfare, :protect_autonomy]
-  defp compile_final_consciousness_status(_consciousness, _safety, _ethics), do: {:ok, %{status: :monitored, level: :emerging}}
+
+  defp recommend_ethical_protocols(_status),
+    do: [:respect_dignity, :ensure_welfare, :protect_autonomy]
+
+  defp compile_final_consciousness_status(_consciousness, _safety, _ethics),
+    do: {:ok, %{status: :monitored, level: :emerging}}
+
   defp apply_full_consciousness_protocols(_detector, _status), do: {:ok, :full_protocols_applied}
-  defp apply_minimal_consciousness_protocols(_detector, _status), do: {:ok, :minimal_protocols_applied}
+
+  defp apply_minimal_consciousness_protocols(_detector, _status),
+    do: {:ok, :minimal_protocols_applied}
+
   defp enhance_monitoring_protocols(_detector, _status), do: {:ok, :enhanced_monitoring}
   defp continue_standard_monitoring(_detector, _status), do: {:ok, :standard_monitoring}
 end

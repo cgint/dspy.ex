@@ -55,7 +55,10 @@ defmodule Dspy.LM.OpenAI do
 
   # DeepSeek models
   @deepseek_models %{
-    "deepseek-r1-0528-qwen3-8b-mlx" => %{type: :chat, capabilities: [:text, :tools, :structured_output]}
+    "deepseek-r1-0528-qwen3-8b-mlx" => %{
+      type: :chat,
+      capabilities: [:text, :tools, :structured_output]
+    }
   }
 
   # Realtime models
@@ -205,19 +208,20 @@ defmodule Dspy.LM.OpenAI do
       {:error, :model_not_supported_for_streaming}
     else
       body = build_streaming_request_body(client, request)
-      
+
       # Use enhanced streaming visualization
-      stream_callback = if callback_fn do
-        callback_fn
-      else
-        Dspy.EnhancedStreamingVisualization.create_enhanced_callback(
-          stream_id: "gpt41_stream_#{System.unique_integer([:positive])}",
-          model: client.model,
-          display_mode: :full,
-          enable_charts: true
-        )
-      end
-      
+      stream_callback =
+        if callback_fn do
+          callback_fn
+        else
+          Dspy.EnhancedStreamingVisualization.create_enhanced_callback(
+            stream_id: "gpt41_stream_#{System.unique_integer([:positive])}",
+            model: client.model,
+            display_mode: :full,
+            enable_charts: true
+          )
+        end
+
       make_streaming_request(client, "/chat/completions", body, stream_callback)
     end
   end
@@ -229,37 +233,39 @@ defmodule Dspy.LM.OpenAI do
     enable_streaming = Keyword.get(opts, :streaming, true)
     enable_aggregation = Keyword.get(opts, :aggregation, true)
     enable_verification = Keyword.get(opts, :verification, true)
-    
+
     if enable_streaming do
       # Use Agent state to track aggregation and verification
-      agent_pid = spawn(fn -> 
-        stream_state_loop(%{
-          aggregated_tokens: [],
-          verification_steps: [],
-          complete_text: "",
-          enable_aggregation: enable_aggregation,
-          enable_verification: enable_verification
-        })
-      end)
-      
+      agent_pid =
+        spawn(fn ->
+          stream_state_loop(%{
+            aggregated_tokens: [],
+            verification_steps: [],
+            complete_text: "",
+            enable_aggregation: enable_aggregation,
+            enable_verification: enable_verification
+          })
+        end)
+
       callback = fn
         {:chunk, content} ->
           send(agent_pid, {:chunk, content})
           :ok
-        
+
         {:done, final_data} ->
           send(agent_pid, {:finalize, final_data})
+
           receive do
             {:result, result} -> {:ok, result}
-          after 
+          after
             5000 -> {:error, :timeout}
           end
-        
+
         {:error, error} ->
           send(agent_pid, {:error, error})
           {:error, error}
       end
-      
+
       generate_stream(client, request, callback)
     else
       # Non-streaming fallback
@@ -267,15 +273,16 @@ defmodule Dspy.LM.OpenAI do
         {:ok, response} ->
           content = get_in(response, [:choices, Access.at(0), :message, :content]) || ""
           verification = if enable_verification, do: verify_complete_reasoning(content), else: nil
-          
-          {:ok, %{
-            complete_text: content,
-            verification_steps: [],
-            final_verification: verification,
-            aggregated_tokens: [content],
-            metadata: response
-          }}
-        
+
+          {:ok,
+           %{
+             complete_text: content,
+             verification_steps: [],
+             final_verification: verification,
+             aggregated_tokens: [content],
+             metadata: response
+           }}
+
         error ->
           error
       end
@@ -285,29 +292,32 @@ defmodule Dspy.LM.OpenAI do
   defp stream_state_loop(state) do
     receive do
       {:chunk, content} ->
-        updated_state = %{state | 
-          aggregated_tokens: [content | state.aggregated_tokens],
-          complete_text: state.complete_text <> content
+        updated_state = %{
+          state
+          | aggregated_tokens: [content | state.aggregated_tokens],
+            complete_text: state.complete_text <> content
         }
-        
+
         # Perform verification if enabled
-        updated_state = if state.enable_verification do
-          verification_step = verify_reasoning_step(content)
-          %{updated_state | verification_steps: [verification_step | state.verification_steps]}
-        else
-          updated_state
-        end
-        
+        updated_state =
+          if state.enable_verification do
+            verification_step = verify_reasoning_step(content)
+            %{updated_state | verification_steps: [verification_step | state.verification_steps]}
+          else
+            updated_state
+          end
+
         stream_state_loop(updated_state)
-      
+
       {:finalize, final_data} ->
         # Perform final verification on complete text
-        final_verification = if state.enable_verification do
-          verify_complete_reasoning(state.complete_text)
-        else
-          nil
-        end
-        
+        final_verification =
+          if state.enable_verification do
+            verify_complete_reasoning(state.complete_text)
+          else
+            nil
+          end
+
         result = %{
           complete_text: state.complete_text,
           verification_steps: Enum.reverse(state.verification_steps),
@@ -315,9 +325,9 @@ defmodule Dspy.LM.OpenAI do
           aggregated_tokens: Enum.reverse(state.aggregated_tokens),
           metadata: final_data
         }
-        
+
         send(self(), {:result, result})
-      
+
       {:error, error} ->
         send(self(), {:error, error})
     end
@@ -646,21 +656,22 @@ defmodule Dspy.LM.OpenAI do
 
   defp parse_streaming_response(response_body, callback_fn) do
     response_string = List.to_string(response_body)
-    
+
     # Split by SSE event boundaries
     events = String.split(response_string, "\n\n")
-    
-    final_result = process_streaming_events(events, callback_fn, %{
-      aggregated_content: "",
-      token_count: 0,
-      chunks_processed: 0
-    })
-    
+
+    final_result =
+      process_streaming_events(events, callback_fn, %{
+        aggregated_content: "",
+        token_count: 0,
+        chunks_processed: 0
+      })
+
     case final_result do
       {:ok, data} ->
         callback_fn.({:done, data})
         {:ok, data}
-      
+
       {:error, reason} ->
         callback_fn.({:error, reason})
         {:error, reason}
@@ -668,47 +679,50 @@ defmodule Dspy.LM.OpenAI do
   end
 
   defp process_streaming_events([], _callback_fn, accumulator) do
-    {:ok, %{
-      complete_text: accumulator.aggregated_content,
-      token_count: accumulator.token_count,
-      chunks_processed: accumulator.chunks_processed
-    }}
+    {:ok,
+     %{
+       complete_text: accumulator.aggregated_content,
+       token_count: accumulator.token_count,
+       chunks_processed: accumulator.chunks_processed
+     }}
   end
 
   defp process_streaming_events([event | rest], callback_fn, accumulator) do
     case parse_sse_event(event) do
       {:data, "[DONE]"} ->
-        {:ok, %{
-          complete_text: accumulator.aggregated_content,
-          token_count: accumulator.token_count,
-          chunks_processed: accumulator.chunks_processed
-        }}
-      
+        {:ok,
+         %{
+           complete_text: accumulator.aggregated_content,
+           token_count: accumulator.token_count,
+           chunks_processed: accumulator.chunks_processed
+         }}
+
       {:data, json_data} ->
         case Jason.decode(json_data) do
-          {:ok, %{"choices" => [%{"delta" => %{"content" => content}} | _]}} when is_binary(content) ->
+          {:ok, %{"choices" => [%{"delta" => %{"content" => content}} | _]}}
+          when is_binary(content) ->
             # Process the chunk with aggregation
             new_accumulator = %{
               aggregated_content: accumulator.aggregated_content <> content,
               token_count: accumulator.token_count + estimate_token_count(content),
               chunks_processed: accumulator.chunks_processed + 1
             }
-            
+
             # Send chunk to callback
             callback_fn.({:chunk, content})
-            
+
             # Continue processing
             process_streaming_events(rest, callback_fn, new_accumulator)
-          
+
           {:ok, _} ->
             # Non-content chunk, continue processing
             process_streaming_events(rest, callback_fn, accumulator)
-          
+
           {:error, _} ->
             # Invalid JSON, continue processing
             process_streaming_events(rest, callback_fn, accumulator)
         end
-      
+
       :ignore ->
         process_streaming_events(rest, callback_fn, accumulator)
     end
@@ -716,15 +730,15 @@ defmodule Dspy.LM.OpenAI do
 
   defp parse_sse_event(event_string) do
     lines = String.split(event_string, "\n")
-    
+
     Enum.reduce(lines, :ignore, fn line, acc ->
       case String.trim(line) do
         "data: " <> data ->
           {:data, String.trim(data)}
-        
+
         "" ->
           acc
-        
+
         _ ->
           acc
       end
@@ -747,17 +761,20 @@ defmodule Dspy.LM.OpenAI do
     }
   end
 
-
   defp detect_reasoning_patterns(content) do
     patterns = [
       %{pattern: ~r/<think>/, type: :thinking_start, weight: 1.0},
       %{pattern: ~r/<\/think>/, type: :thinking_end, weight: 1.0},
-      %{pattern: ~r/because|since|therefore|thus|consequently/, type: :causal_reasoning, weight: 0.8},
+      %{
+        pattern: ~r/because|since|therefore|thus|consequently/,
+        type: :causal_reasoning,
+        weight: 0.8
+      },
       %{pattern: ~r/if.*then|when.*then|assuming/, type: :conditional_reasoning, weight: 0.7},
       %{pattern: ~r/first|second|third|next|finally/, type: :sequential_reasoning, weight: 0.6},
       %{pattern: ~r/however|but|although|despite/, type: :contrasting_reasoning, weight: 0.5}
     ]
-    
+
     Enum.filter(patterns, fn %{pattern: pattern} ->
       String.match?(content, pattern)
     end)
@@ -767,21 +784,21 @@ defmodule Dspy.LM.OpenAI do
     length_score = min(1.0, String.length(content) / 100.0)
     complexity_score = assess_text_complexity(content)
     reasoning_score = if detect_reasoning_patterns(content) != [], do: 0.8, else: 0.2
-    
+
     (length_score + complexity_score + reasoning_score) / 3.0
   end
 
   defp assess_text_complexity(content) do
     word_count = content |> String.split() |> length()
     unique_words = content |> String.split() |> Enum.uniq() |> length()
-    
+
     complexity_indicators = [
       word_count > 10,
       unique_words / max(1, word_count) > 0.7,
       String.contains?(content, ["analyze", "consider", "evaluate", "determine"]),
       String.match?(content, ~r/[.!?]{2,}/)
     ]
-    
+
     Enum.count(complexity_indicators, & &1) / length(complexity_indicators)
   end
 
@@ -789,7 +806,7 @@ defmodule Dspy.LM.OpenAI do
     # Basic logical consistency checks
     contradictions = detect_contradictions(content)
     logical_flow = assess_local_logical_flow(content)
-    
+
     %{
       contradiction_score: contradictions,
       local_flow_score: logical_flow,
@@ -805,33 +822,34 @@ defmodule Dspy.LM.OpenAI do
       {~r/true.*false/, 0.7},
       {~r/yes.*no/, 0.6}
     ]
-    
-    max_contradiction = Enum.reduce(contradiction_patterns, 0.0, fn {pattern, weight}, acc ->
-      if String.match?(content, pattern) do
-        max(acc, weight)
-      else
-        acc
-      end
-    end)
-    
+
+    max_contradiction =
+      Enum.reduce(contradiction_patterns, 0.0, fn {pattern, weight}, acc ->
+        if String.match?(content, pattern) do
+          max(acc, weight)
+        else
+          acc
+        end
+      end)
+
     max_contradiction
   end
 
   defp assess_local_logical_flow(content) do
     sentences = String.split(content, ~r/[.!?]+/)
-    
+
     if length(sentences) < 2 do
       1.0
     else
       # Simple assessment based on connecting words and sentence structure
       connecting_words = ["therefore", "thus", "because", "since", "however", "although"]
-      connections_found = Enum.count(sentences, fn sentence ->
-        Enum.any?(connecting_words, &String.contains?(sentence, &1))
-      end)
-      
+
+      connections_found =
+        Enum.count(sentences, fn sentence ->
+          Enum.any?(connecting_words, &String.contains?(sentence, &1))
+        end)
+
       min(1.0, connections_found / max(1, length(sentences) - 1))
     end
   end
-
-
 end

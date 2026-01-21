@@ -157,19 +157,19 @@ defmodule Dspy do
   alias Dspy.{Settings, Example, Prediction}
 
   @type dspy_config :: [
-    lm: module(),
-    max_tokens: pos_integer(),
-    temperature: float(),
-    cache: boolean()
-  ]
+          lm: module(),
+          max_tokens: pos_integer(),
+          temperature: float(),
+          cache: boolean()
+        ]
 
   @type settings :: %{
-    lm: module(),
-    max_tokens: pos_integer(),
-    temperature: float(),
-    cache: boolean(),
-    metadata: map()
-  }
+          lm: module(),
+          max_tokens: pos_integer(),
+          temperature: float(),
+          cache: boolean(),
+          metadata: map()
+        }
 
   @doc """
   Configure global DSPy settings.

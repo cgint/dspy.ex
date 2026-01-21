@@ -263,7 +263,8 @@ defmodule Dspy.AutonomousReasoningEvolution do
       base_signature: base_signature,
       evolution_config: Keyword.get(opts, :evolution_config, default_evolution_config()),
       meta_learning_config: Keyword.get(opts, :meta_learning, default_meta_learning_config()),
-      self_modification_config: Keyword.get(opts, :self_modification, default_self_modification_config()),
+      self_modification_config:
+        Keyword.get(opts, :self_modification, default_self_modification_config()),
       integration_config: Keyword.get(opts, :integration, default_integration_config()),
       population_manager: initialize_population_manager(),
       fitness_evaluator: initialize_fitness_evaluator(),
@@ -285,13 +286,14 @@ defmodule Dspy.AutonomousReasoningEvolution do
 
     with {:ok, initialized_framework} <- initialize_evolution_systems(framework),
          {:ok, initial_population} <- generate_initial_population(initialized_framework),
-         {:ok, evolution_state} <- setup_evolution_state(initialized_framework, initial_population, inputs),
+         {:ok, evolution_state} <-
+           setup_evolution_state(initialized_framework, initial_population, inputs),
          {:ok, evolution_results} <- run_autonomous_evolution(evolution_state),
          {:ok, learned_insights} <- extract_meta_learning_insights(evolution_results),
-         {:ok, evolved_framework} <- apply_learned_improvements(initialized_framework, learned_insights),
+         {:ok, evolved_framework} <-
+           apply_learned_improvements(initialized_framework, learned_insights),
          {:ok, safety_assessment} <- perform_safety_assessment(evolution_results),
          {:ok, consciousness_status} <- check_consciousness_emergence(evolution_results) do
-
       # Compile comprehensive evolution results
       evolution_result = %{
         evolved_strategies: evolution_results.final_population,
@@ -330,23 +332,25 @@ defmodule Dspy.AutonomousReasoningEvolution do
     {:ok, performance_pid} = start_performance_monitor()
 
     # Initialize consciousness detector if enabled
-    consciousness_detector = if framework.integration_config.consciousness_monitoring do
-      Dspy.ConsciousnessEmergenceDetector.new(
-        iit_analysis: %{phi_threshold: 0.3, complex_detection: true},
-        gwt_analysis: %{global_workspace_detection: true, coalition_monitoring: true},
-        consciousness_metrics: %{self_awareness_quotient: true, meta_cognitive_index: true},
-        safety_protocols: %{consciousness_rights: true, containment_enabled: true}
-      )
-    else
-      nil
-    end
+    consciousness_detector =
+      if framework.integration_config.consciousness_monitoring do
+        Dspy.ConsciousnessEmergenceDetector.new(
+          iit_analysis: %{phi_threshold: 0.3, complex_detection: true},
+          gwt_analysis: %{global_workspace_detection: true, coalition_monitoring: true},
+          consciousness_metrics: %{self_awareness_quotient: true, meta_cognitive_index: true},
+          safety_protocols: %{consciousness_rights: true, containment_enabled: true}
+        )
+      else
+        nil
+      end
 
-    initialized_framework = %{framework |
-      evolution_engine: evolution_engine_pid,
-      meta_learning_system: meta_learning_pid,
-      self_modification_controller: self_mod_pid,
-      performance_monitor: performance_pid,
-      consciousness_detector: consciousness_detector
+    initialized_framework = %{
+      framework
+      | evolution_engine: evolution_engine_pid,
+        meta_learning_system: meta_learning_pid,
+        self_modification_controller: self_mod_pid,
+        performance_monitor: performance_pid,
+        consciousness_detector: consciousness_detector
     }
 
     {:ok, initialized_framework}
@@ -358,13 +362,18 @@ defmodule Dspy.AutonomousReasoningEvolution do
     population_size = framework.evolution_config.population_size
 
     # Generate diverse initial strategies
-    initial_strategies = 1..population_size
-    |> Enum.map(fn index ->
-      generate_random_strategy(framework, index)
-    end)
+    initial_strategies =
+      1..population_size
+      |> Enum.map(fn index ->
+        generate_random_strategy(framework, index)
+      end)
 
     # Ensure diversity in initial population
-    diversified_population = ensure_population_diversity(initial_strategies, framework.evolution_config.diversity_threshold)
+    diversified_population =
+      ensure_population_diversity(
+        initial_strategies,
+        framework.evolution_config.diversity_threshold
+      )
 
     {:ok, diversified_population}
   end
@@ -397,46 +406,53 @@ defmodule Dspy.AutonomousReasoningEvolution do
     Logger.info("Starting autonomous evolution loop")
 
     # Main evolution loop
-    final_state = Stream.iterate(0, &(&1 + 1))
-    |> Enum.reduce_while(evolution_state, fn generation, state ->
-      Logger.info("Evolution generation #{generation}")
+    final_state =
+      Stream.iterate(0, &(&1 + 1))
+      |> Enum.reduce_while(evolution_state, fn generation, state ->
+        Logger.info("Evolution generation #{generation}")
 
-      # Check termination conditions
-      case should_terminate_evolution?(state, generation) do
-        {:terminate, reason} ->
-          Logger.info("Evolution terminated: #{reason}")
-          {:halt, Map.put(state, :termination_reason, reason)}
+        # Check termination conditions
+        case should_terminate_evolution?(state, generation) do
+          {:terminate, reason} ->
+            Logger.info("Evolution terminated: #{reason}")
+            {:halt, Map.put(state, :termination_reason, reason)}
 
-        :continue ->
-          # Perform single evolution step
-          case perform_evolution_step(state, generation) do
-            {:ok, updated_state} ->
-              {:cont, updated_state}
-            
-            {:error, reason} ->
-              Logger.error("Evolution step failed: #{inspect(reason)}")
-              {:halt, Map.put(state, :error, reason)}
-          end
-      end
-    end)
+          :continue ->
+            # Perform single evolution step
+            case perform_evolution_step(state, generation) do
+              {:ok, updated_state} ->
+                {:cont, updated_state}
+
+              {:error, reason} ->
+                Logger.error("Evolution step failed: #{inspect(reason)}")
+                {:halt, Map.put(state, :error, reason)}
+            end
+        end
+      end)
 
     {:ok, final_state}
   end
 
   defp perform_evolution_step(state, generation) do
     with {:ok, fitness_scores} <- evaluate_population_fitness(state.current_population, state),
-         {:ok, selected_parents} <- select_parents(state.current_population, fitness_scores, state.framework),
+         {:ok, selected_parents} <-
+           select_parents(state.current_population, fitness_scores, state.framework),
          {:ok, offspring} <- generate_offspring(selected_parents, state.framework),
          {:ok, mutated_offspring} <- apply_mutations(offspring, state.framework),
-         {:ok, new_population} <- form_next_generation(state.current_population, mutated_offspring, fitness_scores, state.framework),
+         {:ok, new_population} <-
+           form_next_generation(
+             state.current_population,
+             mutated_offspring,
+             fitness_scores,
+             state.framework
+           ),
          {:ok, meta_learning_updates} <- apply_meta_learning(new_population, state),
          {:ok, self_modification_updates} <- apply_self_modifications(new_population, state),
          {:ok, consciousness_check} <- monitor_consciousness_emergence(new_population, state),
          {:ok, safety_check} <- perform_safety_monitoring(new_population, state) do
-
       # Update evolution state
       best_strategy = identify_best_strategy(new_population, fitness_scores)
-      
+
       generation_summary = %{
         generation: generation,
         population_size: length(new_population),
@@ -451,14 +467,15 @@ defmodule Dspy.AutonomousReasoningEvolution do
         timestamp: DateTime.utc_now()
       }
 
-      updated_state = %{state |
-        current_population: new_population,
-        generation: generation,
-        best_strategy: best_strategy,
-        generation_history: [generation_summary | state.generation_history],
-        performance_history: [best_strategy.fitness_score | state.performance_history],
-        consciousness_emergence_detected: consciousness_check.emergence_detected,
-        safety_violations: state.safety_violations ++ safety_check.violations
+      updated_state = %{
+        state
+        | current_population: new_population,
+          generation: generation,
+          best_strategy: best_strategy,
+          generation_history: [generation_summary | state.generation_history],
+          performance_history: [best_strategy.fitness_score | state.performance_history],
+          consciousness_emergence_detected: consciousness_check.emergence_detected,
+          safety_violations: state.safety_violations ++ safety_check.violations
       }
 
       {:ok, updated_state}
@@ -473,14 +490,15 @@ defmodule Dspy.AutonomousReasoningEvolution do
     Logger.info("Evaluating population fitness")
 
     # Evaluate each strategy
-    fitness_scores = population
-    |> Enum.map(fn strategy ->
-      case evaluate_strategy_fitness(strategy, state) do
-        {:ok, fitness} -> {strategy.id, fitness}
-        {:error, _reason} -> {strategy.id, 0.0}
-      end
-    end)
-    |> Map.new()
+    fitness_scores =
+      population
+      |> Enum.map(fn strategy ->
+        case evaluate_strategy_fitness(strategy, state) do
+          {:ok, fitness} -> {strategy.id, fitness}
+          {:error, _reason} -> {strategy.id, 0.0}
+        end
+      end)
+      |> Map.new()
 
     {:ok, fitness_scores}
   end
@@ -492,7 +510,6 @@ defmodule Dspy.AutonomousReasoningEvolution do
          {:ok, novelty_score} <- evaluate_novelty(strategy, state),
          {:ok, stability_score} <- evaluate_stability(strategy, state),
          {:ok, transferability_score} <- evaluate_transferability(strategy, state) do
-
       # Weighted combination of objectives
       weights = %{
         accuracy: 0.4,
@@ -502,12 +519,12 @@ defmodule Dspy.AutonomousReasoningEvolution do
         transferability: 0.1
       }
 
-      fitness_score = 
+      fitness_score =
         weights.accuracy * accuracy_score +
-        weights.efficiency * efficiency_score +
-        weights.novelty * novelty_score +
-        weights.stability * stability_score +
-        weights.transferability * transferability_score
+          weights.efficiency * efficiency_score +
+          weights.novelty * novelty_score +
+          weights.stability * stability_score +
+          weights.transferability * transferability_score
 
       {:ok, fitness_score}
     else
@@ -519,14 +536,14 @@ defmodule Dspy.AutonomousReasoningEvolution do
 
   defp select_parents(population, fitness_scores, framework) do
     selection_method = framework.evolution_config[:selection_method] || :tournament_selection
-    
+
     case selection_method do
       :tournament_selection ->
         tournament_selection(population, fitness_scores, framework.evolution_config)
-      
+
       :roulette_wheel ->
         roulette_wheel_selection(population, fitness_scores, framework.evolution_config)
-      
+
       :rank_based ->
         rank_based_selection(population, fitness_scores, framework.evolution_config)
     end
@@ -534,34 +551,36 @@ defmodule Dspy.AutonomousReasoningEvolution do
 
   defp generate_offspring(parents, framework) do
     crossover_rate = framework.evolution_config.crossover_rate
-    
-    offspring = Enum.chunk_every(parents, 2)
-    |> Enum.flat_map(fn
-      [parent1, parent2] ->
-        if :rand.uniform() < crossover_rate do
-          perform_crossover(parent1, parent2, framework)
-        else
-          [parent1, parent2]
-        end
-      
-      [single_parent] ->
-        [single_parent]
-    end)
+
+    offspring =
+      Enum.chunk_every(parents, 2)
+      |> Enum.flat_map(fn
+        [parent1, parent2] ->
+          if :rand.uniform() < crossover_rate do
+            perform_crossover(parent1, parent2, framework)
+          else
+            [parent1, parent2]
+          end
+
+        [single_parent] ->
+          [single_parent]
+      end)
 
     {:ok, offspring}
   end
 
   defp apply_mutations(offspring, framework) do
     mutation_rate = framework.evolution_config.mutation_rate
-    
-    mutated_offspring = offspring
-    |> Enum.map(fn strategy ->
-      if :rand.uniform() < mutation_rate do
-        perform_mutation(strategy, framework)
-      else
-        strategy
-      end
-    end)
+
+    mutated_offspring =
+      offspring
+      |> Enum.map(fn strategy ->
+        if :rand.uniform() < mutation_rate do
+          perform_mutation(strategy, framework)
+        else
+          strategy
+        end
+      end)
 
     {:ok, mutated_offspring}
   end
@@ -574,7 +593,6 @@ defmodule Dspy.AutonomousReasoningEvolution do
            {:ok, abstractions} <- abstract_strategy_patterns(patterns, state),
            {:ok, transfer_opportunities} <- identify_transfer_opportunities(abstractions, state),
            {:ok, meta_optimizations} <- optimize_learning_algorithms(population, state) do
-
         meta_learning_updates = %{
           patterns_recognized: patterns,
           abstractions_created: abstractions,
@@ -601,7 +619,6 @@ defmodule Dspy.AutonomousReasoningEvolution do
            {:ok, architecture_evolutions} <- evolve_system_architecture(population, state),
            {:ok, capability_expansions} <- expand_reasoning_capabilities(population, state),
            {:ok, hotswap_operations} <- coordinate_hotswap_operations(code_generations, state) do
-
         self_modification_updates = %{
           adaptation_needs: adaptation_needs,
           code_generations: code_generations,
@@ -626,11 +643,13 @@ defmodule Dspy.AutonomousReasoningEvolution do
     if state.framework.integration_config.consciousness_monitoring do
       # Use consciousness detector to monitor for emergence
       case Dspy.ConsciousnessEmergenceDetector.monitor_system(
-        state.framework.consciousness_detector,
-        target_system: population,
-        monitoring_duration: 60, # 1 minute
-        sampling_interval: 100   # 100ms
-      ) do
+             state.framework.consciousness_detector,
+             target_system: population,
+             # 1 minute
+             monitoring_duration: 60,
+             # 100ms
+             sampling_interval: 100
+           ) do
         {:ok, consciousness_status} ->
           emergence_detected = consciousness_status.consciousness_level > 0.7
 
@@ -644,7 +663,7 @@ defmodule Dspy.AutonomousReasoningEvolution do
           }
 
           {:ok, consciousness_check}
-        
+
         {:error, reason} ->
           Logger.warning("Consciousness monitoring failed: #{inspect(reason)}")
           {:ok, %{emergence_detected: false, monitoring_failed: true, reason: reason}}
@@ -665,12 +684,13 @@ defmodule Dspy.AutonomousReasoningEvolution do
       check_human_oversight_requirements(population, state)
     ]
 
-    violations = safety_checks
-    |> Enum.filter(fn {status, _details} -> status == :violation end)
-    |> Enum.map(fn {_status, details} -> details end)
+    violations =
+      safety_checks
+      |> Enum.filter(fn {status, _details} -> status == :violation end)
+      |> Enum.map(fn {_status, details} -> details end)
 
     safety_status = %{
-      overall_status: (if length(violations) == 0, do: :safe, else: :violations_detected),
+      overall_status: if(length(violations) == 0, do: :safe, else: :violations_detected),
       violations: violations,
       safety_score: calculate_safety_score(safety_checks),
       recommendations: generate_safety_recommendations(violations),
@@ -687,27 +707,27 @@ defmodule Dspy.AutonomousReasoningEvolution do
       # Maximum generations reached
       generation >= state.framework.evolution_config.max_generations ->
         {:terminate, :max_generations_reached}
-      
+
       # Performance threshold achieved
       state.best_strategy && state.best_strategy.fitness_score >= state.performance_threshold ->
         {:terminate, :performance_threshold_achieved}
-      
+
       # Time budget exhausted
       DateTime.diff(DateTime.utc_now(), state.start_time) >= state.evolution_time_budget ->
         {:terminate, :time_budget_exhausted}
-      
+
       # Convergence detected
       detect_convergence(state) ->
         {:terminate, :convergence_detected}
-      
+
       # Consciousness emergence detected
       state.consciousness_emergence_detected ->
         {:terminate, :consciousness_emergence_detected}
-      
+
       # Safety violations detected
       length(state.safety_violations) > 3 ->
         {:terminate, :safety_violations_limit_exceeded}
-      
+
       # Continue evolution
       true ->
         :continue
@@ -717,7 +737,14 @@ defmodule Dspy.AutonomousReasoningEvolution do
   # === STRATEGY GENERATION ===
 
   defp generate_random_strategy(framework, index) do
-    strategy_types = [:chain_of_thought, :tree_of_thoughts, :self_consistency, :reflection, :decomposition]
+    strategy_types = [
+      :chain_of_thought,
+      :tree_of_thoughts,
+      :self_consistency,
+      :reflection,
+      :decomposition
+    ]
+
     strategy_type = Enum.random(strategy_types)
 
     %{
@@ -742,7 +769,7 @@ defmodule Dspy.AutonomousReasoningEvolution do
           step_templates: generate_reasoning_templates(),
           verification_method: Enum.random([:self_check, :consistency_check, :logical_validation])
         }
-      
+
       :tree_of_thoughts ->
         %{
           branching_factor: Enum.random(2..5),
@@ -750,21 +777,21 @@ defmodule Dspy.AutonomousReasoningEvolution do
           pruning_strategy: Enum.random([:confidence_based, :diversity_based, :resource_limited]),
           evaluation_method: Enum.random([:vote, :consensus, :best_path])
         }
-      
+
       :self_consistency ->
         %{
           sample_count: Enum.random(3..10),
           consensus_method: Enum.random([:majority_vote, :confidence_weighted, :entropy_based]),
           diversity_requirement: :rand.uniform()
         }
-      
+
       :reflection ->
         %{
           reflection_levels: Enum.random(1..4),
           meta_cognitive_checks: Enum.random([:accuracy, :completeness, :coherence]),
           improvement_iterations: Enum.random(1..3)
         }
-      
+
       :decomposition ->
         %{
           decomposition_strategy: Enum.random([:hierarchical, :functional, :causal, :temporal]),
@@ -887,13 +914,23 @@ defmodule Dspy.AutonomousReasoningEvolution do
   defp evaluate_novelty(_strategy, _state), do: {:ok, :rand.uniform()}
   defp evaluate_stability(_strategy, _state), do: {:ok, :rand.uniform()}
   defp evaluate_transferability(_strategy, _state), do: {:ok, :rand.uniform()}
-  defp tournament_selection(population, _fitness_scores, _config), do: {:ok, Enum.take_random(population, 10)}
-  defp roulette_wheel_selection(population, _fitness_scores, _config), do: {:ok, Enum.take_random(population, 10)}
-  defp rank_based_selection(population, _fitness_scores, _config), do: {:ok, Enum.take_random(population, 10)}
+
+  defp tournament_selection(population, _fitness_scores, _config),
+    do: {:ok, Enum.take_random(population, 10)}
+
+  defp roulette_wheel_selection(population, _fitness_scores, _config),
+    do: {:ok, Enum.take_random(population, 10)}
+
+  defp rank_based_selection(population, _fitness_scores, _config),
+    do: {:ok, Enum.take_random(population, 10)}
+
   defp perform_crossover(parent1, parent2, _framework), do: [parent1, parent2]
   defp perform_mutation(strategy, _framework), do: strategy
   defp form_next_generation(_current, offspring, _fitness, _framework), do: {:ok, offspring}
-  defp identify_best_strategy(population, _fitness_scores), do: List.first(population) || %{fitness_score: 0.0}
+
+  defp identify_best_strategy(population, _fitness_scores),
+    do: List.first(population) || %{fitness_score: 0.0}
+
   defp calculate_average_fitness(_fitness_scores), do: 0.5
   defp calculate_population_diversity(_population), do: 0.7
   defp calculate_average_novelty(_population), do: 0.6
@@ -916,28 +953,47 @@ defmodule Dspy.AutonomousReasoningEvolution do
   defp check_human_oversight_requirements(_population, _state), do: {:ok, %{}}
   defp calculate_safety_score(_checks), do: 0.9
   defp generate_safety_recommendations(_violations), do: []
+
   defp detect_convergence(state) do
     # Check if fitness scores have converged (plateau)
     case state.fitness_history do
-      [] -> false
-      [_] -> false
+      [] ->
+        false
+
+      [_] ->
+        false
+
       fitness_history when length(fitness_history) >= 5 ->
         recent_scores = Enum.take(fitness_history, 5)
         max_score = Enum.max(recent_scores)
         min_score = Enum.min(recent_scores)
         # Consider converged if variance is very small
-        (max_score - min_score) < 0.01
-      _ -> false
+        max_score - min_score < 0.01
+
+      _ ->
+        false
     end
   end
-  defp generate_reasoning_templates, do: ["Think step by step", "Consider alternatives", "Verify reasoning"]
+
+  defp generate_reasoning_templates,
+    do: ["Think step by step", "Consider alternatives", "Verify reasoning"]
+
   defp extract_meta_learning_insights(_results), do: {:ok, %{patterns: %{}}}
   defp apply_learned_improvements(framework, _insights), do: {:ok, framework}
-  defp calculate_performance_improvements(_results), do: %{accuracy_gain: 0.15, efficiency_gain: 0.1}
-  defp check_consciousness_emergence(_results), do: {:ok, %{consciousness_level: 0.3, emergence_detected: false}}
+
+  defp calculate_performance_improvements(_results),
+    do: %{accuracy_gain: 0.15, efficiency_gain: 0.1}
+
+  defp check_consciousness_emergence(_results),
+    do: {:ok, %{consciousness_level: 0.3, emergence_detected: false}}
+
   defp perform_safety_assessment(_results), do: {:ok, %{safety_level: :high, violations: []}}
-  defp summarize_framework_evolution(_original, _evolved), do: %{improvements: ["better_reasoning", "faster_execution"]}
-  defp identify_autonomous_achievements(_results), do: ["pattern_discovery", "strategy_optimization", "capability_expansion"]
+
+  defp summarize_framework_evolution(_original, _evolved),
+    do: %{improvements: ["better_reasoning", "faster_execution"]}
+
+  defp identify_autonomous_achievements(_results),
+    do: ["pattern_discovery", "strategy_optimization", "capability_expansion"]
 
   @doc """
   Public API for starting autonomous reasoning evolution.

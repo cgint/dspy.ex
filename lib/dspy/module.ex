@@ -30,11 +30,11 @@ defmodule Dspy.Module do
   defmacro __using__(_opts) do
     quote do
       @behaviour Dspy.Module
-      
+
       def forward(module, inputs) do
         __MODULE__.forward(module, inputs)
       end
-      
+
       defoverridable forward: 2
     end
   end
@@ -112,5 +112,4 @@ defmodule Dspy.Module do
       end
     end
   end
-
 end

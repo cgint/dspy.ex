@@ -2,7 +2,7 @@ defmodule Dspy.Adapters do
   @moduledoc """
   Adapter system for converting between different formats (JSON, XML, Chat, etc.).
   Compatible with Python DSPy's adapter architecture.
-  
+
   Supports automatic parsing and formatting of:
   - JSON structured outputs
   - XML hierarchical data
@@ -15,7 +15,7 @@ defmodule Dspy.Adapters do
     @moduledoc """
     Base adapter behavior for format conversion.
     """
-    
+
     @callback parse(String.t(), keyword()) :: {:ok, any()} | {:error, String.t()}
     @callback format(any(), keyword()) :: {:ok, String.t()} | {:error, String.t()}
     @callback validate(any(), keyword()) :: {:ok, any()} | {:error, String.t()}
@@ -25,18 +25,21 @@ defmodule Dspy.Adapters do
     @moduledoc """
     Adapter for JSON format parsing and generation.
     """
-    
+
     @behaviour Dspy.Adapters.Adapter
-    
+
     @impl true
     def parse(text, opts \\ []) do
       case extract_json_from_text(text, opts) do
         {:ok, json_str} ->
           case Jason.decode(json_str) do
-            {:ok, data} -> validate_and_transform(data, opts)
+            {:ok, data} ->
+              validate_and_transform(data, opts)
+
             {:error, %Jason.DecodeError{data: error}} ->
               {:error, "JSON decode error: #{error}"}
           end
+
         {:error, reason} ->
           {:error, reason}
       end
@@ -51,6 +54,7 @@ defmodule Dspy.Adapters do
           else
             {:ok, json}
           end
+
         {:error, error} ->
           {:error, "JSON encode error: #{inspect(error)}"}
       end
@@ -60,14 +64,14 @@ defmodule Dspy.Adapters do
     def validate(data, opts \\ []) do
       schema = opts[:schema]
       required_fields = opts[:required_fields] || []
-      
+
       cond do
         schema && not validate_schema(data, schema) ->
           {:error, "Data does not match schema"}
-        
+
         not validate_required_fields(data, required_fields) ->
           {:error, "Missing required fields: #{inspect(required_fields)}"}
-        
+
         true ->
           {:ok, data}
       end
@@ -80,10 +84,11 @@ defmodule Dspy.Adapters do
         &extract_bracketed_json/1,
         &extract_full_text_as_json/1
       ]
-      
+
       case try_strategies(text, strategies) do
-        {:ok, json} -> 
+        {:ok, json} ->
           {:ok, json}
+
         {:error, reason} ->
           if opts[:lenient] do
             # Try to fix common JSON issues
@@ -110,6 +115,7 @@ defmodule Dspy.Adapters do
 
     defp extract_full_text_as_json(text) do
       trimmed = String.trim(text)
+
       if String.starts_with?(trimmed, "{") and String.ends_with?(trimmed, "}") do
         {:ok, trimmed}
       else
@@ -118,6 +124,7 @@ defmodule Dspy.Adapters do
     end
 
     defp try_strategies(_text, []), do: {:error, "All extraction strategies failed"}
+
     defp try_strategies(text, [strategy | rest]) do
       case strategy.(text) do
         {:ok, result} -> {:ok, result}
@@ -127,11 +134,15 @@ defmodule Dspy.Adapters do
 
     defp fix_and_retry(text) do
       # Common JSON fixes
-      fixed = text
-      |> String.replace(~r/,(\s*[}\]])/, "\\1")  # Remove trailing commas
-      |> String.replace(~r/'([^']*)'/, "\"\\1\"")  # Fix single quotes
-      |> String.replace(~r/(\w+):\s*([^",\{\[\s][^",\}\]]*)/, "\"\\1\": \"\\2\"")  # Add quotes to keys/values
-      
+      fixed =
+        text
+        # Remove trailing commas
+        |> String.replace(~r/,(\s*[}\]])/, "\\1")
+        # Fix single quotes
+        |> String.replace(~r/'([^']*)'/, "\"\\1\"")
+        # Add quotes to keys/values
+        |> String.replace(~r/(\w+):\s*([^",\{\[\s][^",\}\]]*)/, "\"\\1\": \"\\2\"")
+
       case Jason.decode(fixed) do
         {:ok, data} -> {:ok, data}
         {:error, _} -> {:error, "Could not fix JSON format"}
@@ -139,6 +150,7 @@ defmodule Dspy.Adapters do
     end
 
     defp validate_schema(_data, nil), do: true
+
     defp validate_schema(data, schema) when is_map(data) and is_map(schema) do
       Enum.all?(schema, fn {key, expected_type} ->
         case Map.get(data, key) do
@@ -149,6 +161,7 @@ defmodule Dspy.Adapters do
     end
 
     defp validate_required_fields(_data, []), do: true
+
     defp validate_required_fields(data, required_fields) when is_map(data) do
       Enum.all?(required_fields, &Map.has_key?(data, &1))
     end
@@ -166,6 +179,7 @@ defmodule Dspy.Adapters do
         {:ok, validated_data} ->
           transformed = transform_fields(validated_data, opts[:transform] || %{})
           {:ok, transformed}
+
         {:error, reason} ->
           {:error, reason}
       end
@@ -179,6 +193,7 @@ defmodule Dspy.Adapters do
         end
       end)
     end
+
     defp transform_fields(data, _transforms), do: data
   end
 
@@ -186,20 +201,16 @@ defmodule Dspy.Adapters do
     @moduledoc """
     Adapter for XML format parsing and generation.
     """
-    
+
     @behaviour Dspy.Adapters.Adapter
-    
+
     @impl true
     def parse(text, opts \\ []) do
       case extract_xml_from_text(text, opts) do
         {:ok, xml_str} ->
-          case SweetXml.parse(xml_str, dtd: :none) do
-            {:ok, doc} -> 
-              parsed = xml_to_map(doc, opts)
-              {:ok, parsed}
-            {:error, reason} ->
-              {:error, "XML parse error: #{inspect(reason)}"}
-          end
+          parsed = xml_to_map(xml_str, opts)
+          {:ok, parsed}
+
         {:error, reason} ->
           {:error, reason}
       end
@@ -216,15 +227,13 @@ defmodule Dspy.Adapters do
           else
             {:ok, xml}
           end
-        {:error, reason} ->
-          {:error, reason}
       end
     end
 
     @impl true
     def validate(data, opts \\ []) do
       required_tags = opts[:required_tags] || []
-      
+
       if validate_required_tags(data, required_tags) do
         {:ok, data}
       else
@@ -240,19 +249,19 @@ defmodule Dspy.Adapters do
             [xml] -> {:ok, xml}
             _ -> {:error, "No XML code block found"}
           end
-        
+
         String.contains?(text, "<") and String.contains?(text, ">") ->
           case Regex.run(~r/(<.*>.*<\/.*>)/s, text, capture: :all_but_first) do
             [xml] -> {:ok, xml}
             _ -> {:error, "No complete XML structure found"}
           end
-        
+
         true ->
           {:error, "No XML content found"}
       end
     end
 
-    defp xml_to_map(xml_doc, _opts) do
+    defp xml_to_map(_xml_doc, _opts) do
       # Convert XML document to Elixir map structure
       # This would need a proper XML parsing library like SweetXml
       %{parsed: "XML parsing not fully implemented"}
@@ -261,44 +270,52 @@ defmodule Dspy.Adapters do
     defp map_to_xml(data, opts) when is_map(data) do
       root_tag = opts[:root_tag] || "root"
       indent = opts[:indent] || 0
-      
-      xml_content = Enum.map(data, fn {key, value} ->
-        format_xml_element(key, value, indent + 2)
-      end) |> Enum.join("\n")
-      
+
+      xml_content =
+        Enum.map(data, fn {key, value} ->
+          format_xml_element(key, value, indent + 2)
+        end)
+        |> Enum.join("\n")
+
       xml = """
       #{String.duplicate(" ", indent)}<#{root_tag}>
       #{xml_content}
       #{String.duplicate(" ", indent)}</#{root_tag}>
       """
-      
+
       {:ok, xml}
     end
 
     defp format_xml_element(key, value, indent) when is_map(value) do
-      {:ok, inner_xml} = map_to_xml(value, [indent: indent + 2])
+      {:ok, inner_xml} = map_to_xml(value, indent: indent + 2)
+
       """
       #{String.duplicate(" ", indent)}<#{key}>
       #{inner_xml}
       #{String.duplicate(" ", indent)}</#{key}>
       """
     end
+
     defp format_xml_element(key, value, indent) when is_list(value) do
-      elements = Enum.map(value, fn item ->
-        format_xml_element("item", item, indent + 2)
-      end) |> Enum.join("\n")
-      
+      elements =
+        Enum.map(value, fn item ->
+          format_xml_element("item", item, indent + 2)
+        end)
+        |> Enum.join("\n")
+
       """
       #{String.duplicate(" ", indent)}<#{key}>
       #{elements}
       #{String.duplicate(" ", indent)}</#{key}>
       """
     end
+
     defp format_xml_element(key, value, indent) do
       "#{String.duplicate(" ", indent)}<#{key}>#{value}</#{key}>"
     end
 
     defp validate_required_tags(_data, []), do: true
+
     defp validate_required_tags(data, required_tags) when is_map(data) do
       Enum.all?(required_tags, fn tag ->
         Map.has_key?(data, tag) or Map.has_key?(data, to_string(tag))
@@ -310,24 +327,20 @@ defmodule Dspy.Adapters do
     @moduledoc """
     Adapter for chat conversation format parsing and generation.
     """
-    
+
     @behaviour Dspy.Adapters.Adapter
-    
+
     @impl true
     def parse(text, opts \\ []) do
-      case extract_chat_messages(text, opts) do
-        {:ok, messages} -> 
-          validated_messages = validate_chat_format(messages, opts)
-          {:ok, validated_messages}
-        {:error, reason} ->
-          {:error, reason}
-      end
+      {:ok, messages} = extract_chat_messages(text, opts)
+      validated_messages = validate_chat_format(messages, opts)
+      {:ok, validated_messages}
     end
 
     @impl true
     def format(messages, opts \\ []) when is_list(messages) do
       formatted = Enum.map(messages, &format_message/1) |> Enum.join("\n\n")
-      
+
       if opts[:wrap_in_code_block] do
         {:ok, "```\n#{formatted}\n```"}
       else
@@ -338,7 +351,7 @@ defmodule Dspy.Adapters do
     @impl true
     def validate(messages, opts \\ []) when is_list(messages) do
       required_roles = opts[:required_roles] || ["user", "assistant"]
-      
+
       if validate_message_roles(messages, required_roles) do
         {:ok, messages}
       else
@@ -353,7 +366,7 @@ defmodule Dspy.Adapters do
         ~r/\*\*Human:\*\*\s*(.+?)\*\*Assistant:\*\*\s*(.+?)$/ms,
         ~r/User:\s*(.+?)Assistant:\s*(.+?)$/ms
       ]
-      
+
       case try_chat_patterns(text, patterns) do
         {:ok, messages} -> {:ok, messages}
         {:error, _} -> parse_generic_chat(text)
@@ -361,10 +374,13 @@ defmodule Dspy.Adapters do
     end
 
     defp try_chat_patterns(_text, []), do: {:error, "No chat pattern matched"}
+
     defp try_chat_patterns(text, [pattern | rest]) do
       case Regex.scan(pattern, text, capture: :all_but_first) do
-        [] -> try_chat_patterns(text, rest)
-        matches -> 
+        [] ->
+          try_chat_patterns(text, rest)
+
+        matches ->
           messages = Enum.flat_map(matches, &parse_chat_match/1)
           {:ok, messages}
       end
@@ -376,6 +392,7 @@ defmodule Dspy.Adapters do
         %{role: "assistant", content: String.trim(assistant_content)}
       ]
     end
+
     defp parse_chat_match([role1, content1, role2, content2]) do
       [
         %{role: normalize_role(role1), content: String.trim(content1)},
@@ -385,40 +402,43 @@ defmodule Dspy.Adapters do
 
     defp parse_generic_chat(text) do
       lines = String.split(text, "\n") |> Enum.map(&String.trim/1) |> Enum.reject(&(&1 == ""))
-      
-      messages = Enum.reduce(lines, [], fn line, acc ->
-        cond do
-          String.starts_with?(line, ["Human:", "User:", "Q:"]) ->
-            content = String.replace(line, ~r/^(Human|User|Q):\s*/, "")
-            [%{role: "user", content: content} | acc]
-          
-          String.starts_with?(line, ["Assistant:", "AI:", "A:"]) ->
-            content = String.replace(line, ~r/^(Assistant|AI|A):\s*/, "")
-            [%{role: "assistant", content: content} | acc]
-          
-          true ->
-            # Append to last message if exists
-            case acc do
-              [last | rest] ->
-                updated = Map.update!(last, :content, &(&1 <> " " <> line))
-                [updated | rest]
-              [] ->
-                [%{role: "user", content: line}]
-            end
-        end
-      end)
-      
+
+      messages =
+        Enum.reduce(lines, [], fn line, acc ->
+          cond do
+            String.starts_with?(line, ["Human:", "User:", "Q:"]) ->
+              content = String.replace(line, ~r/^(Human|User|Q):\s*/, "")
+              [%{role: "user", content: content} | acc]
+
+            String.starts_with?(line, ["Assistant:", "AI:", "A:"]) ->
+              content = String.replace(line, ~r/^(Assistant|AI|A):\s*/, "")
+              [%{role: "assistant", content: content} | acc]
+
+            true ->
+              # Append to last message if exists
+              case acc do
+                [last | rest] ->
+                  updated = Map.update!(last, :content, &(&1 <> " " <> line))
+                  [updated | rest]
+
+                [] ->
+                  [%{role: "user", content: line}]
+              end
+          end
+        end)
+
       {:ok, Enum.reverse(messages)}
     end
 
     defp format_message(%{role: role, content: content}) do
-      role_label = case role do
-        "user" -> "Human"
-        "assistant" -> "Assistant"
-        "system" -> "System"
-        _ -> String.capitalize(role)
-      end
-      
+      role_label =
+        case role do
+          "user" -> "Human"
+          "assistant" -> "Assistant"
+          "system" -> "System"
+          _ -> String.capitalize(role)
+        end
+
       "#{role_label}: #{content}"
     end
 
@@ -449,9 +469,9 @@ defmodule Dspy.Adapters do
 
   @doc """
   Parse text using the specified adapter.
-  
+
   ## Examples
-  
+
       iex> Adapters.parse("{\"name\": \"John\"}", :json)
       {:ok, %{"name" => "John"}}
       
@@ -486,13 +506,13 @@ defmodule Dspy.Adapters do
     cond do
       String.contains?(text, "{") and String.contains?(text, "}") ->
         parse(text, :json, opts)
-      
+
       String.contains?(text, "<") and String.contains?(text, ">") ->
         parse(text, :xml, opts)
-      
+
       String.contains?(text, ["Human:", "User:", "Assistant:", "AI:"]) ->
         parse(text, :chat, opts)
-      
+
       true ->
         {:error, "Could not auto-detect format"}
     end

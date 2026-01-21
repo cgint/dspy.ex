@@ -1,5 +1,32 @@
 # Instructions
 
-## Project Documentation
+This repository is iterating toward a “DSPy-style Elixir core” with minimal long-term maintenance burden.
 
-- Maintain `docs/STATUS.md` with a high-level status summary at the top and a chronological log of changes/milestones at the end. This ensures that the current state is immediately visible while preserving historical context and preventing information loss over time.
+## Modes (explicit)
+- Planning keywords: “Analyse” / “Investigate” / “Let’s discuss” / “RFC”
+- Implementation keywords: “Go” / “Proceed” / “Implement” / “Approved”
+
+## Decisions (current)
+- Provider layer: use `req_llm` for unified LLM API access; do not maintain provider HTTP quirks in `dspy.ex`.
+- Orchestration: do **not** base core on Jido v2 yet; treat Jido v2 as an optional runner/integration layer later.
+- UI: do **not** mix core `dspy.ex` functionality with a web interface; a web UI can be a separate package/app depending on `:dspy`.
+
+## Safety (always)
+- Never run `rm -rf`.
+- Never do destructive git ops (no `git reset --hard`, no force-push) unless explicitly instructed in this conversation.
+- Never edit `.env` / env var files.
+- Do not revert unrelated changes unless explicitly asked.
+
+## Workflow
+- Keep `docs/STATUS.md` up to date with:
+  - Goal + success criteria
+  - Decisions + rationale
+  - Open questions + learnings
+  - Verification run commands
+  - A checkbox checklist showing what is done and what’s next
+- Prefer an early checkpoint commit when unblocking the repo (tooling/build/test health), then iterate with smaller feature commits afterward.
+- Run `./precommit.sh` regularly, especially before committing.
+- Write tests alongside behavior changes (prefer small, deterministic tests).
+
+## Docs & diagrams
+- For any Markdown doc that describes a process/flow/sequence/state machine, add a D2 diagram (`*.d2`) and render it to SVG (`d2to.sh file.d2`), then embed it near the top as `![...](./file.svg)`.

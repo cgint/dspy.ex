@@ -142,6 +142,7 @@ defmodule Dspy.AdaptiveExperimentFramework do
   """
 
   use Dspy.Module
+
   # alias Dspy.{ExperimentJournal, TrainingDataStorage, NovelSystemGenerator} # Commented out unused aliases
   require Logger
 
@@ -224,7 +225,8 @@ defmodule Dspy.AdaptiveExperimentFramework do
 
     %__MODULE__{
       base_signature: base_signature,
-      knowledge_integration: Keyword.get(opts, :knowledge_integration, default_knowledge_config()),
+      knowledge_integration:
+        Keyword.get(opts, :knowledge_integration, default_knowledge_config()),
       monitoring: Keyword.get(opts, :monitoring, default_monitoring_config()),
       scientific_rigor: Keyword.get(opts, :scientific_rigor, default_scientific_config()),
       adaptive_learning: Keyword.get(opts, :adaptive_learning, default_adaptive_config()),
@@ -247,10 +249,10 @@ defmodule Dspy.AdaptiveExperimentFramework do
     with {:ok, initialized_framework} <- initialize_processes(framework),
          {:ok, processed_inputs} <- preprocess_inputs(initialized_framework, inputs),
          {:ok, experiment_plan} <- create_experiment_plan(initialized_framework, processed_inputs),
-         {:ok, execution_results} <- execute_adaptive_experiment(initialized_framework, experiment_plan),
+         {:ok, execution_results} <-
+           execute_adaptive_experiment(initialized_framework, experiment_plan),
          {:ok, analyzed_results} <- analyze_and_learn(initialized_framework, execution_results),
          {:ok, final_insights} <- generate_meta_insights(initialized_framework, analyzed_results) do
-
       # Compile comprehensive results
       prediction_attrs = %{
         experiment_results: analyzed_results,
@@ -258,7 +260,8 @@ defmodule Dspy.AdaptiveExperimentFramework do
         knowledge_graph: initialized_framework.knowledge_graph,
         meta_insights: final_insights,
         experiment_journal: get_journal_summary(initialized_framework),
-        reproducibility_package: create_reproducibility_package(initialized_framework, analyzed_results)
+        reproducibility_package:
+          create_reproducibility_package(initialized_framework, analyzed_results)
       }
 
       prediction = Dspy.Prediction.new(prediction_attrs)
@@ -279,17 +282,19 @@ defmodule Dspy.AdaptiveExperimentFramework do
     {:ok, storage_pid} = Dspy.TrainingDataStorage.start_link()
 
     # Start monitoring process if enabled
-    monitoring_pid = if framework.monitoring.enable_live_tracking do
-      {:ok, pid} = start_monitoring_process(framework)
-      pid
-    else
-      nil
-    end
+    monitoring_pid =
+      if framework.monitoring.enable_live_tracking do
+        {:ok, pid} = start_monitoring_process(framework)
+        pid
+      else
+        nil
+      end
 
-    updated_framework = %{framework |
-      journal_process: journal_pid,
-      storage_process: storage_pid,
-      monitoring_process: monitoring_pid
+    updated_framework = %{
+      framework
+      | journal_process: journal_pid,
+        storage_process: storage_pid,
+        monitoring_process: monitoring_pid
     }
 
     {:ok, updated_framework}
@@ -304,7 +309,7 @@ defmodule Dspy.AdaptiveExperimentFramework do
   defp run_monitoring_dashboard(port) do
     # Simplified monitoring dashboard - would use Phoenix LiveView in production
     Logger.info("Starting monitoring dashboard on port #{port}")
-    
+
     # This would start a real web server in production
     receive do
       :stop -> :ok
@@ -316,18 +321,19 @@ defmodule Dspy.AdaptiveExperimentFramework do
   # Input Processing
 
   defp preprocess_inputs(framework, inputs) do
-    processed = inputs
-    |> extract_hypothesis_if_present()
-    |> normalize_experimental_data()
-    |> integrate_domain_knowledge(framework)
-    |> validate_experimental_design(framework)
+    processed =
+      inputs
+      |> extract_hypothesis_if_present()
+      |> normalize_experimental_data()
+      |> integrate_domain_knowledge(framework)
+      |> validate_experimental_design(framework)
 
     {:ok, processed}
   end
 
   defp extract_hypothesis_if_present(inputs) do
     hypothesis = Map.get(inputs, :hypothesis)
-    
+
     if hypothesis do
       Map.put(inputs, :structured_hypothesis, structure_hypothesis(hypothesis))
     else
@@ -355,13 +361,13 @@ defmodule Dspy.AdaptiveExperimentFramework do
     cond do
       length(independent_vars) == 1 and length(dependent_vars) == 1 ->
         ["t_test", "mann_whitney"]
-      
+
       length(independent_vars) > 1 and length(dependent_vars) == 1 ->
         ["anova", "kruskal_wallis"]
-      
+
       length(dependent_vars) > 1 ->
         ["manova", "multivariate_tests"]
-      
+
       true ->
         ["correlation", "regression"]
     end
@@ -377,17 +383,18 @@ defmodule Dspy.AdaptiveExperimentFramework do
   defp ensure_data_format(inputs) do
     # Ensure consistent data format across different input types
     data = Map.get(inputs, :input_data, [])
-    
-    normalized_data = case data do
-      list when is_list(list) -> 
-        Enum.map(list, &normalize_single_data_point/1)
-      
-      map when is_map(map) ->
-        [normalize_single_data_point(map)]
-      
-      _ ->
-        []
-    end
+
+    normalized_data =
+      case data do
+        list when is_list(list) ->
+          Enum.map(list, &normalize_single_data_point/1)
+
+        map when is_map(map) ->
+          [normalize_single_data_point(map)]
+
+        _ ->
+          []
+      end
 
     Map.put(inputs, :normalized_data, normalized_data)
   end
@@ -432,7 +439,7 @@ defmodule Dspy.AdaptiveExperimentFramework do
       # Integrate relevant domain knowledge from previous experiments
       relevant_concepts = find_relevant_concepts(inputs, framework)
       related_experiments = find_related_experiments(inputs, framework)
-      
+
       inputs
       |> Map.put(:relevant_concepts, relevant_concepts)
       |> Map.put(:related_experiments, related_experiments)
@@ -461,7 +468,7 @@ defmodule Dspy.AdaptiveExperimentFramework do
 
   defp validate_hypothesis_structure(inputs) do
     hypothesis = Map.get(inputs, :structured_hypothesis)
-    
+
     if hypothesis do
       validation_results = %{
         has_research_question: not is_nil(hypothesis.research_question),
@@ -469,7 +476,7 @@ defmodule Dspy.AdaptiveExperimentFramework do
         has_defined_variables: map_size(hypothesis.variables) > 0,
         has_success_criteria: not is_nil(hypothesis.success_criteria)
       }
-      
+
       Map.put(inputs, :hypothesis_validation, validation_results)
     else
       inputs
@@ -517,7 +524,7 @@ defmodule Dspy.AdaptiveExperimentFramework do
 
   defp create_statistical_analysis_plan(framework, inputs) do
     hypothesis = Map.get(inputs, :structured_hypothesis)
-    
+
     %{
       primary_tests: hypothesis[:statistical_tests] || ["t_test"],
       alpha_level: framework.scientific_rigor.confidence_level,
@@ -546,7 +553,8 @@ defmodule Dspy.AdaptiveExperimentFramework do
         visualization: %{
           enable_plots: true,
           plot_types: ["time_series", "distribution", "scatter"],
-          update_frequency: 5000  # milliseconds
+          # milliseconds
+          update_frequency: 5000
         },
         alerts: framework.alert_rules
       }
@@ -561,7 +569,8 @@ defmodule Dspy.AdaptiveExperimentFramework do
         parameter_adaptation: %{
           learning_rate: framework.adaptive_learning.learning_rate,
           exploration_rate: framework.adaptive_learning.exploration_rate,
-          adaptation_frequency: 10  # every N experiments
+          # every N experiments
+          adaptation_frequency: 10
         },
         early_stopping: %{
           enable: framework.monitoring.enable_early_stopping,
@@ -570,8 +579,10 @@ defmodule Dspy.AdaptiveExperimentFramework do
           monitor_metric: "accuracy"
         },
         resource_optimization: %{
-          max_execution_time: 3600,  # seconds
-          max_memory_usage: 8192,    # MB
+          # seconds
+          max_execution_time: 3600,
+          # MB
+          max_memory_usage: 8192,
           adaptive_batch_size: true
         }
       }
@@ -582,7 +593,7 @@ defmodule Dspy.AdaptiveExperimentFramework do
 
   defp define_stopping_criteria(framework, inputs) do
     hypothesis = Map.get(inputs, :structured_hypothesis)
-    
+
     %{
       statistical_significance: %{
         alpha_threshold: 1.0 - framework.scientific_rigor.confidence_level,
@@ -595,8 +606,10 @@ defmodule Dspy.AdaptiveExperimentFramework do
       },
       resource_constraints: %{
         max_experiments: 100,
-        max_time_budget: 7200,  # seconds
-        max_cost_budget: 1000   # arbitrary units
+        # seconds
+        max_time_budget: 7200,
+        # arbitrary units
+        max_cost_budget: 1000
       },
       convergence_criteria: %{
         parameter_stability: 0.001,
@@ -659,26 +672,26 @@ defmodule Dspy.AdaptiveExperimentFramework do
 
   defp run_experiment_iterations(framework, plan, state) do
     max_iterations = plan.stopping_criteria.resource_constraints.max_experiments
-    
+
     Stream.iterate(0, &(&1 + 1))
     |> Stream.take_while(fn iteration ->
       iteration < max_iterations and not should_stop?(framework, plan, state)
     end)
     |> Enum.reduce(state, fn iteration, acc_state ->
       Logger.info("Running experiment iteration #{iteration + 1}")
-      
+
       # Run single experiment iteration
       iteration_result = run_single_iteration(framework, plan, iteration)
-      
+
       # Update state with results
       updated_state = update_experiment_state(acc_state, iteration_result)
-      
+
       # Perform adaptive adjustments
       adapted_state = maybe_adapt_parameters(framework, plan, updated_state, iteration)
-      
+
       # Record iteration in journal
       record_iteration_results(framework, iteration, iteration_result)
-      
+
       adapted_state
     end)
   end
@@ -698,7 +711,7 @@ defmodule Dspy.AdaptiveExperimentFramework do
       # Perform interim statistical analysis
       p_value = calculate_interim_p_value(state.results)
       alpha_threshold = plan.stopping_criteria.statistical_significance.alpha_threshold
-      
+
       p_value < alpha_threshold
     else
       false
@@ -710,7 +723,7 @@ defmodule Dspy.AdaptiveExperimentFramework do
     if length(results) > 1 do
       scores = Enum.map(results, fn r -> Map.get(r, :accuracy, 0) end)
       variance = calculate_variance(scores)
-      
+
       if variance > 0 do
         # Mock t-test calculation
         0.05 * :rand.uniform()
@@ -724,7 +737,7 @@ defmodule Dspy.AdaptiveExperimentFramework do
 
   defp calculate_variance(scores) when length(scores) > 1 do
     mean = Enum.sum(scores) / length(scores)
-    
+
     scores
     |> Enum.map(fn x -> :math.pow(x - mean, 2) end)
     |> Enum.sum()
@@ -736,8 +749,10 @@ defmodule Dspy.AdaptiveExperimentFramework do
   defp check_practical_stopping_criteria(plan, state) do
     if state.current_best do
       improvement = Map.get(state.current_best, :accuracy, 0)
-      {min_improvement, _max_improvement} = plan.stopping_criteria.practical_significance.min_improvement
-      
+
+      {min_improvement, _max_improvement} =
+        plan.stopping_criteria.practical_significance.min_improvement
+
       improvement >= min_improvement / 100.0
     else
       false
@@ -746,17 +761,24 @@ defmodule Dspy.AdaptiveExperimentFramework do
 
   defp check_resource_stopping_criteria(_plan, state) do
     # Check if we've exceeded resource limits
-    state.completed_experiments >= 50  # Simplified check
+    # Simplified check
+    state.completed_experiments >= 50
   end
 
   defp check_convergence_stopping_criteria(plan, state) do
-    if length(state.results) >= plan.stopping_criteria.convergence_criteria.consecutive_stable_runs do
-      recent_results = Enum.take(state.results, plan.stopping_criteria.convergence_criteria.consecutive_stable_runs)
+    if length(state.results) >=
+         plan.stopping_criteria.convergence_criteria.consecutive_stable_runs do
+      recent_results =
+        Enum.take(
+          state.results,
+          plan.stopping_criteria.convergence_criteria.consecutive_stable_runs
+        )
+
       scores = Enum.map(recent_results, fn r -> Map.get(r, :accuracy, 0) end)
-      
+
       variance = calculate_variance(scores)
       threshold = plan.stopping_criteria.convergence_criteria.metric_stability
-      
+
       variance < threshold
     else
       false
@@ -766,35 +788,36 @@ defmodule Dspy.AdaptiveExperimentFramework do
   defp run_single_iteration(_framework, plan, iteration) do
     # Select experimental condition (treatment group)
     condition = select_experimental_condition(plan, iteration)
-    
+
     # Create module for this condition
     module = create_reasoning_module(condition)
-    
+
     # Run on sample of data
     data_sample = select_data_sample(plan.data_points, iteration)
-    
+
     # Execute and measure
     start_time = System.monotonic_time(:millisecond)
-    
-    results = Enum.map(data_sample, fn data_point ->
-      case Dspy.Module.forward(module, data_point) do
-        {:ok, prediction} ->
-          %{
-            data_id: data_point.id,
-            prediction: prediction,
-            accuracy: calculate_accuracy(prediction, data_point),
-            confidence: Map.get(prediction.attrs, :confidence, 0.0),
-            reasoning_depth: calculate_reasoning_depth(prediction)
-          }
-        
-        {:error, _reason} ->
-          %{data_id: data_point.id, error: true, accuracy: 0.0}
-      end
-    end)
-    
+
+    results =
+      Enum.map(data_sample, fn data_point ->
+        case Dspy.Module.forward(module, data_point) do
+          {:ok, prediction} ->
+            %{
+              data_id: data_point.id,
+              prediction: prediction,
+              accuracy: calculate_accuracy(prediction, data_point),
+              confidence: Map.get(prediction.attrs, :confidence, 0.0),
+              reasoning_depth: calculate_reasoning_depth(prediction)
+            }
+
+          {:error, _reason} ->
+            %{data_id: data_point.id, error: true, accuracy: 0.0}
+        end
+      end)
+
     end_time = System.monotonic_time(:millisecond)
     execution_time = end_time - start_time
-    
+
     %{
       iteration: iteration,
       condition: condition,
@@ -822,7 +845,7 @@ defmodule Dspy.AdaptiveExperimentFramework do
   defp select_data_sample(data_points, iteration) do
     # Select subset of data for this iteration
     sample_size = min(10, length(data_points))
-    
+
     if iteration == 0 do
       Enum.take(data_points, sample_size)
     else
@@ -835,7 +858,7 @@ defmodule Dspy.AdaptiveExperimentFramework do
     # Simplified accuracy calculation
     expected = Map.get(data_point, :expected_answer)
     actual = Map.get(prediction.attrs, :answer)
-    
+
     if expected and actual do
       if String.downcase(to_string(expected)) == String.downcase(to_string(actual)) do
         1.0
@@ -843,7 +866,8 @@ defmodule Dspy.AdaptiveExperimentFramework do
         0.0
       end
     else
-      :rand.uniform()  # Random score for demo
+      # Random score for demo
+      :rand.uniform()
     end
   end
 
@@ -857,12 +881,12 @@ defmodule Dspy.AdaptiveExperimentFramework do
 
   defp summarize_iteration_results(results) do
     valid_results = Enum.reject(results, fn r -> Map.get(r, :error, false) end)
-    
+
     if length(valid_results) > 0 do
       accuracies = Enum.map(valid_results, fn r -> r.accuracy end)
       confidences = Enum.map(valid_results, fn r -> r.confidence end)
       reasoning_depths = Enum.map(valid_results, fn r -> r.reasoning_depth end)
-      
+
       %{
         mean_accuracy: Enum.sum(accuracies) / length(accuracies),
         std_accuracy: calculate_std_dev(accuracies),
@@ -886,49 +910,50 @@ defmodule Dspy.AdaptiveExperimentFramework do
 
   defp update_experiment_state(state, iteration_result) do
     updated_results = [iteration_result | state.results]
-    
+
     # Update current best
-    current_best = if state.current_best do
-      if iteration_result.summary.mean_accuracy > state.current_best.accuracy do
+    current_best =
+      if state.current_best do
+        if iteration_result.summary.mean_accuracy > state.current_best.accuracy do
+          %{
+            iteration: iteration_result.iteration,
+            condition: iteration_result.condition,
+            accuracy: iteration_result.summary.mean_accuracy,
+            confidence: iteration_result.summary.mean_confidence
+          }
+        else
+          state.current_best
+        end
+      else
         %{
           iteration: iteration_result.iteration,
           condition: iteration_result.condition,
           accuracy: iteration_result.summary.mean_accuracy,
           confidence: iteration_result.summary.mean_confidence
         }
-      else
-        state.current_best
       end
-    else
-      %{
-        iteration: iteration_result.iteration,
-        condition: iteration_result.condition,
-        accuracy: iteration_result.summary.mean_accuracy,
-        confidence: iteration_result.summary.mean_confidence
-      }
-    end
-    
-    %{state |
-      completed_experiments: state.completed_experiments + 1,
-      results: updated_results,
-      current_best: current_best
+
+    %{
+      state
+      | completed_experiments: state.completed_experiments + 1,
+        results: updated_results,
+        current_best: current_best
     }
   end
 
   defp maybe_adapt_parameters(framework, plan, state, iteration) do
-    if framework.adaptive_learning.enable_online_optimization and 
-       rem(iteration, plan.adaptation_strategy.parameter_adaptation.adaptation_frequency) == 0 do
-      
+    if framework.adaptive_learning.enable_online_optimization and
+         rem(iteration, plan.adaptation_strategy.parameter_adaptation.adaptation_frequency) == 0 do
       # Perform parameter adaptation based on results
       adaptations = calculate_parameter_adaptations(framework, state)
-      
+
       adaptation_entry = %{
         iteration: iteration,
         adaptations: adaptations,
         timestamp: DateTime.utc_now(),
         trigger: "scheduled_adaptation"
       }
-      
+
       %{state | adaptation_history: [adaptation_entry | state.adaptation_history]}
     else
       state
@@ -938,17 +963,17 @@ defmodule Dspy.AdaptiveExperimentFramework do
   defp calculate_parameter_adaptations(_framework, state) do
     # Analyze recent performance and suggest parameter changes
     recent_results = Enum.take(state.results, 5)
-    
+
     if length(recent_results) > 1 do
       performance_trend = analyze_performance_trend(recent_results)
-      
+
       case performance_trend do
         :improving ->
           %{exploration_rate: :decrease, learning_rate: :maintain}
-        
+
         :declining ->
           %{exploration_rate: :increase, learning_rate: :decrease}
-        
+
         :stable ->
           %{exploration_rate: :increase, learning_rate: :increase}
       end
@@ -959,11 +984,11 @@ defmodule Dspy.AdaptiveExperimentFramework do
 
   defp analyze_performance_trend(results) do
     accuracies = Enum.map(results, fn r -> r.summary.mean_accuracy end)
-    
+
     if length(accuracies) >= 2 do
       recent_avg = Enum.sum(Enum.take(accuracies, 2)) / 2
       older_avg = Enum.sum(Enum.drop(accuracies, 2)) / max(1, length(accuracies) - 2)
-      
+
       cond do
         recent_avg > older_avg + 0.01 -> :improving
         recent_avg < older_avg - 0.01 -> :declining
@@ -981,7 +1006,7 @@ defmodule Dspy.AdaptiveExperimentFramework do
       metrics: result.summary,
       timestamp: DateTime.utc_now()
     }
-    
+
     Dspy.ExperimentJournal.record_observation(
       framework.journal_process,
       "current_experiment",
@@ -1004,11 +1029,11 @@ defmodule Dspy.AdaptiveExperimentFramework do
 
   defp perform_statistical_analysis(results) do
     all_results = Enum.flat_map(results.results, fn r -> r.individual_results end)
-    
+
     if length(all_results) > 1 do
       accuracies = Enum.map(all_results, fn r -> r.accuracy end)
       confidences = Enum.map(all_results, fn r -> r.confidence end)
-      
+
       %{
         descriptive_stats: %{
           accuracy: %{
@@ -1033,31 +1058,34 @@ defmodule Dspy.AdaptiveExperimentFramework do
 
   defp perform_hypothesis_tests(results) do
     # Group results by condition
-    grouped_results = results.results
-    |> Enum.group_by(fn r -> r.condition end)
-    |> Enum.map(fn {condition, condition_results} ->
-      accuracies = condition_results
-      |> Enum.flat_map(fn r -> Enum.map(r.individual_results, & &1.accuracy) end)
-      
-      {condition, accuracies}
-    end)
-    |> Map.new()
+    grouped_results =
+      results.results
+      |> Enum.group_by(fn r -> r.condition end)
+      |> Enum.map(fn {condition, condition_results} ->
+        accuracies =
+          condition_results
+          |> Enum.flat_map(fn r -> Enum.map(r.individual_results, & &1.accuracy) end)
+
+        {condition, accuracies}
+      end)
+      |> Map.new()
 
     # Perform pairwise comparisons
     conditions = Map.keys(grouped_results)
-    
-    comparisons = for c1 <- conditions, c2 <- conditions, c1 < c2 do
-      group1 = grouped_results[c1]
-      group2 = grouped_results[c2]
-      
-      {comparison_name, test_result} = perform_t_test(group1, group2)
-      
-      %{
-        comparison: "#{c1}_vs_#{c2}",
-        test: comparison_name,
-        result: test_result
-      }
-    end
+
+    comparisons =
+      for c1 <- conditions, c2 <- conditions, c1 < c2 do
+        group1 = grouped_results[c1]
+        group2 = grouped_results[c2]
+
+        {comparison_name, test_result} = perform_t_test(group1, group2)
+
+        %{
+          comparison: "#{c1}_vs_#{c2}",
+          test: comparison_name,
+          result: test_result
+        }
+      end
 
     %{pairwise_comparisons: comparisons}
   end
@@ -1067,31 +1095,35 @@ defmodule Dspy.AdaptiveExperimentFramework do
     if length(group1) > 1 and length(group2) > 1 do
       mean1 = Enum.sum(group1) / length(group1)
       mean2 = Enum.sum(group2) / length(group2)
-      
+
       std1 = calculate_std_dev(group1)
       std2 = calculate_std_dev(group2)
-      
+
       # Simplified t-statistic
       pooled_std = :math.sqrt((std1 * std1 + std2 * std2) / 2)
-      t_stat = if pooled_std > 0 do
-        (mean1 - mean2) / pooled_std
-      else
-        0
-      end
-      
+
+      t_stat =
+        if pooled_std > 0 do
+          (mean1 - mean2) / pooled_std
+        else
+          0
+        end
+
       # Mock p-value calculation
-      p_value = if abs(t_stat) > 2.0 do
-        0.05 * :rand.uniform()
-      else
-        0.1 + 0.4 * :rand.uniform()
-      end
-      
-      {"welch_t_test", %{
-        t_statistic: t_stat,
-        p_value: p_value,
-        significant: p_value < 0.05,
-        mean_difference: mean1 - mean2
-      }}
+      p_value =
+        if abs(t_stat) > 2.0 do
+          0.05 * :rand.uniform()
+        else
+          0.1 + 0.4 * :rand.uniform()
+        end
+
+      {"welch_t_test",
+       %{
+         t_statistic: t_stat,
+         p_value: p_value,
+         significant: p_value < 0.05,
+         mean_difference: mean1 - mean2
+       }}
     else
       {"insufficient_data", %{error: "Not enough data points"}}
     end
@@ -1099,7 +1131,8 @@ defmodule Dspy.AdaptiveExperimentFramework do
 
   defp calculate_effect_sizes(_results) do
     # Calculate Cohen's d for main comparisons
-    %{cohens_d: 0.5 + :rand.uniform() * 0.8}  # Mock calculation
+    # Mock calculation
+    %{cohens_d: 0.5 + :rand.uniform() * 0.8}
   end
 
   defp calculate_confidence_intervals(_results) do
@@ -1117,11 +1150,11 @@ defmodule Dspy.AdaptiveExperimentFramework do
     if framework.knowledge_integration.enable_concept_extraction do
       # Extract key concepts from experiment results
       concepts = []
-      
+
       # Analyze successful vs unsuccessful strategies
       success_patterns = analyze_success_patterns(results)
       failure_patterns = analyze_failure_patterns(results)
-      
+
       %{
         extracted_concepts: concepts,
         success_patterns: success_patterns,
@@ -1134,9 +1167,10 @@ defmodule Dspy.AdaptiveExperimentFramework do
   end
 
   defp analyze_success_patterns(results) do
-    successful_iterations = results.results
-    |> Enum.filter(fn r -> r.summary.mean_accuracy > 0.7 end)
-    
+    successful_iterations =
+      results.results
+      |> Enum.filter(fn r -> r.summary.mean_accuracy > 0.7 end)
+
     %{
       count: length(successful_iterations),
       common_conditions: extract_common_conditions(successful_iterations),
@@ -1145,9 +1179,10 @@ defmodule Dspy.AdaptiveExperimentFramework do
   end
 
   defp analyze_failure_patterns(results) do
-    failed_iterations = results.results
-    |> Enum.filter(fn r -> r.summary.mean_accuracy < 0.3 end)
-    
+    failed_iterations =
+      results.results
+      |> Enum.filter(fn r -> r.summary.mean_accuracy < 0.3 end)
+
     %{
       count: length(failed_iterations),
       common_conditions: extract_common_conditions(failed_iterations),
@@ -1157,7 +1192,7 @@ defmodule Dspy.AdaptiveExperimentFramework do
 
   defp extract_common_conditions(iterations) do
     conditions = Enum.map(iterations, fn r -> r.condition end)
-    
+
     conditions
     |> Enum.reduce(%{}, fn condition, acc ->
       Map.update(acc, condition, 1, &(&1 + 1))
@@ -1167,12 +1202,18 @@ defmodule Dspy.AdaptiveExperimentFramework do
   defp extract_performance_characteristics(iterations) do
     if length(iterations) > 0 do
       execution_times = Enum.map(iterations, fn r -> r.execution_time end)
-      reasoning_depths = iterations
-      |> Enum.flat_map(fn r -> Enum.map(r.individual_results, & &1.reasoning_depth) end)
-      
+
+      reasoning_depths =
+        iterations
+        |> Enum.flat_map(fn r -> Enum.map(r.individual_results, & &1.reasoning_depth) end)
+
       %{
         avg_execution_time: Enum.sum(execution_times) / length(execution_times),
-        avg_reasoning_depth: if(length(reasoning_depths) > 0, do: Enum.sum(reasoning_depths) / length(reasoning_depths), else: 0)
+        avg_reasoning_depth:
+          if(length(reasoning_depths) > 0,
+            do: Enum.sum(reasoning_depths) / length(reasoning_depths),
+            else: 0
+          )
       }
     else
       %{}
@@ -1269,7 +1310,8 @@ defmodule Dspy.AdaptiveExperimentFramework do
     if Map.has_key?(results, :adaptation_history) and length(results.adaptation_history) > 0 do
       %{
         adaptations_made: length(results.adaptation_history),
-        adaptation_effectiveness: 0.7,  # Mock score
+        # Mock score
+        adaptation_effectiveness: 0.7,
         most_effective_adaptation: "exploration_rate_increase"
       }
     else

@@ -2,7 +2,7 @@ defmodule Dspy.LM.LiteLLM do
   @moduledoc """
   Universal language model client wrapper supporting 100+ providers.
   Compatible with Python DSPy's LiteLLM integration.
-  
+
   Supported providers:
   - OpenAI (GPT-3.5, GPT-4, GPT-4o)
   - Anthropic (Claude 3.5 Sonnet, Haiku, Opus)
@@ -14,7 +14,7 @@ defmodule Dspy.LM.LiteLLM do
   """
 
   use GenServer
-  
+
   defstruct [
     :model,
     :api_key,
@@ -30,18 +30,18 @@ defmodule Dspy.LM.LiteLLM do
   ]
 
   @type t :: %__MODULE__{
-    model: String.t(),
-    api_key: String.t() | nil,
-    base_url: String.t() | nil,
-    provider: atom(),
-    max_tokens: pos_integer(),
-    temperature: float(),
-    timeout: pos_integer(),
-    retry_attempts: pos_integer(),
-    custom_headers: map(),
-    completion_window: pos_integer(),
-    request_id: String.t() | nil
-  }
+          model: String.t(),
+          api_key: String.t() | nil,
+          base_url: String.t() | nil,
+          provider: atom(),
+          max_tokens: pos_integer(),
+          temperature: float(),
+          timeout: pos_integer(),
+          retry_attempts: pos_integer(),
+          custom_headers: map(),
+          completion_window: pos_integer(),
+          request_id: String.t() | nil
+        }
 
   # Provider mappings
   @providers %{
@@ -51,27 +51,27 @@ defmodule Dspy.LM.LiteLLM do
     "gpt-4-turbo" => :openai,
     "gpt-4o" => :openai,
     "gpt-4o-mini" => :openai,
-    
+
     # Anthropic family
     "claude-3-5-sonnet-20241022" => :anthropic,
     "claude-3-5-haiku-20241022" => :anthropic,
     "claude-3-opus-20240229" => :anthropic,
-    
+
     # Google family
     "gemini-1.5-pro" => :google,
     "gemini-1.5-flash" => :google,
     "gemini-2.0-flash-exp" => :google,
-    
+
     # Meta Llama family
     "meta-llama/Llama-3.1-8B-Instruct" => :meta,
     "meta-llama/Llama-3.1-70B-Instruct" => :meta,
     "meta-llama/Llama-3.2-90B-Vision-Instruct" => :meta,
-    
+
     # Mistral family
     "mistral-7b-instruct" => :mistral,
     "mixtral-8x7b-instruct" => :mistral,
     "mixtral-8x22b-instruct" => :mistral,
-    
+
     # Cohere family
     "command-r-plus" => :cohere,
     "command-r" => :cohere
@@ -95,9 +95,9 @@ defmodule Dspy.LM.LiteLLM do
 
   @doc """
   Create a new LiteLLM client instance.
-  
+
   ## Examples
-  
+
       iex> LiteLLM.new("gpt-4o")
       %LiteLLM{model: "gpt-4o", provider: :openai, ...}
       
@@ -106,9 +106,9 @@ defmodule Dspy.LM.LiteLLM do
   """
   def new(model, opts \\ []) do
     provider = Map.get(@providers, model, :unknown)
-    
+
     config = Map.merge(@default_config, Map.new(opts))
-    
+
     %__MODULE__{
       model: model,
       provider: provider,
@@ -126,9 +126,9 @@ defmodule Dspy.LM.LiteLLM do
 
   @doc """
   Generate completions from the language model.
-  
+
   ## Examples
-  
+
       iex> client = LiteLLM.new("gpt-4o")
       iex> LiteLLM.completions(client, [%{role: "user", content: "Hello!"}])
       {:ok, %{choices: [%{message: %{content: "Hello! How can I help you?"}}]}}
@@ -150,11 +150,12 @@ defmodule Dspy.LM.LiteLLM do
   """
   def generate(%__MODULE__{} = client, prompt, opts \\ []) when is_binary(prompt) do
     messages = [%{role: "user", content: prompt}]
-    
+
     case completions(client, messages, opts) do
       {:ok, response} ->
         content = extract_content(response, client.provider)
         {:ok, %{completions: [content]}}
+
       {:error, reason} ->
         {:error, reason}
     end
@@ -169,14 +170,15 @@ defmodule Dspy.LM.LiteLLM do
       max_tokens: opts[:max_tokens] || client.max_tokens,
       temperature: opts[:temperature] || client.temperature
     }
-    
-    headers = [
-      {"Authorization", "Bearer #{client.api_key}"},
-      {"Content-Type", "application/json"}
-    ] ++ Map.to_list(client.custom_headers)
-    
+
+    headers =
+      [
+        {"Authorization", "Bearer #{client.api_key}"},
+        {"Content-Type", "application/json"}
+      ] ++ Map.to_list(client.custom_headers)
+
     url = "#{client.base_url || "https://api.openai.com"}/v1/chat/completions"
-    
+
     make_request(url, request_body, headers, client.timeout)
   end
 
@@ -184,64 +186,66 @@ defmodule Dspy.LM.LiteLLM do
     # Convert OpenAI format to Anthropic format
     system_msg = Enum.find(messages, &(&1.role == "system"))
     user_messages = Enum.filter(messages, &(&1.role != "system"))
-    
+
     request_body = %{
       model: client.model,
       messages: user_messages,
       max_tokens: opts[:max_tokens] || client.max_tokens,
       temperature: opts[:temperature] || client.temperature
     }
-    
-    request_body = if system_msg do
-      Map.put(request_body, :system, system_msg.content)
-    else
-      request_body
-    end
-    
-    headers = [
-      {"x-api-key", client.api_key},
-      {"Content-Type", "application/json"},
-      {"anthropic-version", "2023-06-01"}
-    ] ++ Map.to_list(client.custom_headers)
-    
+
+    request_body =
+      if system_msg do
+        Map.put(request_body, :system, system_msg.content)
+      else
+        request_body
+      end
+
+    headers =
+      [
+        {"x-api-key", client.api_key},
+        {"Content-Type", "application/json"},
+        {"anthropic-version", "2023-06-01"}
+      ] ++ Map.to_list(client.custom_headers)
+
     url = "#{client.base_url || "https://api.anthropic.com"}/v1/messages"
-    
+
     make_request(url, request_body, headers, client.timeout)
   end
 
-  defp call_google(client, messages, _opts) do
+  defp call_google(_client, _messages, _opts) do
     # Implement Google Gemini API calls
     {:error, "Google provider not yet implemented"}
   end
 
-  defp call_meta(client, messages, _opts) do
+  defp call_meta(_client, _messages, _opts) do
     # Implement Meta Llama API calls
     {:error, "Meta provider not yet implemented"}
   end
 
-  defp call_mistral(client, messages, _opts) do
+  defp call_mistral(_client, _messages, _opts) do
     # Implement Mistral API calls
     {:error, "Mistral provider not yet implemented"}
   end
 
-  defp call_cohere(client, messages, _opts) do
+  defp call_cohere(_client, _messages, _opts) do
     # Implement Cohere API calls
     {:error, "Cohere provider not yet implemented"}
   end
 
   defp make_request(url, body, headers, timeout) do
     json_body = Jason.encode!(body)
-    
+
     case HTTPoison.post(url, json_body, headers, recv_timeout: timeout) do
       {:ok, %HTTPoison.Response{status_code: 200, body: response_body}} ->
         case Jason.decode(response_body) do
           {:ok, decoded} -> {:ok, decoded}
           {:error, _} -> {:error, "Failed to decode response"}
         end
-      
+
       {:ok, %HTTPoison.Response{status_code: status, body: error_body}} ->
         {:error, "API request failed with status #{status}: #{error_body}"}
-      
+
       {:error, %HTTPoison.Error{reason: reason}} ->
         {:error, "Network error: #{reason}"}
     end
@@ -251,8 +255,10 @@ defmodule Dspy.LM.LiteLLM do
     case provider do
       :openai ->
         get_in(response, ["choices", Access.at(0), "message", "content"])
+
       :anthropic ->
         get_in(response, ["content", Access.at(0), "text"])
+
       _ ->
         get_in(response, ["choices", Access.at(0), "message", "content"])
     end

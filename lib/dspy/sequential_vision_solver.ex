@@ -797,7 +797,7 @@ defmodule Dspy.SequentialVisionSolver do
       ~r/Finally,(.+?)$/s
     ]
 
-    all_steps = 
+    all_steps =
       for pattern <- step_patterns,
           [_, step] <- Regex.scan(pattern, response_text),
           trimmed_step = String.trim(step),
@@ -830,7 +830,7 @@ defmodule Dspy.SequentialVisionSolver do
       ~r/(?:^|\s)(\$[^$\n\r]+\$)/
     ]
 
-    all_expressions = 
+    all_expressions =
       for pattern <- expression_patterns,
           [_, expr] <- Regex.scan(pattern, text) do
         String.trim(expr)

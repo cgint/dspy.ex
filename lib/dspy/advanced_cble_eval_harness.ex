@@ -280,12 +280,13 @@ defmodule Dspy.AdvancedCBLEEvalHarness do
 
       # Start the collaborative evaluation
       MultiAgentChat.start_topic(chat_pid, question)
-      
+
       # Wait for completion and get results
-      :timer.sleep(10000) # Wait for conversation to develop
+      # Wait for conversation to develop
+      :timer.sleep(10000)
       state = MultiAgentChat.get_state(chat_pid)
       MultiAgentChat.stop_conversation(chat_pid)
-      
+
       # Extract the collaborative answer from conversation history
       extract_collaborative_answer(state.conversation_history)
     else
@@ -470,7 +471,6 @@ defmodule Dspy.AdvancedCBLEEvalHarness do
     sub_questions = decompose_complex_question(context.question)
     {:retry, Map.put(context, :questions, sub_questions)}
   end
-
 
   # Helper functions for advanced features
   defp create_nlp_analysis_signature do
@@ -716,7 +716,6 @@ defmodule Dspy.AdvancedCBLEEvalHarness do
 
   # Missing function implementations
 
-
   defp create_vision_specialist(harness) do
     %{
       name: "Vision Specialist",
@@ -826,7 +825,6 @@ defmodule Dspy.AdvancedCBLEEvalHarness do
     Logger.info("Results stored at: #{result_file}")
   end
 
-
   defp should_continue_testing?(harness, results) do
     # Determine if adaptive testing should continue
     criteria = harness.adaptive_engine.termination_criteria
@@ -914,7 +912,6 @@ defmodule Dspy.AdvancedCBLEEvalHarness do
       ]
     )
   end
-
 
   defp create_tree_signature(question) do
     # Create signature for tree of thoughts
@@ -1286,6 +1283,7 @@ defmodule Dspy.AdvancedCBLEEvalHarness do
     case Enum.reverse(conversation_history) do
       [%{content: content} | _] when content != "" ->
         content
+
       _ ->
         "Unable to reach collaborative consensus"
     end
@@ -1293,6 +1291,7 @@ defmodule Dspy.AdvancedCBLEEvalHarness do
 
   defp calculate_standard_deviation([]), do: 0.0
   defp calculate_standard_deviation([_]), do: 0.0
+
   defp calculate_standard_deviation(values) do
     n = length(values)
     mean = Enum.sum(values) / n

@@ -1,19 +1,19 @@
 defmodule DspyWeb.GodmodeCoordinatorLive do
   use DspyWeb, :live_view
-  
+
   alias Dspy.GodmodeCoordinator
-  
+
   @impl true
   def mount(_params, _session, socket) do
     if connected?(socket) do
       # Subscribe to coordinator events
       GodmodeCoordinator.subscribe_to_events([:all])
-      
+
       # Schedule periodic updates
       :timer.send_interval(1000, self(), :update_metrics)
     end
-    
-    socket = 
+
+    socket =
       socket
       |> assign(:page_title, "🔥 Godmode Coordinator")
       |> assign(:system_status, %{})
@@ -23,60 +23,63 @@ defmodule DspyWeb.GodmodeCoordinatorLive do
       |> assign(:power_level, :godmode)
       |> assign(:auto_optimization, true)
       |> load_initial_data()
-    
+
     {:ok, socket}
   end
-  
+
   @impl true
   def handle_info(:update_metrics, socket) do
-    socket = 
+    socket =
       socket
       |> update_system_status()
       |> update_live_metrics()
-    
+
     {:noreply, socket}
   end
-  
+
   @impl true
   def handle_info({:coordinator_event, event}, socket) do
     socket = add_event_to_recent(socket, event)
     {:noreply, socket}
   end
-  
+
   @impl true
   def handle_event("activate_godmode", _params, socket) do
     case GodmodeCoordinator.activate_godmode() do
       {:ok, :godmode_active} ->
-        socket = 
+        socket =
           socket
           |> assign(:power_level, :godmode)
           |> put_flash(:info, "⚡ GODMODE ACTIVATED - Supreme system control enabled")
-        
+
         {:noreply, socket}
-        
+
       {:error, reason} ->
         socket = put_flash(socket, :error, "Failed to activate godmode: #{inspect(reason)}")
         {:noreply, socket}
     end
   end
-  
+
   @impl true
   def handle_event("force_optimization", _params, socket) do
     case GodmodeCoordinator.force_system_optimization() do
       {:ok, result} ->
-        socket = 
+        socket =
           socket
-          |> put_flash(:info, "🎯 System optimization completed: #{result.improvement}% improvement")
+          |> put_flash(
+            :info,
+            "🎯 System optimization completed: #{result.improvement}% improvement"
+          )
           |> update_system_status()
-        
+
         {:noreply, socket}
-        
+
       {:error, reason} ->
         socket = put_flash(socket, :error, "Optimization failed: #{inspect(reason)}")
         {:noreply, socket}
     end
   end
-  
+
   @impl true
   def handle_event("execute_coordinated_task", %{"task_type" => task_type}, socket) do
     task_spec = %{
@@ -85,61 +88,67 @@ defmodule DspyWeb.GodmodeCoordinatorLive do
       complexity: :medium,
       priority: :high
     }
-    
+
     case GodmodeCoordinator.execute_coordinated_task(task_spec) do
       {:ok, task_id, result} ->
-        socket = 
+        socket =
           socket
           |> put_flash(:info, "✅ Task #{task_id} executed successfully")
-          |> add_task_to_active(%{id: task_id, type: task_type, result: result, timestamp: DateTime.utc_now()})
-        
+          |> add_task_to_active(%{
+            id: task_id,
+            type: task_type,
+            result: result,
+            timestamp: DateTime.utc_now()
+          })
+
         {:noreply, socket}
-        
+
       {:error, reason} ->
         socket = put_flash(socket, :error, "Task execution failed: #{inspect(reason)}")
         {:noreply, socket}
     end
   end
-  
+
   @impl true
   def handle_event("spawn_agent_swarm", %{"count" => count_str}, socket) do
     count = String.to_integer(count_str)
-    
-    agent_specs = Enum.map(1..count, fn i ->
-      %{
-        id: "swarm_agent_#{i}",
-        model: "gpt-4.1",
-        task_type: :general,
-        coordination_level: :high
-      }
-    end)
-    
+
+    agent_specs =
+      Enum.map(1..count, fn i ->
+        %{
+          id: "swarm_agent_#{i}",
+          model: "gpt-4.1",
+          task_type: :general,
+          coordination_level: :high
+        }
+      end)
+
     case GodmodeCoordinator.spawn_agent_swarm(agent_specs) do
       {:ok, swarm_id, agents, _coordination_result} ->
-        socket = 
+        socket =
           socket
           |> put_flash(:info, "🚀 Agent swarm #{swarm_id} spawned with #{map_size(agents)} agents")
           |> update_system_status()
-        
+
         {:noreply, socket}
-        
+
       {:error, reason} ->
         socket = put_flash(socket, :error, "Agent swarm spawn failed: #{inspect(reason)}")
         {:noreply, socket}
     end
   end
-  
+
   @impl true
   def handle_event("toggle_auto_optimization", _params, socket) do
     new_value = !socket.assigns.auto_optimization
     socket = assign(socket, :auto_optimization, new_value)
-    
+
     # This would typically update the coordinator's configuration
     # GodmodeCoordinator.update_config(%{auto_optimization: new_value})
-    
+
     {:noreply, socket}
   end
-  
+
   @impl true
   def render(assigns) do
     ~H"""
@@ -348,7 +357,7 @@ defmodule DspyWeb.GodmodeCoordinatorLive do
         </div>
       </div>
     </div>
-    
+
     <style>
       .godmode-dashboard {
         min-height: 100vh;
@@ -606,77 +615,87 @@ defmodule DspyWeb.GodmodeCoordinatorLive do
     </style>
     """
   end
-  
+
   # Helper functions
-  
+
   defp load_initial_data(socket) do
     socket
     |> update_system_status()
     |> update_live_metrics()
   end
-  
+
   defp update_system_status(socket) do
-    system_status = case GodmodeCoordinator.get_system_status() do
-      status when is_map(status) -> status
-      _ -> %{}
-    end
-    
+    system_status =
+      case GodmodeCoordinator.get_system_status() do
+        status when is_map(status) -> status
+        _ -> %{}
+      end
+
     assign(socket, :system_status, system_status)
   end
-  
+
   defp update_live_metrics(socket) do
-    live_metrics = case GodmodeCoordinator.get_live_metrics() do
-      metrics when is_map(metrics) -> metrics
-      _ -> %{}
-    end
-    
+    live_metrics =
+      case GodmodeCoordinator.get_live_metrics() do
+        metrics when is_map(metrics) -> metrics
+        _ -> %{}
+      end
+
     assign(socket, :live_metrics, live_metrics)
   end
-  
+
   defp add_event_to_recent(socket, event) do
-    recent_events = [event | socket.assigns.recent_events]
-    |> Enum.take(50)  # Keep last 50 events
-    
+    recent_events =
+      [event | socket.assigns.recent_events]
+      # Keep last 50 events
+      |> Enum.take(50)
+
     assign(socket, :recent_events, recent_events)
   end
-  
+
   defp add_task_to_active(socket, task) do
-    active_tasks = [task | socket.assigns.active_tasks]
-    |> Enum.take(20)  # Keep last 20 tasks
-    
+    active_tasks =
+      [task | socket.assigns.active_tasks]
+      # Keep last 20 tasks
+      |> Enum.take(20)
+
     assign(socket, :active_tasks, active_tasks)
   end
-  
+
   defp power_level_class(:godmode), do: "power-level-godmode"
   defp power_level_class(:enhanced), do: "power-level-enhanced"
   defp power_level_class(_), do: "power-level-normal"
-  
+
   defp power_level_display(:godmode), do: "⚡ GODMODE"
   defp power_level_display(:enhanced), do: "🔥 ENHANCED"
   defp power_level_display(_), do: "💡 NORMAL"
-  
+
   defp format_percentage(value) when is_number(value) do
     "#{:erlang.float_to_binary(value * 100, decimals: 1)}%"
   end
+
   defp format_percentage(_), do: "0.0%"
-  
+
   defp format_memory(value) when is_number(value) do
     "#{:erlang.float_to_binary(value, decimals: 2)}GB"
   end
+
   defp format_memory(_), do: "0.00GB"
-  
+
   defp format_timestamp(timestamp) when is_struct(timestamp, DateTime) do
     Calendar.strftime(timestamp, "%H:%M:%S")
   end
+
   defp format_timestamp(_), do: "--:--:--"
-  
+
   defp format_event_type(event_type) when is_atom(event_type) do
     event_type
     |> Atom.to_string()
     |> String.replace("_", " ")
     |> String.upcase()
   end
+
   defp format_event_type(_), do: "UNKNOWN"
-  
+
   defp get_input_value(_id, default), do: default
 end

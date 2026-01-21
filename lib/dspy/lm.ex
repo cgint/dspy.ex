@@ -76,6 +76,23 @@ defmodule Dspy.LM do
   end
 
   @doc """
+  Backwards-compatible helper for call sites that pass a prompt string + options.
+
+  Prefer calling `generate/2` with a request map in new code.
+  """
+  def generate(lm, prompt, opts) when is_binary(prompt) and is_list(opts) do
+    request = %{
+      messages: [%{role: "user", content: prompt}],
+      max_tokens: Keyword.get(opts, :max_tokens),
+      temperature: Keyword.get(opts, :temperature),
+      stop: Keyword.get(opts, :stop),
+      tools: Keyword.get(opts, :tools)
+    }
+
+    generate(lm, request)
+  end
+
+  @doc """
   Generate text from a simple prompt string.
   """
   def generate_text(prompt, opts \\ []) do
@@ -90,7 +107,8 @@ defmodule Dspy.LM do
       {:ok, response} ->
         case get_in(response, [:choices, Access.at(0), :message]) do
           %{"content" => content} when is_binary(content) -> {:ok, content}
-          %{content: content} when is_binary(content) -> {:ok, content}  # Support atom keys
+          # Support atom keys
+          %{content: content} when is_binary(content) -> {:ok, content}
           message -> {:error, {:missing_content, message}}
         end
 
@@ -197,25 +215,25 @@ defmodule Dspy.LM do
   def generate_structured_output(signature, inputs) do
     # Build the prompt from the signature
     prompt = Dspy.Signature.to_prompt(signature)
-    
+
     # Add the input values to the prompt
-    input_text = 
+    input_text =
       inputs
       |> Enum.map(fn {key, value} ->
         field_name = key |> Atom.to_string() |> String.replace("_", " ") |> String.capitalize()
         "#{field_name}: #{inspect(value)}"
       end)
       |> Enum.join("\n")
-    
+
     full_prompt = "#{prompt}\n\n#{input_text}"
-    
+
     # Generate the response
     case generate_text(full_prompt) do
       {:ok, response_text} ->
         # Parse the outputs according to the signature
         outputs = Dspy.Signature.parse_outputs(signature, response_text)
         {:ok, outputs}
-        
+
       {:error, reason} ->
         {:error, reason}
     end

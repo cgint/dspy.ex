@@ -11,9 +11,9 @@ defmodule DspyTest do
   describe "configuration" do
     test "can configure DSPy settings" do
       lm = %Dspy.LM.OpenAI{model: "gpt-4.1", api_key: "test-key"}
-      
+
       assert :ok = Dspy.configure(lm: lm, max_tokens: 1000)
-      
+
       settings = Dspy.settings()
       assert settings.lm == lm
       assert settings.max_tokens == 1000
@@ -22,7 +22,7 @@ defmodule DspyTest do
     test "can get specific settings" do
       lm = %Dspy.LM.OpenAI{model: "gpt-4.1-nano", api_key: "test-key"}
       Dspy.configure(lm: lm)
-      
+
       assert Dspy.Settings.get(:lm) == lm
     end
   end
@@ -30,7 +30,7 @@ defmodule DspyTest do
   describe "examples and predictions" do
     test "can create examples" do
       example = Dspy.example(%{question: "What is 2+2?", answer: "4"})
-      
+
       assert example.attrs.question == "What is 2+2?"
       assert example.attrs.answer == "4"
       assert Dspy.Example.get(example, :question) == "What is 2+2?"
@@ -38,7 +38,7 @@ defmodule DspyTest do
 
     test "can create predictions" do
       prediction = Dspy.prediction(%{answer: "4", reasoning: "2+2=4"})
-      
+
       assert prediction.attrs.answer == "4"
       assert prediction.attrs.reasoning == "2+2=4"
       assert Dspy.Prediction.get(prediction, :answer) == "4"

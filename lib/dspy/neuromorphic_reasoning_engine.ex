@@ -3,7 +3,7 @@ defmodule Dspy.NeuromorphicReasoningEngine do
   Advanced neuromorphic reasoning engine that integrates brain-inspired computing 
   principles with DSPy's reasoning capabilities, leveraging Erlang's profiling and
   concurrent processing for energy-efficient AI reasoning.
-  
+
   Key Features:
   - Spiking Neural Networks for event-driven reasoning
   - Energy-efficient computation using Erlang profiling optimization
@@ -19,7 +19,7 @@ defmodule Dspy.NeuromorphicReasoningEngine do
   defstruct [
     :neuron_pools,
     :spike_buffer,
-    :synaptic_weights, 
+    :synaptic_weights,
     :adaptation_rules,
     :energy_monitor,
     :profiling_state,
@@ -30,21 +30,21 @@ defmodule Dspy.NeuromorphicReasoningEngine do
   ]
 
   @type spike :: %{
-    neuron_id: String.t(),
-    timestamp: integer(),
-    intensity: float(),
-    concept: String.t(),
-    reasoning_type: atom()
-  }
+          neuron_id: String.t(),
+          timestamp: integer(),
+          intensity: float(),
+          concept: String.t(),
+          reasoning_type: atom()
+        }
 
   @type neuron_pool :: %{
-    id: String.t(),
-    neurons: [String.t()],
-    activation_threshold: float(),
-    refractory_period: integer(),
-    synaptic_plasticity: float(),
-    energy_consumption: float()
-  }
+          id: String.t(),
+          neurons: [String.t()],
+          activation_threshold: float(),
+          refractory_period: integer(),
+          synaptic_plasticity: float(),
+          energy_consumption: float()
+        }
 
   # ================================
   # Neuromorphic Reasoning API
@@ -90,7 +90,7 @@ defmodule Dspy.NeuromorphicReasoningEngine do
   def init(opts) do
     # Start Erlang profiling for energy monitoring (if available)
     safe_start_profiling()
-    
+
     state = %__MODULE__{
       neuron_pools: initialize_neuron_pools(opts),
       spike_buffer: %{},
@@ -107,9 +107,11 @@ defmodule Dspy.NeuromorphicReasoningEngine do
     # Schedule energy optimization cycles
     schedule_energy_optimization()
     schedule_memory_consolidation()
-    
-    Logger.info("Neuromorphic Reasoning Engine initialized with #{map_size(state.neuron_pools)} neuron pools")
-    
+
+    Logger.info(
+      "Neuromorphic Reasoning Engine initialized with #{map_size(state.neuron_pools)} neuron pools"
+    )
+
     {:ok, state}
   end
 
@@ -117,23 +119,24 @@ defmodule Dspy.NeuromorphicReasoningEngine do
   def handle_call({:neuromorphic_reasoning, problem, opts}, _from, state) do
     # Start profiling this specific reasoning task
     profiling_ref = start_reasoning_profiling()
-    
+
     try do
       # Convert problem to spike patterns
       initial_spikes = problem_to_spike_patterns(problem, state.neuron_pools)
-      
+
       # Process through neuromorphic network
       reasoning_result = execute_neuromorphic_processing(initial_spikes, state, opts)
-      
+
       # Apply consciousness emergence detection if enabled
-      conscious_result = apply_consciousness_emergence(reasoning_result, state.consciousness_detector)
-      
+      conscious_result =
+        apply_consciousness_emergence(reasoning_result, state.consciousness_detector)
+
       # Integrate with quantum superposition if available
       final_result = integrate_quantum_superposition(conscious_result, state.quantum_bridge)
-      
+
       # Update synaptic weights based on success
       updated_state = update_synaptic_plasticity(state, final_result.success_metrics)
-      
+
       {:reply, {:ok, final_result}, updated_state}
     catch
       error ->
@@ -159,15 +162,15 @@ defmodule Dspy.NeuromorphicReasoningEngine do
   @impl true
   def handle_cast({:start_streaming, signature, opts}, state) do
     streaming_context = initialize_streaming_context(signature, opts)
-    
+
     # Create neuromorphic streaming callback
     callback = create_neuromorphic_streaming_callback(streaming_context)
-    
+
     # Start adaptive streaming with real-time spike processing
-    spawn_link(fn -> 
+    spawn_link(fn ->
       execute_adaptive_streaming(streaming_context, callback, state)
     end)
-    
+
     {:noreply, %{state | streaming_context: streaming_context}}
   end
 
@@ -207,18 +210,19 @@ defmodule Dspy.NeuromorphicReasoningEngine do
       &neuromorphic_consensus/2,
       &spike_decoding/2
     ]
-    
+
     # Execute pipeline with fault tolerance
-    result = Enum.reduce(processing_steps, initial_spikes, fn step, acc_spikes ->
-      try do
-        step.(acc_spikes, state)
-      rescue
-        error ->
-          Logger.warning("Neuromorphic step failed, using fallback: #{inspect(error)}")
-          neuromorphic_fallback(acc_spikes, state)
-      end
-    end)
-    
+    result =
+      Enum.reduce(processing_steps, initial_spikes, fn step, acc_spikes ->
+        try do
+          step.(acc_spikes, state)
+        rescue
+          error ->
+            Logger.warning("Neuromorphic step failed, using fallback: #{inspect(error)}")
+            neuromorphic_fallback(acc_spikes, state)
+        end
+      end)
+
     %{
       reasoning_output: result.final_reasoning,
       spike_trace: result.spike_history,
@@ -232,16 +236,17 @@ defmodule Dspy.NeuromorphicReasoningEngine do
   defp spike_encoding(reasoning_input, state) do
     # Convert reasoning concepts to spike trains
     concepts = extract_reasoning_concepts(reasoning_input)
-    
-    spike_trains = concepts
-    |> Enum.map(fn concept ->
-      intensity = calculate_concept_intensity(concept)
-      frequency = concept_to_frequency(concept, intensity)
-      
-      generate_spike_train(concept, frequency, intensity, state.neuron_pools)
-    end)
-    |> Enum.flat_map(& &1)
-    
+
+    spike_trains =
+      concepts
+      |> Enum.map(fn concept ->
+        intensity = calculate_concept_intensity(concept)
+        frequency = concept_to_frequency(concept, intensity)
+
+        generate_spike_train(concept, frequency, intensity, state.neuron_pools)
+      end)
+      |> Enum.flat_map(& &1)
+
     %{
       spikes: spike_trains,
       encoding_latency: measure_encoding_latency(),
@@ -252,20 +257,21 @@ defmodule Dspy.NeuromorphicReasoningEngine do
   defp temporal_integration(spike_data, state) do
     # Integrate spikes over time windows for temporal reasoning
     time_windows = partition_spikes_by_time(spike_data.spikes)
-    
-    integrated_patterns = time_windows
-    |> Enum.map(fn {window_start, window_spikes} ->
-      pattern = detect_temporal_patterns(window_spikes)
-      integration_strength = calculate_integration_strength(pattern, state.synaptic_weights)
-      
-      %{
-        window: window_start,
-        pattern: pattern,
-        strength: integration_strength,
-        reasoning_contribution: pattern_to_reasoning(pattern)
-      }
-    end)
-    
+
+    integrated_patterns =
+      time_windows
+      |> Enum.map(fn {window_start, window_spikes} ->
+        pattern = detect_temporal_patterns(window_spikes)
+        integration_strength = calculate_integration_strength(pattern, state.synaptic_weights)
+
+        %{
+          window: window_start,
+          pattern: pattern,
+          strength: integration_strength,
+          reasoning_contribution: pattern_to_reasoning(pattern)
+        }
+      end)
+
     %{
       integrated_patterns: integrated_patterns,
       temporal_coherence: calculate_temporal_coherence(integrated_patterns),
@@ -276,20 +282,21 @@ defmodule Dspy.NeuromorphicReasoningEngine do
   defp lateral_inhibition(integration_data, state) do
     # Apply competitive inhibition between conflicting reasoning paths
     patterns = integration_data.integrated_patterns
-    
+
     # Find competing patterns
     competing_groups = group_competing_patterns(patterns)
-    
+
     # Apply inhibition based on strength and relevance
-    inhibited_patterns = competing_groups
-    |> Enum.map(fn group ->
-      winner = select_pattern_winner(group, state.neuron_pools)
-      suppressed = apply_inhibition_to_losers(group, winner)
-      
-      [winner | suppressed]
-    end)
-    |> List.flatten()
-    
+    inhibited_patterns =
+      competing_groups
+      |> Enum.map(fn group ->
+        winner = select_pattern_winner(group, state.neuron_pools)
+        suppressed = apply_inhibition_to_losers(group, winner)
+
+        [winner | suppressed]
+      end)
+      |> List.flatten()
+
     %{
       final_patterns: inhibited_patterns,
       competition_results: analyze_competition_results(competing_groups),
@@ -300,21 +307,22 @@ defmodule Dspy.NeuromorphicReasoningEngine do
   defp competitive_dynamics(inhibition_data, state) do
     # Implement competitive dynamics for reasoning selection
     patterns = inhibition_data.final_patterns
-    
+
     # Create competition between reasoning strategies
     competitions = create_reasoning_competitions(patterns)
-    
-    results = competitions
-    |> Enum.map(fn competition ->
-      winner = run_competitive_selection(competition, state.adaptation_rules)
-      
-      %{
-        competition: competition,
-        winner: winner,
-        selection_metrics: calculate_selection_metrics(competition, winner)
-      }
-    end)
-    
+
+    results =
+      competitions
+      |> Enum.map(fn competition ->
+        winner = run_competitive_selection(competition, state.adaptation_rules)
+
+        %{
+          competition: competition,
+          winner: winner,
+          selection_metrics: calculate_selection_metrics(competition, winner)
+        }
+      end)
+
     %{
       competition_results: results,
       selected_reasoning: extract_winning_reasoning(results),
@@ -326,15 +334,16 @@ defmodule Dspy.NeuromorphicReasoningEngine do
     # Apply homeostatic regulation to maintain system stability
     current_activity = measure_system_activity(competition_data)
     target_activity = state.adaptation_rules.target_activity_level
-    
+
     regulation_needed = current_activity - target_activity
-    
-    regulated_reasoning = if abs(regulation_needed) > 0.1 do
-      apply_homeostatic_adjustment(competition_data.selected_reasoning, regulation_needed)
-    else
-      competition_data.selected_reasoning
-    end
-    
+
+    regulated_reasoning =
+      if abs(regulation_needed) > 0.1 do
+        apply_homeostatic_adjustment(competition_data.selected_reasoning, regulation_needed)
+      else
+        competition_data.selected_reasoning
+      end
+
     %{
       regulated_reasoning: regulated_reasoning,
       activity_level: current_activity,
@@ -346,16 +355,17 @@ defmodule Dspy.NeuromorphicReasoningEngine do
   defp spike_timing_dependent_plasticity(regulation_data, state) do
     # Apply STDP for learning and adaptation
     reasoning_quality = assess_reasoning_quality(regulation_data.regulated_reasoning)
-    
+
     # Update synaptic weights based on timing and success
-    weight_updates = calculate_stdp_updates(
-      regulation_data.regulated_reasoning,
-      reasoning_quality,
-      state.synaptic_weights
-    )
-    
+    weight_updates =
+      calculate_stdp_updates(
+        regulation_data.regulated_reasoning,
+        reasoning_quality,
+        state.synaptic_weights
+      )
+
     updated_weights = apply_weight_updates(state.synaptic_weights, weight_updates)
-    
+
     %{
       final_reasoning: regulation_data.regulated_reasoning,
       weight_updates: weight_updates,
@@ -368,23 +378,24 @@ defmodule Dspy.NeuromorphicReasoningEngine do
   defp neuromorphic_consensus(plasticity_data, state) do
     # Generate consensus across neuromorphic processing
     reasoning_candidates = extract_reasoning_candidates(plasticity_data.final_reasoning)
-    
+
     # Weight candidates by neuromorphic criteria
-    weighted_candidates = reasoning_candidates
-    |> Enum.map(fn candidate ->
-      neuromorphic_score = calculate_neuromorphic_score(candidate, state)
-      
-      %{
-        candidate: candidate,
-        neuromorphic_score: neuromorphic_score,
-        biological_plausibility: assess_biological_plausibility(candidate),
-        energy_efficiency: estimate_energy_efficiency(candidate)
-      }
-    end)
-    |> Enum.sort_by(& &1.neuromorphic_score, :desc)
-    
+    weighted_candidates =
+      reasoning_candidates
+      |> Enum.map(fn candidate ->
+        neuromorphic_score = calculate_neuromorphic_score(candidate, state)
+
+        %{
+          candidate: candidate,
+          neuromorphic_score: neuromorphic_score,
+          biological_plausibility: assess_biological_plausibility(candidate),
+          energy_efficiency: estimate_energy_efficiency(candidate)
+        }
+      end)
+      |> Enum.sort_by(& &1.neuromorphic_score, :desc)
+
     consensus_reasoning = combine_top_candidates(weighted_candidates)
-    
+
     %{
       consensus_reasoning: consensus_reasoning,
       candidate_analysis: weighted_candidates,
@@ -396,9 +407,9 @@ defmodule Dspy.NeuromorphicReasoningEngine do
   defp spike_decoding(consensus_data, state) do
     # Decode spike patterns back to reasoning output
     spikes_to_decode = consensus_data.consensus_reasoning
-    
+
     decoded_reasoning = decode_spike_patterns_to_reasoning(spikes_to_decode, state.neuron_pools)
-    
+
     %{
       final_reasoning: decoded_reasoning,
       spike_history: collect_processing_history(consensus_data),
@@ -415,35 +426,38 @@ defmodule Dspy.NeuromorphicReasoningEngine do
   defp perform_energy_optimization(state) do
     # Use Erlang profiling to identify energy inefficiencies
     profiling_data = safe_analyze_profiling()
-    
+
     # Analyze function call patterns for optimization
     optimization_targets = identify_optimization_targets(profiling_data)
-    
+
     # Apply neuromorphic optimizations
     optimized_neuron_pools = optimize_neuron_pools(state.neuron_pools, optimization_targets)
     optimized_weights = optimize_synaptic_weights(state.synaptic_weights, optimization_targets)
-    
+
     # Update energy monitoring
     updated_energy_monitor = update_energy_monitor(state.energy_monitor, optimization_targets)
-    
-    Logger.info("Energy optimization completed: #{length(optimization_targets)} targets optimized")
-    
-    %{state |
-      neuron_pools: optimized_neuron_pools,
-      synaptic_weights: optimized_weights,
-      energy_monitor: updated_energy_monitor
+
+    Logger.info(
+      "Energy optimization completed: #{length(optimization_targets)} targets optimized"
+    )
+
+    %{
+      state
+      | neuron_pools: optimized_neuron_pools,
+        synaptic_weights: optimized_weights,
+        energy_monitor: updated_energy_monitor
     }
   end
 
   defp identify_optimization_targets(profiling_data) do
     # Analyze profiling data to find energy-intensive operations
     profiling_data
-    |> Enum.filter(fn {_function, metrics} -> 
+    |> Enum.filter(fn {_function, metrics} ->
       metrics.percentage > 5.0 or metrics.calls > 1000
     end)
     |> Enum.map(fn {function, metrics} ->
       optimization_type = determine_optimization_type(function, metrics)
-      
+
       %{
         function: function,
         metrics: metrics,
@@ -460,12 +474,16 @@ defmodule Dspy.NeuromorphicReasoningEngine do
       case target.optimization_type do
         :reduce_threshold ->
           adjust_activation_thresholds(acc_pools, target)
+
         :increase_refractory ->
           adjust_refractory_periods(acc_pools, target)
+
         :sparse_connections ->
           implement_sparse_connectivity(acc_pools, target)
+
         :adaptive_pooling ->
           implement_adaptive_pooling(acc_pools, target)
+
         _ ->
           acc_pools
       end
@@ -485,7 +503,7 @@ defmodule Dspy.NeuromorphicReasoningEngine do
       &streaming_consciousness_check/3,
       &neuromorphic_response_generation/3
     ]
-    
+
     # Process streaming data through neuromorphic pipeline
     Enum.reduce(stream_pipeline, streaming_context, fn step, context ->
       step.(context, callback, state)
@@ -495,11 +513,12 @@ defmodule Dspy.NeuromorphicReasoningEngine do
   defp neuromorphic_preprocessing(context, _callback, _state) do
     # Preprocess streaming input for neuromorphic processing
     preprocessed = apply_neuromorphic_preprocessing(context.input_stream)
-    
+
     # Update context with preprocessing results
-    %{context | 
-      preprocessed_stream: preprocessed,
-      preprocessing_latency: measure_preprocessing_latency()
+    %{
+      context
+      | preprocessed_stream: preprocessed,
+        preprocessing_latency: measure_preprocessing_latency()
     }
   end
 
@@ -508,32 +527,32 @@ defmodule Dspy.NeuromorphicReasoningEngine do
     context.preprocessed_stream
     |> Stream.map(fn chunk ->
       spikes = chunk_to_spikes(chunk, state.neuron_pools)
-      
+
       # Process spikes immediately for low latency
       processed_spikes = process_real_time_spikes(spikes, state)
-      
+
       # Send callback with neuromorphic processing result
       callback.({:neuromorphic_chunk, processed_spikes})
-      
+
       processed_spikes
     end)
     |> Stream.run()
-    
+
     context
   end
 
   defp real_time_adaptation(context, callback, state) do
     # Adapt neuromorphic parameters in real-time based on performance
     performance_metrics = collect_streaming_performance_metrics(context)
-    
+
     # Apply real-time adaptations
     adaptations = calculate_real_time_adaptations(performance_metrics, state.adaptation_rules)
-    
+
     # Update neuromorphic parameters
     apply_real_time_adaptations(adaptations)
-    
+
     callback.({:adaptation_update, adaptations})
-    
+
     %{context | adaptations: adaptations}
   end
 
@@ -541,10 +560,10 @@ defmodule Dspy.NeuromorphicReasoningEngine do
     # Check for consciousness emergence during streaming
     if state.consciousness_detector.enabled do
       consciousness_level = detect_streaming_consciousness(context, state.consciousness_detector)
-      
+
       if consciousness_level > state.consciousness_detector.emergence_threshold do
         callback.({:consciousness_emergence, consciousness_level})
-        
+
         # Apply consciousness-aware processing
         conscious_context = apply_consciousness_aware_streaming(context, consciousness_level)
         conscious_context
@@ -559,10 +578,10 @@ defmodule Dspy.NeuromorphicReasoningEngine do
   defp neuromorphic_response_generation(context, callback, state) do
     # Generate final neuromorphic responses
     responses = generate_neuromorphic_responses(context, state)
-    
+
     # Send final callback with complete results
     callback.({:neuromorphic_complete, responses})
-    
+
     %{context | final_responses: responses}
   end
 
@@ -573,33 +592,39 @@ defmodule Dspy.NeuromorphicReasoningEngine do
   defp perform_memory_consolidation(state) do
     # Apply biological forgetting mechanisms
     current_time = System.monotonic_time(:millisecond)
-    
+
     # Consolidate synaptic weights
-    consolidated_weights = apply_memory_consolidation(
-      state.synaptic_weights,
-      current_time,
-      state.memory_consolidator
-    )
-    
+    consolidated_weights =
+      apply_memory_consolidation(
+        state.synaptic_weights,
+        current_time,
+        state.memory_consolidator
+      )
+
     # Clean up old spike buffers
-    cleaned_spike_buffer = apply_forgetting_curve(
-      state.spike_buffer,
-      current_time,
-      state.memory_consolidator.forgetting_curve
-    )
-    
+    cleaned_spike_buffer =
+      apply_forgetting_curve(
+        state.spike_buffer,
+        current_time,
+        state.memory_consolidator.forgetting_curve
+      )
+
     # Strengthen important pathways
-    strengthened_pools = strengthen_important_pathways(
-      state.neuron_pools,
-      state.memory_consolidator.importance_criteria
+    strengthened_pools =
+      strengthen_important_pathways(
+        state.neuron_pools,
+        state.memory_consolidator.importance_criteria
+      )
+
+    Logger.debug(
+      "Memory consolidation: #{map_size(state.spike_buffer) - map_size(cleaned_spike_buffer)} buffers forgotten"
     )
-    
-    Logger.debug("Memory consolidation: #{map_size(state.spike_buffer) - map_size(cleaned_spike_buffer)} buffers forgotten")
-    
-    %{state |
-      synaptic_weights: consolidated_weights,
-      spike_buffer: cleaned_spike_buffer,
-      neuron_pools: strengthened_pools
+
+    %{
+      state
+      | synaptic_weights: consolidated_weights,
+        spike_buffer: cleaned_spike_buffer,
+        neuron_pools: strengthened_pools
     }
   end
 
@@ -607,8 +632,10 @@ defmodule Dspy.NeuromorphicReasoningEngine do
     spike_buffer
     |> Enum.filter(fn {_id, spike_data} ->
       time_since_spike = current_time - spike_data.timestamp
-      forgetting_probability = calculate_forgetting_probability(time_since_spike, forgetting_curve)
-      
+
+      forgetting_probability =
+        calculate_forgetting_probability(time_since_spike, forgetting_curve)
+
       :rand.uniform() > forgetting_probability
     end)
     |> Map.new()
@@ -628,7 +655,7 @@ defmodule Dspy.NeuromorphicReasoningEngine do
     if consciousness_detector.enabled do
       # Calculate consciousness metrics from neuromorphic processing
       phi_value = calculate_neuromorphic_phi(reasoning_result)
-      
+
       # Apply consciousness enhancement if emergence detected
       if phi_value > consciousness_detector.emergence_threshold do
         enhance_with_consciousness(reasoning_result, phi_value)
@@ -644,10 +671,10 @@ defmodule Dspy.NeuromorphicReasoningEngine do
     if quantum_bridge.enabled do
       # Convert neuromorphic reasoning to quantum superposition
       quantum_states = neuromorphic_to_quantum_states(reasoning_result.reasoning_output)
-      
+
       # Apply quantum superposition processing
       superposition_result = apply_quantum_neuromorphic_fusion(quantum_states, quantum_bridge)
-      
+
       # Merge quantum and neuromorphic results
       merge_quantum_neuromorphic_results(reasoning_result, superposition_result)
     else
@@ -661,12 +688,12 @@ defmodule Dspy.NeuromorphicReasoningEngine do
 
   defp initialize_neuron_pools(opts) do
     pool_configs = Keyword.get(opts, :neuron_pools, default_neuron_pool_configs())
-    
+
     pool_configs
     |> Enum.map(fn config ->
       pool_id = config.id
       neurons = initialize_neurons(config.neuron_count, pool_id)
-      
+
       pool = %{
         id: pool_id,
         neurons: neurons,
@@ -676,7 +703,7 @@ defmodule Dspy.NeuromorphicReasoningEngine do
         energy_consumption: config.energy_consumption,
         reasoning_type: config.reasoning_type
       }
-      
+
       {pool_id, pool}
     end)
     |> Map.new()
@@ -684,14 +711,42 @@ defmodule Dspy.NeuromorphicReasoningEngine do
 
   defp default_neuron_pool_configs do
     [
-      %{id: "reasoning_pool", neuron_count: 100, activation_threshold: 0.7, refractory_period: 50,
-        synaptic_plasticity: 0.1, energy_consumption: 1.0, reasoning_type: :logical},
-      %{id: "intuition_pool", neuron_count: 80, activation_threshold: 0.5, refractory_period: 30,
-        synaptic_plasticity: 0.15, energy_consumption: 0.8, reasoning_type: :intuitive},
-      %{id: "memory_pool", neuron_count: 120, activation_threshold: 0.6, refractory_period: 40,
-        synaptic_plasticity: 0.05, energy_consumption: 0.6, reasoning_type: :memory},
-      %{id: "creative_pool", neuron_count: 60, activation_threshold: 0.4, refractory_period: 20,
-        synaptic_plasticity: 0.2, energy_consumption: 1.2, reasoning_type: :creative}
+      %{
+        id: "reasoning_pool",
+        neuron_count: 100,
+        activation_threshold: 0.7,
+        refractory_period: 50,
+        synaptic_plasticity: 0.1,
+        energy_consumption: 1.0,
+        reasoning_type: :logical
+      },
+      %{
+        id: "intuition_pool",
+        neuron_count: 80,
+        activation_threshold: 0.5,
+        refractory_period: 30,
+        synaptic_plasticity: 0.15,
+        energy_consumption: 0.8,
+        reasoning_type: :intuitive
+      },
+      %{
+        id: "memory_pool",
+        neuron_count: 120,
+        activation_threshold: 0.6,
+        refractory_period: 40,
+        synaptic_plasticity: 0.05,
+        energy_consumption: 0.6,
+        reasoning_type: :memory
+      },
+      %{
+        id: "creative_pool",
+        neuron_count: 60,
+        activation_threshold: 0.4,
+        refractory_period: 20,
+        synaptic_plasticity: 0.2,
+        energy_consumption: 1.2,
+        reasoning_type: :creative
+      }
     ]
   end
 
@@ -706,7 +761,7 @@ defmodule Dspy.NeuromorphicReasoningEngine do
       reasoning_to_memory: :rand.uniform() * 0.1,
       intuition_to_creative: :rand.uniform() * 0.15,
       memory_to_reasoning: :rand.uniform() * 0.08,
-      creative_to_intuition: :rand.uniform() * 0.12,
+      creative_to_intuition: :rand.uniform() * 0.12
       # Add more synaptic connections as needed
     }
   end
@@ -759,14 +814,16 @@ defmodule Dspy.NeuromorphicReasoningEngine do
     %{
       forgetting_curve: %{
         decay_constant: 0.001,
-        time_scale: 3600000  # 1 hour
+        # 1 hour
+        time_scale: 3_600_000
       },
       importance_criteria: %{
         usage_frequency: 0.4,
         recency: 0.3,
         success_correlation: 0.3
       },
-      consolidation_interval: 60000  # 1 minute
+      # 1 minute
+      consolidation_interval: 60000
     }
   end
 
@@ -775,11 +832,13 @@ defmodule Dspy.NeuromorphicReasoningEngine do
   # ================================
 
   defp schedule_energy_optimization do
-    Process.send_after(self(), :optimize_energy, 30_000)  # Every 30 seconds
+    # Every 30 seconds
+    Process.send_after(self(), :optimize_energy, 30_000)
   end
 
   defp schedule_memory_consolidation do
-    Process.send_after(self(), :consolidate_memory, 60_000)  # Every minute
+    # Every minute
+    Process.send_after(self(), :consolidate_memory, 60_000)
   end
 
   defp start_reasoning_profiling do
@@ -798,7 +857,7 @@ defmodule Dspy.NeuromorphicReasoningEngine do
   defp safe_start_profiling do
     try do
       if Code.ensure_loaded?(:eprof) do
-        :eprof.start_profiling([self()])
+        apply(:eprof, :start_profiling, [[self()]])
       else
         {:ok, :mock_profiling}
       end
@@ -810,7 +869,7 @@ defmodule Dspy.NeuromorphicReasoningEngine do
   defp safe_stop_profiling do
     try do
       if Code.ensure_loaded?(:eprof) do
-        :eprof.stop_profiling()
+        apply(:eprof, :stop_profiling, [])
       else
         :ok
       end
@@ -822,7 +881,7 @@ defmodule Dspy.NeuromorphicReasoningEngine do
   defp safe_analyze_profiling do
     try do
       if Code.ensure_loaded?(:eprof) do
-        :eprof.analyze(:total)
+        apply(:eprof, :analyze, [:total])
       else
         # Mock profiling data for fallback
         {:ok, %{total_time: 1000, call_count: 100, functions: []}}
@@ -839,14 +898,15 @@ defmodule Dspy.NeuromorphicReasoningEngine do
   defp update_synaptic_plasticity(state, success_metrics) do
     # Update synaptic weights based on reasoning success
     learning_rate = calculate_learning_rate(success_metrics)
-    
-    updated_weights = state.synaptic_weights
-    |> Enum.map(fn {connection, weight} ->
-      adjustment = learning_rate * success_metrics.accuracy * 0.1
-      {connection, weight + adjustment}
-    end)
-    |> Map.new()
-    
+
+    updated_weights =
+      state.synaptic_weights
+      |> Enum.map(fn {connection, weight} ->
+        adjustment = learning_rate * success_metrics.accuracy * 0.1
+        {connection, weight + adjustment}
+      end)
+      |> Map.new()
+
     %{state | synaptic_weights: updated_weights}
   end
 

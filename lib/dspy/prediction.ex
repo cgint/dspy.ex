@@ -112,7 +112,7 @@ defmodule Dspy.Prediction do
       :error -> :error
     end
   end
-  
+
   @impl Access
   def get_and_update(prediction, key, function) do
     current_value = get(prediction, key)
@@ -120,7 +120,7 @@ defmodule Dspy.Prediction do
     new_prediction = put(prediction, key, new_value)
     {get_value, new_prediction}
   end
-  
+
   @impl Access
   def pop(prediction, key) do
     current_value = get(prediction, key)

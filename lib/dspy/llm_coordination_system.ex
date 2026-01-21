@@ -2,7 +2,7 @@ defmodule Dspy.LLMCoordinationSystem do
   @moduledoc """
   LLM Coordination System for managing token usage and orchestrating 
   multi-turn autonomous meta-hotswapping processes.
-  
+
   This system:
   1. Tracks and manages LLM token consumption across agent operations
   2. Coordinates multi-turn conversations and decision making
@@ -79,14 +79,14 @@ defmodule Dspy.LLMCoordinationSystem do
       optimization_metrics: %{cache_hits: 0, cache_misses: 0, optimization_savings: 0},
       flow_control: %{max_concurrent: 5, current_active: 0, queue: []}
     }
-    
+
     Logger.info("LLM Coordination System #{coordination_id} started")
     {:ok, state}
   end
 
   def handle_call({:begin_process, process_spec, token_budget}, _from, state) do
     process_id = generate_process_id()
-    
+
     conversation_state = %{
       process_id: process_id,
       spec: process_spec,
@@ -97,13 +97,14 @@ defmodule Dspy.LLMCoordinationSystem do
       status: :active,
       start_time: DateTime.utc_now()
     }
-    
-    updated_state = %{state |
-      active_conversations: Map.put(state.active_conversations, process_id, conversation_state),
-      token_budget: %{state.token_budget | reserved: state.token_budget.reserved + token_budget},
-      coordination_state: :active
+
+    updated_state = %{
+      state
+      | active_conversations: Map.put(state.active_conversations, process_id, conversation_state),
+        token_budget: %{state.token_budget | reserved: state.token_budget.reserved + token_budget},
+        coordination_state: :active
     }
-    
+
     Logger.info("Started coordinated process #{process_id} with #{token_budget} token budget")
     {:reply, {:ok, process_id}, updated_state}
   end
@@ -112,20 +113,22 @@ defmodule Dspy.LLMCoordinationSystem do
     case Map.get(state.active_conversations, conversation_id) do
       nil ->
         {:reply, {:error, :conversation_not_found}, state}
-        
+
       conversation ->
         case execute_coordinated_query(state, conversation, prompt, context) do
           {:ok, response, updated_conversation, tokens_used} ->
-            updated_conversations = Map.put(state.active_conversations, conversation_id, updated_conversation)
-            
-            updated_state = %{state |
-              active_conversations: updated_conversations,
-              token_budget: %{state.token_budget | used: state.token_budget.used + tokens_used},
-              token_usage: update_token_usage(state.token_usage, tokens_used)
+            updated_conversations =
+              Map.put(state.active_conversations, conversation_id, updated_conversation)
+
+            updated_state = %{
+              state
+              | active_conversations: updated_conversations,
+                token_budget: %{state.token_budget | used: state.token_budget.used + tokens_used},
+                token_usage: update_token_usage(state.token_usage, tokens_used)
             }
-            
+
             {:reply, {:ok, response}, updated_state}
-            
+
           {:error, reason} ->
             {:reply, {:error, reason}, state}
         end
@@ -142,7 +145,7 @@ defmodule Dspy.LLMCoordinationSystem do
       flow_control: state.flow_control,
       coordination_state: state.coordination_state
     }
-    
+
     {:reply, status, state}
   end
 
@@ -159,33 +162,44 @@ defmodule Dspy.LLMCoordinationSystem do
   defp execute_coordinated_query(state, conversation, prompt, context) do
     # Check token budget
     estimated_tokens = estimate_token_usage(prompt, context)
-    
+
     if conversation.tokens_used + estimated_tokens > conversation.token_budget do
       {:error, :token_budget_exceeded}
     else
       # Check cache first for efficiency
       cache_key = generate_cache_key(prompt, context)
-      
+
       case check_conversation_cache(state.conversation_cache, cache_key) do
         {:hit, cached_response} ->
           Logger.debug("Cache hit for query")
-          
-          updated_conversation = add_turn_to_conversation(conversation, prompt, cached_response, 0)
-          _updated_metrics = %{state.optimization_metrics | cache_hits: state.optimization_metrics.cache_hits + 1}
-          
+
+          updated_conversation =
+            add_turn_to_conversation(conversation, prompt, cached_response, 0)
+
+          _updated_metrics = %{
+            state.optimization_metrics
+            | cache_hits: state.optimization_metrics.cache_hits + 1
+          }
+
           {:ok, cached_response, updated_conversation, 0}
-          
+
         :miss ->
           # Execute actual LLM query
           case execute_llm_query(state.llm_clients, prompt, context, conversation) do
             {:ok, response, actual_tokens} ->
               # Update conversation and cache
-              updated_conversation = add_turn_to_conversation(conversation, prompt, response, actual_tokens)
+              updated_conversation =
+                add_turn_to_conversation(conversation, prompt, response, actual_tokens)
+
               _updated_cache = cache_response(state.conversation_cache, cache_key, response)
-              _updated_metrics = %{state.optimization_metrics | cache_misses: state.optimization_metrics.cache_misses + 1}
-              
+
+              _updated_metrics = %{
+                state.optimization_metrics
+                | cache_misses: state.optimization_metrics.cache_misses + 1
+              }
+
               {:ok, response, updated_conversation, actual_tokens}
-              
+
             {:error, reason} ->
               {:error, reason}
           end
@@ -196,15 +210,15 @@ defmodule Dspy.LLMCoordinationSystem do
   defp execute_llm_query(llm_clients, prompt, context, conversation) do
     # Enhanced prompt with conversation context
     enhanced_prompt = build_enhanced_prompt(prompt, context, conversation)
-    
+
     # Select best LLM client based on query type and current load
     selected_client = select_optimal_client(llm_clients, enhanced_prompt, conversation)
-    
+
     case query_llm_with_retry(selected_client, enhanced_prompt) do
       {:ok, response} ->
         actual_tokens = calculate_actual_tokens(enhanced_prompt, response)
         {:ok, response, actual_tokens}
-        
+
       {:error, reason} ->
         {:error, reason}
     end
@@ -213,30 +227,31 @@ defmodule Dspy.LLMCoordinationSystem do
   defp build_enhanced_prompt(prompt, context, conversation) do
     # Build context-aware prompt with conversation history
     conversation_context = build_conversation_context(conversation)
-    
+
     """
     === CONVERSATION CONTEXT ===
     Process ID: #{conversation.process_id}
     Turn Number: #{length(conversation.turns) + 1}
     Previous Context: #{conversation_context}
     Current Context: #{inspect(context)}
-    
+
     === COORDINATION INSTRUCTIONS ===
     This is part of an autonomous meta-hotswapping process.
     Provide structured, actionable responses that can be parsed and executed.
     Focus on the specific phase: #{get_current_phase(conversation)}
-    
+
     === USER PROMPT ===
     #{prompt}
-    
+
     === RESPONSE FORMAT ===
     Provide response in structured format for autonomous processing.
     """
   end
 
   defp build_conversation_context(conversation) do
-    recent_turns = Enum.take(conversation.turns, -3) # Last 3 turns for context
-    
+    # Last 3 turns for context
+    recent_turns = Enum.take(conversation.turns, -3)
+
     Enum.map_join(recent_turns, "\n", fn turn ->
       "Turn #{turn.turn_number}: #{String.slice(turn.prompt, 0, 100)}... -> #{String.slice(turn.response, 0, 100)}..."
     end)
@@ -244,7 +259,7 @@ defmodule Dspy.LLMCoordinationSystem do
 
   defp get_current_phase(conversation) do
     turn_count = length(conversation.turns)
-    
+
     case turn_count do
       0 -> :analysis_and_selection
       1 -> :design_and_planning
@@ -259,7 +274,7 @@ defmodule Dspy.LLMCoordinationSystem do
     # Select client based on complexity, conversation phase, and current load
     phase = get_current_phase(conversation)
     complexity = estimate_query_complexity(prompt)
-    
+
     case {phase, complexity} do
       {:analysis_and_selection, :high} -> llm_clients.primary_reasoning
       {:design_and_planning, _} -> llm_clients.code_specialist
@@ -275,22 +290,22 @@ defmodule Dspy.LLMCoordinationSystem do
       case execute_single_llm_query(client, prompt) do
         {:ok, response} ->
           {:ok, response}
-          
+
         {:error, :rate_limit} when retries > 0 ->
           backoff_time = exponential_backoff(3 - retries)
           Logger.info("Rate limited, backing off for #{backoff_time}ms")
           Process.sleep(backoff_time)
           query_llm_with_retry(client, prompt, retries - 1)
-          
+
         {:error, :timeout} when retries > 0 ->
           Logger.warning("LLM query timed out, retrying")
           query_llm_with_retry(client, prompt, retries - 1)
-          
+
         {:error, reason} when retries > 0 ->
           Logger.warning("LLM query failed, retrying: #{inspect(reason)}")
           Process.sleep(1000)
           query_llm_with_retry(client, prompt, retries - 1)
-          
+
         {:error, reason} ->
           Logger.error("LLM query failed after all retries: #{inspect(reason)}")
           {:error, reason}
@@ -306,10 +321,13 @@ defmodule Dspy.LLMCoordinationSystem do
     case call_llm_api(client, prompt) do
       {:ok, response} when is_binary(response) ->
         {:ok, response}
+
       {:ok, response} ->
         {:ok, inspect(response)}
+
       {:error, reason} ->
         {:error, reason}
+
       result ->
         # Fallback for unexpected formats - ensures we always return {:ok, binary()}
         {:ok, inspect(result)}
@@ -321,10 +339,13 @@ defmodule Dspy.LLMCoordinationSystem do
     cond do
       String.contains?(prompt, "error_test") ->
         {:error, :api_error}
+
       String.contains?(prompt, "timeout_test") ->
         {:error, :timeout}
+
       String.contains?(prompt, "rate_limit_test") ->
         {:error, :rate_limit}
+
       true ->
         simulated_response = generate_simulated_response(prompt)
         {:ok, simulated_response}
@@ -343,7 +364,7 @@ defmodule Dspy.LLMCoordinationSystem do
           "success_criteria": "Working module with passing tests"
         }
         """
-        
+
       String.contains?(prompt, "design") ->
         """
         {
@@ -355,7 +376,7 @@ defmodule Dspy.LLMCoordinationSystem do
           "hotswap_points": ["main_function integration"]
         }
         """
-        
+
       String.contains?(prompt, "implementation") ->
         """
         defmodule GeneratedModule do
@@ -371,7 +392,7 @@ defmodule Dspy.LLMCoordinationSystem do
           end
         end
         """
-        
+
       String.contains?(prompt, "test") ->
         """
         defmodule GeneratedModuleTest do
@@ -383,7 +404,7 @@ defmodule Dspy.LLMCoordinationSystem do
           end
         end
         """
-        
+
       String.contains?(prompt, "validation") ->
         """
         {
@@ -395,7 +416,7 @@ defmodule Dspy.LLMCoordinationSystem do
           "legitimacy_score": 0.95
         }
         """
-        
+
       true ->
         "Coordinated response for: #{String.slice(prompt, 0, 50)}..."
     end
@@ -409,10 +430,11 @@ defmodule Dspy.LLMCoordinationSystem do
       tokens_used: tokens_used,
       timestamp: DateTime.utc_now()
     }
-    
-    %{conversation |
-      turns: conversation.turns ++ [turn],
-      tokens_used: conversation.tokens_used + tokens_used
+
+    %{
+      conversation
+      | turns: conversation.turns ++ [turn],
+        tokens_used: conversation.tokens_used + tokens_used
     }
   end
 
@@ -454,10 +476,11 @@ defmodule Dspy.LLMCoordinationSystem do
   end
 
   defp update_token_usage(usage, tokens_used) do
-    %{usage |
-      queries: usage.queries + 1,
-      responses: usage.responses + 1,
-      efficiency: calculate_efficiency(usage, tokens_used)
+    %{
+      usage
+      | queries: usage.queries + 1,
+        responses: usage.responses + 1,
+        efficiency: calculate_efficiency(usage, tokens_used)
     }
   end
 
@@ -474,40 +497,45 @@ defmodule Dspy.LLMCoordinationSystem do
   defp perform_token_optimization(state) do
     # Implement token optimization strategies
     _optimization_savings = 0
-    
+
     # 1. Cache optimization
     cache_savings = optimize_cache(state.conversation_cache)
-    
+
     # 2. Context compression
     context_savings = compress_contexts(state.active_conversations)
-    
+
     # 3. Query deduplication
     dedup_savings = deduplicate_queries(state.active_conversations)
-    
+
     total_savings = cache_savings + context_savings + dedup_savings
-    
-    optimized_state = %{state |
-      optimization_metrics: %{state.optimization_metrics |
-        optimization_savings: state.optimization_metrics.optimization_savings + total_savings
-      }
+
+    optimized_state = %{
+      state
+      | optimization_metrics: %{
+          state.optimization_metrics
+          | optimization_savings: state.optimization_metrics.optimization_savings + total_savings
+        }
     }
-    
+
     {:ok, optimized_state, total_savings}
   end
 
   defp optimize_cache(_cache) do
     # Cache optimization logic
-    50 # Simulated savings
+    # Simulated savings
+    50
   end
 
   defp compress_contexts(_conversations) do
     # Context compression logic  
-    30 # Simulated savings
+    # Simulated savings
+    30
   end
 
   defp deduplicate_queries(_conversations) do
     # Query deduplication logic
-    20 # Simulated savings
+    # Simulated savings
+    20
   end
 
   defp initialize_llm_clients do
@@ -531,8 +559,9 @@ defmodule Dspy.LLMCoordinationSystem do
   defp exponential_backoff(attempt) do
     base_delay = 1000
     jitter = :rand.uniform(500)
-    max_delay = 30_000  # Maximum 30 seconds
-    
+    # Maximum 30 seconds
+    max_delay = 30_000
+
     calculated_delay = round(base_delay * :math.pow(2, attempt) + jitter)
     min(calculated_delay, max_delay)
   end

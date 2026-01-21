@@ -592,7 +592,8 @@ defmodule Dspy.AdaptiveBacktracking do
 
     # Trim the prompt if it's too long (OpenAI has limits)
     max_prompt_length = 8000
-    trimmed_prompt = 
+
+    trimmed_prompt =
       if String.length(filled_prompt) > max_prompt_length do
         String.slice(filled_prompt, 0, max_prompt_length) <> "..."
       else

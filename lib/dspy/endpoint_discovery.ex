@@ -180,7 +180,7 @@ defmodule Dspy.EndpointDiscovery do
     case LM.generate(request) do
       {:ok, response} ->
         parse_structured_response(response, signature)
-      
+
       {:error, reason} ->
         {:error, reason}
     end
@@ -188,10 +188,12 @@ defmodule Dspy.EndpointDiscovery do
 
   defp build_system_prompt(signature) do
     output_fields = signature.output_fields
-    field_descriptions = Enum.map(output_fields, fn {name, %{description: desc}} ->
-      "- #{name}: #{desc}"
-    end)
-    
+
+    field_descriptions =
+      Enum.map(output_fields, fn {name, %{description: desc}} ->
+        "- #{name}: #{desc}"
+      end)
+
     """
     You are a helpful assistant that generates structured JSON output.
     You must respond with a valid JSON object containing these fields:
@@ -200,30 +202,33 @@ defmodule Dspy.EndpointDiscovery do
   end
 
   defp build_user_prompt(_signature, inputs) do
-    input_data = Enum.map(inputs, fn {key, value} ->
-      "#{key}: #{Jason.encode!(value)}"
-    end)
-    
+    input_data =
+      Enum.map(inputs, fn {key, value} ->
+        "#{key}: #{Jason.encode!(value)}"
+      end)
+
     """
     Based on the following inputs, generate the required output:
-    
+
     #{Enum.join(input_data, "\n")}
-    
+
     Respond with a valid JSON object.
     """
   end
 
   defp parse_structured_response(response, signature) do
     content = get_in(response, [:choices, Access.at(0), :message, :content]) || ""
-    
+
     case Jason.decode(content) do
       {:ok, parsed} ->
         # Convert to struct based on signature output fields
-        output_data = Enum.reduce(signature.output_fields, %{}, fn {name, _field}, acc ->
-          Map.put(acc, name, Map.get(parsed, Atom.to_string(name)))
-        end)
+        output_data =
+          Enum.reduce(signature.output_fields, %{}, fn {name, _field}, acc ->
+            Map.put(acc, name, Map.get(parsed, Atom.to_string(name)))
+          end)
+
         {:ok, output_data}
-        
+
       {:error, _} ->
         {:error, :invalid_json_response}
     end

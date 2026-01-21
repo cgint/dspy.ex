@@ -1,13 +1,13 @@
 defmodule Dspy.MetaHotswap do
   @moduledoc """
   Meta-hotswapping functionality for DSPy that enables runtime substructure recomposition.
-  
+
   Allows dynamic replacement and modification of:
   - Signatures and their field definitions
   - Module behaviors and implementations
   - Reasoning patterns and strategies
   - Language model configurations
-  
+
   All changes happen in-flight without system restart.
   """
 
@@ -23,7 +23,7 @@ defmodule Dspy.MetaHotswap do
 
   @doc """
   Hotswap a signature definition at runtime.
-  
+
   ## Example
       
       new_signature = %{
@@ -40,9 +40,9 @@ defmodule Dspy.MetaHotswap do
 
   @doc """
   Hotswap a module's implementation at runtime.
-  
+
   ## Example
-  
+
       # new_code = "defmodule NewPredict do..."
       Dspy.MetaHotswap.swap_module("Predict", new_code)
   """
@@ -87,40 +87,42 @@ defmodule Dspy.MetaHotswap do
       swap_history: [],
       next_swap_id: 1
     }
-    
+
     Logger.info("Meta-hotswap manager started")
     {:ok, state}
   end
 
   def handle_call({:swap_signature, module_name, new_sig_def}, _from, state) do
     swap_id = "sig_#{state.next_swap_id}"
-    
+
     try do
       # Backup existing signature if it exists
       backup = backup_existing_module(module_name)
-      
+
       # Generate new signature module
       new_module_code = generate_signature_module(module_name, new_sig_def)
-      
+
       # Compile and load new module
       {module_atom, _bytecode} = Code.compile_string(new_module_code)
-      
+
       # Update state
       new_state = %{
-        state |
-        active_swaps: Map.put(state.active_swaps, swap_id, %{
-          type: :signature,
-          module: module_name,
-          timestamp: DateTime.utc_now(),
-          backup: backup
-        }),
-        next_swap_id: state.next_swap_id + 1,
-        swap_history: [%{id: swap_id, action: :signature_swap, module: module_name} | state.swap_history]
+        state
+        | active_swaps:
+            Map.put(state.active_swaps, swap_id, %{
+              type: :signature,
+              module: module_name,
+              timestamp: DateTime.utc_now(),
+              backup: backup
+            }),
+          next_swap_id: state.next_swap_id + 1,
+          swap_history: [
+            %{id: swap_id, action: :signature_swap, module: module_name} | state.swap_history
+          ]
       }
-      
+
       Logger.info("Hotswapped signature for #{module_name} with ID #{swap_id}")
       {:reply, {:ok, swap_id, module_atom}, new_state}
-      
     catch
       error ->
         Logger.error("Failed to hotswap signature: #{inspect(error)}")
@@ -130,30 +132,32 @@ defmodule Dspy.MetaHotswap do
 
   def handle_call({:swap_module, module_name, new_code}, _from, state) do
     swap_id = "mod_#{state.next_swap_id}"
-    
+
     try do
       # Backup existing module
       backup = backup_existing_module(module_name)
-      
+
       # Compile new module
       [{module_atom, _bytecode}] = Code.compile_string(new_code)
-      
+
       # Update state
       new_state = %{
-        state |
-        active_swaps: Map.put(state.active_swaps, swap_id, %{
-          type: :module,
-          module: module_name,
-          timestamp: DateTime.utc_now(),
-          backup: backup
-        }),
-        next_swap_id: state.next_swap_id + 1,
-        swap_history: [%{id: swap_id, action: :module_swap, module: module_name} | state.swap_history]
+        state
+        | active_swaps:
+            Map.put(state.active_swaps, swap_id, %{
+              type: :module,
+              module: module_name,
+              timestamp: DateTime.utc_now(),
+              backup: backup
+            }),
+          next_swap_id: state.next_swap_id + 1,
+          swap_history: [
+            %{id: swap_id, action: :module_swap, module: module_name} | state.swap_history
+          ]
       }
-      
+
       Logger.info("Hotswapped module #{module_name} with ID #{swap_id}")
       {:reply, {:ok, swap_id, module_atom}, new_state}
-      
     catch
       error ->
         Logger.error("Failed to hotswap module: #{inspect(error)}")
@@ -163,32 +167,38 @@ defmodule Dspy.MetaHotswap do
 
   def handle_call({:swap_reasoning, module_name, pattern_type, new_pattern}, _from, state) do
     swap_id = "reason_#{state.next_swap_id}"
-    
+
     try do
       # Generate pattern-specific module modification
       modified_code = generate_reasoning_swap(module_name, pattern_type, new_pattern)
-      
+
       # Backup and compile
       backup = backup_existing_module(module_name)
       {module_atom, _bytecode} = Code.compile_string(modified_code)
-      
+
       # Update state
       new_state = %{
-        state |
-        active_swaps: Map.put(state.active_swaps, swap_id, %{
-          type: :reasoning_pattern,
-          module: module_name,
-          pattern: pattern_type,
-          timestamp: DateTime.utc_now(),
-          backup: backup
-        }),
-        next_swap_id: state.next_swap_id + 1,
-        swap_history: [%{id: swap_id, action: :reasoning_swap, module: module_name, pattern: pattern_type} | state.swap_history]
+        state
+        | active_swaps:
+            Map.put(state.active_swaps, swap_id, %{
+              type: :reasoning_pattern,
+              module: module_name,
+              pattern: pattern_type,
+              timestamp: DateTime.utc_now(),
+              backup: backup
+            }),
+          next_swap_id: state.next_swap_id + 1,
+          swap_history: [
+            %{id: swap_id, action: :reasoning_swap, module: module_name, pattern: pattern_type}
+            | state.swap_history
+          ]
       }
-      
-      Logger.info("Hotswapped reasoning pattern #{pattern_type} for #{module_name} with ID #{swap_id}")
+
+      Logger.info(
+        "Hotswapped reasoning pattern #{pattern_type} for #{module_name} with ID #{swap_id}"
+      )
+
       {:reply, {:ok, swap_id, module_atom}, new_state}
-      
     catch
       error ->
         Logger.error("Failed to hotswap reasoning pattern: #{inspect(error)}")
@@ -198,32 +208,36 @@ defmodule Dspy.MetaHotswap do
 
   def handle_call({:recompose, operation, target_modules, composition_spec}, _from, state) do
     swap_id = "recomp_#{state.next_swap_id}"
-    
+
     try do
       # Perform substructure recomposition
-      result = case operation do
-        :merge -> merge_modules(target_modules, composition_spec)
-        :split -> split_module(target_modules, composition_spec)
-        :transform -> transform_modules(target_modules, composition_spec)
-      end
-      
+      result =
+        case operation do
+          :merge -> merge_modules(target_modules, composition_spec)
+          :split -> split_module(target_modules, composition_spec)
+          :transform -> transform_modules(target_modules, composition_spec)
+        end
+
       # Update state
       new_state = %{
-        state |
-        active_swaps: Map.put(state.active_swaps, swap_id, %{
-          type: :recomposition,
-          operation: operation,
-          modules: target_modules,
-          timestamp: DateTime.utc_now(),
-          result: result
-        }),
-        next_swap_id: state.next_swap_id + 1,
-        swap_history: [%{id: swap_id, action: :recompose, operation: operation, modules: target_modules} | state.swap_history]
+        state
+        | active_swaps:
+            Map.put(state.active_swaps, swap_id, %{
+              type: :recomposition,
+              operation: operation,
+              modules: target_modules,
+              timestamp: DateTime.utc_now(),
+              result: result
+            }),
+          next_swap_id: state.next_swap_id + 1,
+          swap_history: [
+            %{id: swap_id, action: :recompose, operation: operation, modules: target_modules}
+            | state.swap_history
+          ]
       }
-      
+
       Logger.info("Recomposed substructure with operation #{operation}, ID #{swap_id}")
       {:reply, {:ok, swap_id, result}, new_state}
-      
     catch
       error ->
         Logger.error("Failed to recompose substructure: #{inspect(error)}")
@@ -239,22 +253,21 @@ defmodule Dspy.MetaHotswap do
     case Map.get(state.active_swaps, swap_id) do
       nil ->
         {:reply, {:error, :swap_not_found}, state}
-        
+
       swap_info ->
         try do
           # Restore from backup
           restore_from_backup(swap_info.backup)
-          
+
           # Remove from active swaps
           new_state = %{
-            state |
-            active_swaps: Map.delete(state.active_swaps, swap_id),
-            swap_history: [%{id: swap_id, action: :rollback} | state.swap_history]
+            state
+            | active_swaps: Map.delete(state.active_swaps, swap_id),
+              swap_history: [%{id: swap_id, action: :rollback} | state.swap_history]
           }
-          
+
           Logger.info("Rolled back swap #{swap_id}")
           {:reply, {:ok, :rolled_back}, new_state}
-          
         catch
           error ->
             Logger.error("Failed to rollback swap: #{inspect(error)}")
@@ -267,7 +280,7 @@ defmodule Dspy.MetaHotswap do
 
   defp backup_existing_module(module_name) do
     module_atom = String.to_atom("Elixir.#{module_name}")
-    
+
     case Code.ensure_loaded(module_atom) do
       {:module, _} ->
         # Get module info and source if available
@@ -277,6 +290,7 @@ defmodule Dspy.MetaHotswap do
           attributes: module_atom.__info__(:attributes),
           timestamp: DateTime.utc_now()
         }
+
       {:error, _} ->
         %{module: module_atom, exists: false, timestamp: DateTime.utc_now()}
     end
@@ -327,7 +341,7 @@ defmodule Dspy.MetaHotswap do
           end
         end
         """
-        
+
       :self_consistency ->
         """
         defmodule #{module_name}Hotswapped do
@@ -349,7 +363,7 @@ defmodule Dspy.MetaHotswap do
           defp find_consensus(results), do: hd(results)
         end
         """
-        
+
       _ ->
         """
         defmodule #{module_name}Hotswapped do
@@ -366,7 +380,7 @@ defmodule Dspy.MetaHotswap do
   defp merge_modules(modules, spec) do
     # Create a merged module combining functionality
     merged_name = spec.name || "MergedModule"
-    
+
     module_code = """
     defmodule #{merged_name} do
       use Dspy.Module
@@ -391,50 +405,52 @@ defmodule Dspy.MetaHotswap do
       end
     end
     """
-    
+
     {module_atom, _} = Code.compile_string(module_code)
     %{merged_module: module_atom, original_modules: modules}
   end
 
   defp split_module(module, spec) do
     # Split a module into multiple specialized modules
-    split_modules = Enum.map(spec.split_into, fn split_spec ->
-      module_code = """
-      defmodule #{split_spec.name} do
-        use Dspy.Module
-        
-        def forward(module, inputs) do
-          # Split functionality: #{split_spec.functionality}
-          {:ok, Map.put(inputs, :split_type, :#{split_spec.functionality})}
+    split_modules =
+      Enum.map(spec.split_into, fn split_spec ->
+        module_code = """
+        defmodule #{split_spec.name} do
+          use Dspy.Module
+          
+          def forward(module, inputs) do
+            # Split functionality: #{split_spec.functionality}
+            {:ok, Map.put(inputs, :split_type, :#{split_spec.functionality})}
+          end
         end
-      end
-      """
-      
-      {module_atom, _} = Code.compile_string(module_code)
-      module_atom
-    end)
-    
+        """
+
+        {module_atom, _} = Code.compile_string(module_code)
+        module_atom
+      end)
+
     %{split_modules: split_modules, original_module: module}
   end
 
   defp transform_modules(modules, spec) do
     # Transform modules according to specification
-    transformed = Enum.map(modules, fn module ->
-      module_code = """
-      defmodule #{module}Transformed do
-        use Dspy.Module
-        
-        def forward(module, inputs) do
-          # Transformed: #{spec.transformation}
-          {:ok, Map.put(inputs, :transformed, true)}
+    transformed =
+      Enum.map(modules, fn module ->
+        module_code = """
+        defmodule #{module}Transformed do
+          use Dspy.Module
+          
+          def forward(module, inputs) do
+            # Transformed: #{spec.transformation}
+            {:ok, Map.put(inputs, :transformed, true)}
+          end
         end
-      end
-      """
-      
-      {module_atom, _} = Code.compile_string(module_code)
-      module_atom
-    end)
-    
+        """
+
+        {module_atom, _} = Code.compile_string(module_code)
+        module_atom
+      end)
+
     %{transformed_modules: transformed, transformation: spec.transformation}
   end
 

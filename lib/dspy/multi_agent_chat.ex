@@ -276,9 +276,10 @@ defmodule Dspy.MultiAgentChat do
   @impl true
   def handle_call(:stop, _from, state) do
     # Notify observers with a timeout to prevent hanging
-    Task.start(fn -> 
+    Task.start(fn ->
       notify_observers(state, {:conversation_ended, state.conversation_history})
     end)
+
     {:stop, :normal, :ok, state}
   end
 

@@ -111,6 +111,7 @@ defmodule Dspy.ScientificInquiryWorkflow do
   """
 
   use GenServer
+
   # alias Dspy.{ExperimentJournal, AdaptiveExperimentFramework, TrainingDataStorage} # Commented out unused aliases
   require Logger
 
@@ -152,19 +153,19 @@ defmodule Dspy.ScientificInquiryWorkflow do
           preregistration: boolean()
         }
 
-  @type workflow_stage :: 
-          :problem_identification |
-          :literature_review |
-          :hypothesis_generation |
-          :experimental_design |
-          :data_collection |
-          :analysis |
-          :interpretation |
-          :validation |
-          :theory_building |
-          :communication |
-          :dissemination |
-          :completed
+  @type workflow_stage ::
+          :problem_identification
+          | :literature_review
+          | :hypothesis_generation
+          | :experimental_design
+          | :data_collection
+          | :analysis
+          | :interpretation
+          | :validation
+          | :theory_building
+          | :communication
+          | :dissemination
+          | :completed
 
   @type t :: %__MODULE__{
           workflow_id: String.t(),
@@ -196,7 +197,7 @@ defmodule Dspy.ScientificInquiryWorkflow do
 
   def new(opts \\ []) do
     workflow_id = generate_workflow_id()
-    
+
     %__MODULE__{
       workflow_id: workflow_id,
       domain: Keyword.get(opts, :domain, "general"),
@@ -226,9 +227,10 @@ defmodule Dspy.ScientificInquiryWorkflow do
 
   def execute_pipeline(workflow, opts \\ []) do
     initial_observations = Keyword.get(opts, :initial_observations, [])
-    
+
     with {:ok, initialized_workflow} <- initialize_workflow_process(workflow),
-         {:ok, stage1_results} <- execute_problem_identification(initialized_workflow, initial_observations),
+         {:ok, stage1_results} <-
+           execute_problem_identification(initialized_workflow, initial_observations),
          {:ok, stage2_results} <- execute_literature_review(stage1_results),
          {:ok, stage3_results} <- execute_hypothesis_generation(stage2_results),
          {:ok, stage4_results} <- execute_experimental_design(stage3_results),
@@ -237,7 +239,6 @@ defmodule Dspy.ScientificInquiryWorkflow do
          {:ok, stage7_results} <- execute_validation_replication(stage6_results),
          {:ok, stage8_results} <- execute_theory_building(stage7_results),
          {:ok, final_results} <- execute_communication_dissemination(stage8_results) do
-
       # Compile comprehensive research outputs
       research_package = compile_research_package(final_results)
       {:ok, research_package}
@@ -250,22 +251,24 @@ defmodule Dspy.ScientificInquiryWorkflow do
 
   defp execute_problem_identification(workflow, initial_observations) do
     Logger.info("Stage 1: Problem Identification & Opportunity Analysis")
-    
+
     # Analyze initial observations
     observation_analysis = analyze_initial_observations(initial_observations)
-    
+
     # Identify research gaps and opportunities
     research_gaps = identify_research_gaps(workflow.domain, observation_analysis)
-    
+
     # Generate preliminary research questions
     preliminary_questions = generate_research_questions(observation_analysis, research_gaps)
-    
+
     # Assess feasibility and impact
-    feasibility_assessment = assess_research_feasibility(preliminary_questions, workflow.research_scope)
-    
+    feasibility_assessment =
+      assess_research_feasibility(preliminary_questions, workflow.research_scope)
+
     # Prioritize research directions
-    prioritized_questions = prioritize_research_questions(preliminary_questions, feasibility_assessment)
-    
+    prioritized_questions =
+      prioritize_research_questions(preliminary_questions, feasibility_assessment)
+
     stage_results = %{
       observations: initial_observations,
       observation_analysis: observation_analysis,
@@ -274,12 +277,14 @@ defmodule Dspy.ScientificInquiryWorkflow do
       feasibility_assessment: feasibility_assessment,
       prioritized_questions: prioritized_questions,
       stage_duration: measure_stage_duration(),
-      quality_score: calculate_stage_quality_score(workflow.quality_standards, "problem_identification")
+      quality_score:
+        calculate_stage_quality_score(workflow.quality_standards, "problem_identification")
     }
 
-    updated_workflow = workflow
-    |> update_stage(:literature_review, stage_results)
-    |> Map.put(:research_questions, prioritized_questions)
+    updated_workflow =
+      workflow
+      |> update_stage(:literature_review, stage_results)
+      |> Map.put(:research_questions, prioritized_questions)
 
     {:ok, updated_workflow}
   end
@@ -311,13 +316,15 @@ defmodule Dspy.ScientificInquiryWorkflow do
     |> String.downcase()
     |> String.split(~r/[^\w]+/)
     |> Enum.filter(fn word -> String.length(word) > 3 end)
-    |> Enum.reject(fn word -> word in ["this", "that", "with", "from", "they", "have", "been"] end)
+    |> Enum.reject(fn word ->
+      word in ["this", "that", "with", "from", "they", "have", "been"]
+    end)
   end
 
   defp identify_research_gaps(domain, analysis) do
     # Identify gaps in current knowledge based on themes and domain expertise
     themes = analysis.themes
-    
+
     %{
       methodological_gaps: identify_methodological_gaps(themes, domain),
       empirical_gaps: identify_empirical_gaps(themes, domain),
@@ -329,21 +336,25 @@ defmodule Dspy.ScientificInquiryWorkflow do
 
   defp generate_research_questions(_analysis, gaps) do
     base_questions = []
-    
-    # Generate questions from methodological gaps
-    methodological_questions = gaps.methodological_gaps
-    |> Enum.map(&generate_methodological_question/1)
-    
-    # Generate questions from empirical gaps
-    empirical_questions = gaps.empirical_gaps
-    |> Enum.map(&generate_empirical_question/1)
-    
-    # Generate questions from theoretical gaps
-    theoretical_questions = gaps.theoretical_gaps
-    |> Enum.map(&generate_theoretical_question/1)
 
-    all_questions = base_questions ++ methodological_questions ++ empirical_questions ++ theoretical_questions
-    
+    # Generate questions from methodological gaps
+    methodological_questions =
+      gaps.methodological_gaps
+      |> Enum.map(&generate_methodological_question/1)
+
+    # Generate questions from empirical gaps
+    empirical_questions =
+      gaps.empirical_gaps
+      |> Enum.map(&generate_empirical_question/1)
+
+    # Generate questions from theoretical gaps
+    theoretical_questions =
+      gaps.theoretical_gaps
+      |> Enum.map(&generate_theoretical_question/1)
+
+    all_questions =
+      base_questions ++ methodological_questions ++ empirical_questions ++ theoretical_questions
+
     # Refine and structure questions
     all_questions
     |> Enum.map(&structure_research_question/1)
@@ -368,22 +379,23 @@ defmodule Dspy.ScientificInquiryWorkflow do
 
   defp execute_literature_review(workflow) do
     Logger.info("Stage 2: Literature Review & Knowledge Synthesis")
-    
+
     # Conduct systematic literature search
     literature_search = conduct_literature_search(workflow.research_questions, workflow.domain)
-    
+
     # Synthesize existing knowledge
     knowledge_synthesis = synthesize_literature(literature_search)
-    
+
     # Identify contradictions and controversies
     contradictions = identify_literature_contradictions(knowledge_synthesis)
-    
+
     # Map research landscape
     research_landscape = map_research_landscape(knowledge_synthesis)
-    
+
     # Refine research questions based on literature
-    refined_questions = refine_questions_with_literature(workflow.research_questions, knowledge_synthesis)
-    
+    refined_questions =
+      refine_questions_with_literature(workflow.research_questions, knowledge_synthesis)
+
     stage_results = %{
       literature_search: literature_search,
       knowledge_synthesis: knowledge_synthesis,
@@ -392,21 +404,24 @@ defmodule Dspy.ScientificInquiryWorkflow do
       refined_questions: refined_questions,
       literature_gaps: identify_remaining_gaps(knowledge_synthesis),
       stage_duration: measure_stage_duration(),
-      quality_score: calculate_stage_quality_score(workflow.quality_standards, "literature_review")
+      quality_score:
+        calculate_stage_quality_score(workflow.quality_standards, "literature_review")
     }
 
-    updated_workflow = workflow
-    |> update_stage(:hypothesis_generation, stage_results)
-    |> Map.put(:research_questions, refined_questions)
+    updated_workflow =
+      workflow
+      |> update_stage(:hypothesis_generation, stage_results)
+      |> Map.put(:research_questions, refined_questions)
 
     {:ok, updated_workflow}
   end
 
   defp conduct_literature_search(research_questions, domain) do
     # Simulate comprehensive literature search
-    search_terms = research_questions
-    |> Enum.flat_map(fn q -> extract_search_terms(q.question) end)
-    |> Enum.uniq()
+    search_terms =
+      research_questions
+      |> Enum.flat_map(fn q -> extract_search_terms(q.question) end)
+      |> Enum.uniq()
 
     %{
       search_terms: search_terms,
@@ -421,7 +436,7 @@ defmodule Dspy.ScientificInquiryWorkflow do
 
   defp synthesize_literature(literature_search) do
     papers = literature_search.papers_found
-    
+
     %{
       paper_count: length(papers),
       key_findings: extract_key_findings(papers),
@@ -439,41 +454,45 @@ defmodule Dspy.ScientificInquiryWorkflow do
 
   defp execute_hypothesis_generation(workflow) do
     Logger.info("Stage 3: Hypothesis Generation & Formalization")
-    
+
     literature_findings = get_latest_stage_results(workflow, :literature_review)
-    
+
     # Generate hypotheses from research questions and literature
-    generated_hypotheses = generate_hypotheses_from_questions(
-      workflow.research_questions, 
-      literature_findings.knowledge_synthesis
-    )
-    
+    generated_hypotheses =
+      generate_hypotheses_from_questions(
+        workflow.research_questions,
+        literature_findings.knowledge_synthesis
+      )
+
     # Formalize hypotheses with clear predictions
     formalized_hypotheses = formalize_hypotheses(generated_hypotheses)
-    
+
     # Assess hypothesis testability and feasibility
     hypothesis_assessment = assess_hypotheses(formalized_hypotheses, workflow.research_scope)
-    
+
     # Prioritize hypotheses for testing
     prioritized_hypotheses = prioritize_hypotheses(formalized_hypotheses, hypothesis_assessment)
-    
+
     # Generate alternative and competing hypotheses
     alternative_hypotheses = generate_alternative_hypotheses(prioritized_hypotheses)
-    
+
     stage_results = %{
       generated_hypotheses: generated_hypotheses,
       formalized_hypotheses: formalized_hypotheses,
       hypothesis_assessment: hypothesis_assessment,
       prioritized_hypotheses: prioritized_hypotheses,
       alternative_hypotheses: alternative_hypotheses,
-      hypothesis_network: build_hypothesis_network(prioritized_hypotheses, alternative_hypotheses),
+      hypothesis_network:
+        build_hypothesis_network(prioritized_hypotheses, alternative_hypotheses),
       stage_duration: measure_stage_duration(),
-      quality_score: calculate_stage_quality_score(workflow.quality_standards, "hypothesis_generation")
+      quality_score:
+        calculate_stage_quality_score(workflow.quality_standards, "hypothesis_generation")
     }
 
-    updated_workflow = workflow
-    |> update_stage(:experimental_design, stage_results)
-    |> Map.put(:hypotheses, prioritized_hypotheses)
+    updated_workflow =
+      workflow
+      |> update_stage(:experimental_design, stage_results)
+      |> Map.put(:hypotheses, prioritized_hypotheses)
 
     {:ok, updated_workflow}
   end
@@ -490,8 +509,10 @@ defmodule Dspy.ScientificInquiryWorkflow do
   defp generate_hypotheses_for_question(question, knowledge_synthesis) do
     # Generate multiple hypotheses per research question
     base_hypothesis = generate_primary_hypothesis(question, knowledge_synthesis)
-    alternative_hypotheses = generate_alternative_hypotheses_for_question(question, knowledge_synthesis)
-    
+
+    alternative_hypotheses =
+      generate_alternative_hypotheses_for_question(question, knowledge_synthesis)
+
     [base_hypothesis | alternative_hypotheses]
   end
 
@@ -521,31 +542,34 @@ defmodule Dspy.ScientificInquiryWorkflow do
 
   defp execute_experimental_design(workflow) do
     Logger.info("Stage 4: Experimental Design & Planning")
-    
+
     _hypothesis_results = get_latest_stage_results(workflow, :hypothesis_generation)
-    
+
     # Design experiments for each prioritized hypothesis
-    experimental_designs = design_experiments_for_hypotheses(
-      workflow.hypotheses,
-      workflow.quality_standards,
-      workflow.resource_tracker
-    )
-    
+    experimental_designs =
+      design_experiments_for_hypotheses(
+        workflow.hypotheses,
+        workflow.quality_standards,
+        workflow.resource_tracker
+      )
+
     # Optimize experimental parameters
-    optimized_designs = optimize_experimental_designs(experimental_designs, workflow.research_scope)
-    
+    optimized_designs =
+      optimize_experimental_designs(experimental_designs, workflow.research_scope)
+
     # Calculate statistical power and sample sizes
     power_analysis = conduct_power_analysis(optimized_designs)
-    
+
     # Plan data collection procedures
     data_collection_plan = plan_data_collection(optimized_designs, power_analysis)
-    
+
     # Design quality control measures
-    quality_control = design_quality_control_measures(optimized_designs, workflow.quality_standards)
-    
+    quality_control =
+      design_quality_control_measures(optimized_designs, workflow.quality_standards)
+
     # Create experimental timeline
     experimental_timeline = create_experimental_timeline(optimized_designs, data_collection_plan)
-    
+
     stage_results = %{
       experimental_designs: experimental_designs,
       optimized_designs: optimized_designs,
@@ -553,15 +577,18 @@ defmodule Dspy.ScientificInquiryWorkflow do
       data_collection_plan: data_collection_plan,
       quality_control: quality_control,
       experimental_timeline: experimental_timeline,
-      resource_allocation: allocate_experimental_resources(optimized_designs, workflow.resource_tracker),
+      resource_allocation:
+        allocate_experimental_resources(optimized_designs, workflow.resource_tracker),
       risk_assessment: assess_experimental_risks(optimized_designs),
       stage_duration: measure_stage_duration(),
-      quality_score: calculate_stage_quality_score(workflow.quality_standards, "experimental_design")
+      quality_score:
+        calculate_stage_quality_score(workflow.quality_standards, "experimental_design")
     }
 
-    updated_workflow = workflow
-    |> update_stage(:data_collection, stage_results)
-    |> Map.put(:experimental_designs, optimized_designs)
+    updated_workflow =
+      workflow
+      |> update_stage(:data_collection, stage_results)
+      |> Map.put(:experimental_designs, optimized_designs)
 
     {:ok, updated_workflow}
   end
@@ -597,32 +624,34 @@ defmodule Dspy.ScientificInquiryWorkflow do
 
   defp execute_data_collection(workflow) do
     Logger.info("Stage 5: Data Collection & Experimentation")
-    
+
     design_results = get_latest_stage_results(workflow, :experimental_design)
-    
+
     # Execute experiments according to optimized designs
-    experiment_execution = execute_experiments(
-      workflow.experimental_designs,
-      design_results.data_collection_plan,
-      design_results.quality_control
-    )
-    
+    experiment_execution =
+      execute_experiments(
+        workflow.experimental_designs,
+        design_results.data_collection_plan,
+        design_results.quality_control
+      )
+
     # Monitor data quality in real-time
     data_quality_monitoring = monitor_data_quality(experiment_execution)
-    
+
     # Perform interim analyses for adaptive stopping
     interim_analyses = conduct_interim_analyses(experiment_execution, workflow.hypotheses)
-    
+
     # Adapt experimental parameters if needed
-    adaptive_adjustments = make_adaptive_adjustments(
-      experiment_execution,
-      interim_analyses,
-      workflow.experimental_designs
-    )
-    
+    adaptive_adjustments =
+      make_adaptive_adjustments(
+        experiment_execution,
+        interim_analyses,
+        workflow.experimental_designs
+      )
+
     # Compile final dataset
     final_dataset = compile_final_dataset(experiment_execution, data_quality_monitoring)
-    
+
     stage_results = %{
       experiment_execution: experiment_execution,
       data_quality_monitoring: data_quality_monitoring,
@@ -635,9 +664,10 @@ defmodule Dspy.ScientificInquiryWorkflow do
       quality_score: calculate_stage_quality_score(workflow.quality_standards, "data_collection")
     }
 
-    updated_workflow = workflow
-    |> update_stage(:analysis, stage_results)
-    |> Map.put(:data_collection, final_dataset)
+    updated_workflow =
+      workflow
+      |> update_stage(:analysis, stage_results)
+      |> Map.put(:data_collection, final_dataset)
 
     {:ok, updated_workflow}
   end
@@ -651,22 +681,23 @@ defmodule Dspy.ScientificInquiryWorkflow do
 
   defp execute_single_experiment(design, collection_plan, quality_control) do
     # Create adaptive experiment framework for execution
-    framework = Dspy.AdaptiveExperimentFramework.new(
-      base_signature: create_signature_for_design(design),
-      scientific_rigor: %{
-        hypothesis_driven: true,
-        statistical_validation: true,
-        reproducibility_mode: true
-      },
-      monitoring: %{
-        enable_early_stopping: true,
-        enable_resource_monitoring: true
-      }
-    )
+    framework =
+      Dspy.AdaptiveExperimentFramework.new(
+        base_signature: create_signature_for_design(design),
+        scientific_rigor: %{
+          hypothesis_driven: true,
+          statistical_validation: true,
+          reproducibility_mode: true
+        },
+        monitoring: %{
+          enable_early_stopping: true,
+          enable_resource_monitoring: true
+        }
+      )
 
     # Prepare experimental inputs
     experimental_inputs = prepare_experimental_inputs(design, collection_plan)
-    
+
     # Execute experiment with framework
     case Dspy.Module.forward(framework, experimental_inputs) do
       {:ok, results} ->
@@ -677,7 +708,7 @@ defmodule Dspy.ScientificInquiryWorkflow do
           execution_time: DateTime.utc_now(),
           quality_metrics: assess_execution_quality(results, quality_control)
         }
-        
+
       {:error, reason} ->
         %{
           design_id: design.hypothesis_id,
@@ -692,36 +723,39 @@ defmodule Dspy.ScientificInquiryWorkflow do
 
   defp execute_analysis_interpretation(workflow) do
     Logger.info("Stage 6: Analysis & Interpretation")
-    
+
     _data_results = get_latest_stage_results(workflow, :data_collection)
-    
+
     # Perform comprehensive statistical analysis
-    statistical_analysis = perform_comprehensive_analysis(
-      workflow.data_collection,
-      workflow.hypotheses,
-      workflow.experimental_designs
-    )
-    
+    statistical_analysis =
+      perform_comprehensive_analysis(
+        workflow.data_collection,
+        workflow.hypotheses,
+        workflow.experimental_designs
+      )
+
     # Interpret results in context of hypotheses
     hypothesis_evaluation = evaluate_hypotheses(statistical_analysis, workflow.hypotheses)
-    
+
     # Assess practical significance
     practical_significance = assess_practical_significance(statistical_analysis, workflow.domain)
-    
+
     # Identify unexpected findings
     unexpected_findings = identify_unexpected_findings(statistical_analysis, workflow.hypotheses)
-    
+
     # Generate insights and implications
-    insights = generate_research_insights(
-      statistical_analysis,
-      hypothesis_evaluation,
-      practical_significance,
-      unexpected_findings
-    )
-    
+    insights =
+      generate_research_insights(
+        statistical_analysis,
+        hypothesis_evaluation,
+        practical_significance,
+        unexpected_findings
+      )
+
     # Assess limitations and threats to validity
-    validity_assessment = assess_study_validity(workflow.experimental_designs, statistical_analysis)
-    
+    validity_assessment =
+      assess_study_validity(workflow.experimental_designs, statistical_analysis)
+
     stage_results = %{
       statistical_analysis: statistical_analysis,
       hypothesis_evaluation: hypothesis_evaluation,
@@ -730,14 +764,16 @@ defmodule Dspy.ScientificInquiryWorkflow do
       insights: insights,
       validity_assessment: validity_assessment,
       effect_sizes: calculate_comprehensive_effect_sizes(statistical_analysis),
-      confidence_assessment: assess_confidence_in_findings(statistical_analysis, validity_assessment),
+      confidence_assessment:
+        assess_confidence_in_findings(statistical_analysis, validity_assessment),
       stage_duration: measure_stage_duration(),
       quality_score: calculate_stage_quality_score(workflow.quality_standards, "analysis")
     }
 
-    updated_workflow = workflow
-    |> update_stage(:validation, stage_results)
-    |> Map.put(:analysis_results, [stage_results | workflow.analysis_results])
+    updated_workflow =
+      workflow
+      |> update_stage(:validation, stage_results)
+      |> Map.put(:analysis_results, [stage_results | workflow.analysis_results])
 
     {:ok, updated_workflow}
   end
@@ -761,35 +797,37 @@ defmodule Dspy.ScientificInquiryWorkflow do
 
   defp execute_validation_replication(workflow) do
     Logger.info("Stage 7: Validation & Replication")
-    
+
     analysis_results = get_latest_stage_results(workflow, :analysis)
-    
+
     # Design validation studies
-    validation_designs = design_validation_studies(
-      workflow.analysis_results,
-      workflow.hypotheses,
-      workflow.research_scope
-    )
-    
+    validation_designs =
+      design_validation_studies(
+        workflow.analysis_results,
+        workflow.hypotheses,
+        workflow.research_scope
+      )
+
     # Execute replication studies
     replication_results = execute_replication_studies(validation_designs)
-    
+
     # Cross-validate findings
     cross_validation = perform_cross_validation(workflow.analysis_results, replication_results)
-    
+
     # Assess reproducibility
-    reproducibility_assessment = assess_reproducibility(
-      workflow.analysis_results,
-      replication_results,
-      workflow.experimental_designs
-    )
-    
+    reproducibility_assessment =
+      assess_reproducibility(
+        workflow.analysis_results,
+        replication_results,
+        workflow.experimental_designs
+      )
+
     # Meta-analyze across studies
     meta_analysis = conduct_meta_analysis(workflow.analysis_results, replication_results)
-    
+
     # Evaluate generalizability
     generalizability = assess_generalizability(meta_analysis, workflow.domain)
-    
+
     stage_results = %{
       validation_designs: validation_designs,
       replication_results: replication_results,
@@ -803,9 +841,10 @@ defmodule Dspy.ScientificInquiryWorkflow do
       quality_score: calculate_stage_quality_score(workflow.quality_standards, "validation")
     }
 
-    updated_workflow = workflow
-    |> update_stage(:theory_building, stage_results)
-    |> Map.put(:validation_studies, [stage_results | workflow.validation_studies])
+    updated_workflow =
+      workflow
+      |> update_stage(:theory_building, stage_results)
+      |> Map.put(:validation_studies, [stage_results | workflow.validation_studies])
 
     {:ok, updated_workflow}
   end
@@ -814,40 +853,44 @@ defmodule Dspy.ScientificInquiryWorkflow do
 
   defp execute_theory_building(workflow) do
     Logger.info("Stage 8: Theory Building & Knowledge Integration")
-    
+
     _validation_results = get_latest_stage_results(workflow, :validation)
-    
+
     # Extract concepts and principles
-    concept_extraction = extract_theoretical_concepts(
-      workflow.analysis_results,
-      workflow.validation_studies
-    )
-    
+    concept_extraction =
+      extract_theoretical_concepts(
+        workflow.analysis_results,
+        workflow.validation_studies
+      )
+
     # Build theoretical frameworks
-    theoretical_frameworks = build_theoretical_frameworks(
-      concept_extraction,
-      workflow.domain,
-      workflow.research_questions
-    )
-    
+    theoretical_frameworks =
+      build_theoretical_frameworks(
+        concept_extraction,
+        workflow.domain,
+        workflow.research_questions
+      )
+
     # Formalize theories
     formalized_theories = formalize_theories(theoretical_frameworks)
-    
+
     # Generate predictions from theories
     theoretical_predictions = generate_theoretical_predictions(formalized_theories)
-    
+
     # Integrate with existing knowledge
-    knowledge_integration = integrate_with_existing_knowledge(
-      formalized_theories,
-      workflow.domain
-    )
-    
+    knowledge_integration =
+      integrate_with_existing_knowledge(
+        formalized_theories,
+        workflow.domain
+      )
+
     # Assess theoretical contributions
-    theoretical_contributions = assess_theoretical_contributions(
-      formalized_theories,
-      knowledge_integration
-    )
-    
+    theoretical_contributions =
+      assess_theoretical_contributions(
+        formalized_theories,
+        knowledge_integration
+      )
+
     stage_results = %{
       concept_extraction: concept_extraction,
       theoretical_frameworks: theoretical_frameworks,
@@ -861,9 +904,10 @@ defmodule Dspy.ScientificInquiryWorkflow do
       quality_score: calculate_stage_quality_score(workflow.quality_standards, "theory_building")
     }
 
-    updated_workflow = workflow
-    |> update_stage(:communication, stage_results)
-    |> Map.put(:knowledge_contributions, stage_results)
+    updated_workflow =
+      workflow
+      |> update_stage(:communication, stage_results)
+      |> Map.put(:knowledge_contributions, stage_results)
 
     {:ok, updated_workflow}
   end
@@ -872,30 +916,30 @@ defmodule Dspy.ScientificInquiryWorkflow do
 
   defp execute_communication_dissemination(workflow) do
     Logger.info("Stage 9: Communication & Dissemination")
-    
+
     _theory_results = get_latest_stage_results(workflow, :theory_building)
-    
+
     # Generate comprehensive research report
     research_report = generate_comprehensive_report(workflow)
-    
+
     # Create scientific manuscripts
     manuscripts = generate_scientific_manuscripts(workflow)
-    
+
     # Prepare presentations and visualizations
     presentations = create_research_presentations(workflow)
-    
+
     # Generate popular science communications
     popular_communications = create_popular_communications(workflow)
-    
+
     # Prepare data and code sharing packages
     sharing_packages = create_sharing_packages(workflow)
-    
+
     # Plan dissemination strategy
     dissemination_strategy = plan_dissemination_strategy(workflow, manuscripts)
-    
+
     # Track impact and citations
     impact_tracking = setup_impact_tracking(workflow, manuscripts)
-    
+
     stage_results = %{
       research_report: research_report,
       manuscripts: manuscripts,
@@ -909,9 +953,10 @@ defmodule Dspy.ScientificInquiryWorkflow do
       quality_score: calculate_stage_quality_score(workflow.quality_standards, "communication")
     }
 
-    updated_workflow = workflow
-    |> update_stage(:completed, stage_results)
-    |> Map.put(:publications, manuscripts)
+    updated_workflow =
+      workflow
+      |> update_stage(:completed, stage_results)
+      |> Map.put(:publications, manuscripts)
 
     {:ok, updated_workflow}
   end
@@ -922,7 +967,6 @@ defmodule Dspy.ScientificInquiryWorkflow do
     %{
       workflow_id: workflow.workflow_id,
       completion_date: DateTime.utc_now(),
-      
       scientific_findings: %{
         primary_findings: extract_primary_findings(workflow),
         supporting_evidence: compile_supporting_evidence(workflow),
@@ -932,7 +976,6 @@ defmodule Dspy.ScientificInquiryWorkflow do
         limitations: compile_limitations(workflow),
         generalizability: assess_final_generalizability(workflow)
       },
-      
       theoretical_contributions: %{
         new_concepts: extract_new_concepts(workflow),
         theoretical_frameworks: workflow.knowledge_contributions.theoretical_frameworks,
@@ -940,51 +983,43 @@ defmodule Dspy.ScientificInquiryWorkflow do
         predictive_models: extract_predictive_models(workflow),
         paradigm_shifts: identify_paradigm_shifts(workflow)
       },
-      
       methodological_contributions: %{
         novel_methods: identify_novel_methods(workflow),
         methodological_improvements: identify_methodological_improvements(workflow),
         best_practices: derive_best_practices(workflow),
         quality_standards: assess_quality_contributions(workflow)
       },
-      
       practical_applications: %{
         immediate_applications: identify_immediate_applications(workflow),
         technology_transfer: assess_technology_transfer_potential(workflow),
         policy_implications: derive_policy_implications(workflow),
         industry_relevance: assess_industry_relevance(workflow)
       },
-      
       generated_publications: workflow.publications,
-      
       knowledge_base_updates: %{
         concept_additions: extract_concept_additions(workflow),
         relationship_updates: extract_relationship_updates(workflow),
         theory_integrations: extract_theory_integrations(workflow),
         citation_network_updates: extract_citation_updates(workflow)
       },
-      
       recommended_next_steps: %{
         immediate_follow_ups: identify_immediate_follow_ups(workflow),
         long_term_research_directions: identify_long_term_directions(workflow),
         collaboration_opportunities: identify_collaboration_opportunities(workflow),
         funding_opportunities: identify_funding_opportunities(workflow)
       },
-      
       quality_assessment: %{
         overall_quality_score: calculate_overall_quality_score(workflow),
         stage_quality_scores: extract_stage_quality_scores(workflow),
         reproducibility_score: calculate_reproducibility_score(workflow),
         impact_prediction: predict_research_impact(workflow)
       },
-      
       resource_utilization: %{
         time_investment: calculate_total_time_investment(workflow),
         computational_resources: summarize_computational_usage(workflow),
         financial_costs: calculate_financial_costs(workflow),
         efficiency_metrics: calculate_efficiency_metrics(workflow)
       },
-      
       workflow_metadata: %{
         total_duration: calculate_total_workflow_duration(workflow),
         stage_durations: extract_stage_durations(workflow),
@@ -1035,21 +1070,21 @@ defmodule Dspy.ScientificInquiryWorkflow do
 
   defp initialize_resource_tracker(opts) do
     constraints = get_in(opts, [:research_scope, :resource_constraints]) || %{}
-    
+
     %{
-      time_budget: Map.get(constraints, :time_budget, 180), # days
+      # days
+      time_budget: Map.get(constraints, :time_budget, 180),
       financial_budget: Map.get(constraints, :budget, 10000),
       computational_budget: Map.get(constraints, :computational_budget, 1000),
       human_resources: Map.get(constraints, :human_resources, 2),
-      
       time_used: 0,
       financial_used: 0,
       computational_used: 0,
       human_hours_used: 0,
-      
       efficiency_targets: %{
         cost_per_finding: 1000,
-        time_per_experiment: 7, # days
+        # days
+        time_per_experiment: 7,
         success_rate_target: 0.8
       }
     }
@@ -1057,12 +1092,11 @@ defmodule Dspy.ScientificInquiryWorkflow do
 
   defp initialize_timeline do
     start_date = DateTime.utc_now()
-    
+
     %{
       start_date: start_date,
       planned_end_date: DateTime.add(start_date, 180, :day),
       current_date: start_date,
-      
       stage_deadlines: %{
         problem_identification: DateTime.add(start_date, 14, :day),
         literature_review: DateTime.add(start_date, 28, :day),
@@ -1074,7 +1108,6 @@ defmodule Dspy.ScientificInquiryWorkflow do
         theory_building: DateTime.add(start_date, 170, :day),
         communication: DateTime.add(start_date, 180, :day)
       },
-      
       milestones: [],
       delays: [],
       accelerations: []
@@ -1084,17 +1117,19 @@ defmodule Dspy.ScientificInquiryWorkflow do
   defp update_stage(workflow, next_stage, stage_results) do
     stage_entry = %{
       stage: workflow.current_stage,
-      start_time: Map.get(List.first(workflow.stage_history) || %{}, :end_time, workflow.process_metadata.created_at),
+      start_time:
+        Map.get(
+          List.first(workflow.stage_history) || %{},
+          :end_time,
+          workflow.process_metadata.created_at
+        ),
       end_time: DateTime.utc_now(),
       results: stage_results,
       quality_score: stage_results.quality_score,
       duration: stage_results.stage_duration
     }
 
-    %{workflow |
-      current_stage: next_stage,
-      stage_history: [stage_entry | workflow.stage_history]
-    }
+    %{workflow | current_stage: next_stage, stage_history: [stage_entry | workflow.stage_history]}
   end
 
   defp get_latest_stage_results(workflow, stage) do
@@ -1108,30 +1143,40 @@ defmodule Dspy.ScientificInquiryWorkflow do
 
   defp measure_stage_duration do
     # Return mock duration - would track actual time in production
-    :rand.uniform(7) + 3  # 3-10 days
+    # 3-10 days
+    :rand.uniform(7) + 3
   end
 
   defp calculate_stage_quality_score(quality_standards, stage_name) do
     base_score = 0.8
-    
+
     # Adjust based on quality standards
-    rigor_adjustment = case quality_standards.statistical_rigor do
-      :maximum -> 0.1
-      :high -> 0.05
-      :medium -> 0.0
-      :low -> -0.1
-    end
-    
-    reproducibility_adjustment = if quality_standards.reproducibility == :required, do: 0.05, else: 0.0
-    
-    stage_specific_adjustment = case stage_name do
-      "experimental_design" -> 0.05  # Critical stage
-      "analysis" -> 0.05            # Critical stage
-      "validation" -> 0.1           # Most critical
-      _ -> 0.0
-    end
-    
-    Float.round(base_score + rigor_adjustment + reproducibility_adjustment + stage_specific_adjustment, 2)
+    rigor_adjustment =
+      case quality_standards.statistical_rigor do
+        :maximum -> 0.1
+        :high -> 0.05
+        :medium -> 0.0
+        :low -> -0.1
+      end
+
+    reproducibility_adjustment =
+      if quality_standards.reproducibility == :required, do: 0.05, else: 0.0
+
+    stage_specific_adjustment =
+      case stage_name do
+        # Critical stage
+        "experimental_design" -> 0.05
+        # Critical stage
+        "analysis" -> 0.05
+        # Most critical
+        "validation" -> 0.1
+        _ -> 0.0
+      end
+
+    Float.round(
+      base_score + rigor_adjustment + reproducibility_adjustment + stage_specific_adjustment,
+      2
+    )
   end
 
   # Placeholder implementations for complex functions
@@ -1144,8 +1189,13 @@ defmodule Dspy.ScientificInquiryWorkflow do
 
   defp identify_methodological_gaps(_themes, _domain), do: ["experimental_design", "measurement"]
   defp identify_empirical_gaps(_themes, _domain), do: ["insufficient_data", "conflicting_results"]
-  defp identify_theoretical_gaps(_themes, _domain), do: ["mechanism_unclear", "boundary_conditions"]
-  defp identify_technological_gaps(_themes, _domain), do: ["scalability", "real_world_application"]
+
+  defp identify_theoretical_gaps(_themes, _domain),
+    do: ["mechanism_unclear", "boundary_conditions"]
+
+  defp identify_technological_gaps(_themes, _domain),
+    do: ["scalability", "real_world_application"]
+
   defp calculate_gap_priorities(_themes, _domain), do: %{}
 
   defp generate_methodological_question(gap), do: "How can we improve #{gap}?"
@@ -1157,7 +1207,8 @@ defmodule Dspy.ScientificInquiryWorkflow do
   defp assess_question_feasibility(_question), do: 0.8
   defp assess_impact_potential(_question), do: 0.7
   defp suggest_research_methods(_question), do: ["experimental", "observational"]
-  defp estimate_research_duration(_question), do: 90  # days
+  # days
+  defp estimate_research_duration(_question), do: 90
   defp estimate_resource_requirements(_question), do: %{budget: 5000, time: 90}
 
   # Additional placeholder implementations would continue...
@@ -1182,7 +1233,8 @@ defmodule Dspy.ScientificInquiryWorkflow do
         year: 2020 + :rand.uniform(4),
         citations: :rand.uniform(100),
         abstract: "This paper investigates #{Enum.random(terms)}...",
-        methodology: Enum.random(["experimental", "observational", "theoretical", "meta_analysis"]),
+        methodology:
+          Enum.random(["experimental", "observational", "theoretical", "meta_analysis"]),
         key_findings: ["Finding 1", "Finding 2", "Finding 3"]
       }
     end)
@@ -1211,6 +1263,7 @@ defmodule Dspy.ScientificInquiryWorkflow do
   defp identify_consensus_areas(_papers), do: ["consensus_1", "consensus_2"]
   defp identify_debate_areas(_papers), do: ["debate_1", "debate_2"]
   defp analyze_research_trends(_papers), do: %{increasing: [], decreasing: []}
+
   defp identify_influential_works(papers) do
     papers
     |> Enum.sort_by(fn paper -> paper.citations end, :desc)
@@ -1234,6 +1287,7 @@ defmodule Dspy.ScientificInquiryWorkflow do
   defp generate_null_hypothesis(statement), do: "No effect: #{statement}"
   defp generate_alternative_hypothesis_statement(statement), do: "Alternative to: #{statement}"
   defp generate_specific_predictions(_statement), do: ["prediction_1", "prediction_2"]
+
   defp identify_hypothesis_variables(_statement) do
     %{independent: ["var1"], dependent: ["var2"], controlled: ["var3"]}
   end
@@ -1252,15 +1306,18 @@ defmodule Dspy.ScientificInquiryWorkflow do
 
   defp prioritize_hypotheses(hypotheses, assessment) do
     hypotheses
-    |> Enum.sort_by(fn h -> 
-      scores = assessment[h.id]
-      scores.testability + scores.feasibility + scores.impact
-    end, :desc)
+    |> Enum.sort_by(
+      fn h ->
+        scores = assessment[h.id]
+        scores.testability + scores.feasibility + scores.impact
+      end,
+      :desc
+    )
   end
 
   defp generate_alternative_hypotheses(hypotheses) do
     hypotheses
-    |> Enum.map(fn h -> 
+    |> Enum.map(fn h ->
       %{
         id: "ALT_#{h.id}",
         statement: "Alternative to #{h.statement}",
@@ -1290,7 +1347,7 @@ defmodule Dspy.ScientificInquiryWorkflow do
       global_metrics: %{},
       system_status: :initialized
     }
-    
+
     Logger.info("Scientific Inquiry Workflow system initialized")
     {:ok, state}
   end
@@ -1406,11 +1463,13 @@ defmodule Dspy.ScientificInquiryWorkflow do
   defp extract_stage_quality_scores(_), do: %{}
   defp calculate_reproducibility_score(_), do: 0.9
   defp predict_research_impact(_), do: 0.7
-  defp calculate_total_time_investment(_), do: 120 # days
+  # days
+  defp calculate_total_time_investment(_), do: 120
   defp summarize_computational_usage(_), do: %{}
   defp calculate_financial_costs(_), do: 8500
   defp calculate_efficiency_metrics(_), do: %{}
-  defp calculate_total_workflow_duration(_), do: 145 # days
+  # days
+  defp calculate_total_workflow_duration(_), do: 145
   defp extract_stage_durations(_), do: %{}
   defp extract_decision_points(_), do: []
   defp extract_adaptations_made(_), do: []
@@ -1432,7 +1491,7 @@ defmodule Dspy.ScientificInquiryWorkflow do
     |> Enum.map(fn {question, index} ->
       %{
         question: question,
-        priority_score: 0.8 - (index * 0.1),
+        priority_score: 0.8 - index * 0.1,
         feasibility_score: Map.get(feasibility, :technical_feasibility, 0.5),
         impact_potential: 0.7
       }

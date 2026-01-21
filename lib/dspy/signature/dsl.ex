@@ -15,10 +15,11 @@ defmodule Dspy.Signature.DSL do
         required: Keyword.get(unquote(opts), :required, true),
         default: Keyword.get(unquote(opts), :default)
       }
-      
+
       case unquote(direction) do
         :input ->
           @input_fields field_spec
+
         :output ->
           @output_fields field_spec
       end

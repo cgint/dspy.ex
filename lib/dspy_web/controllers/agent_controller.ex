@@ -2,14 +2,15 @@ defmodule DspyWeb.AgentController do
   use DspyWeb, :controller
 
   def spawn_swarm(conn, %{"count" => count} = _params) do
-    agents = for i <- 1..count do
-      %{
-        id: "agent_#{i}_#{System.unique_integer([:positive])}",
-        status: "active",
-        created_at: DateTime.utc_now()
-      }
-    end
-    
+    agents =
+      for i <- 1..count do
+        %{
+          id: "agent_#{i}_#{System.unique_integer([:positive])}",
+          status: "active",
+          created_at: DateTime.utc_now()
+        }
+      end
+
     json(conn, %{status: "success", agents: agents})
   end
 
@@ -22,7 +23,7 @@ defmodule DspyWeb.AgentController do
       tasks_completed: :rand.uniform(50),
       uptime_seconds: :rand.uniform(3600)
     }
-    
+
     json(conn, status)
   end
 

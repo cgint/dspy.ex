@@ -2,7 +2,7 @@ defmodule Dspy.AutonomousMetaAgent do
   @moduledoc """
   Autonomous meta-hotswapping agent that performs a complete selection, design, 
   write, test, and validation process coordinated by LLM tokens.
-  
+
   This agent:
   1. Analyzes the current system state and requirements
   2. Designs appropriate code modifications or new modules
@@ -10,7 +10,7 @@ defmodule Dspy.AutonomousMetaAgent do
   4. Tests the implementation to ensure it works
   5. Validates output for correctness and legitimacy
   6. Coordinates the entire multi-turn process using LLM tokens
-  
+
   The agent is self-directing and meta-aware, capable of evolving its own
   functionality through the hotswapping mechanism.
   """
@@ -81,37 +81,40 @@ defmodule Dspy.AutonomousMetaAgent do
       active_hotswaps: [],
       llm_client: initialize_llm_client()
     }
-    
+
     Logger.info("Autonomous Meta Agent #{agent_id} initialized")
     {:ok, state}
   end
 
   def handle_call({:autonomous_process, goal, context}, _from, state) do
     Logger.info("Starting autonomous process for goal: #{goal}")
-    
+
     start_time = DateTime.utc_now()
     task_id = generate_task_id()
-    
-    new_state = %{state | 
-      current_task: %{id: task_id, goal: goal, context: context, start_time: start_time}
+
+    new_state = %{
+      state
+      | current_task: %{id: task_id, goal: goal, context: context, start_time: start_time}
     }
-    
+
     # Execute the complete autonomous cycle
     case execute_autonomous_cycle(new_state, goal, context) do
       {:ok, final_state, result} ->
         completion_time = DateTime.diff(DateTime.utc_now(), start_time)
-        
-        updated_state = update_performance_metrics(final_state, true, completion_time)
-        |> add_to_execution_history(task_id, goal, result, completion_time)
-        
+
+        updated_state =
+          update_performance_metrics(final_state, true, completion_time)
+          |> add_to_execution_history(task_id, goal, result, completion_time)
+
         {:reply, {:ok, result}, updated_state}
-        
+
       {:error, reason, intermediate_state} ->
         completion_time = DateTime.diff(DateTime.utc_now(), start_time)
-        
-        updated_state = update_performance_metrics(intermediate_state, false, completion_time)
-        |> add_to_execution_history(task_id, goal, {:error, reason}, completion_time)
-        
+
+        updated_state =
+          update_performance_metrics(intermediate_state, false, completion_time)
+          |> add_to_execution_history(task_id, goal, {:error, reason}, completion_time)
+
         {:reply, {:error, reason}, updated_state}
     end
   end
@@ -122,10 +125,11 @@ defmodule Dspy.AutonomousMetaAgent do
 
   def handle_call({:self_evolve, evolution_direction}, _from, state) do
     Logger.info("Initiating self-evolution: #{evolution_direction}")
-    
+
     case perform_self_evolution(state, evolution_direction) do
       {:ok, evolved_state} ->
         {:reply, {:ok, :evolved}, evolved_state}
+
       {:error, reason} ->
         {:reply, {:error, reason}, state}
     end
@@ -151,15 +155,15 @@ defmodule Dspy.AutonomousMetaAgent do
   # Phase 1: Selection and Analysis
   defp phase_1_selection_and_analysis(state, goal, context) do
     Logger.info("Phase 1: Selection and Analysis")
-    
+
     # Use LLM tokens to analyze the goal and select appropriate approach
     analysis_prompt = """
     As an autonomous meta-agent, analyze this goal and determine the best approach:
-    
+
     Goal: #{goal}
     Context: #{inspect(context)}
     Current system capabilities: #{inspect(get_system_capabilities())}
-    
+
     Provide a structured analysis with:
     1. Problem decomposition
     2. Required capabilities assessment  
@@ -167,10 +171,10 @@ defmodule Dspy.AutonomousMetaAgent do
     4. Resource and complexity estimation
     5. Success criteria definition
     """
-    
+
     {:ok, analysis_result} = query_llm(state.llm_client, analysis_prompt)
     Logger.info("Analysis completed successfully")
-    
+
     selection_result = %{
       problem_decomposition: extract_field(analysis_result, "problem_decomposition"),
       required_capabilities: extract_field(analysis_result, "required_capabilities"),
@@ -178,26 +182,27 @@ defmodule Dspy.AutonomousMetaAgent do
       complexity_estimate: extract_field(analysis_result, "complexity_estimate"),
       success_criteria: extract_field(analysis_result, "success_criteria")
     }
-    
-    updated_state = %{state |
-      design_state: %{phase: :analysis_complete, artifacts: [selection_result]},
-      coordination_tokens: increment_tokens(state.coordination_tokens, 1)
+
+    updated_state = %{
+      state
+      | design_state: %{phase: :analysis_complete, artifacts: [selection_result]},
+        coordination_tokens: increment_tokens(state.coordination_tokens, 1)
     }
-    
+
     {:ok, updated_state}
   end
 
   # Phase 2: Design and Planning
   defp phase_2_design_and_planning(state) do
     Logger.info("Phase 2: Design and Planning")
-    
+
     [selection_result] = state.design_state.artifacts
-    
+
     design_prompt = """
     Based on the analysis, create a detailed implementation design:
-    
+
     Analysis: #{inspect(selection_result)}
-    
+
     Design the following:
     1. Module architecture and structure
     2. Function specifications and signatures
@@ -206,10 +211,10 @@ defmodule Dspy.AutonomousMetaAgent do
     5. File organization and code structure
     6. Hotswapping integration points
     """
-    
+
     {:ok, design_result} = query_llm(state.llm_client, design_prompt)
     Logger.info("Design planning completed successfully")
-    
+
     design_plan = %{
       module_architecture: extract_field(design_result, "module_architecture"),
       function_specifications: extract_field(design_result, "function_specifications"),
@@ -218,26 +223,30 @@ defmodule Dspy.AutonomousMetaAgent do
       file_structure: extract_field(design_result, "file_structure"),
       hotswap_points: extract_field(design_result, "hotswap_points")
     }
-    
-    updated_state = %{state |
-      design_state: %{phase: :design_complete, artifacts: state.design_state.artifacts ++ [design_plan]},
-      coordination_tokens: increment_tokens(state.coordination_tokens, 1)
+
+    updated_state = %{
+      state
+      | design_state: %{
+          phase: :design_complete,
+          artifacts: state.design_state.artifacts ++ [design_plan]
+        },
+        coordination_tokens: increment_tokens(state.coordination_tokens, 1)
     }
-    
+
     {:ok, updated_state}
   end
 
   # Phase 3: Implementation and Writing
   defp phase_3_implementation_and_writing(state) do
     Logger.info("Phase 3: Implementation and Writing")
-    
+
     [_selection, design_plan] = state.design_state.artifacts
-    
+
     implementation_prompt = """
     Generate complete, working Elixir code based on this design:
-    
+
     Design Plan: #{inspect(design_plan)}
-    
+
     Requirements:
     1. Write production-ready Elixir modules
     2. Include proper documentation and typespecs
@@ -245,26 +254,27 @@ defmodule Dspy.AutonomousMetaAgent do
     4. Ensure hotswapping compatibility
     5. Include error handling and logging
     6. Make code modular and testable
-    
+
     Provide the complete code for each module/file needed.
     """
-    
+
     {:ok, implementation_result} = query_llm(state.llm_client, implementation_prompt)
     Logger.info("Implementation generated successfully")
-    
+
     case write_implementation_files(implementation_result) do
       {:ok, files_created, modules_compiled} ->
-        updated_state = %{state |
-          implementation_state: %{
-            phase: :implementation_complete,
-            files_created: files_created,
-            modules_compiled: modules_compiled
-          },
-          coordination_tokens: increment_tokens(state.coordination_tokens, 1)
+        updated_state = %{
+          state
+          | implementation_state: %{
+              phase: :implementation_complete,
+              files_created: files_created,
+              modules_compiled: modules_compiled
+            },
+            coordination_tokens: increment_tokens(state.coordination_tokens, 1)
         }
-        
+
         {:ok, updated_state}
-        
+
       {:error, reason} ->
         {:error, :implementation_writing, reason, state}
     end
@@ -273,43 +283,44 @@ defmodule Dspy.AutonomousMetaAgent do
   # Phase 4: Testing and Verification
   defp phase_4_testing_and_verification(state) do
     Logger.info("Phase 4: Testing and Verification")
-    
+
     files_created = state.implementation_state.files_created
     modules_compiled = state.implementation_state.modules_compiled
-    
+
     # Generate and run tests for the implemented modules
     testing_prompt = """
     Create comprehensive tests for these implemented modules:
-    
+
     Files: #{inspect(files_created)}
     Modules: #{inspect(modules_compiled)}
-    
+
     Generate tests that verify:
     1. Basic functionality works correctly
     2. Edge cases are handled properly
     3. Error conditions are managed
     4. Integration with DSPy framework
     5. Hotswapping compatibility
-    
+
     Provide complete test code that can be executed.
     """
-    
+
     {:ok, test_code} = query_llm(state.llm_client, testing_prompt)
     Logger.info("Test code generated successfully")
-    
+
     case execute_generated_tests(test_code, modules_compiled) do
       {:ok, test_results} ->
-        updated_state = %{state |
-          test_state: %{
-            phase: :testing_complete,
-            tests_run: [test_code],
-            results: test_results
-          },
-          coordination_tokens: increment_tokens(state.coordination_tokens, 1)
+        updated_state = %{
+          state
+          | test_state: %{
+              phase: :testing_complete,
+              tests_run: [test_code],
+              results: test_results
+            },
+            coordination_tokens: increment_tokens(state.coordination_tokens, 1)
         }
-        
+
         {:ok, updated_state}
-        
+
       {:error, reason} ->
         {:error, :test_execution, reason, state}
     end
@@ -318,32 +329,32 @@ defmodule Dspy.AutonomousMetaAgent do
   # Phase 5: Validation and Legitimacy Check
   defp phase_5_validation_and_legitimacy_check(state) do
     Logger.info("Phase 5: Validation and Legitimacy Check")
-    
+
     test_results = state.test_state.results
     modules_compiled = state.implementation_state.modules_compiled
-    
+
     validation_prompt = """
     Perform legitimacy and correctness validation:
-    
+
     Test Results: #{inspect(test_results)}
     Modules: #{inspect(modules_compiled)}
     Original Goal: #{state.current_task.goal}
-    
+
     Validate:
     1. Output correctness and legitimacy
     2. Goal achievement assessment
     3. Code quality and safety analysis
     4. Performance and efficiency check
     5. Integration safety verification
-    
+
     Provide a comprehensive validation report with legitimacy score (0-1).
     """
-    
+
     {:ok, validation_result} = query_llm(state.llm_client, validation_prompt)
     Logger.info("Validation analysis completed")
-    
+
     legitimacy_score = extract_legitimacy_score(validation_result)
-    
+
     validations = %{
       correctness_check: extract_field(validation_result, "correctness"),
       goal_achievement: extract_field(validation_result, "goal_achievement"),
@@ -352,16 +363,17 @@ defmodule Dspy.AutonomousMetaAgent do
       safety_verification: extract_field(validation_result, "safety"),
       legitimacy_score: legitimacy_score
     }
-    
-    updated_state = %{state |
-      validation_state: %{
-        phase: :validation_complete,
-        validations: [validations],
-        legitimacy_score: legitimacy_score
-      },
-      coordination_tokens: increment_tokens(state.coordination_tokens, 1)
+
+    updated_state = %{
+      state
+      | validation_state: %{
+          phase: :validation_complete,
+          validations: [validations],
+          legitimacy_score: legitimacy_score
+        },
+        coordination_tokens: increment_tokens(state.coordination_tokens, 1)
     }
-    
+
     if legitimacy_score >= 0.8 do
       {:ok, updated_state}
     else
@@ -372,7 +384,7 @@ defmodule Dspy.AutonomousMetaAgent do
   # Phase 6: Coordination and Finalization
   defp phase_6_coordination_and_finalization(state) do
     Logger.info("Phase 6: Coordination and Finalization")
-    
+
     # Finalize the implementation through hotswapping if needed
     case finalize_with_hotswapping(state) do
       {:ok, hotswap_results} ->
@@ -396,14 +408,15 @@ defmodule Dspy.AutonomousMetaAgent do
             efficiency: calculate_efficiency(state)
           }
         }
-        
-        final_state = %{state |
-          coordination_tokens: increment_tokens(state.coordination_tokens, 1),
-          active_hotswaps: state.active_hotswaps ++ hotswap_results
+
+        final_state = %{
+          state
+          | coordination_tokens: increment_tokens(state.coordination_tokens, 1),
+            active_hotswaps: state.active_hotswaps ++ hotswap_results
         }
-        
+
         {:ok, final_state, final_result}
-        
+
       {:error, reason} ->
         {:error, :finalization, reason, state}
     end
@@ -415,25 +428,26 @@ defmodule Dspy.AutonomousMetaAgent do
     try do
       # Parse the implementation result to extract file contents
       files_to_create = parse_implementation_files(implementation_result)
-      
-      files_created = Enum.map(files_to_create, fn {file_path, content} ->
-        File.write!(file_path, content)
-        file_path
-      end)
-      
+
+      files_created =
+        Enum.map(files_to_create, fn {file_path, content} ->
+          File.write!(file_path, content)
+          file_path
+        end)
+
       # Compile the modules
-      modules_compiled = Enum.map(files_to_create, fn {_file_path, content} ->
-        case Code.compile_string(content) do
-          [{module, _bytecode}] -> module
-          modules when is_list(modules) -> Enum.map(modules, fn {mod, _} -> mod end)
-          _ -> nil
-        end
-      end)
-      |> List.flatten()
-      |> Enum.reject(&is_nil/1)
-      
+      modules_compiled =
+        Enum.map(files_to_create, fn {_file_path, content} ->
+          case Code.compile_string(content) do
+            [{module, _bytecode}] -> module
+            modules when is_list(modules) -> Enum.map(modules, fn {mod, _} -> mod end)
+            _ -> nil
+          end
+        end)
+        |> List.flatten()
+        |> Enum.reject(&is_nil/1)
+
       {:ok, files_created, modules_compiled}
-      
     catch
       error ->
         {:error, "Failed to write/compile files: #{inspect(error)}"}
@@ -444,17 +458,17 @@ defmodule Dspy.AutonomousMetaAgent do
     try do
       # Compile and run the test code
       [{test_module, _}] = Code.compile_string(test_code)
-      
+
       test_results = %{
         modules_tested: modules_to_test,
         test_module: test_module,
-        all_tests_passed: true, # Simplified - would run actual tests
+        # Simplified - would run actual tests
+        all_tests_passed: true,
         execution_time: :rand.uniform(100),
         coverage: 0.95
       }
-      
+
       {:ok, test_results}
-      
     catch
       error ->
         {:error, "Test execution failed: #{inspect(error)}"}
@@ -464,17 +478,18 @@ defmodule Dspy.AutonomousMetaAgent do
   defp finalize_with_hotswapping(state) do
     try do
       # Use the meta-hotswap system to integrate the new modules
-      hotswap_results = Enum.map(state.implementation_state.modules_compiled, fn module ->
-        case MetaHotswap.swap_module(to_string(module), get_module_source(module)) do
-          {:ok, swap_id, _module_atom} ->
-            %{module: module, swap_id: swap_id, status: :hotswapped}
-          {:error, reason} ->
-            %{module: module, error: reason, status: :failed}
-        end
-      end)
-      
+      hotswap_results =
+        Enum.map(state.implementation_state.modules_compiled, fn module ->
+          case MetaHotswap.swap_module(to_string(module), get_module_source(module)) do
+            {:ok, swap_id, _module_atom} ->
+              %{module: module, swap_id: swap_id, status: :hotswapped}
+
+            {:error, reason} ->
+              %{module: module, error: reason, status: :failed}
+          end
+        end)
+
       {:ok, hotswap_results}
-      
     catch
       error ->
         {:error, "Hotswapping failed: #{inspect(error)}"}
@@ -557,36 +572,39 @@ defmodule Dspy.AutonomousMetaAgent do
       state.test_state.phase,
       state.validation_state.phase
     ]
-    
-    Enum.count(phases, fn phase -> 
+
+    Enum.count(phases, fn phase ->
       String.contains?(to_string(phase), "complete")
     end)
   end
 
   defp update_performance_metrics(state, success, completion_time) do
     current_metrics = state.performance_metrics
-    
+
     # Simple running average update
-    new_success_rate = if success do
-      (current_metrics.success_rate + 1.0) / 2.0
-    else
-      current_metrics.success_rate / 2.0
-    end
-    
+    new_success_rate =
+      if success do
+        (current_metrics.success_rate + 1.0) / 2.0
+      else
+        current_metrics.success_rate / 2.0
+      end
+
     new_avg_time = (current_metrics.avg_completion_time + completion_time) / 2
-    
-    new_quality_score = if success do
-      min(1.0, current_metrics.quality_score + 0.1)
-    else
-      max(0.0, current_metrics.quality_score - 0.1)
-    end
-    
-    %{state |
-      performance_metrics: %{
-        success_rate: new_success_rate,
-        avg_completion_time: new_avg_time,
-        quality_score: new_quality_score
-      }
+
+    new_quality_score =
+      if success do
+        min(1.0, current_metrics.quality_score + 0.1)
+      else
+        max(0.0, current_metrics.quality_score - 0.1)
+      end
+
+    %{
+      state
+      | performance_metrics: %{
+          success_rate: new_success_rate,
+          avg_completion_time: new_avg_time,
+          quality_score: new_quality_score
+        }
     }
   end
 
@@ -598,27 +616,27 @@ defmodule Dspy.AutonomousMetaAgent do
       completion_time: completion_time,
       timestamp: DateTime.utc_now()
     }
-    
-    %{state |
-      execution_history: [history_entry | state.execution_history],
-      current_task: nil
-    }
+
+    %{state | execution_history: [history_entry | state.execution_history], current_task: nil}
   end
 
   defp perform_self_evolution(state, evolution_direction) do
     # Agent evolves its own capabilities through meta-hotswapping
     Logger.info("Performing self-evolution: #{evolution_direction}")
-    
+
     evolution_code = generate_evolution_code(evolution_direction)
-    
+
     case MetaHotswap.swap_module("Dspy.AutonomousMetaAgent", evolution_code) do
       {:ok, swap_id, _module} ->
-        updated_state = %{state |
-          active_hotswaps: [%{type: :self_evolution, swap_id: swap_id} | state.active_hotswaps],
-          learning_memory: Map.put(state.learning_memory, evolution_direction, DateTime.utc_now())
+        updated_state = %{
+          state
+          | active_hotswaps: [%{type: :self_evolution, swap_id: swap_id} | state.active_hotswaps],
+            learning_memory:
+              Map.put(state.learning_memory, evolution_direction, DateTime.utc_now())
         }
+
         {:ok, updated_state}
-        
+
       {:error, reason} ->
         {:error, reason}
     end
@@ -633,7 +651,7 @@ defmodule Dspy.AutonomousMetaAgent do
           # Extended functionality for better reasoning
         end
         """
-      
+
       :improved_efficiency ->
         """
         # Efficiency improvements would be generated here
@@ -641,7 +659,7 @@ defmodule Dspy.AutonomousMetaAgent do
           # Performance optimizations
         end
         """
-      
+
       _ ->
         """
         # Default evolution

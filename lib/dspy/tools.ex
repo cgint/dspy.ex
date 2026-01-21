@@ -2,7 +2,7 @@ defmodule Dspy.Tools do
   @moduledoc """
   Tool integration system for function calling and ReAct patterns.
   Compatible with Python DSPy's tool architecture.
-  
+
   Supports:
   - Function calling with structured arguments
   - Tool registration and discovery
@@ -16,7 +16,7 @@ defmodule Dspy.Tools do
     @moduledoc """
     Represents a callable tool with metadata and validation.
     """
-    
+
     defstruct [
       :name,
       :description,
@@ -30,25 +30,25 @@ defmodule Dspy.Tools do
     ]
 
     @type t :: %__MODULE__{
-      name: String.t(),
-      description: String.t(),
-      function: function(),
-      parameters: list(),
-      return_type: atom(),
-      examples: list(),
-      timeout: pos_integer(),
-      retry_attempts: pos_integer(),
-      validation_schema: map() | nil
-    }
+            name: String.t(),
+            description: String.t(),
+            function: function(),
+            parameters: list(),
+            return_type: atom(),
+            examples: list(),
+            timeout: pos_integer(),
+            retry_attempts: pos_integer(),
+            validation_schema: map() | nil
+          }
   end
 
   defmodule ToolRegistry do
     @moduledoc """
     Registry for managing available tools.
     """
-    
+
     use GenServer
-    
+
     def start_link(opts \\ []) do
       GenServer.start_link(__MODULE__, opts, name: __MODULE__)
     end
@@ -89,12 +89,14 @@ defmodule Dspy.Tools do
     end
 
     def handle_call({:search, query}, _from, state) do
-      matching_tools = state.tools
-      |> Map.values()
-      |> Enum.filter(fn tool ->
-        String.contains?(String.downcase(tool.name), String.downcase(query)) or
-        String.contains?(String.downcase(tool.description), String.downcase(query))
-      end)
+      matching_tools =
+        state.tools
+        |> Map.values()
+        |> Enum.filter(fn tool ->
+          String.contains?(String.downcase(tool.name), String.downcase(query)) or
+            String.contains?(String.downcase(tool.description), String.downcase(query))
+        end)
+
       {:reply, matching_tools, state}
     end
   end
@@ -103,13 +105,14 @@ defmodule Dspy.Tools do
     @moduledoc """
     Handles structured function calling with language models.
     """
-    
+
     def call_function(lm, function_spec, args, opts \\ []) do
       prompt = build_function_call_prompt(function_spec, args, opts)
-      
+
       case Dspy.LM.generate(lm, prompt, opts) do
         {:ok, response} ->
           parse_function_response(response, function_spec, opts)
+
         {:error, reason} ->
           {:error, "Function call failed: #{reason}"}
       end
@@ -118,19 +121,19 @@ defmodule Dspy.Tools do
     def build_function_call_prompt(function_spec, args, opts) do
       base_prompt = """
       You are a function calling assistant. Execute the following function with the provided arguments.
-      
+
       Function: #{function_spec.name}
       Description: #{function_spec.description}
-      
+
       Arguments:
       #{format_args(args)}
-      
+
       Parameters:
       #{format_parameters(function_spec.parameters)}
-      
+
       Execute the function and return the result in the specified format.
       """
-      
+
       if opts[:format] == :json do
         base_prompt <> "\n\nReturn the result as JSON."
       else
@@ -141,13 +144,15 @@ defmodule Dspy.Tools do
     defp format_args(args) when is_map(args) do
       Enum.map(args, fn {key, value} ->
         "- #{key}: #{inspect(value)}"
-      end) |> Enum.join("\n")
+      end)
+      |> Enum.join("\n")
     end
 
     defp format_parameters(parameters) do
       Enum.map(parameters, fn param ->
         "- #{param.name} (#{param.type}): #{param.description}"
-      end) |> Enum.join("\n")
+      end)
+      |> Enum.join("\n")
     end
 
     defp parse_function_response(response, function_spec, opts) do
@@ -157,6 +162,7 @@ defmodule Dspy.Tools do
             {:ok, parsed} -> validate_function_result(parsed, function_spec)
             {:error, reason} -> {:error, "Failed to parse JSON response: #{reason}"}
           end
+
         _ ->
           {:ok, response}
       end
@@ -177,6 +183,7 @@ defmodule Dspy.Tools do
       # Basic schema validation - could be extended
       if is_map(data) and is_map(schema) do
         missing_keys = Map.keys(schema) -- Map.keys(data)
+
         if missing_keys == [] do
           :ok
         else
@@ -193,7 +200,7 @@ defmodule Dspy.Tools do
     Implementation of ReAct (Reasoning + Acting) pattern.
     Allows models to interleave reasoning and tool use.
     """
-    
+
     defstruct [
       :lm,
       :tools,
@@ -206,15 +213,15 @@ defmodule Dspy.Tools do
     ]
 
     @type t :: %__MODULE__{
-      lm: any(),
-      tools: list(),
-      max_steps: pos_integer(),
-      thought_prefix: String.t(),
-      action_prefix: String.t(),
-      observation_prefix: String.t(),
-      answer_prefix: String.t(),
-      stop_words: list()
-    }
+            lm: any(),
+            tools: list(),
+            max_steps: pos_integer(),
+            thought_prefix: String.t(),
+            action_prefix: String.t(),
+            observation_prefix: String.t(),
+            answer_prefix: String.t(),
+            stop_words: list()
+          }
 
     def new(lm, tools, opts \\ []) do
       %__MODULE__{
@@ -235,26 +242,28 @@ defmodule Dspy.Tools do
     end
 
     defp build_react_prompt(react, question, _opts) do
-      tool_descriptions = Enum.map(react.tools, fn tool ->
-        "#{tool.name}: #{tool.description}"
-      end) |> Enum.join("\n")
-      
+      tool_descriptions =
+        Enum.map(react.tools, fn tool ->
+          "#{tool.name}: #{tool.description}"
+        end)
+        |> Enum.join("\n")
+
       """
       You are solving a problem step by step using reasoning and actions.
-      
+
       Available tools:
       #{tool_descriptions}
-      
+
       Use the following format:
       #{react.thought_prefix} [your reasoning about what to do next]
       #{react.action_prefix} [tool_name(arguments)]
       #{react.observation_prefix} [tool result will appear here]
-      
+
       When you have enough information, provide your final answer:
       #{react.answer_prefix} [your final answer]
-      
+
       Question: #{question}
-      
+
       #{react.thought_prefix}
       """
     end
@@ -263,50 +272,61 @@ defmodule Dspy.Tools do
       case Dspy.LM.generate(react.lm, prompt, stop: react.stop_words) do
         {:ok, response} ->
           updated_prompt = prompt <> response
-          
+
           case parse_react_step(response, react) do
             {:thought, thought} ->
               new_history = [{:thought, thought, step} | history]
               continue_react_loop(react, updated_prompt, new_history, step)
-            
+
             {:action, action_call} ->
               case execute_action(action_call, react.tools) do
                 {:ok, observation} ->
-                  obs_text = "\n#{react.observation_prefix} #{observation}\n#{react.thought_prefix} "
+                  obs_text =
+                    "\n#{react.observation_prefix} #{observation}\n#{react.thought_prefix} "
+
                   new_prompt = updated_prompt <> obs_text
-                  new_history = [{:action, action_call, step}, {:observation, observation, step} | history]
+
+                  new_history = [
+                    {:action, action_call, step},
+                    {:observation, observation, step} | history
+                  ]
+
                   execute_react_loop(react, new_prompt, new_history, step + 1)
-                
+
                 {:error, error} ->
-                  error_text = "\n#{react.observation_prefix} Error: #{error}\n#{react.thought_prefix} "
+                  error_text =
+                    "\n#{react.observation_prefix} Error: #{error}\n#{react.thought_prefix} "
+
                   new_prompt = updated_prompt <> error_text
                   new_history = [{:action, action_call, step}, {:error, error, step} | history]
                   execute_react_loop(react, new_prompt, new_history, step + 1)
               end
-            
+
             {:answer, answer} ->
-              {:ok, %{
-                answer: answer,
-                steps: step + 1,
-                history: Enum.reverse(history),
-                reasoning_trace: extract_reasoning_trace(history)
-              }}
-            
-            {:none, text} ->
+              {:ok,
+               %{
+                 answer: answer,
+                 steps: step + 1,
+                 history: Enum.reverse(history),
+                 reasoning_trace: extract_reasoning_trace(history)
+               }}
+
+            {:none, _text} ->
               continue_react_loop(react, updated_prompt, history, step)
           end
-        
+
         {:error, reason} ->
           {:error, "React execution failed: #{reason}"}
       end
     end
 
     defp execute_react_loop(react, _prompt, history, _step) do
-      {:error, %{
-        reason: "Max steps reached",
-        max_steps: react.max_steps,
-        history: Enum.reverse(history)
-      }}
+      {:error,
+       %{
+         reason: "Max steps reached",
+         max_steps: react.max_steps,
+         history: Enum.reverse(history)
+       }}
     end
 
     defp continue_react_loop(react, prompt, history, step) do
@@ -315,22 +335,22 @@ defmodule Dspy.Tools do
 
     defp parse_react_step(text, react) do
       text = String.trim(text)
-      
+
       cond do
         String.starts_with?(text, react.answer_prefix) ->
           answer = String.replace_prefix(text, react.answer_prefix, "") |> String.trim()
           {:answer, answer}
-        
+
         String.contains?(text, react.action_prefix) ->
           case Regex.run(~r/#{react.action_prefix}\s*(.+)/i, text, capture: :all_but_first) do
             [action] -> {:action, String.trim(action)}
             _ -> {:none, text}
           end
-        
+
         String.starts_with?(text, react.thought_prefix) ->
           thought = String.replace_prefix(text, react.thought_prefix, "") |> String.trim()
           {:thought, thought}
-        
+
         true ->
           {:none, text}
       end
@@ -342,9 +362,11 @@ defmodule Dspy.Tools do
           case find_tool(tool_name, tools) do
             {:ok, tool} ->
               call_tool(tool, args)
+
             {:error, reason} ->
               {:error, reason}
           end
+
         {:error, reason} ->
           {:error, reason}
       end
@@ -358,6 +380,7 @@ defmodule Dspy.Tools do
             {:ok, args} -> {:ok, {tool_name, args}}
             {:error, reason} -> {:error, "Failed to parse arguments: #{reason}"}
           end
+
         _ ->
           # Maybe it's just a tool name
           {:ok, {String.trim(action_call), %{}}}
@@ -365,23 +388,26 @@ defmodule Dspy.Tools do
     end
 
     defp parse_arguments(""), do: {:ok, %{}}
+
     defp parse_arguments(args_str) do
       # Simple argument parsing - could be more sophisticated
       try do
         # Try to parse as key=value pairs
-        args = String.split(args_str, ",")
-        |> Enum.map(&String.trim/1)
-        |> Enum.reduce(%{}, fn arg, acc ->
-          case String.split(arg, "=", parts: 2) do
-            [key, value] ->
-              clean_key = String.trim(key)
-              clean_value = String.trim(value) |> String.trim("'\"")
-              Map.put(acc, clean_key, clean_value)
-            [single_arg] ->
-              Map.put(acc, "query", String.trim(single_arg) |> String.trim("'\""))
-          end
-        end)
-        
+        args =
+          String.split(args_str, ",")
+          |> Enum.map(&String.trim/1)
+          |> Enum.reduce(%{}, fn arg, acc ->
+            case String.split(arg, "=", parts: 2) do
+              [key, value] ->
+                clean_key = String.trim(key)
+                clean_value = String.trim(value) |> String.trim("'\"")
+                Map.put(acc, clean_key, clean_value)
+
+              [single_arg] ->
+                Map.put(acc, "query", String.trim(single_arg) |> String.trim("'\""))
+            end
+          end)
+
         {:ok, args}
       rescue
         _ -> {:error, "Invalid argument format"}
@@ -428,19 +454,21 @@ defmodule Dspy.Tools do
         timeout: 10_000,
         retry_attempts: 2
       },
-      
       %Tool{
         name: "calculate",
         description: "Perform mathematical calculations",
         function: &calculate_tool/1,
         parameters: [
-          %{name: "expression", type: "string", description: "Mathematical expression to evaluate"}
+          %{
+            name: "expression",
+            type: "string",
+            description: "Mathematical expression to evaluate"
+          }
         ],
         return_type: :number,
         timeout: 5_000,
         retry_attempts: 1
       },
-      
       %Tool{
         name: "datetime",
         description: "Get current date and time information",
@@ -459,15 +487,26 @@ defmodule Dspy.Tools do
 
   defp search_tool(%{"query" => query} = args) do
     num_results = Map.get(args, "num_results", 5)
-    
+
     # Mock search implementation - would integrate with real search API
-    results = [
-      %{title: "Result 1 for: #{query}", url: "https://example.com/1", snippet: "Sample result..."},
-      %{title: "Result 2 for: #{query}", url: "https://example.com/2", snippet: "Another result..."}
-    ] |> Enum.take(num_results)
-    
-    "Found #{length(results)} results for '#{query}': " <>
-    Enum.map(results, &(&1.title)) |> Enum.join(", ")
+    results =
+      [
+        %{
+          title: "Result 1 for: #{query}",
+          url: "https://example.com/1",
+          snippet: "Sample result..."
+        },
+        %{
+          title: "Result 2 for: #{query}",
+          url: "https://example.com/2",
+          snippet: "Another result..."
+        }
+      ]
+      |> Enum.take(num_results)
+
+    ("Found #{length(results)} results for '#{query}': " <>
+       Enum.map(results, & &1.title))
+    |> Enum.join(", ")
   end
 
   defp calculate_tool(%{"expression" => expression}) do
@@ -482,13 +521,14 @@ defmodule Dspy.Tools do
 
   defp datetime_tool(args) do
     format = Map.get(args, "format", "%Y-%m-%d %H:%M:%S")
-    
+
     case DateTime.now("Etc/UTC") do
-      {:ok, dt} -> 
+      {:ok, dt} ->
         case Calendar.strftime(dt, format) do
           formatted -> "Current time: #{formatted}"
         end
-      {:error, _} -> 
+
+      {:error, _} ->
         "Error: Could not get current time"
     end
   end
@@ -545,16 +585,17 @@ defmodule Dspy.Tools do
   """
   def execute_tool(%Tool{} = tool, args, opts \\ []) do
     timeout = opts[:timeout] || tool.timeout
-    
-    task = Task.async(fn ->
-      try do
-        result = tool.function.(args)
-        {:ok, result}
-      rescue
-        e -> {:error, Exception.message(e)}
-      end
-    end)
-    
+
+    task =
+      Task.async(fn ->
+        try do
+          result = tool.function.(args)
+          {:ok, result}
+        rescue
+          e -> {:error, Exception.message(e)}
+        end
+      end)
+
     case Task.yield(task, timeout) || Task.shutdown(task) do
       {:ok, result} -> result
       nil -> {:error, "Tool execution timed out"}
@@ -576,7 +617,7 @@ defmodule Dspy.Tools do
     children = [
       {ToolRegistry, opts}
     ]
-    
+
     Supervisor.start_link(children, strategy: :one_for_one)
   end
 end

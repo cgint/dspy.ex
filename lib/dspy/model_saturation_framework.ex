@@ -31,23 +31,24 @@ defmodule Dspy.ModelSaturationFramework do
     _ = """
     Comprehensively evaluate model saturation across all capability dimensions
     """
-    
+
     # 1. Multi-dimensional capability assessment
-    {capability_assessments, updated_framework} = 
+    {capability_assessments, updated_framework} =
       assess_all_capability_dimensions(framework, model_module, evaluation_config)
-    
+
     # 2. Boundary exploration
     {boundary_results, framework_with_boundaries} =
       explore_performance_boundaries(updated_framework, model_module, capability_assessments)
-    
+
     # 3. Saturation level determination
     saturation_analysis = determine_saturation_levels(framework_with_boundaries, boundary_results)
-    
+
     # 4. Generate comprehensive saturation report
-    saturation_report = generate_saturation_report(saturation_analysis, capability_assessments, boundary_results)
-    
+    saturation_report =
+      generate_saturation_report(saturation_analysis, capability_assessments, boundary_results)
+
     final_framework = record_saturation_evaluation(framework_with_boundaries, saturation_report)
-    
+
     {saturation_report, final_framework}
   end
 
@@ -55,10 +56,11 @@ defmodule Dspy.ModelSaturationFramework do
     _ = """
     Track how model saturation changes over extended evaluation periods
     """
-    
+
     duration = Map.get(tracking_config, :duration_minutes, 60)
-    _sampling_interval = Map.get(tracking_config, :sampling_interval_seconds, 300) # 5 minutes
-    
+    # 5 minutes
+    _sampling_interval = Map.get(tracking_config, :sampling_interval_seconds, 300)
+
     tracking_results = %{
       start_time: DateTime.utc_now(),
       duration: duration,
@@ -66,7 +68,7 @@ defmodule Dspy.ModelSaturationFramework do
       saturation_trajectory: [],
       capability_evolution: %{}
     }
-    
+
     run_saturation_tracking_loop(framework, model_module, tracking_results, tracking_config)
   end
 
@@ -74,24 +76,25 @@ defmodule Dspy.ModelSaturationFramework do
     _ = """
     Identify gaps in model capabilities and suggest targeted evaluations
     """
-    
+
     target_caps = target_capabilities || get_comprehensive_capability_set()
-    
+
     assessed_capabilities = Map.keys(framework.capability_map)
     missing_capabilities = target_caps -- assessed_capabilities
-    
-    underperforming_capabilities = 
+
+    underperforming_capabilities =
       framework.capability_map
-      |> Enum.filter(fn {_cap, results} -> 
-           results.saturation_level in [:unsaturated, :approaching_saturation] and
-           results.max_performance < 0.7
-         end)
+      |> Enum.filter(fn {_cap, results} ->
+        results.saturation_level in [:unsaturated, :approaching_saturation] and
+          results.max_performance < 0.7
+      end)
       |> Enum.map(fn {cap, _} -> cap end)
-    
+
     %{
       missing_capabilities: missing_capabilities,
       underperforming_capabilities: underperforming_capabilities,
-      suggested_evaluations: generate_targeted_evaluations(missing_capabilities, underperforming_capabilities),
+      suggested_evaluations:
+        generate_targeted_evaluations(missing_capabilities, underperforming_capabilities),
       coverage_score: length(assessed_capabilities) / length(target_caps)
     }
   end
@@ -100,22 +103,24 @@ defmodule Dspy.ModelSaturationFramework do
     _ = """
     Implement adaptive difficulty progression to find exact saturation points
     """
-    
+
     # Start with current boundary knowledge
-    current_boundary = Map.get(framework.performance_boundaries, capability, %{min: 0.0, max: 1.0})
-    
+    current_boundary =
+      Map.get(framework.performance_boundaries, capability, %{min: 0.0, max: 1.0})
+
     # Binary search approach to find saturation point
-    saturation_point = binary_search_saturation_point(
-      model_module, 
-      capability, 
-      current_boundary.min, 
-      current_boundary.max,
-      precision: 0.05
-    )
-    
+    saturation_point =
+      binary_search_saturation_point(
+        model_module,
+        capability,
+        current_boundary.min,
+        current_boundary.max,
+        precision: 0.05
+      )
+
     # Validate saturation point with multiple samples
     validation_results = validate_saturation_point(model_module, capability, saturation_point)
-    
+
     %{
       capability: capability,
       saturation_difficulty: saturation_point,
@@ -129,27 +134,31 @@ defmodule Dspy.ModelSaturationFramework do
     _ = """
     Generate interventions to push model beyond current saturation points
     """
-    
+
     interventions = []
-    
+
     # For each capability dimension
     for {capability, results} <- framework.capability_map do
       case results.saturation_level do
         :saturated ->
-          _interventions = interventions ++ generate_breakthrough_interventions(capability, results)
-        
+          _interventions =
+            interventions ++ generate_breakthrough_interventions(capability, results)
+
         :approaching_saturation ->
-          _interventions = interventions ++ generate_optimization_interventions(capability, results)
-        
+          _interventions =
+            interventions ++ generate_optimization_interventions(capability, results)
+
         :unsaturated ->
-          _interventions = interventions ++ generate_exploration_interventions(capability, results)
-        
-        _ -> interventions
+          _interventions =
+            interventions ++ generate_exploration_interventions(capability, results)
+
+        _ ->
+          interventions
       end
     end
-    
+
     # Sort by potential impact
-    Enum.sort_by(interventions, &(&1.potential_impact), :desc)
+    Enum.sort_by(interventions, & &1.potential_impact, :desc)
   end
 
   defp initialize_capability_dimensions(_opts) do
@@ -158,43 +167,55 @@ defmodule Dspy.ModelSaturationFramework do
       reasoning: %{
         sub_dimensions: [:logical, :causal, :analogical, :counterfactual, :moral],
         measurement_scales: [:accuracy, :consistency, :depth, :speed],
-        saturation_indicators: [:performance_plateau, :error_pattern_stability, :confidence_convergence]
+        saturation_indicators: [
+          :performance_plateau,
+          :error_pattern_stability,
+          :confidence_convergence
+        ]
       },
-      
       memory: %{
         sub_dimensions: [:working_memory, :episodic, :semantic, :procedural],
         measurement_scales: [:capacity, :retention, :retrieval_speed, :accuracy],
         saturation_indicators: [:capacity_limits, :interference_patterns, :forgetting_curves]
       },
-      
       learning: %{
         sub_dimensions: [:few_shot, :in_context, :transfer, :meta_learning],
         measurement_scales: [:adaptation_speed, :generalization, :retention, :efficiency],
         saturation_indicators: [:learning_curve_plateaus, :transfer_limits, :adaptation_failures]
       },
-      
       creativity: %{
         sub_dimensions: [:novelty, :usefulness, :surprise, :aesthetic],
         measurement_scales: [:originality_scores, :coherence, :diversity, :appropriateness],
         saturation_indicators: [:repetition_patterns, :novelty_decline, :creative_exhaustion]
       },
-      
       language: %{
         sub_dimensions: [:comprehension, :generation, :translation, :style_adaptation],
         measurement_scales: [:fluency, :accuracy, :coherence, :style_consistency],
         saturation_indicators: [:grammar_plateaus, :semantic_limits, :pragmatic_boundaries]
       },
-      
       problem_solving: %{
         sub_dimensions: [:decomposition, :planning, :optimization, :constraint_satisfaction],
         measurement_scales: [:solution_quality, :efficiency, :robustness, :scalability],
         saturation_indicators: [:complexity_limits, :solution_repetition, :planning_failures]
       },
-      
       metacognition: %{
-        sub_dimensions: [:self_awareness, :uncertainty_estimation, :strategy_selection, :performance_monitoring],
-        measurement_scales: [:calibration, :introspection_accuracy, :strategy_effectiveness, :monitoring_precision],
-        saturation_indicators: [:calibration_plateaus, :overconfidence_patterns, :strategy_rigidity]
+        sub_dimensions: [
+          :self_awareness,
+          :uncertainty_estimation,
+          :strategy_selection,
+          :performance_monitoring
+        ],
+        measurement_scales: [
+          :calibration,
+          :introspection_accuracy,
+          :strategy_effectiveness,
+          :monitoring_precision
+        ],
+        saturation_indicators: [
+          :calibration_plateaus,
+          :overconfidence_patterns,
+          :strategy_rigidity
+        ]
       }
     }
   end
@@ -205,14 +226,15 @@ defmodule Dspy.ModelSaturationFramework do
       accuracy_plateau_threshold: 0.02,
       performance_variance_threshold: 0.05,
       improvement_rate_threshold: 0.001,
-      
+
       # Behavioral metrics  
       response_pattern_stability: 0.8,
       error_type_consistency: 0.7,
       confidence_calibration_threshold: 0.9,
-      
+
       # Temporal metrics
-      plateau_duration_threshold: 10, # Number of evaluations
+      # Number of evaluations
+      plateau_duration_threshold: 10,
       saturation_confirmation_samples: 5,
       boundary_validation_samples: 3
     }
@@ -221,39 +243,49 @@ defmodule Dspy.ModelSaturationFramework do
   defp assess_all_capability_dimensions(framework, model_module, evaluation_config) do
     capability_assessments = %{}
     updated_framework = framework
-    
-    for {dimension, dimension_config} <- framework.capability_dimensions, reduce: {capability_assessments, updated_framework} do
+
+    for {dimension, dimension_config} <- framework.capability_dimensions,
+        reduce: {capability_assessments, updated_framework} do
       {assessments, current_framework} ->
-        
         # Assess each sub-dimension
         sub_assessments = %{}
-        
+
         for sub_dim <- dimension_config.sub_dimensions, reduce: sub_assessments do
           sub_acc ->
-            assessment = assess_capability_dimension(
-              model_module, 
-              {dimension, sub_dim}, 
-              dimension_config,
-              evaluation_config
-            )
+            assessment =
+              assess_capability_dimension(
+                model_module,
+                {dimension, sub_dim},
+                dimension_config,
+                evaluation_config
+              )
+
             Map.put(sub_acc, sub_dim, assessment)
         end
-        
+
         # Aggregate dimension assessment
         dimension_assessment = aggregate_dimension_assessment(sub_assessments, dimension_config)
-        
+
         updated_assessments = Map.put(assessments, dimension, dimension_assessment)
-        updated_capability_map = Map.put(current_framework.capability_map, dimension, dimension_assessment)
+
+        updated_capability_map =
+          Map.put(current_framework.capability_map, dimension, dimension_assessment)
+
         updated_framework_state = %{current_framework | capability_map: updated_capability_map}
-        
+
         {updated_assessments, updated_framework_state}
     end
   end
 
-  defp assess_capability_dimension(model_module, {dimension, sub_dimension}, dimension_config, evaluation_config) do
+  defp assess_capability_dimension(
+         model_module,
+         {dimension, sub_dimension},
+         dimension_config,
+         evaluation_config
+       ) do
     # Generate progressive difficulty challenges for this specific capability
     challenges = generate_capability_challenges(dimension, sub_dimension, evaluation_config)
-    
+
     results = %{
       performance_curve: [],
       saturation_point: nil,
@@ -262,12 +294,12 @@ defmodule Dspy.ModelSaturationFramework do
       confidence_patterns: [],
       saturation_level: :unsaturated
     }
-    
+
     # Evaluate across difficulty spectrum
     for {difficulty, challenge_set} <- challenges, reduce: results do
       acc_results ->
         challenge_results = evaluate_challenge_set(model_module, challenge_set)
-        
+
         performance_point = %{
           difficulty: difficulty,
           accuracy: challenge_results.accuracy,
@@ -275,19 +307,20 @@ defmodule Dspy.ModelSaturationFramework do
           response_time: challenge_results.response_time,
           error_types: challenge_results.error_types
         }
-        
+
         updated_curve = acc_results.performance_curve ++ [performance_point]
         updated_max = max(acc_results.max_performance, challenge_results.accuracy)
-        
+
         # Check for saturation indicators
         saturation_level = detect_saturation_level(updated_curve, dimension_config)
-        
-        %{acc_results | 
-          performance_curve: updated_curve,
-          max_performance: updated_max,
-          saturation_level: saturation_level,
-          error_patterns: acc_results.error_patterns ++ challenge_results.error_types,
-          confidence_patterns: acc_results.confidence_patterns ++ [challenge_results.confidence]
+
+        %{
+          acc_results
+          | performance_curve: updated_curve,
+            max_performance: updated_max,
+            saturation_level: saturation_level,
+            error_patterns: acc_results.error_patterns ++ challenge_results.error_types,
+            confidence_patterns: acc_results.confidence_patterns ++ [challenge_results.confidence]
         }
     end
   end
@@ -295,10 +328,12 @@ defmodule Dspy.ModelSaturationFramework do
   defp generate_capability_challenges(dimension, sub_dimension, evaluation_config) do
     base_challenges = get_base_challenges_for_capability(dimension, sub_dimension)
     difficulty_levels = Map.get(evaluation_config, :difficulty_levels, 10)
-    
+
     # Generate challenges across difficulty spectrum
     for difficulty <- 1..difficulty_levels, into: %{} do
-      challenge_set = adapt_challenges_for_difficulty(base_challenges, difficulty / difficulty_levels)
+      challenge_set =
+        adapt_challenges_for_difficulty(base_challenges, difficulty / difficulty_levels)
+
       {difficulty / difficulty_levels, challenge_set}
     end
   end
@@ -307,11 +342,11 @@ defmodule Dspy.ModelSaturationFramework do
     if length(performance_curve) < 3 do
       :unsaturated
     else
-      recent_performances = performance_curve |> Enum.take(-3) |> Enum.map(&(&1.accuracy))
+      recent_performances = performance_curve |> Enum.take(-3) |> Enum.map(& &1.accuracy)
       performance_variance = calculate_variance(recent_performances)
-      
+
       latest_performance = List.last(performance_curve).accuracy
-      
+
       cond do
         performance_variance < 0.01 and latest_performance > 0.95 -> :oversaturated
         performance_variance < 0.02 and latest_performance > 0.85 -> :saturated
@@ -323,17 +358,23 @@ defmodule Dspy.ModelSaturationFramework do
 
   defp explore_performance_boundaries(framework, model_module, capability_assessments) do
     boundary_results = %{}
-    
-    for {capability, assessment} <- capability_assessments, reduce: {boundary_results, framework} do
+
+    for {capability, assessment} <- capability_assessments,
+        reduce: {boundary_results, framework} do
       {boundaries, current_framework} ->
-        
         # Find precise performance boundary for this capability
         boundary = find_performance_boundary(model_module, capability, assessment)
-        
+
         updated_boundaries = Map.put(boundaries, capability, boundary)
-        updated_framework_boundaries = Map.put(current_framework.performance_boundaries, capability, boundary)
-        updated_framework = %{current_framework | performance_boundaries: updated_framework_boundaries}
-        
+
+        updated_framework_boundaries =
+          Map.put(current_framework.performance_boundaries, capability, boundary)
+
+        updated_framework = %{
+          current_framework
+          | performance_boundaries: updated_framework_boundaries
+        }
+
         {updated_boundaries, updated_framework}
     end
   end
@@ -341,21 +382,21 @@ defmodule Dspy.ModelSaturationFramework do
   defp find_performance_boundary(_model_module, _capability, assessment) do
     # Find the difficulty level where performance drops below threshold
     performance_curve = assessment.performance_curve
-    
-    boundary_point = 
-      Enum.find(performance_curve, fn point -> 
-        point.accuracy < 0.5 
+
+    boundary_point =
+      Enum.find(performance_curve, fn point ->
+        point.accuracy < 0.5
       end)
-    
+
     case boundary_point do
-      nil -> 
+      nil ->
         # No boundary found within tested range
         %{
           type: :no_boundary_found,
           max_tested_difficulty: performance_curve |> List.last() |> Map.get(:difficulty, 1.0),
           performance_at_max: performance_curve |> List.last() |> Map.get(:accuracy, 0.0)
         }
-      
+
       boundary ->
         %{
           type: :boundary_found,
@@ -374,36 +415,45 @@ defmodule Dspy.ModelSaturationFramework do
       unsaturated_capabilities: [],
       saturation_distribution: %{}
     }
-    
-    capability_saturation_levels = 
+
+    capability_saturation_levels =
       for {capability, assessment} <- framework.capability_map, into: %{} do
         {capability, assessment.saturation_level}
       end
-    
+
     # Calculate distribution
-    distribution = 
+    distribution =
       capability_saturation_levels
       |> Map.values()
       |> Enum.frequencies()
-    
+
     # Determine global saturation level
     saturated_count = Map.get(distribution, :saturated, 0)
     approaching_count = Map.get(distribution, :approaching_saturation, 0)
     total_capabilities = map_size(capability_saturation_levels)
-    
-    global_level = 
+
+    global_level =
       cond do
-        saturated_count / total_capabilities > 0.8 -> :saturated
-        (saturated_count + approaching_count) / total_capabilities > 0.6 -> :approaching_saturation
-        true -> :unsaturated
+        saturated_count / total_capabilities > 0.8 ->
+          :saturated
+
+        (saturated_count + approaching_count) / total_capabilities > 0.6 ->
+          :approaching_saturation
+
+        true ->
+          :unsaturated
       end
-    
-    %{overall_saturation | 
-      global_saturation_level: global_level,
-      saturated_capabilities: get_capabilities_by_level(capability_saturation_levels, :saturated),
-      approaching_saturation_capabilities: get_capabilities_by_level(capability_saturation_levels, :approaching_saturation),
-      unsaturated_capabilities: get_capabilities_by_level(capability_saturation_levels, :unsaturated),
-      saturation_distribution: distribution
+
+    %{
+      overall_saturation
+      | global_saturation_level: global_level,
+        saturated_capabilities:
+          get_capabilities_by_level(capability_saturation_levels, :saturated),
+        approaching_saturation_capabilities:
+          get_capabilities_by_level(capability_saturation_levels, :approaching_saturation),
+        unsaturated_capabilities:
+          get_capabilities_by_level(capability_saturation_levels, :unsaturated),
+        saturation_distribution: distribution
     }
   end
 
@@ -414,8 +464,10 @@ defmodule Dspy.ModelSaturationFramework do
       capability_details: capability_assessments,
       performance_boundaries: boundary_results,
       recommendations: generate_recommendations(saturation_analysis, capability_assessments),
-      next_evaluation_suggestions: suggest_next_evaluations(saturation_analysis, boundary_results),
-      saturation_score: calculate_overall_saturation_score(saturation_analysis, capability_assessments)
+      next_evaluation_suggestions:
+        suggest_next_evaluations(saturation_analysis, boundary_results),
+      saturation_score:
+        calculate_overall_saturation_score(saturation_analysis, capability_assessments)
     }
   end
 
@@ -447,16 +499,16 @@ defmodule Dspy.ModelSaturationFramework do
       creativity: 0.10,
       metacognition: 0.05
     }
-    
-    weighted_scores = 
+
+    weighted_scores =
       for {capability, assessment} <- capability_assessments do
         weight = Map.get(capability_weights, capability, 0.1)
         saturation_score = saturation_level_to_score(assessment.saturation_level)
         performance_score = assessment.max_performance
-        
+
         weight * (0.6 * saturation_score + 0.4 * performance_score)
       end
-    
+
     Enum.sum(weighted_scores)
   end
 
@@ -486,19 +538,19 @@ defmodule Dspy.ModelSaturationFramework do
 
   defp aggregate_dimension_assessment(sub_assessments, _dimension_config) do
     # Aggregate sub-dimension assessments into overall dimension assessment
-    max_performance = 
+    max_performance =
       sub_assessments
       |> Map.values()
-      |> Enum.map(&(&1.max_performance))
+      |> Enum.map(& &1.max_performance)
       |> Enum.max(fn -> 0.0 end)
-    
-    saturation_levels = 
+
+    saturation_levels =
       sub_assessments
       |> Map.values()
-      |> Enum.map(&(&1.saturation_level))
-    
+      |> Enum.map(& &1.saturation_level)
+
     overall_saturation = determine_overall_saturation_level(saturation_levels)
-    
+
     %{
       max_performance: max_performance,
       saturation_level: overall_saturation,
@@ -511,11 +563,16 @@ defmodule Dspy.ModelSaturationFramework do
 
   defp determine_overall_saturation_level(levels) do
     level_counts = Enum.frequencies(levels)
-    
+
     cond do
-      Map.get(level_counts, :saturated, 0) >= length(levels) / 2 -> :saturated
-      Map.get(level_counts, :approaching_saturation, 0) >= length(levels) / 2 -> :approaching_saturation
-      true -> :unsaturated
+      Map.get(level_counts, :saturated, 0) >= length(levels) / 2 ->
+        :saturated
+
+      Map.get(level_counts, :approaching_saturation, 0) >= length(levels) / 2 ->
+        :approaching_saturation
+
+      true ->
+        :unsaturated
     end
   end
 
@@ -541,11 +598,18 @@ defmodule Dspy.ModelSaturationFramework do
   end
 
   # Placeholder functions for advanced features
-  defp run_saturation_tracking_loop(_framework, _model_module, _tracking_results, _config), do: %{}
-  defp get_comprehensive_capability_set, do: [:reasoning, :memory, :learning, :creativity, :language, :problem_solving, :metacognition]
+  defp run_saturation_tracking_loop(_framework, _model_module, _tracking_results, _config),
+    do: %{}
+
+  defp get_comprehensive_capability_set,
+    do: [:reasoning, :memory, :learning, :creativity, :language, :problem_solving, :metacognition]
+
   defp generate_targeted_evaluations(_missing, _underperforming), do: []
   defp binary_search_saturation_point(_model, _capability, _min, _max, _opts), do: 0.5
-  defp validate_saturation_point(_model, _capability, _point), do: %{confidence: 0.8, performance: 0.7, sample_count: 5}
+
+  defp validate_saturation_point(_model, _capability, _point),
+    do: %{confidence: 0.8, performance: 0.7, sample_count: 5}
+
   defp generate_breakthrough_interventions(_capability, _results), do: []
   defp generate_optimization_interventions(_capability, _results), do: []
   defp generate_exploration_interventions(_capability, _results), do: []

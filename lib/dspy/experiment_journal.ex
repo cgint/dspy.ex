@@ -126,7 +126,7 @@ defmodule Dspy.ExperimentJournal do
 
   def register_experiment(_journal, hypothesis, design \\ nil) do
     experiment_id = generate_experiment_id()
-    
+
     experiment = %{
       id: experiment_id,
       timestamp: DateTime.utc_now(),
@@ -163,6 +163,7 @@ defmodule Dspy.ExperimentJournal do
       timestamp: DateTime.utc_now(),
       researcher: get_current_researcher()
     }
+
     GenServer.call(__MODULE__, {:add_note, experiment_id, timestamped_note})
   end
 
@@ -211,7 +212,7 @@ defmodule Dspy.ExperimentJournal do
   def handle_call({:register_experiment, experiment}, _from, state) do
     updated_experiments = Map.put(state.experiments, experiment.id, experiment)
     new_state = %{state | experiments: updated_experiments}
-    
+
     Logger.info("Registered experiment: #{experiment.id}")
     {:reply, :ok, new_state}
   end
@@ -226,7 +227,7 @@ defmodule Dspy.ExperimentJournal do
         updated_experiment = %{experiment | status: status}
         updated_experiments = Map.put(state.experiments, experiment_id, updated_experiment)
         new_state = %{state | experiments: updated_experiments}
-        
+
         Logger.info("Updated experiment #{experiment_id} status to #{status}")
         {:reply, :ok, new_state}
     end
@@ -245,7 +246,7 @@ defmodule Dspy.ExperimentJournal do
         updated_experiment = %{experiment | results: updated_results}
         updated_experiments = Map.put(state.experiments, experiment_id, updated_experiment)
         new_state = %{state | experiments: updated_experiments}
-        
+
         {:reply, :ok, new_state}
     end
   end
@@ -261,7 +262,7 @@ defmodule Dspy.ExperimentJournal do
         updated_experiment = %{experiment | results: merged_results}
         updated_experiments = Map.put(state.experiments, experiment_id, updated_experiment)
         new_state = %{state | experiments: updated_experiments}
-        
+
         Logger.info("Recorded results for experiment: #{experiment_id}")
         {:reply, :ok, new_state}
     end
@@ -278,7 +279,7 @@ defmodule Dspy.ExperimentJournal do
         updated_experiment = %{experiment | notes: updated_notes}
         updated_experiments = Map.put(state.experiments, experiment_id, updated_experiment)
         new_state = %{state | experiments: updated_experiments}
-        
+
         {:reply, :ok, new_state}
     end
   end
@@ -294,7 +295,7 @@ defmodule Dspy.ExperimentJournal do
         updated_experiment = %{experiment | analysis: analysis}
         updated_experiments = Map.put(state.experiments, experiment_id, updated_experiment)
         new_state = %{state | experiments: updated_experiments}
-        
+
         {:reply, {:ok, analysis}, new_state}
     end
   end
@@ -306,20 +307,18 @@ defmodule Dspy.ExperimentJournal do
         {:reply, {:error, :experiment_not_found}, state}
 
       experiment ->
-        final_analysis = if conclusions do
-          Map.put(experiment.analysis, :conclusions, conclusions)
-        else
-          generate_conclusions(experiment)
-        end
+        final_analysis =
+          if conclusions do
+            Map.put(experiment.analysis, :conclusions, conclusions)
+          else
+            generate_conclusions(experiment)
+          end
 
-        updated_experiment = %{experiment | 
-          status: :completed,
-          analysis: final_analysis
-        }
-        
+        updated_experiment = %{experiment | status: :completed, analysis: final_analysis}
+
         updated_experiments = Map.put(state.experiments, experiment_id, updated_experiment)
         new_state = %{state | experiments: updated_experiments}
-        
+
         Logger.info("Completed experiment: #{experiment_id}")
         {:reply, :ok, new_state}
     end
@@ -332,13 +331,14 @@ defmodule Dspy.ExperimentJournal do
         {:reply, {:error, :experiment_not_found}, state}
 
       experiment ->
-        report = case format do
-          :markdown -> generate_markdown_report(experiment)
-          :json -> generate_json_report(experiment)
-          :latex -> generate_latex_report(experiment)
-          _ -> {:error, :unsupported_format}
-        end
-        
+        report =
+          case format do
+            :markdown -> generate_markdown_report(experiment)
+            :json -> generate_json_report(experiment)
+            :latex -> generate_latex_report(experiment)
+            _ -> {:error, :unsupported_format}
+          end
+
         {:reply, report, state}
     end
   end
@@ -351,23 +351,24 @@ defmodule Dspy.ExperimentJournal do
 
   @impl true
   def handle_call({:list_experiments, filters}, _from, state) do
-    filtered_experiments = 
+    filtered_experiments =
       state.experiments
       |> Map.values()
       |> apply_filters(filters)
       |> Enum.sort_by(& &1.timestamp, :desc)
-      
+
     {:reply, filtered_experiments, state}
   end
 
   @impl true
   def handle_call({:export_journal, format}, _from, state) do
-    export_data = case format do
-      :json -> Jason.encode!(state, pretty: true)
-      :csv -> generate_csv_export(state)
-      _ -> {:error, :unsupported_format}
-    end
-    
+    export_data =
+      case format do
+        :json -> Jason.encode!(state, pretty: true)
+        :csv -> generate_csv_export(state)
+        _ -> {:error, :unsupported_format}
+      end
+
     {:reply, export_data, state}
   end
 
@@ -422,10 +423,10 @@ defmodule Dspy.ExperimentJournal do
 
   defp calculate_descriptive_stats(results) do
     observations = Map.get(results, :observations, [])
-    
+
     if length(observations) > 0 do
       scores = Enum.map(observations, fn obs -> Map.get(obs, :score, 0) end)
-      
+
       %{
         n: length(scores),
         mean: Enum.sum(scores) / length(scores),
@@ -442,7 +443,7 @@ defmodule Dspy.ExperimentJournal do
   defp perform_hypothesis_test(results, _hypothesis) do
     # Simplified hypothesis testing - would use proper statistical libraries in production
     observations = Map.get(results, :observations, [])
-    
+
     if length(observations) < 2 do
       %{test: "insufficient_data", p_value: nil, significant: false}
     else
@@ -490,7 +491,7 @@ defmodule Dspy.ExperimentJournal do
   defp generate_conclusions(experiment) do
     analysis = experiment.analysis
     _hypothesis = experiment.hypothesis
-    
+
     %{
       hypothesis_supported: Map.get(analysis.hypothesis_test, :significant, false),
       effect_magnitude: categorize_effect_size(analysis.effect_size),
@@ -509,7 +510,7 @@ defmodule Dspy.ExperimentJournal do
   defp assess_practical_significance(analysis) do
     effect_size = analysis.effect_size
     confidence = analysis.confidence_intervals
-    
+
     %{
       practically_significant: effect_size > 0.3,
       confidence_in_effect: confidence.upper - confidence.lower < 0.3,
@@ -536,13 +537,13 @@ defmodule Dspy.ExperimentJournal do
 
   defp generate_conclusion_summary(experiment) do
     "Experiment #{experiment.id} investigating '#{experiment.hypothesis.research_question}' " <>
-    "has been completed with #{map_size(experiment.results)} data points collected."
+      "has been completed with #{map_size(experiment.results)} data points collected."
   end
 
   defp calculate_median(scores) do
     sorted = Enum.sort(scores)
     len = length(sorted)
-    
+
     if rem(len, 2) == 0 do
       mid = div(len, 2)
       (Enum.at(sorted, mid - 1) + Enum.at(sorted, mid)) / 2
@@ -639,11 +640,15 @@ defmodule Dspy.ExperimentJournal do
 
   defp format_results_section(results) do
     case Map.get(results, :observations) do
-      nil -> "No observations recorded."
-      observations when observations == [] -> "No observations recorded."
-      observations -> 
+      nil ->
+        "No observations recorded."
+
+      observations when observations == [] ->
+        "No observations recorded."
+
+      observations ->
         "#{length(observations)} observations collected. " <>
-        "Average score: #{calculate_average_score(observations)}"
+          "Average score: #{calculate_average_score(observations)}"
     end
   end
 
@@ -693,6 +698,7 @@ defmodule Dspy.ExperimentJournal do
 
   defp calculate_average_score(observations) do
     scores = Enum.map(observations, fn obs -> Map.get(obs, :score, 0) end)
+
     if length(scores) > 0 do
       Float.round(Enum.sum(scores) / length(scores), 2)
     else
@@ -702,16 +708,16 @@ defmodule Dspy.ExperimentJournal do
 
   defp generate_csv_export(state) do
     header = "experiment_id,researcher,timestamp,status,hypothesis,results_count\n"
-    
-    rows = 
+
+    rows =
       state.experiments
       |> Map.values()
       |> Enum.map(fn exp ->
         "#{exp.id},#{exp.researcher},#{DateTime.to_string(exp.timestamp)},#{exp.status}," <>
-        "\"#{exp.hypothesis.research_question}\",#{map_size(exp.results)}"
+          "\"#{exp.hypothesis.research_question}\",#{map_size(exp.results)}"
       end)
       |> Enum.join("\n")
-    
+
     header <> rows
   end
 end
