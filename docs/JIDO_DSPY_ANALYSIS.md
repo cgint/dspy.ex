@@ -169,3 +169,17 @@ Forking is viable, but reduce ecosystem confusion:
 - publish under a distinct Hex name (avoid hijacking `:dspy`)
 - keep API close to original to ease migration
 - document changes clearly (LM backend, teleprompt correctness, eval loop)
+
+---
+
+### 6.6 “Ground truth” references while implementing DSPy semantics
+
+Two sources are particularly useful to reduce ambiguity and speed up correct implementations:
+
+1. **Upstream DSPy Python source (best detail level)**
+   - This repo contains a full checkout at `../dspy`.
+   - When DSPy website docs and behavior diverge, prefer the Python implementation.
+
+2. **Curated docs via `asks.sh`**
+   - Use `asks.sh` to quickly query DSPy and Elixir ecosystem references.
+   - See: `dspy.ex/docs/ASKS_TOOLING.md` for recommended topics and usage.
