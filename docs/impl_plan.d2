@@ -1,0 +1,41 @@
+direction: right
+
+title: "DSPy Core → req_llm → (Optional) Jido v2"
+
+Legend: {
+  shape: text
+  "*DSPy core stays independent of Jido; Jido integration is optional.*"
+}
+
+Phase0: {
+  label: "Phase 0: Foundations"
+  "Lock library-only (no web UI)"
+  "Use req_llm for provider access"
+  "Compile/test baseline"
+}
+
+Phase1: {
+  label: "Phase 1: Core Golden Path"
+  "Unify LM request-map calls"
+  "Add Dspy.LM.ReqLLM adapter"
+  "Make program parameters explicit"
+  "Deterministic Evaluate tests"
+}
+
+Phase2: {
+  label: "Phase 2: Real Teleprompting"
+  "BootstrapFewShot → COPRO/SIMBA → MIPROv2"
+  "Candidate representation as structs/config"
+  "Reproducible improvement on toy dataset"
+}
+
+Phase3: {
+  label: "Phase 3: Jido v2 Integration (Optional)"
+  "Wrap forward/eval/opt runs under Jido"
+  "Supervision, retries, timeouts"
+  "Targets Jido v2 (2.0.0-rc.1, main)"
+}
+
+Phase0 -> Phase1: "once baseline is consistent"
+Phase1 -> Phase2: "once core semantics stable"
+Phase2 -> Phase3: "once teleprompt loop works"
