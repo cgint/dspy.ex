@@ -107,11 +107,19 @@ defmodule Dspy.LM do
     }
 
     with {:ok, response} <- generate(lm, request) do
-      extract_text(response)
+      text_from_response(response)
     end
   end
 
-  defp extract_text(response) do
+  @doc """
+  Extract the first assistant message content from a model response.
+
+  Accepts both atom-keyed and string-keyed response maps.
+  """
+  @spec text_from_response(response() | String.t()) :: {:ok, String.t()} | {:error, any()}
+  def text_from_response(response) when is_binary(response), do: {:ok, response}
+
+  def text_from_response(response) do
     case get_in(response, [:choices, Access.at(0), :message]) do
       %{"content" => content} when is_binary(content) -> {:ok, content}
       # Support atom keys

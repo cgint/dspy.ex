@@ -538,18 +538,26 @@ defmodule Dspy.Retrieve do
           # Step 4: Generate response with context
           prompt = build_rag_prompt(query, context, opts)
 
-          case Dspy.LM.generate(pipeline.generator, prompt, opts) do
-            {:ok, response} ->
-              {:ok,
-               %{
-                 answer: response,
-                 context: context,
-                 retrieved_docs: reranked_docs,
-                 sources: extract_sources(reranked_docs)
-               }}
+          request = %{
+            messages: [Dspy.LM.user_message(prompt)],
+            max_tokens: Keyword.get(opts, :max_tokens),
+            temperature: Keyword.get(opts, :temperature),
+            stop: Keyword.get(opts, :stop),
+            tools: Keyword.get(opts, :tools)
+          }
 
+          with {:ok, response} <- Dspy.LM.generate(pipeline.generator, request),
+               {:ok, text} <- Dspy.LM.text_from_response(response) do
+            {:ok,
+             %{
+               answer: text,
+               context: context,
+               retrieved_docs: reranked_docs,
+               sources: extract_sources(reranked_docs)
+             }}
+          else
             {:error, reason} ->
-              {:error, "Generation failed: #{reason}"}
+              {:error, "Generation failed: #{inspect(reason)}"}
           end
 
         {:error, reason} ->

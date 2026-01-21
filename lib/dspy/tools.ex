@@ -109,12 +109,20 @@ defmodule Dspy.Tools do
     def call_function(lm, function_spec, args, opts \\ []) do
       prompt = build_function_call_prompt(function_spec, args, opts)
 
-      case Dspy.LM.generate(lm, prompt, opts) do
-        {:ok, response} ->
-          parse_function_response(response, function_spec, opts)
+      request = %{
+        messages: [Dspy.LM.user_message(prompt)],
+        max_tokens: Keyword.get(opts, :max_tokens),
+        temperature: Keyword.get(opts, :temperature),
+        stop: Keyword.get(opts, :stop),
+        tools: Keyword.get(opts, :tools)
+      }
 
+      with {:ok, response} <- Dspy.LM.generate(lm, request),
+           {:ok, text} <- Dspy.LM.text_from_response(response) do
+        parse_function_response(text, function_spec, opts)
+      else
         {:error, reason} ->
-          {:error, "Function call failed: #{reason}"}
+          {:error, "Function call failed: #{inspect(reason)}"}
       end
     end
 
@@ -269,54 +277,59 @@ defmodule Dspy.Tools do
     end
 
     defp execute_react_loop(react, prompt, history, step) when step < react.max_steps do
-      case Dspy.LM.generate(react.lm, prompt, stop: react.stop_words) do
-        {:ok, response} ->
-          updated_prompt = prompt <> response
+      request = %{
+        messages: [Dspy.LM.user_message(prompt)],
+        stop: react.stop_words
+      }
 
-          case parse_react_step(response, react) do
-            {:thought, thought} ->
-              new_history = [{:thought, thought, step} | history]
-              continue_react_loop(react, updated_prompt, new_history, step)
+      with {:ok, response} <- Dspy.LM.generate(react.lm, request),
+           {:ok, text} <- Dspy.LM.text_from_response(response) do
+        updated_prompt = prompt <> text
 
-            {:action, action_call} ->
-              case execute_action(action_call, react.tools) do
-                {:ok, observation} ->
-                  obs_text =
-                    "\n#{react.observation_prefix} #{observation}\n#{react.thought_prefix} "
+        case parse_react_step(text, react) do
+          {:thought, thought} ->
+            new_history = [{:thought, thought, step} | history]
+            continue_react_loop(react, updated_prompt, new_history, step)
 
-                  new_prompt = updated_prompt <> obs_text
+          {:action, action_call} ->
+            case execute_action(action_call, react.tools) do
+              {:ok, observation} ->
+                obs_text =
+                  "\n#{react.observation_prefix} #{observation}\n#{react.thought_prefix} "
 
-                  new_history = [
-                    {:action, action_call, step},
-                    {:observation, observation, step} | history
-                  ]
+                new_prompt = updated_prompt <> obs_text
 
-                  execute_react_loop(react, new_prompt, new_history, step + 1)
+                new_history = [
+                  {:action, action_call, step},
+                  {:observation, observation, step} | history
+                ]
 
-                {:error, error} ->
-                  error_text =
-                    "\n#{react.observation_prefix} Error: #{error}\n#{react.thought_prefix} "
+                execute_react_loop(react, new_prompt, new_history, step + 1)
 
-                  new_prompt = updated_prompt <> error_text
-                  new_history = [{:action, action_call, step}, {:error, error, step} | history]
-                  execute_react_loop(react, new_prompt, new_history, step + 1)
-              end
+              {:error, error} ->
+                error_text =
+                  "\n#{react.observation_prefix} Error: #{error}\n#{react.thought_prefix} "
 
-            {:answer, answer} ->
-              {:ok,
-               %{
-                 answer: answer,
-                 steps: step + 1,
-                 history: Enum.reverse(history),
-                 reasoning_trace: extract_reasoning_trace(history)
-               }}
+                new_prompt = updated_prompt <> error_text
+                new_history = [{:action, action_call, step}, {:error, error, step} | history]
+                execute_react_loop(react, new_prompt, new_history, step + 1)
+            end
 
-            {:none, _text} ->
-              continue_react_loop(react, updated_prompt, history, step)
-          end
+          {:answer, answer} ->
+            {:ok,
+             %{
+               answer: answer,
+               steps: step + 1,
+               history: Enum.reverse(history),
+               reasoning_trace: extract_reasoning_trace(history)
+             }}
 
+          {:none, _text} ->
+            continue_react_loop(react, updated_prompt, history, step)
+        end
+      else
         {:error, reason} ->
-          {:error, "React execution failed: #{reason}"}
+          {:error, "React execution failed: #{inspect(reason)}"}
       end
     end
 
