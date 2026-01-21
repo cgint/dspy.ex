@@ -1,0 +1,24 @@
+direction: right
+
+"User / App" -> "Jido AgentServer": "signals / calls"
+
+"Jido AgentServer": {
+  Agent: "Jido.Agent"
+
+  "DSPy Logic": {
+    Signature
+    "Module / CoT"
+  }
+
+  "LLM Layer": {
+    req_llm
+  }
+
+  Agent -> "DSPy Logic".Signature
+  "DSPy Logic".Signature -> "DSPy Logic"."Module / CoT"
+  "DSPy Logic"."Module / CoT" -> "LLM Layer".req_llm: "prompt/request"
+  "LLM Layer".req_llm -> "DSPy Logic"."Module / CoT": "response"
+  "DSPy Logic"."Module / CoT" -> Agent: "Prediction"
+}
+
+"Jido AgentServer" -> Output: "emit / UI / next step"

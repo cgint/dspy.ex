@@ -1,0 +1,25 @@
+direction: right
+
+Start: "Goal: advance dspy.ex"
+
+Start -> Upstream: "PRs to maintainer"
+Start -> Fork: "maintainer unresponsive"
+
+Upstream: {
+  label: "**Upstream path**\n(minimal change)"
+  Step1: "Fix API mismatches + tests"
+  Step2: "Add req_llm-based LM adapter"
+  Step3: "Harden eval/teleprompt core"
+}
+
+Fork: {
+  label: "**Fork path**\n(new Hex package)"
+  Step1: "Rename package/app"
+  Step2: "Ship improvements faster"
+  Risk: "fragmentation + user confusion"
+}
+
+Upstream -> Accepted: "merge + release"
+Upstream -> Stalled: "no review"
+
+Stalled -> Fork: "fallback"
