@@ -26,6 +26,7 @@ Execution checklist (iterate/commit-friendly):
 - [x] Migrate LM call sites to request maps (stop using prompt+opts internally)
 - [x] Make `Predict` expose `parameters/1` + `update_parameters/2` (teleprompt-friendly)
 - [x] Add deterministic `Predict` → `Evaluate` golden-path test with a mock LM
+- [x] Make `BootstrapFewShot` teleprompter run end-to-end (no dynamic modules) + add smoke test proving improvement
 - [ ] Revisit repo shape: relocate/gate `lib/dspy_web/*` + GenStage “godmode” modules into separate package/app
 
 Success criteria:
@@ -74,3 +75,4 @@ Notes:
 - **2026-01-21**: Migrated remaining internal LM call sites (`Dspy.Tools`, `Dspy.Retrieve`) to use request maps + `Dspy.LM.text_from_response/1`; added focused unit tests; `./precommit.sh` remains green.
 - **2026-01-21**: Tightened `./precommit.sh` checks to reduce noise: skip asset compilation when `assets.deploy` task is unavailable and only scan TODO/FIXME/XXX in comments.
 - **2026-01-21**: Added `Predict.parameters/1` + `Predict.update_parameters/2` and a deterministic `Predict` → `Evaluate` golden-path test to anchor Phase 1 success criteria.
+- **2026-01-21**: Repaired `BootstrapFewShot` to produce candidate programs via `update_parameters/2` (no dynamic modules) and added a deterministic toy-dataset smoke test that shows score improvement.

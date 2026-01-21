@@ -52,7 +52,7 @@ defmodule Dspy.Teleprompt.BootstrapFewShot do
 
   @type t :: %__MODULE__{
           metric: function(),
-          teacher: module() | nil,
+          teacher: any() | nil,
           max_bootstrapped_demos: pos_integer(),
           max_labeled_demos: pos_integer(),
           max_rounds: pos_integer(),
@@ -114,7 +114,7 @@ defmodule Dspy.Teleprompt.BootstrapFewShot do
 
   """
   @impl Dspy.Teleprompt
-  @spec compile(t(), module(), list(Example.t())) :: {:ok, module()} | {:error, term()}
+  @spec compile(t(), any(), list(Example.t())) :: {:ok, any()} | {:error, term()}
   def compile(%__MODULE__{} = teleprompt, student, trainset) do
     IO.puts("Starting BootstrapFewShot compilation...")
 
@@ -163,7 +163,15 @@ defmodule Dspy.Teleprompt.BootstrapFewShot do
           IO.puts("Bootstrap round #{round}/#{max_rounds}")
 
           round_examples =
-            bootstrap_round(teacher, trainset, metric, max_demos, max_errors, num_threads)
+            bootstrap_round(
+              teacher,
+              trainset,
+              metric,
+              max_demos,
+              max_errors,
+              num_threads,
+              seed + round
+            )
 
           acc_examples ++ round_examples
       end
@@ -180,11 +188,11 @@ defmodule Dspy.Teleprompt.BootstrapFewShot do
     {:ok, best_examples}
   end
 
-  defp bootstrap_round(teacher, trainset, metric, max_demos, max_errors, num_threads) do
+  defp bootstrap_round(teacher, trainset, metric, max_demos, max_errors, num_threads, seed) do
     # Sample training inputs for bootstrapping
     inputs =
       trainset
-      |> Trainset.sample(max_demos * 2, strategy: :random)
+      |> Trainset.sample(max_demos * 2, strategy: :random, seed: seed)
       |> Enum.map(& &1.attrs)
 
     # Generate outputs using teacher program
@@ -249,10 +257,14 @@ defmodule Dspy.Teleprompt.BootstrapFewShot do
     end
   end
 
-  defp select_labeled_examples(%__MODULE__{max_labeled_demos: max_labeled}, trainset) do
-    # Select diverse labeled examples from training set
-    labeled = Trainset.sample(trainset, max_labeled, strategy: :diverse)
-    {:ok, labeled}
+  defp select_labeled_examples(%__MODULE__{max_labeled_demos: max_labeled, seed: seed}, trainset) do
+    if max_labeled <= 0 do
+      {:ok, []}
+    else
+      # Select diverse labeled examples from training set
+      labeled = Trainset.sample(trainset, max_labeled, strategy: :diverse, seed: seed + 500)
+      {:ok, labeled}
+    end
   end
 
   defp generate_candidate_programs(
@@ -265,95 +277,38 @@ defmodule Dspy.Teleprompt.BootstrapFewShot do
 
     :rand.seed(:exsss, {seed + 1000, seed + 1001, seed + 1002})
 
+    full_examples =
+      (bootstrapped ++ labeled)
+      |> Enum.uniq_by(& &1.attrs)
+
     candidates =
-      for i <- 1..num_candidates do
-        # Randomly combine bootstrapped and labeled examples
-        num_bootstrap = :rand.uniform(length(bootstrapped) + 1) - 1
-        num_labeled = :rand.uniform(length(labeled) + 1) - 1
+      if num_candidates <= 1 do
+        [create_candidate_program(student, full_examples, 1)]
+      else
+        [create_candidate_program(student, full_examples, 1)] ++
+          for i <- 2..num_candidates do
+            # Randomly combine bootstrapped and labeled examples
+            num_bootstrap = :rand.uniform(length(bootstrapped) + 1) - 1
+            num_labeled = :rand.uniform(length(labeled) + 1) - 1
 
-        selected_bootstrap = Enum.take_random(bootstrapped, num_bootstrap)
-        selected_labeled = Enum.take_random(labeled, num_labeled)
+            selected_bootstrap = Enum.take_random(bootstrapped, num_bootstrap)
+            selected_labeled = Enum.take_random(labeled, num_labeled)
 
-        all_examples = selected_bootstrap ++ selected_labeled
+            all_examples = selected_bootstrap ++ selected_labeled
 
-        create_candidate_program(student, all_examples, i)
+            create_candidate_program(student, all_examples, i)
+          end
       end
 
     {:ok, candidates}
   end
 
   defp create_candidate_program(student, examples, candidate_id) do
-    # Create a program variant with specific examples
-    {:module, module_name, _binary, _exports} =
-      defmodule :"Elixir.BootstrapCandidate#{candidate_id}" do
-        @behaviour Dspy.Module
+    _candidate_id = candidate_id
 
-        @student student
-        @examples examples
-        @candidate_id candidate_id
-
-        def __student__, do: @student
-        def __examples__, do: @examples
-        def __candidate_id__, do: @candidate_id
-
-        @impl Dspy.Module
-        def forward(input) do
-          student = __student__()
-          examples = __examples__()
-
-          # Enhance input with few-shot examples
-          enhanced_input = add_examples_to_context(input, examples)
-
-          # Forward to student program
-          Dspy.Module.forward(student, enhanced_input)
-        end
-
-        @impl Dspy.Module
-        def parameters do
-          original_params = Dspy.Module.parameters(__student__())
-
-          Map.merge(original_params, %{
-            few_shot_examples: __examples__(),
-            num_bootstrap_examples: length(Enum.filter(__examples__(), &is_bootstrap_example/1)),
-            num_labeled_examples:
-              length(__examples__()) -
-                length(Enum.filter(__examples__(), &is_bootstrap_example/1)),
-            candidate_id: __candidate_id__()
-          })
-        end
-
-        defp add_examples_to_context(input, examples) when is_map(input) do
-          example_context = format_examples_for_context(examples)
-          Map.put(input, :few_shot_examples, example_context)
-        end
-
-        defp add_examples_to_context(input, examples) do
-          example_context = format_examples_for_context(examples)
-          %{input: input, few_shot_examples: example_context}
-        end
-
-        defp format_examples_for_context(examples) do
-          examples
-          |> Enum.with_index(1)
-          |> Enum.map(fn {example, idx} ->
-            "Example #{idx}:\n" <> format_example_fields(example.attrs)
-          end)
-          |> Enum.join("\n\n")
-        end
-
-        defp format_example_fields(attrs) do
-          attrs
-          |> Enum.map(fn {key, value} -> "#{key}: #{value}" end)
-          |> Enum.join("\n")
-        end
-
-        defp is_bootstrap_example(%Dspy.Example{attrs: attrs}) do
-          # Simple heuristic: if it has high confidence or was generated
-          Map.get(attrs, :confidence, 0) > 0.8 or Map.has_key?(attrs, :generated)
-        end
-      end
-
-    module_name
+    Dspy.Module.update_parameters(student, [
+      Dspy.Parameter.new("predict.examples", :examples, examples)
+    ])
   end
 
   defp select_best_program(
