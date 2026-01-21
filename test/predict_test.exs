@@ -56,6 +56,22 @@ defmodule DspyPredictTest do
       assert predict.max_retries == 3
     end
 
+    test "exposes and updates optimizable parameters" do
+      predict = Dspy.Predict.new(TestQA)
+
+      params = Dspy.Module.parameters(predict)
+      assert Enum.any?(params, &(&1.name == "predict.examples"))
+
+      updated =
+        Dspy.Module.update_parameters(predict, [
+          Dspy.Parameter.new("predict.examples", :examples, [
+            Dspy.Example.new(question: "q", answer: "a")
+          ])
+        ])
+
+      assert length(updated.examples) == 1
+    end
+
     test "can forward predictions" do
       predict = Dspy.Predict.new(TestQA)
       inputs = %{question: "What is 2+2?"}

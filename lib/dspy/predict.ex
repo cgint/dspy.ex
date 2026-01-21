@@ -28,6 +28,36 @@ defmodule Dspy.Predict do
   end
 
   @impl true
+  def parameters(%__MODULE__{} = predict) do
+    base = [
+      Dspy.Parameter.new("predict.examples", :examples, predict.examples)
+    ]
+
+    case predict.signature.instructions do
+      nil ->
+        base
+
+      instructions when is_binary(instructions) ->
+        base ++ [Dspy.Parameter.new("predict.instructions", :prompt, instructions)]
+    end
+  end
+
+  @impl true
+  def update_parameters(%__MODULE__{} = predict, parameters) when is_list(parameters) do
+    Enum.reduce(parameters, predict, fn
+      %Dspy.Parameter{name: "predict.examples", value: examples}, acc when is_list(examples) ->
+        %{acc | examples: examples}
+
+      %Dspy.Parameter{name: "predict.instructions", value: instructions}, acc
+      when is_binary(instructions) ->
+        %{acc | signature: %{acc.signature | instructions: instructions}}
+
+      _other, acc ->
+        acc
+    end)
+  end
+
+  @impl true
   def forward(predict, inputs) do
     with :ok <- Dspy.Signature.validate_inputs(predict.signature, inputs),
          {:ok, prompt} <- build_prompt(predict, inputs),

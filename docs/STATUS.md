@@ -24,6 +24,8 @@ Execution checklist (iterate/commit-friendly):
 - [x] Introduce `req_llm` adapter (`Dspy.LM.ReqLLM`) + tests
 - [x] Make `Dspy.LM.generate/3` return text (legacy compatibility)
 - [x] Migrate LM call sites to request maps (stop using prompt+opts internally)
+- [x] Make `Predict` expose `parameters/1` + `update_parameters/2` (teleprompt-friendly)
+- [x] Add deterministic `Predict` → `Evaluate` golden-path test with a mock LM
 - [ ] Revisit repo shape: relocate/gate `lib/dspy_web/*` + GenStage “godmode” modules into separate package/app
 
 Success criteria:
@@ -71,3 +73,4 @@ Notes:
 - **2026-01-21**: Repaired legacy call sites by making `Dspy.LM.generate/3` return text (and added coverage).
 - **2026-01-21**: Migrated remaining internal LM call sites (`Dspy.Tools`, `Dspy.Retrieve`) to use request maps + `Dspy.LM.text_from_response/1`; added focused unit tests; `./precommit.sh` remains green.
 - **2026-01-21**: Tightened `./precommit.sh` checks to reduce noise: skip asset compilation when `assets.deploy` task is unavailable and only scan TODO/FIXME/XXX in comments.
+- **2026-01-21**: Added `Predict.parameters/1` + `Predict.update_parameters/2` and a deterministic `Predict` → `Evaluate` golden-path test to anchor Phase 1 success criteria.
