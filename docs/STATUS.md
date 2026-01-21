@@ -22,6 +22,7 @@ Execution checklist (iterate/commit-friendly):
 - [x] Add/extend tests for “LM call shape” (prompt+opts → request-map normalization)
 - [x] Create a “tooling/health unblock” checkpoint commit
 - [x] Introduce `req_llm` adapter (`Dspy.LM.ReqLLM`) + tests
+- [x] Make `Dspy.LM.generate/3` return text (legacy compatibility)
 - [ ] Migrate LM call sites to request maps (stop using prompt+opts internally)
 - [ ] Revisit repo shape: relocate/gate `lib/dspy_web/*` + GenStage “godmode” modules into separate package/app
 
@@ -67,3 +68,4 @@ Notes:
 - **2026-01-21**: Made `mix compile --warnings-as-errors` + `./precommit.sh` pass; added a regression test for `Dspy.LM.generate/3` request-map normalization.
 - **2026-01-21**: Checkpointed current repo health so we can iterate in smaller, test-driven commits.
 - **2026-01-21**: Added `Dspy.LM.ReqLLM` adapter and tests; resolved `mix.lock` conflict by removing a stale locked `req` version so `req_llm` could resolve.
+- **2026-01-21**: Repaired legacy call sites by making `Dspy.LM.generate/3` return text (and added coverage).

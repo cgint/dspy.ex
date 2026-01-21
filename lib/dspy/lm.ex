@@ -81,6 +81,23 @@ defmodule Dspy.LM do
   Prefer calling `generate/2` with a request map in new code.
   """
   def generate(lm, prompt, opts) when is_binary(prompt) and is_list(opts) do
+    generate_text(lm, prompt, opts)
+  end
+
+  @doc """
+  Generate text from a simple prompt string.
+  """
+  def generate_text(prompt, opts \\ []) do
+    case Dspy.Settings.get(:lm) do
+      nil -> {:error, :no_lm_configured}
+      lm -> generate_text(lm, prompt, opts)
+    end
+  end
+
+  @doc """
+  Generate text from a prompt string using a specific language model.
+  """
+  def generate_text(lm, prompt, opts) when is_binary(prompt) and is_list(opts) do
     request = %{
       messages: [%{role: "user", content: prompt}],
       max_tokens: Keyword.get(opts, :max_tokens),
@@ -89,31 +106,17 @@ defmodule Dspy.LM do
       tools: Keyword.get(opts, :tools)
     }
 
-    generate(lm, request)
+    with {:ok, response} <- generate(lm, request) do
+      extract_text(response)
+    end
   end
 
-  @doc """
-  Generate text from a simple prompt string.
-  """
-  def generate_text(prompt, opts \\ []) do
-    request = %{
-      messages: [%{role: "user", content: prompt}],
-      max_tokens: Keyword.get(opts, :max_tokens),
-      temperature: Keyword.get(opts, :temperature),
-      stop: Keyword.get(opts, :stop)
-    }
-
-    case generate(request) do
-      {:ok, response} ->
-        case get_in(response, [:choices, Access.at(0), :message]) do
-          %{"content" => content} when is_binary(content) -> {:ok, content}
-          # Support atom keys
-          %{content: content} when is_binary(content) -> {:ok, content}
-          message -> {:error, {:missing_content, message}}
-        end
-
-      {:error, reason} ->
-        {:error, reason}
+  defp extract_text(response) do
+    case get_in(response, [:choices, Access.at(0), :message]) do
+      %{"content" => content} when is_binary(content) -> {:ok, content}
+      # Support atom keys
+      %{content: content} when is_binary(content) -> {:ok, content}
+      message -> {:error, {:missing_content, message}}
     end
   end
 

@@ -116,7 +116,7 @@ defmodule DspyPredictTest do
     test "generate/3 builds a request map from prompt + opts" do
       lm = %CapturingLM{pid: self()}
 
-      assert {:ok, _response} =
+      assert {:ok, "ok"} =
                Dspy.LM.generate(lm, "Hello", max_tokens: 7, temperature: 0.5, stop: ["END"])
 
       assert_receive {:lm_request,
