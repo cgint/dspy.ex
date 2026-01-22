@@ -1,0 +1,62 @@
+direction: down
+
+classes: {
+  process: {
+    style: {
+      stroke-dash: 3
+    }
+  }
+}
+
+node: "Elixir Node (BEAM)" {
+  class: process
+
+  app: "Your Application" {
+    style: {
+      fill: "#e0e7ff"
+    }
+  }
+
+  pythonx: "Pythonx (NIF)" {
+    style: {
+      fill: "#c7d2fe"
+    }
+    
+    interpreter: "Embedded Python Interpreter" {
+      style: {
+        fill: "#a5b4fc"
+      }
+    }
+  }
+
+  app -> pythonx: "Pythonx.eval(...)"
+  pythonx -> interpreter: "Executes"
+  interpreter -> pythonx: "Result"
+  pythonx -> app: "Elixir Term"
+}
+
+fs: "File System / Cache" {
+  style: {
+    fill: "#f3f4f6"
+  }
+
+  uv_tool: "uv (binary)" {
+    shape: page
+  }
+  
+  managed_env: "Managed Environment" {
+    py_runtime: "Python 3.12+"
+    py_deps: "Dependencies\n(numpy, dspy-ai, etc.)"
+  }
+}
+
+config: "config/config.exs" {
+  shape: page
+  content: "pyproject_toml definition"
+}
+
+config -> pythonx: "Defines Environment"
+pythonx -> uv_tool: "Invokes (uv init)"
+uv_tool -> managed_env: "Downloads & Installs"
+interpreter -> managed_env: "Loads Modules"
+
