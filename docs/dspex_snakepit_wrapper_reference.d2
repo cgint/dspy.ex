@@ -1,0 +1,41 @@
+title: "DSPex wrapper architecture (SnakeBridge + Snakepit)"
+
+direction: right
+
+Elixir: {
+  label: "**Elixir app**\nDSPex + generated Dspy.*"
+
+  Calls: {
+    label: "**API layers**\n- DSPex facade\n- Dspy.* generated bindings"
+  }
+
+  RuntimeOpts: {
+    label: "**Routing options**\n__runtime__: pool_name, session_id, timeouts"
+  }
+}
+
+Bridge: {
+  label: "**SnakeBridge**\nUniversal FFI"
+}
+
+Snakepit: {
+  label: "**Snakepit**\nPython worker pools over gRPC"
+
+  Pools: {
+    label: "**Pools**\nstrict affinity for refs\nhint affinity for stateless work"
+  }
+}
+
+Python: {
+  label: "**Python workers**\nDSPy + dependencies (uv-managed)"
+
+  DSPy: { label: "**DSPy (Python)**\nteleprompters, modules, eval" }
+  Providers: { label: "**LLM providers**\n(via LiteLLM etc.)" }
+}
+
+Elixir -> Bridge: "call/method/attr"
+Elixir -> RuntimeOpts: "attach __runtime__"
+Bridge -> Snakepit: "gRPC"
+Snakepit -> Pools: "route call"
+Pools -> Python: "execute"
+Python.DSPy -> Python.Providers: "HTTP calls"
