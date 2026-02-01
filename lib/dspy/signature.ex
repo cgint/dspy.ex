@@ -3979,11 +3979,28 @@ defmodule Dspy.Signature do
   Parse outputs according to the signature.
   """
   def parse_outputs(signature, text) do
-    output_fields = signature.output_fields
+    json_outputs =
+      case try_parse_json_outputs(signature, text) do
+        {:ok, outputs} -> outputs
+        :error -> %{}
+      end
 
     outputs =
-      output_fields
-      |> Enum.reduce(%{}, fn field, acc ->
+      signature.output_fields
+      |> parse_label_outputs(text, json_outputs)
+
+    # Validate the complete output structure
+    case validate_output_structure(outputs, signature) do
+      :ok -> outputs
+      {:error, _reason} = error -> error
+    end
+  end
+
+  defp parse_label_outputs(output_fields, text, acc) do
+    Enum.reduce(output_fields, acc, fn field, acc ->
+      if Map.has_key?(acc, field.name) do
+        acc
+      else
         case extract_field_value(text, field) do
           {:ok, value} ->
             case validate_field_value(value, field) do
@@ -3994,12 +4011,105 @@ defmodule Dspy.Signature do
           :error ->
             acc
         end
-      end)
+      end
+    end)
+  end
 
-    # Validate the complete output structure
-    case validate_output_structure(outputs, signature) do
-      :ok -> outputs
-      {:error, _reason} = error -> error
+  defp try_parse_json_outputs(signature, text) do
+    with {:ok, json_string} <- extract_json_object(text),
+         {:ok, decoded} <- Jason.decode(json_string),
+         true <- is_map(decoded) do
+      outputs = map_json_to_outputs(signature, decoded)
+
+      if map_size(outputs) > 0 do
+        {:ok, outputs}
+      else
+        :error
+      end
+    else
+      _ -> :error
+    end
+  end
+
+  defp extract_json_object(text) do
+    trimmed = String.trim(text)
+
+    cond do
+      String.starts_with?(trimmed, "{") and String.ends_with?(trimmed, "}") ->
+        {:ok, trimmed}
+
+      true ->
+        start_idx =
+          case :binary.match(text, "{") do
+            {idx, _len} -> idx
+            :nomatch -> nil
+          end
+
+        end_idx =
+          case :binary.matches(text, "}") do
+            [] ->
+              nil
+
+            matches ->
+              {idx, _len} = List.last(matches)
+              idx
+          end
+
+        cond do
+          is_nil(start_idx) or is_nil(end_idx) ->
+            :error
+
+          start_idx < end_idx ->
+            {:ok, text |> :binary.part(start_idx, end_idx - start_idx + 1) |> String.trim()}
+
+          true ->
+            :error
+        end
+    end
+  end
+
+  defp map_json_to_outputs(signature, decoded_map) do
+    Enum.reduce(signature.output_fields, %{}, fn field, acc ->
+      key = Atom.to_string(field.name)
+
+      if Map.has_key?(decoded_map, key) do
+        decoded_map
+        |> Map.fetch!(key)
+        |> normalize_json_value_for_field(field)
+        |> validate_field_value(field)
+        |> case do
+          {:ok, validated_value} -> Map.put(acc, field.name, validated_value)
+          {:error, _} -> acc
+        end
+      else
+        acc
+      end
+    end)
+  end
+
+  defp normalize_json_value_for_field(value, field) do
+    case field.type do
+      :string ->
+        if is_binary(value), do: value, else: to_string(value)
+
+      :number ->
+        if is_binary(value), do: value, else: to_string(value)
+
+      :boolean ->
+        cond do
+          is_binary(value) -> value
+          is_boolean(value) -> if(value, do: "true", else: "false")
+          true -> to_string(value)
+        end
+
+      :json ->
+        if is_binary(value), do: value, else: Jason.encode!(value)
+
+      :code ->
+        if is_binary(value), do: value, else: to_string(value)
+
+      _ ->
+        if is_binary(value), do: value, else: to_string(value)
     end
   end
 
