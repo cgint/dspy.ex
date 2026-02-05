@@ -17,6 +17,7 @@ This file is intentionally **not** about the current task list. It is about the 
 - Keep a single “where to start” entry point (`AGENTS.md`).
 - Keep a compact memory file (`agent/MEMORY.md`) that is updated when decisions change.
 - Keep the plan in `plan/` and avoid mixing planning into `docs/`.
+- Prefer frequent small commits so git history acts as time-travel context.
 
 ## What I will challenge immediately
 - Any plan that aims for “full feature parity” before a stable, tested core exists.
