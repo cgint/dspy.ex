@@ -20,6 +20,7 @@ North star docs:
   - [ ] R0 acceptance tests: port `simplest/simplest_dspy.py` behavior into `test/acceptance/*`
   - [ ] R0 acceptance tests: port `simplest/simplest_dspy_with_signature_onefile.py` behavior (JSON-ish structured output expectations)
   - [ ] Add string-signature convenience: `Dspy.Predict.new("input -> output")`
+  - [ ] Add GEPA to the teleprompter roadmap (spec + tests) and de-emphasize Jido in planning docs
 
 Current health:
 - `mix test` passes, but only after adding missing dependencies needed by in-tree modules:

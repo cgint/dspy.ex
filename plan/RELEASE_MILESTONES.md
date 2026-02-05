@@ -46,7 +46,7 @@ Hard requirements:
 **Goal:** demonstrate the DSPy differentiator (optimization) end-to-end.
 
 Users can:
-- run `BootstrapFewShot` (or the next chosen teleprompter) to improve a score
+- run **GEPA** (or the next chosen teleprompter) to improve a score
 - keep candidates as stable structs/parameters (no dynamic module creation)
 
 Hard requirements:

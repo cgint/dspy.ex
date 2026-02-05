@@ -1,12 +1,14 @@
-# Implementation Plan: DSPy Core → `req_llm` → (Optional) Jido v2
+# Implementation Plan: DSPy Core → `req_llm` → Teleprompters (GEPA priority)
 
-Outcome: Ship a stable, testable DSPy-style core in `dspy.ex` as a **library-only** project, use **`req_llm`** for low-level LLM provider access, then add **Jido v2** integration as an optional layer (or separate package) without coupling the DSPy core to an agent runtime.
+Outcome: Ship a stable, testable DSPy-style core in `dspy.ex` as a **library-only** project, use **`req_llm`** for low-level LLM provider access, then deliver real optimization value via teleprompters (GEPA is a priority).
+
+Note: Jido integration is explicitly **out of scope for now**; revisit only after core + key teleprompters are solid.
 
 Success criteria:
 - `Predict`/`ChainOfThought` + `Evaluate` run end-to-end deterministically with a mock LM.
 - Teleprompt(s) can improve scores on a toy dataset with a fixed seed.
 - Low-level LLM API/provider maintenance is delegated to `req_llm` (single adapter in `dspy.ex`).
-- Jido integration targets **Jido v2** (`2.0.0-rc.1`, main branch; local checkout at `../jido`) and remains optional.
+- Teleprompting includes a real, valuable optimizer; **GEPA is prioritized** over orchestration/runtime integrations.
 
 ## Diagram
 ![Implementation Plan](./diagrams/impl_plan.svg)
@@ -53,14 +55,15 @@ Work items:
 Deliverable:
 - A small example program + tests proving `Predict` → `Evaluate` works deterministically.
 
-## Phase 2 — Bring 1–2 teleprompters to “real”
+## Phase 2 — Bring teleprompters to “real” (GEPA priority)
 
-Goal: A teleprompt that measurably improves performance, using an Elixir-native candidate representation.
+Goal: A teleprompter that measurably improves performance, using an Elixir-native candidate representation.
 
-Pick order:
-1. **BootstrapFewShot** (most foundational)
-2. **COPRO** or **SIMBA**
-3. **MIPROv2** (later; depends on more moving parts)
+Pick order (subject to adjustment as we learn):
+1. **GEPA**
+2. **BootstrapFewShot** (foundational)
+3. **COPRO** or **SIMBA**
+4. **MIPROv2** (later; depends on more moving parts)
 
 Work items:
 - Represent candidates as structs/config applied to stable modules (no dynamic modules).
@@ -70,21 +73,14 @@ Work items:
 Deliverable:
 - A toy dataset + fixed-seed run that shows an improvement and is reproducible.
 
-## Phase 3 — Jido v2 integration (optional layer)
+## Phase 3 — (Deferred) orchestration/runtime integration
 
-Goal: Orchestrate DSPy programs/optimization runs under Jido without adding Jido as a core dependency.
+Intentionally deferred. We focus on:
+- core DSPy workflows
+- evaluation
+- teleprompters/optimizers (GEPA priority)
 
-Work items:
-- Create a small integration layer (e.g. `dspy_jido` app/package or `lib/dspy_jido/*`) that:
-  - wraps `Dspy.Module.forward/2` as a Jido action
-  - runs evaluation/optimization as supervised jobs (timeouts, retries, logging)
-- Target **Jido v2**:
-  - Hex: `https://hex.pm/packages/jido/2.0.0-rc.1`
-  - Upstream main: `https://github.com/agentjido/jido`
-  - `v1.x` is stable but expected to be deprecated soon.
-
-Deliverable:
-- A minimal “Jido runner” example showing supervision/operational benefits while DSPy stays pure.
+We can revisit orchestration (e.g., Jido) once the basics are solid and we have real workloads to orchestrate.
 
 ## Verification (each phase)
 
