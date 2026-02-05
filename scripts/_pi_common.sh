@@ -59,7 +59,10 @@ validate_model_policy() {
   fi
 
   # Loop automation never uses Gemini models.
-  if [[ "${PI_MODEL,,}" == *"gemini"* ]]; then
+  # Note: macOS often ships bash 3.x, so avoid `${var,,}`.
+  local model_lc
+  model_lc="$(printf '%s' "${PI_MODEL}" | tr '[:upper:]' '[:lower:]')"
+  if [[ "${model_lc}" == *"gemini"* ]]; then
     echo "ERROR: refusing to run loop automation with Gemini models: '${PI_MODEL}'" >&2
     exit 2
   fi
