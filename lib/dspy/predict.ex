@@ -74,6 +74,10 @@ defmodule Dspy.Predict do
     signature.signature()
   end
 
+  defp get_signature(signature) when is_binary(signature) do
+    Dspy.Signature.define(signature)
+  end
+
   defp get_signature(signature), do: signature
 
   defp build_prompt(predict, inputs) do

@@ -52,15 +52,29 @@ defmodule Dspy.Signature do
   @doc """
   Define a signature from a string specification.
 
-  Format: "function_name(input1: type, input2: type) -> output1: type, output2: type"
+  Supported formats:
+
+    * "function_name(input1: type, input2: type) -> output1: type, output2: type"
+    * "input1, input2 -> output1, output2: int" (types optional; default is `string`)
+
   """
-  def define(signature_string) do
+  def define(signature_string) when is_binary(signature_string) do
+    signature_string = String.trim(signature_string)
+
     case parse_signature_string(signature_string) do
       {:ok, {name, input_fields, output_fields}} ->
         new(name, input_fields: input_fields, output_fields: output_fields)
 
-      {:error, reason} ->
-        raise ArgumentError, "Invalid signature format: #{reason}"
+      {:error, _reason} ->
+        case parse_arrow_signature_string(signature_string) do
+          {:ok, {input_fields, output_fields}} ->
+            # For arrow-style signatures we don't have a separate function name; keep
+            # the original string as an identifier.
+            new(signature_string, input_fields: input_fields, output_fields: output_fields)
+
+          {:error, reason} ->
+            raise ArgumentError, "Invalid signature format: #{reason}"
+        end
     end
   end
 
@@ -4095,6 +4109,9 @@ defmodule Dspy.Signature do
       :number ->
         if is_binary(value), do: value, else: to_string(value)
 
+      :integer ->
+        if is_binary(value), do: value, else: to_string(value)
+
       :boolean ->
         cond do
           is_binary(value) -> value
@@ -4231,6 +4248,13 @@ defmodule Dspy.Signature do
       :string ->
         if is_binary(value), do: {:ok, value}, else: {:error, :invalid_string}
 
+      :integer ->
+        case Integer.parse(String.trim(value)) do
+          {num, ""} -> {:ok, num}
+          {num, _rest} -> {:ok, num}
+          :error -> {:error, :invalid_integer}
+        end
+
       :number ->
         case Float.parse(value) do
           {num, ""} ->
@@ -4296,6 +4320,81 @@ defmodule Dspy.Signature do
       :ok
     rescue
       error -> {:error, Exception.message(error)}
+    end
+  end
+
+  # Parse arrow signature strings like "input1, input2 -> output1, output2: int".
+  #
+  # Types are optional; when omitted, we default to `string`.
+  defp parse_arrow_signature_string(signature_string) do
+    clean_string = signature_string |> String.trim() |> String.replace(~r/\s+/, " ")
+
+    case String.split(clean_string, "->", parts: 2) do
+      [inputs_part, outputs_part] ->
+        with {:ok, input_fields} <- parse_arrow_fields(String.trim(inputs_part), :string),
+             {:ok, output_fields} <- parse_arrow_fields(String.trim(outputs_part), :string) do
+          {:ok, {input_fields, output_fields}}
+        else
+          error -> error
+        end
+
+      _ ->
+        {:error, "Invalid arrow signature format - expected 'inputs -> outputs'"}
+    end
+  end
+
+  defp parse_arrow_fields(fields_str, default_type) do
+    fields_str
+    |> String.split(",")
+    |> Enum.map(&String.trim/1)
+    |> Enum.reject(&(&1 == ""))
+    |> Enum.reduce_while({:ok, []}, fn field_str, {:ok, acc} ->
+      case parse_arrow_field(field_str, default_type) do
+        {:ok, field} -> {:cont, {:ok, [field | acc]}}
+        error -> {:halt, error}
+      end
+    end)
+    |> case do
+      {:ok, fields} -> {:ok, Enum.reverse(fields)}
+      error -> error
+    end
+  end
+
+  defp parse_arrow_field(field_str, default_type) do
+    case String.split(field_str, ":", parts: 2) do
+      [name, type] ->
+        name = name |> String.trim() |> String.to_atom()
+        type = type |> String.trim() |> normalize_type()
+
+        {:ok,
+         %{
+           name: name,
+           type: type,
+           description: humanize_field_name(name),
+           required: true,
+           default: nil
+         }}
+
+      [name] ->
+        name = String.trim(name)
+
+        if name == "" do
+          {:error, "Invalid field format - empty field name"}
+        else
+          name = String.to_atom(name)
+
+          {:ok,
+           %{
+             name: name,
+             type: default_type,
+             description: humanize_field_name(name),
+             required: true,
+             default: nil
+           }}
+        end
+
+      _ ->
+        {:error, "Invalid field format"}
     end
   end
 
@@ -4385,8 +4484,8 @@ defmodule Dspy.Signature do
 
   defp normalize_type("str"), do: :string
   defp normalize_type("string"), do: :string
-  defp normalize_type("int"), do: :number
-  defp normalize_type("integer"), do: :number
+  defp normalize_type("int"), do: :integer
+  defp normalize_type("integer"), do: :integer
   defp normalize_type("float"), do: :number
   defp normalize_type("number"), do: :number
   defp normalize_type("bool"), do: :boolean
