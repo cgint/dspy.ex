@@ -28,8 +28,12 @@ prompt=$(cat <<'PROMPT'
 You are a strict Elixir code reviewer for this repo.
 
 Task:
-- Review the current git diff (working tree + staged) vs HEAD.
-- Use tools to inspect: `git status --porcelain`, `git diff`, and relevant files.
+- Review all current changes vs HEAD (unstaged, staged, and untracked files).
+- You MUST use tools to inspect:
+  - `git status --porcelain`
+  - `git diff HEAD` (combined view of staged+unstaged)
+  - `git diff --cached`
+  - and open any relevant untracked files explicitly
 
 Focus:
 - Elixir/BEAM best practices (esp. atom safety: avoid String.to_atom on untrusted input)

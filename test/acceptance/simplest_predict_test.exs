@@ -7,7 +7,7 @@ defmodule Dspy.Acceptance.SimplestPredictTest do
 
     @impl true
     def generate(%__MODULE__{pid: pid}, request) do
-      prompt = hd(request.messages).content
+      [%{content: prompt} | _rest] = request.messages
       send(pid, {:prompt, prompt})
 
       content =
@@ -39,6 +39,12 @@ defmodule Dspy.Acceptance.SimplestPredictTest do
   end
 
   setup do
+    prev_settings = Dspy.Settings.get()
+
+    on_exit(fn ->
+      Dspy.Settings.configure(Map.from_struct(prev_settings))
+    end)
+
     Dspy.configure(lm: %SimplestMockLM{pid: self()})
     :ok
   end
@@ -50,7 +56,7 @@ defmodule Dspy.Acceptance.SimplestPredictTest do
     assert is_binary(joke_prediction.attrs.joke)
     assert joke_prediction.attrs.joke =~ "John"
 
-    assert_receive {:prompt, prompt1}
+    assert_receive {:prompt, prompt1}, 1_000
     assert prompt1 =~ "Name: John"
     assert prompt1 =~ "Joke:"
 
@@ -61,7 +67,7 @@ defmodule Dspy.Acceptance.SimplestPredictTest do
 
     assert funnyness_prediction.attrs.funnyness_0_to_10 == 7
 
-    assert_receive {:prompt, prompt2}
+    assert_receive {:prompt, prompt2}, 1_000
     assert prompt2 =~ "Joke: Why did John cross the road?"
     assert prompt2 =~ "Funnyness_0_to_10:"
   end

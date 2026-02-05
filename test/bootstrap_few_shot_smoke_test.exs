@@ -1,5 +1,5 @@
 defmodule DspyBootstrapFewShotSmokeTest do
-  use ExUnit.Case, async: true
+  use ExUnit.Case
 
   alias Dspy.Teleprompt.BootstrapFewShot
 
@@ -12,29 +12,51 @@ defmodule DspyBootstrapFewShotSmokeTest do
   end
 
   defp receive_prompt_with_examples(timeout_ms) do
+    deadline = System.monotonic_time(:millisecond) + timeout_ms
+    do_receive_prompt_with_examples(deadline)
+  end
+
+  defp do_receive_prompt_with_examples(deadline_ms) do
+    remaining = deadline_ms - System.monotonic_time(:millisecond)
+
+    if remaining <= 0 do
+      flunk("Expected to receive an LM prompt containing Examples:, but did not")
+    end
+
     receive do
       {:lm_debug, %{prompt: prompt}} ->
         if String.contains?(prompt, "Examples:") do
           prompt
         else
-          receive_prompt_with_examples(timeout_ms)
+          do_receive_prompt_with_examples(deadline_ms)
         end
     after
-      timeout_ms ->
+      remaining ->
         flunk("Expected to receive an LM prompt containing Examples:, but did not")
     end
   end
 
   defp receive_debug_with_examples(timeout_ms) do
+    deadline = System.monotonic_time(:millisecond) + timeout_ms
+    do_receive_debug_with_examples(deadline)
+  end
+
+  defp do_receive_debug_with_examples(deadline_ms) do
+    remaining = deadline_ms - System.monotonic_time(:millisecond)
+
+    if remaining <= 0 do
+      flunk("Expected to receive an LM debug message containing examples, but did not")
+    end
+
     receive do
       {:lm_debug, %{examples: examples} = debug} ->
         if map_size(examples) > 0 do
           debug
         else
-          receive_debug_with_examples(timeout_ms)
+          do_receive_debug_with_examples(deadline_ms)
         end
     after
-      timeout_ms ->
+      remaining ->
         flunk("Expected to receive an LM debug message containing examples, but did not")
     end
   end
@@ -100,6 +122,12 @@ defmodule DspyBootstrapFewShotSmokeTest do
   end
 
   setup do
+    prev_settings = Dspy.Settings.get()
+
+    on_exit(fn ->
+      Dspy.Settings.configure(Map.from_struct(prev_settings))
+    end)
+
     Dspy.configure(lm: %ExampleAwareMockLM{pid: self()})
     :ok
   end
@@ -118,7 +146,7 @@ defmodule DspyBootstrapFewShotSmokeTest do
 
     baseline = Dspy.Evaluate.evaluate(student, trainset, metric, num_threads: 1, progress: false)
     assert baseline.mean == 0.0
-    assert_receive {:lm_debug, %{examples: examples}}
+    assert_receive {:lm_debug, %{examples: examples}}, 1_000
     assert examples == %{}
     drain_lm_debug_messages()
 
@@ -141,9 +169,9 @@ defmodule DspyBootstrapFewShotSmokeTest do
     optimized_result =
       Dspy.Evaluate.evaluate(optimized, trainset, metric, num_threads: 1, progress: false)
 
-    debug = receive_debug_with_examples(50)
+    debug = receive_debug_with_examples(1_000)
     assert debug.answer == "4"
-    _prompt = receive_prompt_with_examples(50)
+    _prompt = receive_prompt_with_examples(1_000)
 
     assert optimized_result.mean == 1.0
   end

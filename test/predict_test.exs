@@ -7,7 +7,7 @@ defmodule DspyPredictTest do
 
     def generate(_lm, request) do
       # Extract the question from the prompt
-      _prompt = hd(request.messages).content
+      [%{content: _prompt} | _rest] = request.messages
 
       response = %{
         choices: [
@@ -40,6 +40,12 @@ defmodule DspyPredictTest do
   end
 
   setup do
+    prev_settings = Dspy.Settings.get()
+
+    on_exit(fn ->
+      Dspy.Settings.configure(Map.from_struct(prev_settings))
+    end)
+
     # Configure with mock LM
     mock_lm = %MockLM{}
     Dspy.configure(lm: mock_lm)

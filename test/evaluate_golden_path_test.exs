@@ -1,5 +1,5 @@
 defmodule DspyEvaluateGoldenPathTest do
-  use ExUnit.Case, async: true
+  use ExUnit.Case
 
   defmodule MockLM do
     @behaviour Dspy.LM
@@ -28,6 +28,12 @@ defmodule DspyEvaluateGoldenPathTest do
   end
 
   setup do
+    prev_settings = Dspy.Settings.get()
+
+    on_exit(fn ->
+      Dspy.Settings.configure(Map.from_struct(prev_settings))
+    end)
+
     Dspy.configure(lm: %MockLM{})
     :ok
   end

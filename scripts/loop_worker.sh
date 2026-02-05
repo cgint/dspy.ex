@@ -143,7 +143,27 @@ require_evidence_files_listed() {
 }
 
 stage_all_except_sensitive_logs() {
-  git add -A
+  # Stage tracked changes.
+  git add -u
+
+  # Stage *safe* untracked files only (avoid committing random local artifacts).
+  local -a safe=()
+  local f
+
+  while IFS= read -r f; do
+    case "$f" in
+      lib/*|test/*|plan/*|scripts/*|docs/*|openspec/*|mix.exs|mix.lock|README.md|AGENTS.md)
+        safe+=("$f")
+        ;;
+      *)
+        ;;
+    esac
+  done < <(git ls-files --others --exclude-standard)
+
+  if [[ ${#safe[@]} -gt 0 ]]; then
+    git add -- "${safe[@]}"
+  fi
+
   # Ensure local logs/sessions never get staged.
   git restore --staged --quiet -- plan/research/loop_resume plan/research/pi_sessions 2>/dev/null || true
 }
@@ -164,6 +184,9 @@ commit_iteration_if_needed() {
     bash -lc "$verify_cmd"
   fi
 
+  # Stage tracked + safe untracked changes (excluding local logs/sessions) before review.
+  stage_all_except_sensitive_logs
+
   if [[ "$run_review" -eq 1 ]]; then
     if [[ ! -x scripts/loop_review.sh ]]; then
       echo "ERROR: scripts/loop_review.sh is not executable" >&2
@@ -181,7 +204,6 @@ commit_iteration_if_needed() {
     fi
   fi
 
-  stage_all_except_sensitive_logs
   git commit -m "loop: ${iter}"
 }
 
