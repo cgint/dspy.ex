@@ -6,6 +6,8 @@
 ## Summary
 Quality is a product feature of this port: we want a library that is **safe to depend on** and **easy to maintain**.
 
+Since this repo is public, quality also includes **public-repo hygiene**: never commit/push secrets or sensitive logs.
+
 The quality bar is “high but smart”:
 - go deep on the **most-used workflows**
 - keep tests **deterministic** (no network, no API keys)

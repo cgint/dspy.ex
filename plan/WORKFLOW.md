@@ -19,6 +19,10 @@ This repository is iterating toward a “DSPy-style Elixir core” with minimal 
 - Never do destructive git ops (no `git reset --hard`, no force-push) unless explicitly instructed in this conversation.
 - Never edit `.env` / env var files.
 - Do not revert unrelated changes unless explicitly asked.
+- **Assume this repo is public:** do not commit/push secrets or sensitive data.
+  - No API keys/tokens/passwords/private URLs.
+  - Be careful with captured logs (including delegated sub-agent stdout/stderr): review and redact before committing.
+  - Prefer placeholders over machine-specific absolute paths when writing docs.
 
 ## Workflow
 - Keep `plan/STATUS.md` up to date with:
