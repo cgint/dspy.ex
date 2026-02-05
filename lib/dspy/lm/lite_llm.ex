@@ -58,9 +58,9 @@ defmodule Dspy.LM.LiteLLM do
     "claude-3-opus-20240229" => :anthropic,
 
     # Google family
-    "gemini-1.5-pro" => :google,
-    "gemini-1.5-flash" => :google,
-    "gemini-2.0-flash-exp" => :google,
+    "gemini-2.5-pro" => :google,
+    "gemini-2.5-flash" => :google,
+    "gemini-2.5-flash-lite" => :google,
 
     # Meta Llama family
     "meta-llama/Llama-3.1-8B-Instruct" => :meta,
@@ -100,7 +100,7 @@ defmodule Dspy.LM.LiteLLM do
 
       iex> LiteLLM.new("gpt-4o")
       %LiteLLM{model: "gpt-4o", provider: :openai, ...}
-      
+
       iex> LiteLLM.new("claude-3-5-sonnet-20241022", api_key: "sk-ant-...")
       %LiteLLM{model: "claude-3-5-sonnet-20241022", provider: :anthropic, ...}
   """
