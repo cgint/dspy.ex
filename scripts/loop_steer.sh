@@ -13,7 +13,7 @@ parse_pi_flags "$@"
 shift_args=0
 while [[ $# -gt 0 ]]; do
   case "$1" in
-    --provider|--model|--thinking|--tools|--session-dir)
+    --models|--thinking|--tools|--session-dir)
       shift 2; shift_args=$((shift_args+2));;
     --)
       shift; break;;

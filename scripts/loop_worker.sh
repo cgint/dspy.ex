@@ -6,10 +6,11 @@ set -euo pipefail
 usage() {
   cat <<'EOF'
 Usage:
-  scripts/loop_worker.sh --model <id> [--provider <name>] [--max-iters N] [--no-commit] [--no-verify] [--verify-cmd CMD]
+  scripts/loop_worker.sh --models <id> [--thinking medium] [--max-iters N] [--no-commit] [--no-verify] [--verify-cmd CMD]
 
 Notes:
-- Requires non-Gemini model (script refuses Gemini).
+- Requires explicit `--models <id>` (refuses to default).
+- Refuses Gemini models (loop automation should not use Gemini at all).
 - Reads first unchecked item from plan/STATUS.md "## Loop status".
 - Captures delegated stdout/stderr to plan/research/loop_resume/*.log (gitignored).
 - By default:
@@ -44,7 +45,7 @@ while [[ $# -gt 0 ]]; do
       run_verify=0; shift;;
     --verify-cmd)
       verify_cmd="$2"; shift 2;;
-    --provider|--model|--thinking|--tools|--session-dir)
+    --models|--thinking|--tools|--session-dir)
       # already consumed by parse_pi_flags; skip here as well
       shift 2;;
     --)

@@ -31,9 +31,9 @@ This is **context/input only** from that repo; we re-apply the pattern here in a
 Use `pi` to delegate mechanical chunks (tests scaffolding, small refactors, prompt snapshot drafting), capturing stdout/stderr to a file for review.
 
 Hard rule (for this repo):
-- **Do not use** `gemini-cli` / Gemini models.
-- **Do not use** Codex.
 - Use `pi ... -p "<task>"` delegation as documented in `agent/SOUL.md`.
+- Prefer `--models gpt-5.2 --thinking medium`.
+- Loop automation **must not** use Gemini models.
 
 ## Backlog + pause signal (single source of truth)
 We use `plan/STATUS.md` as the resumable state file.

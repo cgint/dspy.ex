@@ -11,6 +11,6 @@ Loop scripts:
 - `loop_worker.sh`: execute backlog items iteratively via delegated `pi` runs; capture logs locally; optionally verify + commit.
 
 Model policy:
-- **Do not use Gemini models**.
-- **Do not use Codex**.
+- Use `--models gpt-5.2 --thinking medium` (provider is linked to model; do not specify provider explicitly).
+- Loop scripts **must not** be run with Gemini models.
 - Delegation is via `pi` CLI only.
