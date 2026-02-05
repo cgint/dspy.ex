@@ -26,8 +26,15 @@ This repository is being developed as an **Elixir-native port** of the upstream 
   - Assistant self-organization: compact memory/context and long-lived operating principles.
   - The goal is to reduce context loss between sessions.
 
-## Working mode (Clarity First)
-- Planning phase: investigate + propose + update planning artifacts.
-- Execution phase: implement only after explicit user approval ("Approved" / "Go").
+## Continuity rule: persist + commit
+- Don’t leave important decisions/learnings only in chat — **persist them** in `plan/` and `agent/`.
+- Prefer **frequent, small commits** (including docs) so we can “time travel” and see how the plan/knowledge/assistant evolves.
+- Keep `plan/STATUS.md` current so a restart can resume without re-deriving context.
 
-(See `plan/WORKFLOW.md` for details.)
+## Working mode (Clarity First, standing approval)
+- Planning phase: investigate + propose + update planning artifacts.
+- Execution phase: proceed autonomously within this repo (implement + delegate) by default.
+  - The user can say **“Hold/Stop”** to pause.
+  - I will still proactively flag/ask on “handshake” items (deps changes, broad refactors, system-wide/heavy commands, or anything that might risk leaking secrets).
+
+(See `plan/WORKFLOW.md` for the detailed guardrails.)
