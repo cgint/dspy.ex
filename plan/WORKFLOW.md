@@ -29,6 +29,7 @@ This repository is iterating toward a “DSPy-style Elixir core” with minimal 
   - A checkbox checklist showing what is done and what’s next
 - Prefer an early checkpoint commit when unblocking the repo (tooling/build/test health), then iterate with smaller feature commits afterward.
 - Prefer **frequent, small, atomic commits** over big batches (git history as time-travel; reduces mishaps).
+- Apply this to **planning + agent self-organization docs** too (commit the evolution of `plan/` and `agent/`, not just code).
 - Run `./precommit.sh` regularly, especially before committing.
 - Write tests alongside behavior changes (prefer small, deterministic tests).
 - Use `plan/QUALITY_BAR.md` as the default testing/quality reference and keep its “best-practices research log” updated when we learn something new.
