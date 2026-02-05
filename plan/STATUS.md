@@ -1,6 +1,6 @@
 # Status
 
-Goal: Build an **Elixir-native port** of upstream **Python DSPy** (`../dspy`) with a maintainable foundation: **`req_llm` for provider access**, **optional Jido v2 for orchestration**, and a **library-only** core.
+Goal: Build an **Elixir-native port** of upstream **Python DSPy** (`../dspy`) with a maintainable foundation: **`req_llm` for provider access**, a **library-only** core, and real optimization value via teleprompters (**GEPA priority**). (Jido/orchestration is deferred for now.)
 
 North star docs:
 - `AGENTS.md` (entry point)
@@ -19,7 +19,7 @@ North star docs:
 - Backlog (ordered):
   - [x] R0 acceptance tests: port `simplest/simplest_dspy.py` behavior into `test/acceptance/*`
   - [ ] R0 acceptance tests: port `simplest/simplest_dspy_with_signature_onefile.py` behavior (JSON-ish structured output expectations)
-  - [ ] Add string-signature convenience: `Dspy.Predict.new("input -> output")`
+  - [x] Add string-signature convenience: `Dspy.Predict.new("input -> output")`
   - [ ] Add GEPA to the teleprompter roadmap (spec + tests) and de-emphasize Jido in planning docs
 - Evidence:
   - Evidence file: `test/acceptance/simplest_predict_test.exs`
