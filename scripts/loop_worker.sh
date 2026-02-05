@@ -8,6 +8,8 @@ usage() {
 Usage:
   scripts/loop_worker.sh --models <id> [--thinking medium] [--max-iters N] [--no-commit] [--no-verify] [--verify-cmd CMD]
 
+Note: `--models <id>` is accepted for convenience; the script passes it through to `pi --model <id>`.
+
 Notes:
 - Requires explicit `--models <id>` (refuses to default).
 - Refuses Gemini models (loop automation should not use Gemini at all).
@@ -45,7 +47,7 @@ while [[ $# -gt 0 ]]; do
       run_verify=0; shift;;
     --verify-cmd)
       verify_cmd="$2"; shift 2;;
-    --models|--thinking|--tools|--session-dir)
+    --models|--model|--thinking|--tools|--session-dir)
       # already consumed by parse_pi_flags; skip here as well
       shift 2;;
     --)
