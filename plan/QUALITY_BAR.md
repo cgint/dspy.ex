@@ -52,6 +52,18 @@ The quality bar is “high but smart”:
   - Treat snapshots as code: version control + review; don’t blindly regenerate.
   - Ensure determinism via canonicalization/mocking.
 
+## Best-practices research log (webs.sh)
+### 2026-02-05 — Open-source maintenance basics (issues + releases)
+- Tool: `webs.sh` (Gemini grounding)
+- Query: "best practices maintain open source library issue templates labels triage release process Elixir Hex Mix"
+- Raw output: `plan/research/web_open_source_maintenance.md`
+- Takeaways (pragmatic):
+  - Add GitHub issue templates that force environment + repro details (Elixir/OTP, library version, minimal repro).
+  - Encourage repro scripts using `Mix.install/2` so maintainers can run a single `repro.exs` without cloning.
+  - Use a small, consistent label taxonomy (`kind:*`, `area:*`, `status:*`, `good first issue`).
+  - Use SemVer + maintain a changelog; automate safely (conventional commits) only if it pays off.
+  - CI “golden path” for libraries: `mix format --check-formatted`, `mix credo --strict`, `mix hex.audit`, `mix dialyzer` (optional early), `mix test --cover`.
+
 ## Maintenance principle (later)
 When we start handling issues publicly, every bug fix should ideally include:
 - a minimal reproducible test

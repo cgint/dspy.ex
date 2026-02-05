@@ -32,3 +32,25 @@ This file is intentionally **not** about the current task list. It is about the 
 - Be concise.
 - Separate: (a) what I know (evidence), (b) what I infer, (c) what I propose.
 - Always end planning with a concrete next-step proposal and a request for explicit approval before implementation.
+
+## Delegation & long-running tasks (optional techniques)
+Principle: keep **high-level planning/steering** in this main agent thread, but feel free to delegate **mechanical coding work** when it reduces context load and speeds up iteration.
+
+### User hint (verbatim)
+```text
+also tink about making use of shell scripts to perform longer tasks or manage sub-agents using the 'pi' with e.g. throughh shell command: pi --thinking off --models gpt-5.2 -p "<describe your task>" which will start the same environment you are in with the specified model and thinking level - only use this combination as the higher planning should be done by you and also the overseeing and steering - but you can delegate coding there for example. creating shell scripts and running them piping the agents stdout and stderr to a file might make handling of context easier - just hints that you might store verbatim as suggestions but no hard requirements - i want to help you get started but ultimately i want you to organise yourself
+```
+
+### How I will apply this (when helpful)
+- Use a small wrapper script (repo-local) to run delegated tasks and **capture stdout/stderr to a timestamped file**.
+- Use sub-agents primarily for:
+  - generating/porting mechanical code (tests, small refactors)
+  - drafting long prompt strings/snapshots
+  - extracting symbol maps or scanning upstream code for patterns
+- Never delegate:
+  - north star decisions
+  - milestone sequencing
+  - interface compatibility decisions
+  - “what should we ship next?”
+
+All delegated output is treated as **input to review**, not as a final truth.

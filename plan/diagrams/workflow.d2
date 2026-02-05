@@ -1,0 +1,29 @@
+direction: down
+
+workflow: {
+  label: "**Workflow (Clarity First)**"
+
+  planning: {
+    label: "**Planning**\nInvestigate + propose\nUpdate plan/* artifacts"
+  }
+
+  approval: {
+    label: "**Stop for approval**\nWait for user: Go / Approved"
+  }
+
+  execution: {
+    label: "**Execution**\nImplement tasks\nTDD + verification"
+  }
+
+  verify: {
+    label: "**Verify + record**\nUpdate plan/STATUS.md\nRun tests + precommit"
+  }
+
+  delegate: {
+    label: "**Optional delegation**\nRun sub-agent via pi CLI\nCapture logs to file"
+  }
+
+  planning -> approval -> execution -> verify -> planning
+  planning -> delegate: "mechanical coding only"
+  delegate -> execution: "review + integrate"
+}

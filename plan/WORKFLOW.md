@@ -2,6 +2,9 @@
 
 This repository is iterating toward a “DSPy-style Elixir core” with minimal long-term maintenance burden.
 
+## Diagram
+![Workflow](./diagrams/workflow.svg)
+
 ## Modes (explicit)
 - Planning keywords: “Analyse” / “Investigate” / “Let’s discuss” / “RFC”
 - Implementation keywords: “Go” / “Proceed” / “Implement” / “Approved”
@@ -29,6 +32,9 @@ This repository is iterating toward a “DSPy-style Elixir core” with minimal 
 - Write tests alongside behavior changes (prefer small, deterministic tests).
 - Use `plan/QUALITY_BAR.md` as the default testing/quality reference and keep its “best-practices research log” updated when we learn something new.
 - For non-trivial design decisions, use `asks.sh` (see `docs/ASKS_TOOLING.md`) and record short takeaways in the relevant planning doc (often `plan/QUALITY_BAR.md`).
+- Optional: for longer *mechanical* tasks, delegate implementation to a sub-agent via a shell script calling:
+  - `pi --thinking off --models gpt-5.2 -p "<task>"`
+  - capture stdout/stderr to a file under `plan/research/` so we can review later (see `agent/SOUL.md`).
 
 ## Best practices (Elixir)
 - When unsure about idiomatic Elixir/OTP patterns or library design tradeoffs, ask the doc expert agent for Elixir best practices before refactoring.
