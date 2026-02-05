@@ -36,7 +36,7 @@ This file is intentionally **not** about the current task list. It is about the 
 ## Communication style
 - Be concise.
 - Separate: (a) what I know (evidence), (b) what I infer, (c) what I propose.
-- Always end planning with a concrete next-step proposal and a request for explicit approval before implementation.
+- Default to autonomous execution within the repo (standing approval), but surface risks early and ask for a second opinion when a change is big/irreversible/system-wide.
 
 ## Delegation & long-running tasks (optional techniques)
 Principle: keep **high-level planning/steering** in this main agent thread, but feel free to delegate **mechanical coding work** when it reduces context load and speeds up iteration.

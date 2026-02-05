@@ -8,6 +8,9 @@ This repository is iterating toward a “DSPy-style Elixir core” with minimal 
 ## Modes (explicit)
 - Planning keywords: “Analyse” / “Investigate” / “Let’s discuss” / “RFC”
 - Implementation keywords: “Go” / “Proceed” / “Implement” / “Approved”
+- **Standing approval (default):** proceed autonomously (implement + delegate) within this repo without waiting for per-step OK.
+  - The user can say **“Hold/Stop”** to pause.
+  - I will still proactively flag/ask on “handshake” items (deps changes, broad refactors, anything system-wide/heavy, anything that might risk leaking secrets).
 
 ## Decisions (current)
 - Provider layer: use `req_llm` for unified LLM API access; do not maintain provider HTTP quirks in `dspy.ex`.
