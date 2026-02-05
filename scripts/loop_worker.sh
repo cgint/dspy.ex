@@ -6,7 +6,9 @@ set -euo pipefail
 usage() {
   cat <<'EOF'
 Usage:
-  scripts/loop_worker.sh --models <id> [--thinking medium] [--max-iters N] [--no-commit] [--no-verify] [--verify-cmd CMD]
+  scripts/loop_worker.sh --models <id> [--thinking medium] [--max-iters N]
+                        [--no-commit] [--no-verify] [--verify-cmd CMD]
+                        [--no-review] [--no-require-review-lgtm]
 
 Note: `--models <id>` is accepted for convenience; the script passes it through to `pi --model <id>`.
 
@@ -31,6 +33,9 @@ do_commit=1
 run_verify=1
 verify_cmd="mix test"
 
+run_review=1
+require_review_lgtm=1
+
 # Parse pi flags first (provider/model/etc), then our flags.
 parse_pi_flags "$@"
 
@@ -47,6 +52,10 @@ while [[ $# -gt 0 ]]; do
       run_verify=0; shift;;
     --verify-cmd)
       verify_cmd="$2"; shift 2;;
+    --no-review)
+      run_review=0; shift;;
+    --no-require-review-lgtm)
+      require_review_lgtm=0; shift;;
     --models|--model|--thinking|--tools|--session-dir)
       # already consumed by parse_pi_flags; skip here as well
       shift 2;;
@@ -90,8 +99,8 @@ first_unchecked_item() {
 }
 
 is_dirty() {
-  git diff --quiet --no-ext-diff && git diff --quiet --no-ext-diff --cached && return 1
-  return 0
+  # Treat untracked files as dirty as well.
+  [[ -n "$(git status --porcelain)" ]]
 }
 
 loop_status_section() {
@@ -153,6 +162,23 @@ commit_iteration_if_needed() {
   if [[ "$run_verify" -eq 1 ]]; then
     echo "Running verification: $verify_cmd"
     bash -lc "$verify_cmd"
+  fi
+
+  if [[ "$run_review" -eq 1 ]]; then
+    if [[ ! -x scripts/loop_review.sh ]]; then
+      echo "ERROR: scripts/loop_review.sh is not executable" >&2
+      return 1
+    fi
+
+    echo "Running review (pi):"
+    review_log_file="$(scripts/loop_review.sh --model "${PI_MODEL}" --thinking "${PI_THINKING}")"
+
+    if [[ "$require_review_lgtm" -eq 1 ]]; then
+      if ! grep -Eq '^Verdict:[[:space:]]*LGTM[[:space:]]*$' "$review_log_file"; then
+        echo "ERROR: review verdict is not LGTM (see $review_log_file). Refusing to commit." >&2
+        return 1
+      fi
+    fi
   fi
 
   stage_all_except_sensitive_logs
