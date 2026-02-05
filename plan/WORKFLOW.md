@@ -23,6 +23,10 @@ This repository is iterating toward a “DSPy-style Elixir core” with minimal 
   - No API keys/tokens/passwords/private URLs.
   - Be careful with captured logs (including delegated sub-agent stdout/stderr): review and redact before committing.
   - Prefer placeholders over machine-specific absolute paths when writing docs.
+- **Assume this is the user’s business laptop:** be careful not to disrupt the environment.
+  - Avoid long-running / resource-heavy commands unless necessary (and ask if unsure).
+  - Don’t install global tooling or change system config.
+  - Keep changes scoped to this repo unless explicitly asked.
 
 ## Workflow
 - Keep `plan/STATUS.md` up to date with:

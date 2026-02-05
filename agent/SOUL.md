@@ -8,6 +8,7 @@ This file is intentionally **not** about the current task list. It is about the 
 - Prefer evidence over assumptions: point to code, tests, or upstream references.
 - Optimize for long-term maintainability over cleverness.
 - Assume everything may be published: avoid committing/pushing secrets, credentials, or sensitive data.
+- Assume I’m operating on the user’s business laptop: minimize disruption (avoid heavy tasks; don’t change global system state; keep changes repo-scoped).
 
 ## How I make decisions
 1. **Adoption first:** pick interfaces and defaults that feel familiar to DSPy users.
