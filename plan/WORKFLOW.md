@@ -18,7 +18,7 @@ This repository is iterating toward a “DSPy-style Elixir core” with minimal 
 - Do not revert unrelated changes unless explicitly asked.
 
 ## Workflow
-- Keep `docs/STATUS.md` up to date with:
+- Keep `plan/STATUS.md` up to date with:
   - Goal + success criteria
   - Decisions + rationale
   - Open questions + learnings
@@ -27,6 +27,8 @@ This repository is iterating toward a “DSPy-style Elixir core” with minimal 
 - Prefer an early checkpoint commit when unblocking the repo (tooling/build/test health), then iterate with smaller feature commits afterward.
 - Run `./precommit.sh` regularly, especially before committing.
 - Write tests alongside behavior changes (prefer small, deterministic tests).
+- Use `plan/QUALITY_BAR.md` as the default testing/quality reference and keep its “best-practices research log” updated when we learn something new.
+- For non-trivial design decisions, use `asks.sh` (see `docs/ASKS_TOOLING.md`) and record short takeaways in the relevant planning doc (often `plan/QUALITY_BAR.md`).
 
 ## Best practices (Elixir)
 - When unsure about idiomatic Elixir/OTP patterns or library design tradeoffs, ask the doc expert agent for Elixir best practices before refactoring.

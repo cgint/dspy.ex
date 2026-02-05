@@ -1,0 +1,34 @@
+direction: down
+
+roadmap: {
+  label: "**DSPy-for-Elixir Strategic Roadmap**\n\nPort the core semantics of Python DSPy into an Elixir-native, testable library."
+
+  foundation: {
+    label: "**Foundation**\nreq_llm adapter + deterministic golden path"
+  }
+
+  core: {
+    label: "**Core API parity**\nSignature/Module/Predict/CoT\nPrompt + parsing semantics"
+  }
+
+  eval: {
+    label: "**Evaluation harness**\nmetrics + datasets\nreproducibility + parallel eval"
+  }
+
+  teleprompt: {
+    label: "**Teleprompting**\nBootstrapFewShot → COPRO/SIMBA → (later) MIPROv2"
+  }
+
+  parity: {
+    label: "**Upstream alignment loop**\nPin Python commit\nOracle tests for tricky semantics"
+  }
+
+  integrations: {
+    label: "**Optional integrations**\nJido v2 runner\nSeparate web UI/app"
+  }
+
+  foundation -> core -> eval -> teleprompt
+  core -> parity
+  teleprompt -> parity
+  parity -> integrations
+}

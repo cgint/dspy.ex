@@ -1,0 +1,27 @@
+direction: down
+
+loop: {
+  label: "**Quality loop (high bar, low hassle)**"
+
+  spec: {
+    label: "**Reference behavior**\nPython DSPy + dspy-intro examples"
+  }
+
+  tests: {
+    label: "**Deterministic tests**\nMockLM + ExUnit\n(acceptance + unit)"
+  }
+
+  implement: {
+    label: "**Implement / refactor**\nsmall, reversible steps"
+  }
+
+  verify: {
+    label: "**Verify**\nmix test + precommit\nno flaky tests"
+  }
+
+  maintain: {
+    label: "**Maintain**\nissues → minimal repro → test → fix"
+  }
+
+  spec -> tests -> implement -> verify -> maintain -> spec
+}

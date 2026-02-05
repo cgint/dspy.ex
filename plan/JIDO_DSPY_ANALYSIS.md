@@ -18,7 +18,7 @@ This document assumes **Jido v2** (currently published as `2.0.0-rc.1` on Hex: `
 
 ### Diagram: High-Level Overlap
 
-![Overlap Diagram](./overlap.svg)
+![Overlap Diagram](./diagrams/overlap.svg)
 
 ---
 
@@ -85,7 +85,7 @@ Key areas:
 
 ### Diagram: Unified Agent Architecture
 
-![Unified Architecture](./architecture.svg)
+![Unified Architecture](./diagrams/architecture.svg)
 
 ---
 
@@ -164,7 +164,7 @@ Given the maintainer is currently unresponsive, the best tactic is layering smal
 
 ## Diagram: Upstream vs Fork path
 
-![Maintainer paths](./maintainer_paths.svg)
+![Maintainer paths](./diagrams/maintainer_paths.svg)
 
 ### 6.5 If upstream doesn’t respond: fork considerations
 

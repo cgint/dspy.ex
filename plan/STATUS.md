@@ -1,6 +1,18 @@
 # Status
 
-Goal: Keep `dspy.ex` docs aligned with the Jido ecosystem reality (v2 on main branch; v1.x stable but headed toward deprecation) and converge on a maintainable foundation: **`req_llm` for provider access**, **optional Jido v2 for orchestration**.
+Goal: Build an **Elixir-native port** of upstream **Python DSPy** (`../dspy`) with a maintainable foundation: **`req_llm` for provider access**, **optional Jido v2 for orchestration**, and a **library-only** core.
+
+North star docs:
+- `AGENTS.md` (entry point)
+- `plan/NORTH_STAR.md`
+- `plan/RELEASE_MILESTONES.md`
+- `plan/INTERFACE_COMPATIBILITY.md`
+- `plan/PORTING_CHARTER.md`
+- `plan/STRATEGIC_ROADMAP_DSPY_PORT.md`
+- `plan/REFERENCE_DSPY_INTRO.md`
+- `plan/QUALITY_BAR.md`
+- `agent/MEMORY.md` (context window)
+- `agent/SOUL.md` (agent operating principles)
 
 Current health:
 - `mix test` passes, but only after adding missing dependencies needed by in-tree modules:
@@ -27,10 +39,12 @@ Execution checklist (iterate/commit-friendly):
 - [x] Make `Predict` expose `parameters/1` + `update_parameters/2` (teleprompt-friendly)
 - [x] Add deterministic `Predict` → `Evaluate` golden-path test with a mock LM
 - [x] Make `BootstrapFewShot` teleprompter run end-to-end (no dynamic modules) + add smoke test proving improvement
+- [ ] Add R0 acceptance tests derived from `/Users/cgint/dev/dspy-intro/src` (common workflows as specs)
+- [ ] Add “string signature” convenience (`Dspy.Predict.new("input -> output")`) to match Python DSPy usage
 - [ ] Revisit repo shape: relocate/gate `lib/dspy_web/*` + GenStage “godmode” modules into separate package/app
 
 Success criteria:
-- Docs in `docs/` clearly state that Jido integration targets **Jido v2** (`2.0.0-rc.1` on Hex) and that `../jido` is the main-branch checkout.
+- Planning docs in `plan/` clearly state that Jido integration targets **Jido v2** (`2.0.0-rc.1` on Hex) and that `../jido` is the main-branch checkout.
 - An implementation plan exists for sequencing DSPy-core vs Jido integration work.
 - `dspy.ex` remains library-only; any web UI lives in a separate package/app.
 - Low-level LLM provider access is delegated to `req_llm` via an adapter.
@@ -54,7 +68,7 @@ Learnings:
 Verification run:
 - `git status --porcelain`
 - `git diff --stat`
-- `rg -n "req_llm|ReqLLM|Jido v2|2.0.0-rc.1|../jido|v1.x" docs/*.md`
+- `rg -n "req_llm|ReqLLM|Jido v2|2.0.0-rc.1|../jido|v1.x" plan/*.md docs/*.md`
 - `mix deps.get`
 - `mix compile --warnings-as-errors`
 - `mix test`
@@ -66,7 +80,7 @@ Notes:
 
 ## Log
 
-- **2026-01-21**: Initialized `docs/INSTRUCTIONS.md` with guidelines on maintaining documentation. Added `Log` section to `docs/STATUS.md` to track project evolution.
+- **2026-01-21**: Initialized `plan/WORKFLOW.md` (originally `docs/INSTRUCTIONS.md`) with guidelines on maintaining documentation. Added `Log` section to `plan/STATUS.md` (originally `docs/STATUS.md`) to track project evolution.
 - **2026-01-21**: Unblocked compilation by adding missing deps/config for in-tree web modules; established “req_llm for providers, Jido v2 optional later”; added checklist to support small iterative commits.
 - **2026-01-21**: Made `mix compile --warnings-as-errors` + `./precommit.sh` pass; added a regression test for `Dspy.LM.generate/3` request-map normalization.
 - **2026-01-21**: Checkpointed current repo health so we can iterate in smaller, test-driven commits.

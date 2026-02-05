@@ -9,7 +9,7 @@ Success criteria:
 - Jido integration targets **Jido v2** (`2.0.0-rc.1`, main branch; local checkout at `../jido`) and remains optional.
 
 ## Diagram
-![Implementation Plan](./impl_plan.svg)
+![Implementation Plan](./diagrams/impl_plan.svg)
 
 ## Scope & principles
 

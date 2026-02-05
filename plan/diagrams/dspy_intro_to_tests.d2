@@ -1,0 +1,27 @@
+direction: down
+
+flow: {
+  label: "**Reference examples → acceptance specs → stable releases**"
+
+  python_examples: {
+    label: "**Python DSPy example suite**\n/Users/cgint/dev/dspy-intro/src"
+  }
+
+  extract: {
+    label: "**Extract intended behaviors**\n(common workflows + edge cases)"
+  }
+
+  elixir_tests: {
+    label: "**Elixir acceptance tests**\nExUnit + deterministic MockLM\n(prompt + parsing + module behavior)"
+  }
+
+  milestones: {
+    label: "**Release milestones**\nShip stable slices early\n(adoption-first)"
+  }
+
+  oss: {
+    label: "**Open-source adoption**\nusers feel at home\nlow maintenance burden"
+  }
+
+  python_examples -> extract -> elixir_tests -> milestones -> oss
+}

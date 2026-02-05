@@ -1,0 +1,7 @@
+# docs/
+
+This directory is intended for **classic documentation** (user-facing docs, technical references, integration notes).
+
+Planning / roadmap / status artifacts live in `plan/`.
+
+Start at the repo entry point: `AGENTS.md`.

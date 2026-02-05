@@ -16,7 +16,7 @@ i would actually NOT want to mix dspy.ex functionality and a web interface - jus
     mix.exs stays minimal and mix test doesn’t require Phoenix deps.
   - Keep Dspy.Settings (GenServer) only if you want global config in the library; otherwise consider a pure functional config approach later.
 
-  If you say “Go”, I’ll update docs/IMPL_PLAN.md to lock this decision in Phase 0 and then start the actual refactor to strip Phoenix from this repo into a separate
+  If you say “Go”, I’ll update plan/IMPL_PLAN.md to lock this decision in Phase 0 and then start the actual refactor to strip Phoenix from this repo into a separate
   package skeleton.
 
 
@@ -69,7 +69,7 @@ i would actually NOT want to mix dspy.ex functionality and a web interface - jus
   the default?
 
 • Edited 3 files (+25 -18)
-  └ docs/IMPL_PLAN.md (+15 -13)
+  └ plan/IMPL_PLAN.md (+15 -13)
      1 -# Implementation Plan: DSPy Core → Jido v2 Integration
      1 +# Implementation Plan: DSPy Core → `req_llm` → (Optional) Jido v2
      2
@@ -115,11 +115,11 @@ i would actually NOT want to mix dspy.ex functionality and a web interface - jus
     90 -
     92 +- Should `dspy.ex` ship only `Dspy.LM.ReqLLM`, or also keep other LM adapters as optional add-ons?
 
-  └ docs/STATUS.md (+5 -1)
+  └ plan/STATUS.md (+5 -1)
      7  - An implementation plan exists for sequencing DSPy-core vs Jido integration work.
      8 +- `dspy.ex` remains library-only; any web UI lives in a separate package/app.
      9 +- Low-level LLM provider access is delegated to `req_llm` via an adapter.
-  └ docs/impl_plan.d2 (+5 -4)
+  └ plan/diagrams/impl_plan.d2 (+5 -4)
      2
      3 -title: "DSPy Core → Jido v2 Integration"
      3 +title: "DSPy Core → req_llm → (Optional) Jido v2"
@@ -138,13 +138,12 @@ i would actually NOT want to mix dspy.ex functionality and a web interface - jus
     41  Phase2 -> Phase3: "once teleprompt loop works"
     40 -
 
-• Ran d2to.sh docs/impl_plan.d2 && rg -n "title: \"DSPy Core" docs/impl_plan.d2 && rg -n "Implementation Plan\]\(\./impl_plan\.svg\)" docs/
-  │ IMPL_PLAN.md && git status --porcelain
+• Ran d2to.sh plan/diagrams/impl_plan.d2 && rg -n "title: \"DSPy Core" plan/diagrams/impl_plan.d2 && rg -n "Implementation Plan\]\(\./diagrams/impl_plan\.svg\)" plan/IMPL_PLAN.md && git status --porcelain
   └ Generating D2 diagram...
-      Input:  /Users/cgint/dev-external/dspy.ex/docs/impl_plan.d2
+      Input:  /Users/cgint/dev-external/dspy.ex/plan/diagrams/impl_plan.d2
     … +11 lines
-    ?? docs/impl_plan.d2
-    ?? docs/impl_plan.svg
+    ?? plan/diagrams/impl_plan.d2
+    ?? plan/diagrams/impl_plan.svg
 
 ─────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
 
@@ -174,12 +173,12 @@ i would actually NOT want to mix dspy.ex functionality and a web interface - jus
   - Keep a low-level escape hatch only inside the adapter (so advanced users can pass through provider-specific knobs without dspy.ex learning provider quirks).
   - Prefer making dspy.ex’s internal LM request/response shape map cleanly onto ReqLLM’s “OpenAI Chat Completions baseline” to avoid adapter churn.
 
-  If you want, I can update docs/IMPL_PLAN.md:1 to explicitly adopt ReqLLM’s two-layer architecture: “high-level default, low-level optional”, and adjust Phase 1 tasks
+  If you want, I can update plan/IMPL_PLAN.md:1 to explicitly adopt ReqLLM’s two-layer architecture: “high-level default, low-level optional”, and adjust Phase 1 tasks
   accordingly.
 › update plan
 
 
-• Edited docs/IMPL_PLAN.md (+5 -0)
+• Edited plan/IMPL_PLAN.md (+5 -0)
     18  - Do not maintain vendor-specific LLM HTTP APIs in `dspy.ex`; use `req_llm`.
     19 +- Follow `req_llm`’s two-layer model:
     20 +  - **High-level API (default):** use unified functions (e.g. text generation + streaming) with standardized requests/responses.
@@ -191,15 +190,15 @@ i would actually NOT want to mix dspy.ex functionality and a web interface - jus
     46 +  - Keep a documented **escape hatch** for `req_llm` low-level Req plugin usage when needed (without leaking provider specifics into core DSPy modules).
     47  - Make “optimizable program state” explicit:
 
-• Ran rg -n "two-layer|High-level API|Low-level API" docs/IMPL_PLAN.md && git status --porcelain
+• Ran rg -n "two-layer|High-level API|Low-level API" plan/IMPL_PLAN.md && git status --porcelain
   └ 19:- Follow `req_llm`’s two-layer model:
     20:  - **High-level API (default):** use unified functions (e.g. text generation + streaming) with standardized requests/responses.
     … +3 lines
-    ?? docs/impl_plan.d2
-    ?? docs/impl_plan.svg
+    ?? plan/diagrams/impl_plan.d2
+    ?? plan/diagrams/impl_plan.svg
 
 ─ Worked for 13s ──────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
-• Updated docs/IMPL_PLAN.md:19 to explicitly adopt req_llm’s two-layer architecture (high-level API by default, low-level Req-plugin escape hatch contained to the
+• Updated plan/IMPL_PLAN.md:19 to explicitly adopt req_llm’s two-layer architecture (high-level API by default, low-level Req-plugin escape hatch contained to the
   adapter), and refined Phase 1 adapter tasks accordingly.
 
 
@@ -241,7 +240,7 @@ i would actually NOT want to mix dspy.ex functionality and a web interface - jus
   - Best “maintain less” split: keep dspy.ex as a clean library (maybe with a tiny Dspy.Settings GenServer), and build dspy_jido on top where Jido manages execution of
     Evaluate/teleprompt jobs and streams progress—without making the DSPy core depend on Jido.
 
-  If you want, I can update docs/IMPL_PLAN.md Phase 3 to explicitly say: “Jido layer owns run orchestration/progress/cancellation; DSPy core owns semantics and stays
+  If you want, I can update plan/IMPL_PLAN.md Phase 3 to explicitly say: “Jido layer owns run orchestration/progress/cancellation; DSPy core owns semantics and stays
   dependency-light.”
 
 
