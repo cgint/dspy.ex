@@ -55,9 +55,12 @@ Rules:
 - Always run the smallest relevant verification (often `mix test`, and periodically `./precommit.sh`).
 - Keep evidence in `plan/STATUS.md` so a restart can resume quickly.
 
-## (Optional) Tooling to add later
-If useful, we can add a repo-local `scripts/loop_resume.sh` similar in spirit to the other repo, but implemented around `pi` (not Codex) and designed to:
-- cap iterations per run
-- detect pause signal in `plan/STATUS.md`
-- capture logs to `plan/research/loop_resume/`
-- auto-commit only when evidence + verification is present
+## Tooling in this repo
+We provide repo-local scripts to operationalize the loop:
+- `scripts/loop_steer.sh`: outer-loop steering (refresh backlog in `plan/STATUS.md` via non-interactive `pi`).
+- `scripts/loop_worker.sh`: inner-loop worker (execute the first unchecked backlog item via `pi`, capture logs, optionally verify + commit).
+
+Both scripts enforce:
+- no Gemini models
+- no Codex
+- no auto-committing of logs/sessions

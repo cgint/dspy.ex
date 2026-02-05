@@ -23,3 +23,7 @@ dspy-*.tar
 /tmp/
 
 python_dspy_source/
+
+# Local automation artifacts (do not commit; may contain sensitive logs)
+/plan/research/loop_resume/
+/plan/research/pi_sessions/
