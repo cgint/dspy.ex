@@ -8,7 +8,8 @@ This repository is being developed as an **Elixir-native port** of the upstream 
 3. `plan/INTERFACE_COMPATIBILITY.md` — explicit mapping to Python DSPy and DSPex-snakepit.
 4. `plan/REFERENCE_DSPY_INTRO.md` — reference Python example suite → acceptance test candidates.
 5. `plan/STATUS.md` — the current heartbeat (health, decisions, next tasks, verification).
-6. `plan/QUALITY_BAR.md` — quality bar + testing principles (tests as specification).
+6. `plan/ITERATION_LOOPS.md` — how we keep iterating safely (outer loop + delegated inner loop).
+7. `plan/QUALITY_BAR.md` — quality bar + testing principles (tests as specification).
 7. `plan/PORTING_CHARTER.md` — scope + operating agreement for how we work.
 8. `agent/MEMORY.md` — compact context window (decisions + “how to resume quickly”).
 9. `agent/SOUL.md` — the assistant’s stable operating principles and learned habits.

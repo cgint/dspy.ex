@@ -1,0 +1,34 @@
+direction: down
+
+loops: {
+  label: "**Iteration model: Outer loop + Inner loop**"
+
+  outer: {
+    label: "**Outer loop (this agent)**\n- Check NORTH_STAR\n- Pick next backlog items\n- Detect metric-tricking/workarounds\n- Decide handshake items"
+    style.fill: "#EFF6FF"
+  }
+
+  backlog: {
+    label: "**Backlog + state (plan/STATUS.md)**\n- Ordered tasks\n- Evidence links\n- Loop state: ACTIVE/PAUSED"
+    style.fill: "#F3F4F6"
+  }
+
+  inner: {
+    label: "**Inner loop (delegated)**\nMechanical tasks\nRun via: pi … -p \"<task>\"\nCapture logs"
+    style.fill: "#ECFDF5"
+  }
+
+  review: {
+    label: "**Review + integrate**\n- Verify (mix test / precommit)\n- Small atomic commits\n- Update STATUS evidence"
+    style.fill: "#FFF7ED"
+  }
+
+  stop: {
+    label: "**Stop / pause**\nWhen backlog empty\nor handshake needed"
+    style.fill: "#FEE2E2"
+  }
+
+  outer -> backlog -> inner -> review -> backlog
+  backlog -> stop: "no unchecked items"
+  stop -> outer: "new backlog"
+}
