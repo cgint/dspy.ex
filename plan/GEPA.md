@@ -36,11 +36,12 @@
 A minimal GEPA “spec suite” should include:
 1. **Contract tests** (cheap):
    - `new/1` requires `:metric`.
-   - `compile/3` returns a structured error until fully implemented.
+   - `compile/3` returns `{:ok, program}` (baseline) when no candidates are provided.
 2. **Toy improvement test** (the real acceptance signal):
-   - A dataset where varying instructions/examples changes outcome.
+   - A dataset where varying instructions changes outcome (mock LM).
    - Baseline program scores < 1.0.
    - GEPA-optimized program scores higher with a fixed seed.
+   - Evidence target: `test/teleprompt/gepa_improvement_test.exs`
 
 ## Non-goals (for now)
 - Exact parity with upstream GEPA internals.

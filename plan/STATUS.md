@@ -21,7 +21,8 @@ North star docs:
   - [x] R0 acceptance tests: port `simplest/simplest_dspy_with_signature_onefile.py` behavior (JSON-ish structured output expectations)
   - [x] Add string-signature convenience: `Dspy.Predict.new("input -> output")`
   - [x] Add GEPA to the teleprompter roadmap (spec + tests) and de-emphasize Jido in planning docs
-  - [ ] Next: GEPA toy improvement acceptance test (baseline < optimized with seed)
+  - [x] Next: GEPA toy improvement acceptance test (baseline < optimized with seed)
+  - [ ] Next: decide whether to refactor legacy teleprompters away from dynamic modules
 - Evidence:
   - Evidence file: `test/acceptance/simplest_predict_test.exs`
   - Evidence file: `test/acceptance/json_outputs_acceptance_test.exs`
@@ -30,8 +31,9 @@ North star docs:
   - Evidence file: `plan/GEPA.md`
   - Evidence file: `plan/diagrams/gepa_flow.d2`
   - Evidence file: `plan/diagrams/gepa_flow.svg`
-  - Evidence file: `lib/dspy/teleprompt/gepa.ex` (interface stub)
+  - Evidence file: `lib/dspy/teleprompt/gepa.ex` (toy GEPA implementation)
   - Evidence file: `test/teleprompt/gepa_test.exs` (contract tests)
+  - Evidence file: `test/teleprompt/gepa_improvement_test.exs` (toy improvement acceptance)
   - Verification: `mix test`
 
 Current health:

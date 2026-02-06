@@ -9,12 +9,11 @@ defmodule Dspy.Teleprompt.GEPATest do
     end
   end
 
-  test "compile/3 is a stub until implementation lands" do
-    tp = GEPA.new(metric: fn _ex, _pred -> 0.0 end, seed: 123)
+  test "compile/3 returns the baseline program if no candidates are provided" do
+    tp = GEPA.new(metric: fn _ex, _pred -> 0.0 end, seed: 123, candidates: [])
 
     program = Dspy.Predict.new("q -> a")
 
-    assert {:error, :not_implemented} =
-             GEPA.compile(tp, program, [Dspy.Example.new(%{q: "x"})])
+    assert {:ok, ^program} = GEPA.compile(tp, program, [Dspy.Example.new(%{q: "x"})])
   end
 end
