@@ -20,12 +20,18 @@ North star docs:
   - [x] R0 acceptance tests: port `simplest/simplest_dspy.py` behavior into `test/acceptance/*`
   - [x] R0 acceptance tests: port `simplest/simplest_dspy_with_signature_onefile.py` behavior (JSON-ish structured output expectations)
   - [x] Add string-signature convenience: `Dspy.Predict.new("input -> output")`
-  - [ ] Add GEPA to the teleprompter roadmap (spec + tests) and de-emphasize Jido in planning docs
+  - [x] Add GEPA to the teleprompter roadmap (spec + tests) and de-emphasize Jido in planning docs
+  - [ ] Next: GEPA toy improvement acceptance test (baseline < optimized with seed)
 - Evidence:
   - Evidence file: `test/acceptance/simplest_predict_test.exs`
   - Evidence file: `test/acceptance/json_outputs_acceptance_test.exs`
   - Evidence file: `lib/dspy/signature.ex` (arrow signatures + `int`/`:integer` parsing)
   - Evidence file: `lib/dspy/predict.ex` (accept string signatures)
+  - Evidence file: `plan/GEPA.md`
+  - Evidence file: `plan/diagrams/gepa_flow.d2`
+  - Evidence file: `plan/diagrams/gepa_flow.svg`
+  - Evidence file: `lib/dspy/teleprompt/gepa.ex` (interface stub)
+  - Evidence file: `test/teleprompt/gepa_test.exs` (contract tests)
   - Verification: `mix test`
 
 Current health:
@@ -37,6 +43,7 @@ Current health:
 - This is a **temporary “unblock compilation”** move; we still intend `dspy.ex` to be library-first and may relocate/gate web concerns later.
 
 Execution checklist (iterate/commit-friendly):
+- Loop automation now includes an LLM review gate before commits (see `scripts/loop_review.sh`).
 - [x] Document “Jido v2 exists but not yet” + local checkout at `../jido`
 - [x] Decide provider layer: `req_llm` (no in-house provider maintenance)
 - [x] Keep web UI out of DSPy core (separate package/app later)
@@ -53,7 +60,7 @@ Execution checklist (iterate/commit-friendly):
 - [x] Make `Predict` expose `parameters/1` + `update_parameters/2` (teleprompt-friendly)
 - [x] Add deterministic `Predict` → `Evaluate` golden-path test with a mock LM
 - [x] Make `BootstrapFewShot` teleprompter run end-to-end (no dynamic modules) + add smoke test proving improvement
-- [ ] Add R0 acceptance tests derived from `/Users/cgint/dev/dspy-intro/src` (common workflows as specs)
+- [ ] Add R0 acceptance tests derived from the external `dspy-intro` workflow suite (see `plan/REFERENCE_DSPY_INTRO.md`)
 - [ ] Add “string signature” convenience (`Dspy.Predict.new("input -> output")`) to match Python DSPy usage
 - [ ] Revisit repo shape: relocate/gate `lib/dspy_web/*` + GenStage “godmode” modules into separate package/app
 

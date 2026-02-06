@@ -16,29 +16,28 @@ defmodule Dspy.Teleprompt do
   - `MIPROv2` - Multi-stage instruction prompt optimization
   - `SIMBA` - Stochastic iterative mini-batch ascent
   - `Ensemble` - Program ensemble optimization
+  - `GEPA` - (Planned) teleprompter; roadmap/spec-first
 
   ## Usage
 
       alias Dspy.Teleprompt.BootstrapFewShot
       
       teleprompt = BootstrapFewShot.new(metric: my_metric, max_bootstrapped_demos: 4)
-      {:ok, optimized_program} = BootstrapFewShot.compile(teleprompt, my_program, trainset)
+      program = Dspy.Predict.new("question -> answer")
+      {:ok, optimized_program} = BootstrapFewShot.compile(teleprompt, program, trainset)
 
   """
 
   alias Dspy.Example
-  alias Dspy.Teleprompt.{LabeledFewShot, BootstrapFewShot, COPRO, MIPROv2, SIMBA, Ensemble}
+  alias Dspy.Teleprompt.{LabeledFewShot, BootstrapFewShot, COPRO, MIPROv2, SIMBA, Ensemble, GEPA}
 
-  @type teleprompt_config :: [
-          metric: (map() -> number()),
-          max_bootstrapped_demos: pos_integer(),
-          max_labeled_demos: pos_integer(),
-          max_rounds: pos_integer(),
-          num_threads: pos_integer(),
-          teacher: module()
-        ]
+  @type metric_fun :: (Example.t() -> number()) | (Example.t(), Dspy.Prediction.t() -> number())
 
-  @type compile_result :: {:ok, module()} | {:error, term()}
+  @type teleprompt_config :: Keyword.t()
+
+  @type program_t :: module() | struct()
+
+  @type compile_result :: {:ok, program_t()} | {:error, term()}
 
   @doc """
   Behaviour for all teleprompt optimizers.
@@ -47,7 +46,7 @@ defmodule Dspy.Teleprompt do
   - `compile/3` - Optimize a program given training data
   - `new/1` - Create teleprompt instance with configuration
   """
-  @callback compile(teleprompt :: struct(), program :: module(), trainset :: list(Example.t())) ::
+  @callback compile(teleprompt :: struct(), program :: program_t(), trainset :: list(Example.t())) ::
               compile_result()
   @callback new(opts :: teleprompt_config()) :: struct()
 
@@ -73,6 +72,7 @@ defmodule Dspy.Teleprompt do
   def new(:mipro_v2, opts), do: MIPROv2.new(opts)
   def new(:simba, opts), do: SIMBA.new(opts)
   def new(:ensemble, opts), do: Ensemble.new(opts)
+  def new(:gepa, opts), do: GEPA.new(opts)
   def new(type, _opts), do: raise(ArgumentError, "Unknown teleprompt type: #{type}")
 
   @doc """
@@ -81,7 +81,7 @@ defmodule Dspy.Teleprompt do
   ## Parameters
 
   - `teleprompt` - Teleprompt optimizer instance
-  - `program` - DSPy program module to optimize
+  - `program` - DSPy program to optimize (typically a struct implementing `Dspy.Module`)
   - `trainset` - List of training examples
 
   ## Returns
@@ -89,7 +89,7 @@ defmodule Dspy.Teleprompt do
   `{:ok, optimized_program}` or `{:error, reason}`
 
   """
-  @spec compile(struct(), module(), list(Example.t())) :: compile_result()
+  @spec compile(struct(), program_t(), list(Example.t())) :: compile_result()
   def compile(%LabeledFewShot{} = tp, program, trainset),
     do: LabeledFewShot.compile(tp, program, trainset)
 
@@ -100,6 +100,7 @@ defmodule Dspy.Teleprompt do
   def compile(%MIPROv2{} = tp, program, trainset), do: MIPROv2.compile(tp, program, trainset)
   def compile(%SIMBA{} = tp, program, trainset), do: SIMBA.compile(tp, program, trainset)
   def compile(%Ensemble{} = tp, program, trainset), do: Ensemble.compile(tp, program, trainset)
+  def compile(%GEPA{} = tp, program, trainset), do: GEPA.compile(tp, program, trainset)
   def compile(tp, _program, _trainset), do: {:error, "Unknown teleprompt type: #{inspect(tp)}"}
 
   @doc """
@@ -145,7 +146,7 @@ defmodule Dspy.Teleprompt do
   Numeric score or `:error`
 
   """
-  @spec run_metric(function(), Example.t(), Prediction.t()) :: number() | :error
+  @spec run_metric(metric_fun(), Example.t(), Dspy.Prediction.t()) :: number() | :error
   def run_metric(metric, example, prediction) when is_function(metric, 2) do
     try do
       score = metric.(example, prediction)

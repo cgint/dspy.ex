@@ -149,7 +149,7 @@ defmodule Dspy.Teleprompt.MIPROv2 do
 
   """
   @impl Dspy.Teleprompt
-  @spec compile(t(), module(), list(Example.t())) :: {:ok, module()} | {:error, term()}
+  @spec compile(t(), Dspy.Teleprompt.program_t(), list(Example.t())) :: Dspy.Teleprompt.compile_result()
   def compile(%__MODULE__{} = teleprompt, program, trainset) do
     if teleprompt.verbose do
       IO.puts("Starting MIPROv2 optimization (#{teleprompt.auto} intensity)...")

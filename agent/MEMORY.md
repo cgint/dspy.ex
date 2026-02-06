@@ -14,8 +14,9 @@
 
 ## Current big decisions (so far)
 - Provider layer: use **`req_llm`** via an adapter (`Dspy.LM.ReqLLM`), avoid maintaining provider-specific HTTP quirks in core.
-- Orchestration: Jido v2 is valuable but should remain an **optional integration layer**, not a hard dependency of core.
+- Orchestration: **deferred for now** (no Jido integration work until core + teleprompters are solid).
 - Keep web UI separate (or gated); don’t let Phoenix/LiveView concerns define core.
+- Teleprompting: prioritize real optimizer value (**GEPA priority**).
 
 ## Upstream reference
 - Upstream repo path: `../dspy`
@@ -40,3 +41,5 @@
 ## Verification habits
 - Prefer small changes that keep `mix test` green.
 - Add a failing test first (TDD) for behavior changes.
+- When tests touch global DSPy settings, always snapshot+restore (`Dspy.TestSupport.restore_settings_on_exit/0` in `test/test_helper.exs`).
+- Loop automation uses a review gate (`scripts/loop_review.sh`) before committing.

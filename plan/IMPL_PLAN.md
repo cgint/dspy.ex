@@ -60,7 +60,7 @@ Deliverable:
 Goal: A teleprompter that measurably improves performance, using an Elixir-native candidate representation.
 
 Pick order (subject to adjustment as we learn):
-1. **GEPA**
+1. **GEPA** (see `plan/GEPA.md`)
 2. **BootstrapFewShot** (foundational)
 3. **COPRO** or **SIMBA**
 4. **MIPROv2** (later; depends on more moving parts)

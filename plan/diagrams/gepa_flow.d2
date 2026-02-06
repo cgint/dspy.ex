@@ -1,0 +1,37 @@
+direction: down
+
+GEPA: {
+  label: "**GEPA teleprompter (roadmap)**"
+
+  Inputs: {
+    label: "**Inputs**"
+    "program (student)"
+    "trainset"
+    "metric"
+    "seed"
+  }
+
+  Baseline: {
+    label: "**Baseline eval**"
+    "Evaluate(student, trainset)"
+  }
+
+  Search: {
+    label: "**Search / propose candidates**"
+    "mutate parameters via update_parameters/2"
+    "score candidates"
+  }
+
+  Select: {
+    label: "**Select best**"
+    "choose highest score"
+  }
+
+  Output: {
+    label: "**Output**"
+    "optimized program"
+    "evidence: tests + reproducible score"
+  }
+
+  Inputs -> Baseline -> Search -> Select -> Output
+}

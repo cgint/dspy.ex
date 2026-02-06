@@ -114,7 +114,7 @@ defmodule Dspy.Teleprompt.BootstrapFewShot do
 
   """
   @impl Dspy.Teleprompt
-  @spec compile(t(), any(), list(Example.t())) :: {:ok, any()} | {:error, term()}
+  @spec compile(t(), Dspy.Teleprompt.program_t(), list(Example.t())) :: Dspy.Teleprompt.compile_result()
   def compile(%__MODULE__{} = teleprompt, student, trainset) do
     IO.puts("Starting BootstrapFewShot compilation...")
 
