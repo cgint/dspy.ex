@@ -4,14 +4,16 @@ defmodule Dspy.Acceptance.JsonOutputsAcceptanceTest do
   defmodule JokeWithRatingSignature do
     use Dspy.Signature
 
-    signature_description "Write a short joke about the provided name and rate its funnyness."
+    signature_description("Write a short joke about the provided name and rate its funnyness.")
 
-    signature_instructions "Return your final outputs as a JSON object with keys: joke, funnyness_0_to_10."
+    signature_instructions(
+      "Return your final outputs as a JSON object with keys: joke, funnyness_0_to_10."
+    )
 
-    input_field :name, :string, "Name to write a joke about"
+    input_field(:name, :string, "Name to write a joke about")
 
-    output_field :joke, :string, "joke text"
-    output_field :funnyness_0_to_10, :integer, "funnyness rating from 0 to 10"
+    output_field(:joke, :string, "joke text")
+    output_field(:funnyness_0_to_10, :integer, "funnyness rating from 0 to 10")
   end
 
   defmodule JsonMockLM do

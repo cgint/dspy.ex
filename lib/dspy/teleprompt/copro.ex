@@ -113,7 +113,8 @@ defmodule Dspy.Teleprompt.COPRO do
 
   """
   @impl Dspy.Teleprompt
-  @spec compile(t(), Dspy.Teleprompt.program_t(), list(Example.t())) :: Dspy.Teleprompt.compile_result()
+  @spec compile(t(), Dspy.Teleprompt.program_t(), list(Example.t())) ::
+          Dspy.Teleprompt.compile_result()
   def compile(%__MODULE__{} = teleprompt, program, trainset) do
     if teleprompt.verbose do
       IO.puts("Starting COPRO optimization...")

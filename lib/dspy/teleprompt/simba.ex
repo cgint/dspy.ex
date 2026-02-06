@@ -138,7 +138,8 @@ defmodule Dspy.Teleprompt.SIMBA do
 
   """
   @impl Dspy.Teleprompt
-  @spec compile(t(), Dspy.Teleprompt.program_t(), list(Example.t())) :: Dspy.Teleprompt.compile_result()
+  @spec compile(t(), Dspy.Teleprompt.program_t(), list(Example.t())) ::
+          Dspy.Teleprompt.compile_result()
   def compile(%__MODULE__{} = teleprompt, student, trainset) do
     if teleprompt.verbose do
       IO.puts("Starting SIMBA optimization with #{teleprompt.max_steps} steps...")

@@ -75,7 +75,8 @@ defmodule Dspy.Teleprompt.LabeledFewShot do
 
   """
   @impl Dspy.Teleprompt
-  @spec compile(t(), Dspy.Teleprompt.program_t(), list(Example.t())) :: Dspy.Teleprompt.compile_result()
+  @spec compile(t(), Dspy.Teleprompt.program_t(), list(Example.t())) ::
+          Dspy.Teleprompt.compile_result()
   def compile(%__MODULE__{} = teleprompt, program, trainset) do
     with {:ok, validated_trainset} <- Trainset.validate(trainset),
          {:ok, selected_examples} <- select_examples(teleprompt, validated_trainset) do

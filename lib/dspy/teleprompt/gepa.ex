@@ -42,7 +42,8 @@ defmodule Dspy.Teleprompt.GEPA do
   end
 
   @impl Dspy.Teleprompt
-  @spec compile(t(), Dspy.Teleprompt.program_t(), list(Example.t())) :: Dspy.Teleprompt.compile_result()
+  @spec compile(t(), Dspy.Teleprompt.program_t(), list(Example.t())) ::
+          Dspy.Teleprompt.compile_result()
   def compile(%__MODULE__{}, _program, _trainset) do
     {:error, :not_implemented}
   end
