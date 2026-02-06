@@ -23,7 +23,7 @@
 - Pinned commit recorded in `plan/PORTING_CHARTER.md` and `plan/STRATEGIC_ROADMAP_DSPY_PORT.md`.
 
 ## Reference example suite (acceptance specs)
-- Python examples path: `/Users/cgint/dev/dspy-intro/src`
+- Python examples path (local, user-specific): `/Users/cgint/dev/dspy-intro/src`
 - Planning doc: `plan/REFERENCE_DSPY_INTRO.md`
 
 ## Repo navigation tips
@@ -43,3 +43,9 @@
 - Add a failing test first (TDD) for behavior changes.
 - When tests touch global DSPy settings, always snapshot+restore (`Dspy.TestSupport.restore_settings_on_exit/0` in `test/test_helper.exs`).
 - Loop automation uses a review gate (`scripts/loop_review.sh`) before committing.
+
+## Recent progress snapshot
+- R0 acceptance tests added for the `dspy-intro` "simplest" flows.
+- GEPA now exists as a **toy instruction-search teleprompter** with deterministic tests:
+  - `test/teleprompt/gepa_improvement_test.exs`
+- Known technical debt: some legacy teleprompters still create dynamic modules; long-term direction is to optimize via `parameters/1` + `update_parameters/2` (no dynamic modules).
