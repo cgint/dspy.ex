@@ -152,7 +152,7 @@ stage_all_except_sensitive_logs() {
 
   while IFS= read -r f; do
     case "$f" in
-      lib/*|test/*|plan/*|scripts/*|docs/*|openspec/*|mix.exs|mix.lock|README.md|AGENTS.md)
+      lib/*|test/*|scripts/*|docs/*|openspec/*|mix.exs|mix.lock|README.md|AGENTS.md|plan/*.md|plan/diagrams/*)
         safe+=("$f")
         ;;
       *)
@@ -170,6 +170,7 @@ stage_all_except_sensitive_logs() {
 
 commit_iteration_if_needed() {
   local iter="$1"
+  local item="$2"
   [[ "$do_commit" -eq 1 ]] || return 0
 
   if ! is_dirty; then
@@ -204,7 +205,17 @@ commit_iteration_if_needed() {
     fi
   fi
 
-  git commit -m "loop: ${iter}"
+  # Commit message uses a short slug of the backlog item for scanability.
+  slug="$(printf '%s' "$item" \
+    | tr '[:upper:]' '[:lower:]' \
+    | sed -E 's/`//g; s/[^a-z0-9]+/-/g; s/^-+|-+$//g; s/-+/-/g' \
+    | cut -c1-72)"
+
+  if [[ -z "$slug" ]]; then
+    slug="$iter"
+  fi
+
+  git commit -m "loop: ${slug}"
 }
 
 for ((i=1; i<=max_iters; i++)); do
@@ -248,7 +259,7 @@ PROMPT
   # Delegate via pi; capture output.
   ( pi_print @AGENTS.md @plan/WORKFLOW.md @plan/STATUS.md "$prompt" ) 2>&1 | tee "$log_file"
 
-  commit_iteration_if_needed "$i"
+  commit_iteration_if_needed "$i" "$item"
 
 done
 

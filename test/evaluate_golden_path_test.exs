@@ -28,12 +28,7 @@ defmodule DspyEvaluateGoldenPathTest do
   end
 
   setup do
-    prev_settings = Dspy.Settings.get()
-
-    on_exit(fn ->
-      Dspy.Settings.configure(Map.from_struct(prev_settings))
-    end)
-
+    Dspy.TestSupport.restore_settings_on_exit()
     Dspy.configure(lm: %MockLM{})
     :ok
   end

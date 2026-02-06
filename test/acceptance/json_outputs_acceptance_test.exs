@@ -50,13 +50,7 @@ defmodule Dspy.Acceptance.JsonOutputsAcceptanceTest do
   end
 
   setup do
-    prev_settings = Dspy.Settings.get()
-
-    on_exit(fn ->
-      # Restore global settings to avoid cross-test coupling.
-      Dspy.Settings.configure(Map.from_struct(prev_settings))
-    end)
-
+    Dspy.TestSupport.restore_settings_on_exit()
     Dspy.configure(lm: %JsonMockLM{pid: self()})
     :ok
   end

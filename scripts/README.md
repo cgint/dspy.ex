@@ -19,3 +19,4 @@ Model policy:
 Review gate:
 - By default, `loop_worker.sh` runs `loop_review.sh` before committing and requires `Verdict: LGTM`.
 - Override with `--no-review` or `--no-require-review-lgtm`.
+- Commits are titled with a short slug of the first unchecked backlog item (for easy scanning).
