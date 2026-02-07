@@ -5,3 +5,5 @@ This directory is intended for **classic documentation** (user-facing docs, tech
 Planning / roadmap / status artifacts live in `plan/`.
 
 Start at the repo entry point: `AGENTS.md`.
+
+Human-friendly overview (what works today + ways ahead): `docs/OVERVIEW.md`.

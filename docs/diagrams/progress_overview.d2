@@ -1,0 +1,26 @@
+direction: down
+
+ref: {
+  label: "**Reference workflows**\n(dspy-intro/src/*)"
+}
+
+test: {
+  label: "**Deterministic acceptance tests**\n(test/acceptance/*)"
+}
+
+impl: {
+  label: "**Implementation**\n(lib/dspy/*)"
+}
+
+verify: {
+  label: "**Verification**\n(mix test)"
+}
+
+docs: {
+  label: "**Human overview**\n(docs/OVERVIEW.md tables + examples)"
+}
+
+ref -> test: "derive" 
+test -> impl: "drive" 
+impl -> verify: "run" 
+verify -> docs: "update evidence links" 

@@ -1,0 +1,114 @@
+# Overview (what works today + ways ahead)
+
+## Diagram
+
+![Progress loop: reference 5 acceptance tests 5 implementation 5 docs](./diagrams/progress_overview.svg)
+
+## What you can do today (proven, deterministic)
+
+The items below are backed by deterministic tests (offline, using mock LMs).
+
+### 1) Predict with arrow signatures + typed outputs
+
+Arrow signatures are supported, including `int`/`integer` normalization.
+
+```elixir
+Dspy.configure(lm: %MyMockLM{})
+
+joker = Dspy.Predict.new("name -> joke")
+{:ok, joke_pred} = Dspy.Module.forward(joker, %{name: "John"})
+
+score = Dspy.Predict.new("joke -> funnyness_0_to_10: int")
+{:ok, score_pred} = Dspy.Module.forward(score, %{joke: joke_pred.attrs.joke})
+
+score_pred.attrs.funnyness_0_to_10 #=> 7
+```
+
+Proof: `test/acceptance/simplest_predict_test.exs`
+
+### 2) Structured JSON outputs (JSON-in-markdown-fences parsing)
+
+If the LM returns outputs as a JSON object (e.g. in ```json fences), DSPex will parse and coerce to signature output field types.
+
+```elixir
+defmodule JokeWithRating do
+  use Dspy.Signature
+
+  signature_instructions("Return outputs as JSON with keys: joke, funnyness_0_to_10.")
+
+  input_field(:name, :string, "Name")
+  output_field(:joke, :string, "joke")
+  output_field(:funnyness_0_to_10, :integer, "0..10")
+end
+
+Dspy.configure(lm: %JsonMockLM{})
+
+predict = Dspy.Predict.new(JokeWithRating)
+{:ok, pred} = Dspy.Module.forward(predict, %{name: "John"})
+
+pred.attrs.funnyness_0_to_10 #=> 7
+```
+
+Proof: `test/acceptance/json_outputs_acceptance_test.exs`
+
+### 3) Evaluate (golden path)
+
+A simple `Predict 5 Evaluate` loop runs deterministically (when you set `num_threads: 1` and use a mock LM).
+
+Proof: `test/evaluate_golden_path_test.exs`
+
+### 4) Teleprompters/optimizers (Predict-only, parameter-based; no dynamic modules)
+
+These teleprompters currently optimize **`%Dspy.Predict{}`** programs by updating optimizable parameters (e.g. `"predict.instructions"`, `"predict.examples"`). They **do not** generate new runtime modules.
+
+- `Dspy.Teleprompt.LabeledFewShot` (sets `predict.examples`)
+  - Proof: `test/teleprompt/labeled_few_shot_improvement_test.exs`
+- `Dspy.Teleprompt.GEPA` (toy deterministic optimizer)
+  - Proof: `test/teleprompt/gepa_test.exs`, `test/teleprompt/gepa_improvement_test.exs`
+
+## Workflow parity vs `dspy-intro/src` (high-level)
+
+Legend:
+- **0** not started
+- **1** primitives exist, no end-to-end acceptance test
+- **2** deterministic acceptance test passes (offline)
+- **3** documented + ergonomic + stable contracts
+
+> Note: a folder can be partially covered; the Current column is about **end-to-end parity for the folders primary workflow**.
+
+| `dspy-intro/src` area | Current | What is already covered here | Evidence |
+|---|---:|---|---|
+| `simplest/` | **2** | Predict + arrow signatures + int parsing; JSON fenced outputs parsing | `test/acceptance/simplest_predict_test.exs`, `test/acceptance/json_outputs_acceptance_test.exs` |
+| `classifier_credentials/` | 0 | (not ported yet) |  |
+| `knowledge_graph/` | 1 | Building blocks exist: JSON outputs + Evaluate + teleprompters | (no KG acceptance test yet) |
+| `text_component_extract/` | 1 | LabeledFewShot loop works (Predict-only); structured extraction primitives exist | `test/teleprompt/labeled_few_shot_improvement_test.exs` |
+
+## Implementation maturity (adoptability)
+
+| Subsystem | Level | Notes | Evidence |
+|---|---:|---|---|
+| Signatures (incl. arrow strings) | 2 | Arrow parsing + `int` normalization covered | `test/acceptance/simplest_predict_test.exs`, `test/signature_test.exs` |
+| Structured output parsing (JSON-ish) | 2 | JSON fenced output parsing + coercion | `test/acceptance/json_outputs_acceptance_test.exs` |
+| Evaluate | 2 | Deterministic golden path proven | `test/evaluate_golden_path_test.exs` |
+| Teleprompters | 2 | Predict-only, parameter-based (no dynamic modules) | `test/teleprompt/*` |
+| Tools/request map integration | 1 | Some tests exist; end-to-end tool logging workflow not ported | `test/tools_request_map_test.exs` |
+| Provider support (real providers) | 1 | Interface exists; primary focus so far is deterministic offline acceptance | (provider acceptance tests TBD) |
+
+## Ways ahead (what we would add next)
+
+These are intentionally phrased as **concrete milestones** with a proof artifact.
+
+### Next workflow-parity milestones
+
+- `classifier_credentials/`: acceptance test for constrained classifier output
+  - Proof: new `test/acceptance/classifier_credentials_acceptance_test.exs`
+- `knowledge_graph/`: acceptance test for triplet extraction + reuse + evaluation
+  - Proof: new `test/acceptance/knowledge_graph_triplets_test.exs`
+- `text_component_extract/`: acceptance test for structured extraction + LabeledFewShot improvement
+  - Proof: new `test/acceptance/text_component_extract_acceptance_test.exs`
+
+### Next maturity milestones
+
+- Standardize teleprompter error shapes (avoid bare strings across all teleprompters)
+- Add unit tests for `Dspy.Teleprompt.Util.set_parameter/4` (update/append/not-applied/type mismatch)
+- Provider-layer acceptance tests (via `req_llm` adapter) once the adapter is wired as the default integration path

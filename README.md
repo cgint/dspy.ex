@@ -4,6 +4,11 @@ Elixir implementation of DSPy - a framework for algorithmically optimizing langu
 
 DSPy provides a unified interface for composing LM programs with automatic optimization, bringing the power of systematic prompt engineering to the Elixir ecosystem.
 
+## Start here (human-friendly)
+
+- `docs/OVERVIEW.md` — what works today, with examples + a multi-dimensional roadmap
+- `AGENTS.md` — how the repo is organized (for contributors/agents)
+
 ## Features
 
 - 🎯 **Type-safe signatures** - Define input/output interfaces with validation
