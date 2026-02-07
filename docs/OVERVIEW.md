@@ -104,7 +104,7 @@ Legend:
 |---|---:|---|---|
 | `simplest/` | **2** | Predict + arrow signatures + int parsing; JSON fenced outputs parsing | `test/acceptance/simplest_predict_test.exs`, `test/acceptance/json_outputs_acceptance_test.exs` |
 | `classifier_credentials/` | **2** | Constrained output classification via `one_of` field constraint | `test/acceptance/classifier_credentials_acceptance_test.exs` |
-| `knowledge_graph/` | 1 | Building blocks exist: JSON outputs + Evaluate + teleprompters | (no KG acceptance test yet) |
+| `knowledge_graph/` | **2** | Triplet extraction from text chunks + reuse existing context + evaluation | `test/acceptance/knowledge_graph_triplets_test.exs` |
 | `text_component_extract/` | 1 | LabeledFewShot loop works (Predict-only); structured extraction primitives exist | `test/teleprompt/labeled_few_shot_improvement_test.exs` |
 
 ## Implementation maturity (adoptability)
@@ -112,7 +112,7 @@ Legend:
 | Subsystem | Level | Notes | Evidence |
 |---|---:|---|---|
 | Signatures (incl. arrow strings) | 2 | Arrow parsing + `int` normalization; `one_of` constraints for enum-like outputs | `test/acceptance/simplest_predict_test.exs`, `test/signature_test.exs`, `test/acceptance/classifier_credentials_acceptance_test.exs` |
-| Structured output parsing (JSON-ish) | 2 | JSON fenced output parsing + coercion | `test/acceptance/json_outputs_acceptance_test.exs` |
+| Structured output parsing (JSON-ish) | 2 | JSON fenced output parsing + coercion (incl. list/map outputs via `:json`) | `test/acceptance/json_outputs_acceptance_test.exs`, `test/acceptance/knowledge_graph_triplets_test.exs` |
 | Evaluate | 2 | Deterministic golden path proven | `test/evaluate_golden_path_test.exs` |
 | Teleprompters | 2 | Predict-only, parameter-based (no dynamic modules) | `test/teleprompt/*` |
 | Tools/request map integration | 1 | Some tests exist; end-to-end “tool logging” workflow not ported | `test/tools_request_map_test.exs` |
@@ -124,8 +124,6 @@ These are intentionally phrased as **concrete milestones** with a “proof artif
 
 ### Next workflow-parity milestones
 
-- `knowledge_graph/`: acceptance test for triplet extraction + reuse + evaluation
-  - Proof: new `test/acceptance/knowledge_graph_triplets_test.exs`
 - `text_component_extract/`: acceptance test for structured extraction + LabeledFewShot improvement
   - Proof: new `test/acceptance/text_component_extract_acceptance_test.exs`
 
