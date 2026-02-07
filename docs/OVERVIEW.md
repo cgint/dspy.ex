@@ -102,7 +102,7 @@ Legend:
 
 | `dspy-intro/src` area | Current | What is already covered here | Evidence |
 |---|---:|---|---|
-| `simplest/` | **2** | Predict + arrow signatures + int parsing; JSON fenced outputs parsing | `test/acceptance/simplest_predict_test.exs`, `test/acceptance/json_outputs_acceptance_test.exs` |
+| `simplest/` | **2** | Predict + arrow signatures + int parsing; JSON fenced outputs parsing; ReAct tool loop + tool logging callbacks | `test/acceptance/simplest_predict_test.exs`, `test/acceptance/json_outputs_acceptance_test.exs`, `test/acceptance/simplest_tool_logging_acceptance_test.exs` |
 | `classifier_credentials/` | **2** | Constrained output classification via `one_of` field constraint | `test/acceptance/classifier_credentials_acceptance_test.exs` |
 | `knowledge_graph/` | **2** | Triplet extraction from text chunks + reuse existing context + evaluation | `test/acceptance/knowledge_graph_triplets_test.exs` |
 | `text_component_extract/` | **2** | Structured extraction via JSON + LabeledFewShot improvement loop | `test/acceptance/text_component_extract_acceptance_test.exs` |
@@ -115,7 +115,7 @@ Legend:
 | Structured output parsing (JSON-ish) | 2 | JSON fenced output parsing + coercion (incl. list/map outputs via `:json`) | `test/acceptance/json_outputs_acceptance_test.exs`, `test/acceptance/knowledge_graph_triplets_test.exs` |
 | Evaluate | 2 | Deterministic golden path proven | `test/evaluate_golden_path_test.exs` |
 | Teleprompters | 2 | Predict-only, parameter-based (no dynamic modules) | `test/teleprompt/*` |
-| Tools/request map integration | 1 | Some tests exist; end-to-end “tool logging” workflow not ported | `test/tools_request_map_test.exs` |
+| Tools/request map integration | 2 | ReAct runs with request maps; tool start/end callbacks supported (tool logging) | `test/tools_request_map_test.exs`, `test/acceptance/simplest_tool_logging_acceptance_test.exs` |
 | Provider support (real providers) | 1 | Interface exists; primary focus so far is deterministic offline acceptance | (provider acceptance tests TBD) |
 
 ## Ways ahead (what we would add next)

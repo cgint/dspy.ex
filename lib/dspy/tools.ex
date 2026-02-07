@@ -204,6 +204,10 @@ defmodule Dspy.Tools do
   end
 
   defmodule React do
+    require Logger
+
+    @type callback_entry :: {module(), term()}
+
     @moduledoc """
     Implementation of ReAct (Reasoning + Acting) pattern.
     Allows models to interleave reasoning and tool use.
@@ -217,7 +221,8 @@ defmodule Dspy.Tools do
       :action_prefix,
       :observation_prefix,
       :answer_prefix,
-      :stop_words
+      :stop_words,
+      callbacks: []
     ]
 
     @type t :: %__MODULE__{
@@ -228,7 +233,8 @@ defmodule Dspy.Tools do
             action_prefix: String.t(),
             observation_prefix: String.t(),
             answer_prefix: String.t(),
-            stop_words: list()
+            stop_words: list(),
+            callbacks: list(callback_entry())
           }
 
     def new(lm, tools, opts \\ []) do
@@ -240,14 +246,38 @@ defmodule Dspy.Tools do
         action_prefix: opts[:action_prefix] || "Action:",
         observation_prefix: opts[:observation_prefix] || "Observation:",
         answer_prefix: opts[:answer_prefix] || "Answer:",
-        stop_words: opts[:stop_words] || ["Observation:", "Answer:"]
+        stop_words: opts[:stop_words] || ["Observation:", "Answer:"],
+        callbacks: opts[:callbacks] || []
       }
     end
 
     def run(%__MODULE__{} = react, question, opts \\ []) do
       initial_prompt = build_react_prompt(react, question, opts)
-      execute_react_loop(react, initial_prompt, [], 0)
+      callbacks = Keyword.get(opts, :callbacks, react.callbacks)
+
+      with :ok <- validate_callbacks(callbacks) do
+        execute_react_loop(%{react | callbacks: callbacks}, initial_prompt, [], 0)
+      end
     end
+
+    defp validate_callbacks(callbacks) when is_list(callbacks) do
+      callbacks
+      |> Enum.with_index()
+      |> Enum.reduce_while(:ok, fn
+        {{mod, _state}, idx}, :ok when is_atom(mod) ->
+          if Code.ensure_loaded?(mod) and function_exported?(mod, :on_tool_start, 4) and
+               function_exported?(mod, :on_tool_end, 5) do
+            {:cont, :ok}
+          else
+            {:halt, {:error, {:invalid_callbacks, {:module_missing_callbacks, idx, mod}}}}
+          end
+
+        {other, idx}, :ok ->
+          {:halt, {:error, {:invalid_callbacks, {:invalid_entry, idx, other}}}}
+      end)
+    end
+
+    defp validate_callbacks(other), do: {:error, {:invalid_callbacks, {:not_a_list, other}}}
 
     defp build_react_prompt(react, question, _opts) do
       tool_descriptions =
@@ -292,7 +322,7 @@ defmodule Dspy.Tools do
             continue_react_loop(react, updated_prompt, new_history, step)
 
           {:action, action_call} ->
-            case execute_action(action_call, react.tools) do
+            case execute_action(action_call, react.tools, react.callbacks) do
               {:ok, observation} ->
                 obs_text =
                   "\n#{react.observation_prefix} #{observation}\n#{react.thought_prefix} "
@@ -369,12 +399,12 @@ defmodule Dspy.Tools do
       end
     end
 
-    defp execute_action(action_call, tools) do
+    defp execute_action(action_call, tools, callbacks) do
       case parse_action_call(action_call) do
         {:ok, {tool_name, args}} ->
           case find_tool(tool_name, tools) do
             {:ok, tool} ->
-              call_tool(tool, args)
+              call_tool(tool, args, callbacks)
 
             {:error, reason} ->
               {:error, reason}
@@ -434,13 +464,60 @@ defmodule Dspy.Tools do
       end
     end
 
-    defp call_tool(%Tool{} = tool, args) do
+    defp call_tool(%Tool{} = tool, args, callbacks) do
+      call_id = System.unique_integer([:positive, :monotonic])
+
+      notify_tool_start(callbacks, call_id, tool, args)
+
       try do
         result = tool.function.(args)
+        notify_tool_end(callbacks, call_id, tool, result, nil)
         {:ok, result}
       rescue
-        e -> {:error, "Tool execution failed: #{Exception.message(e)}"}
+        e ->
+          notify_tool_end(callbacks, call_id, tool, nil, %{
+            kind: :exception,
+            message: Exception.message(e)
+          })
+
+          {:error, "Tool execution failed: #{Exception.message(e)}"}
       end
+    end
+
+    defp notify_tool_start(callbacks, call_id, tool, inputs) do
+      Enum.each(callbacks || [], fn
+        {mod, state} ->
+          try do
+            mod.on_tool_start(call_id, tool, inputs, state)
+          rescue
+            e ->
+              Logger.debug(
+                "Tool callback on_tool_start failed: #{inspect(mod)} #{Exception.message(e)}"
+              )
+
+              :ok
+          end
+      end)
+
+      :ok
+    end
+
+    defp notify_tool_end(callbacks, call_id, tool, outputs, error) do
+      Enum.each(callbacks || [], fn
+        {mod, state} ->
+          try do
+            mod.on_tool_end(call_id, tool, outputs, error, state)
+          rescue
+            e ->
+              Logger.debug(
+                "Tool callback on_tool_end failed: #{inspect(mod)} #{Exception.message(e)}"
+              )
+
+              :ok
+          end
+      end)
+
+      :ok
     end
 
     defp extract_reasoning_trace(history) do
@@ -517,19 +594,16 @@ defmodule Dspy.Tools do
       ]
       |> Enum.take(num_results)
 
-    ("Found #{length(results)} results for '#{query}': " <>
-       Enum.map(results, & &1.title))
-    |> Enum.join(", ")
+    titles = results |> Enum.map(& &1.title) |> Enum.join(", ")
+    "Found #{length(results)} results for '#{query}': #{titles}"
   end
 
   defp calculate_tool(%{"expression" => expression}) do
-    # Simple calculator - would use proper math parser in production
-    case Code.eval_string(expression, [], __ENV__) do
-      {result, _} -> "#{expression} = #{result}"
-      _ -> "Error: Could not evaluate expression"
+    # NOTE: do NOT use Code.eval_string/1 here; tools are model-driven and must be safe.
+    case Dspy.Tools.SafeMath.eval(expression) do
+      {:ok, result} -> "#{expression} = #{result}"
+      {:error, reason} -> "Error: #{reason}"
     end
-  rescue
-    _ -> "Error: Invalid mathematical expression"
   end
 
   defp datetime_tool(args) do
