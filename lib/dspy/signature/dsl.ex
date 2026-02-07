@@ -8,6 +8,8 @@ defmodule Dspy.Signature.DSL do
   """
   defmacro field(name, direction, opts \\ []) do
     quote do
+      one_of = Keyword.get(unquote(opts), :one_of) || Keyword.get(unquote(opts), :choices)
+
       field_spec = %{
         name: unquote(name),
         type: :string,
@@ -15,6 +17,8 @@ defmodule Dspy.Signature.DSL do
         required: Keyword.get(unquote(opts), :required, true),
         default: Keyword.get(unquote(opts), :default)
       }
+
+      field_spec = if is_nil(one_of), do: field_spec, else: Map.put(field_spec, :one_of, one_of)
 
       case unquote(direction) do
         :input ->
@@ -31,13 +35,19 @@ defmodule Dspy.Signature.DSL do
   """
   defmacro input_field(name, type, description \\ "", opts \\ []) do
     quote do
-      @input_fields %{
+      one_of = Keyword.get(unquote(opts), :one_of) || Keyword.get(unquote(opts), :choices)
+
+      field = %{
         name: unquote(name),
         type: unquote(type),
         description: unquote(description),
         required: Keyword.get(unquote(opts), :required, true),
         default: Keyword.get(unquote(opts), :default)
       }
+
+      field = if is_nil(one_of), do: field, else: Map.put(field, :one_of, one_of)
+
+      @input_fields field
     end
   end
 
@@ -46,13 +56,19 @@ defmodule Dspy.Signature.DSL do
   """
   defmacro output_field(name, type, description \\ "", opts \\ []) do
     quote do
-      @output_fields %{
+      one_of = Keyword.get(unquote(opts), :one_of) || Keyword.get(unquote(opts), :choices)
+
+      field = %{
         name: unquote(name),
         type: unquote(type),
         description: unquote(description),
         required: Keyword.get(unquote(opts), :required, true),
         default: Keyword.get(unquote(opts), :default)
       }
+
+      field = if is_nil(one_of), do: field, else: Map.put(field, :one_of, one_of)
+
+      @output_fields field
     end
   end
 

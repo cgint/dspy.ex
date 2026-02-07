@@ -21,11 +21,12 @@ defmodule Dspy.Signature do
   end
 
   @type field :: %{
-          name: atom(),
-          type: atom(),
-          description: String.t(),
-          required: boolean(),
-          default: any()
+          required(:name) => atom(),
+          required(:type) => atom(),
+          required(:description) => String.t(),
+          required(:required) => boolean(),
+          required(:default) => any(),
+          optional(:one_of) => list()
         }
 
   @type t :: %__MODULE__{
@@ -3996,49 +3997,60 @@ defmodule Dspy.Signature do
     json_outputs =
       case try_parse_json_outputs(signature, text) do
         {:ok, outputs} -> outputs
+        {:error, _reason} = error -> error
         :error -> %{}
       end
 
-    outputs =
-      signature.output_fields
-      |> parse_label_outputs(text, json_outputs)
-
-    # Validate the complete output structure
-    case validate_output_structure(outputs, signature) do
-      :ok -> outputs
+    with %{} = json_outputs <- json_outputs,
+         outputs <- parse_label_outputs(signature.output_fields, text, json_outputs),
+         %{} = outputs <- outputs,
+         :ok <- validate_output_structure(outputs, signature) do
+      outputs
+    else
       {:error, _reason} = error -> error
+      other -> {:error, {:invalid_outputs, other}}
     end
   end
 
   defp parse_label_outputs(output_fields, text, acc) do
-    Enum.reduce(output_fields, acc, fn field, acc ->
+    output_fields
+    |> Enum.reduce_while({:ok, acc}, fn field, {:ok, acc} ->
       if Map.has_key?(acc, field.name) do
-        acc
+        {:cont, {:ok, acc}}
       else
         case extract_field_value(text, field) do
           {:ok, value} ->
             case validate_field_value(value, field) do
-              {:ok, validated_value} -> Map.put(acc, field.name, validated_value)
-              {:error, _} -> acc
+              {:ok, validated_value} ->
+                {:cont, {:ok, Map.put(acc, field.name, validated_value)}}
+
+              {:error, reason} ->
+                if field.required do
+                  {:halt, {:error, {:invalid_output_value, field.name, reason}}}
+                else
+                  {:cont, {:ok, acc}}
+                end
             end
 
           :error ->
-            acc
+            {:cont, {:ok, acc}}
         end
       end
     end)
+    |> case do
+      {:ok, map} -> map
+      {:error, _reason} = error -> error
+    end
   end
 
   defp try_parse_json_outputs(signature, text) do
     with {:ok, json_string} <- extract_json_object(text),
          {:ok, decoded} <- Jason.decode(json_string),
          true <- is_map(decoded) do
-      outputs = map_json_to_outputs(signature, decoded)
-
-      if map_size(outputs) > 0 do
-        {:ok, outputs}
-      else
-        :error
+      case map_json_to_outputs(signature, decoded) do
+        {:ok, outputs} when map_size(outputs) > 0 -> {:ok, outputs}
+        {:ok, _outputs} -> :error
+        {:error, _reason} = error -> error
       end
     else
       _ -> :error
@@ -4083,7 +4095,8 @@ defmodule Dspy.Signature do
   end
 
   defp map_json_to_outputs(signature, decoded_map) do
-    Enum.reduce(signature.output_fields, %{}, fn field, acc ->
+    signature.output_fields
+    |> Enum.reduce_while({:ok, %{}}, fn field, {:ok, acc} ->
       key = Atom.to_string(field.name)
 
       if Map.has_key?(decoded_map, key) do
@@ -4092,13 +4105,24 @@ defmodule Dspy.Signature do
         |> normalize_json_value_for_field(field)
         |> validate_field_value(field)
         |> case do
-          {:ok, validated_value} -> Map.put(acc, field.name, validated_value)
-          {:error, _} -> acc
+          {:ok, validated_value} ->
+            {:cont, {:ok, Map.put(acc, field.name, validated_value)}}
+
+          {:error, reason} ->
+            if field.required do
+              {:halt, {:error, {:invalid_output_value, field.name, reason}}}
+            else
+              {:cont, {:ok, acc}}
+            end
         end
       else
-        acc
+        {:cont, {:ok, acc}}
       end
     end)
+    |> case do
+      {:ok, map} -> {:ok, map}
+      {:error, _reason} = error -> error
+    end
   end
 
   defp normalize_json_value_for_field(value, field) do
@@ -4107,26 +4131,22 @@ defmodule Dspy.Signature do
         if is_binary(value), do: value, else: to_string(value)
 
       :number ->
-        if is_binary(value), do: value, else: to_string(value)
+        if is_number(value), do: value, else: value
 
       :integer ->
-        if is_binary(value), do: value, else: to_string(value)
+        if is_integer(value), do: value, else: value
 
       :boolean ->
-        cond do
-          is_binary(value) -> value
-          is_boolean(value) -> if(value, do: "true", else: "false")
-          true -> to_string(value)
-        end
+        if is_boolean(value), do: value, else: value
 
       :json ->
-        if is_binary(value), do: value, else: Jason.encode!(value)
+        value
 
       :code ->
         if is_binary(value), do: value, else: to_string(value)
 
       _ ->
-        if is_binary(value), do: value, else: to_string(value)
+        value
     end
   end
 
@@ -4162,7 +4182,16 @@ defmodule Dspy.Signature do
     field_lines =
       fields
       |> Enum.map(fn field ->
-        "- #{field.name}: #{field.description}"
+        constraint_suffix =
+          case Map.get(field, :one_of) do
+            list when is_list(list) and list != [] ->
+              " (one of: #{Enum.map_join(list, ", ", &to_string/1)})"
+
+            _ ->
+              ""
+          end
+
+        "- #{field.name}: #{field.description}#{constraint_suffix}"
       end)
       |> Enum.join("\n")
 
@@ -4244,19 +4273,96 @@ defmodule Dspy.Signature do
   end
 
   defp validate_field_value(value, field) do
-    case field.type do
-      :string ->
-        if is_binary(value), do: {:ok, value}, else: {:error, :invalid_string}
+    with {:ok, typed_value} <- validate_field_type(value, field.type),
+         :ok <- validate_field_constraints(typed_value, field) do
+      {:ok, typed_value}
+    end
+  end
 
-      :integer ->
+  defp validate_field_constraints(value, field) do
+    case Map.get(field, :one_of) do
+      nil ->
+        :ok
+
+      allowed when is_list(allowed) ->
+        case coerce_one_of_values(field, allowed) do
+          {:ok, allowed} ->
+            if value in allowed do
+              :ok
+            else
+              {:error, {:not_in_allowed_set, allowed}}
+            end
+
+          {:error, reason} ->
+            {:error, {:invalid_constraint, reason}}
+        end
+
+      other ->
+        {:error, {:invalid_constraint, {:one_of, other}}}
+    end
+  end
+
+  defp safe_stringify(raw) do
+    cond do
+      is_binary(raw) -> {:ok, raw}
+      is_atom(raw) -> {:ok, Atom.to_string(raw)}
+      is_boolean(raw) -> {:ok, if(raw, do: "true", else: "false")}
+      is_number(raw) -> {:ok, to_string(raw)}
+      true -> {:error, {:cannot_stringify, raw}}
+    end
+  end
+
+  defp coerce_one_of_values(%{type: type}, allowed) do
+    allowed
+    |> Enum.reduce_while({:ok, []}, fn raw, {:ok, acc} ->
+      case validate_field_type(raw, type) do
+        {:ok, typed} ->
+          {:cont, {:ok, [typed | acc]}}
+
+        {:error, _reason} ->
+          with {:ok, raw_str} <- safe_stringify(raw),
+               {:ok, typed} <- validate_field_type(raw_str, type) do
+            {:cont, {:ok, [typed | acc]}}
+          else
+            {:error, reason} -> {:halt, {:error, {:one_of_values_invalid, raw, reason}}}
+          end
+      end
+    end)
+    |> case do
+      {:ok, values} -> {:ok, Enum.reverse(values)}
+      {:error, _reason} = error -> error
+    end
+  end
+
+  defp validate_field_type(value, type) do
+    case type do
+      :string ->
+        cond do
+          is_binary(value) -> {:ok, value}
+          is_atom(value) -> {:ok, Atom.to_string(value)}
+          is_boolean(value) -> {:ok, if(value, do: "true", else: "false")}
+          is_number(value) -> {:ok, to_string(value)}
+          true -> {:error, :invalid_string}
+        end
+
+      :integer when is_integer(value) ->
+        {:ok, value}
+
+      :integer when is_binary(value) ->
         case Integer.parse(String.trim(value)) do
           {num, ""} -> {:ok, num}
           {num, _rest} -> {:ok, num}
           :error -> {:error, :invalid_integer}
         end
 
-      :number ->
-        case Float.parse(value) do
+      :integer ->
+        {:error, :invalid_integer}
+
+      :number when is_number(value) ->
+        {:ok, value}
+
+      :number when is_binary(value) ->
+        case Float.parse(String.trim(value)) do
           {num, ""} ->
             {:ok, num}
 
@@ -4270,7 +4376,13 @@ defmodule Dspy.Signature do
             end
         end
 
-      :boolean ->
+      :number ->
+        {:error, :invalid_number}
+
+      :boolean when is_boolean(value) ->
+        {:ok, value}
+
+      :boolean when is_binary(value) ->
         case String.downcase(String.trim(value)) do
           "true" -> {:ok, true}
           "false" -> {:ok, false}
@@ -4281,12 +4393,21 @@ defmodule Dspy.Signature do
           _ -> {:error, :invalid_boolean}
         end
 
-      :json ->
+      :boolean ->
+        {:error, :invalid_boolean}
+
+      :json when is_map(value) or is_list(value) ->
+        {:ok, value}
+
+      :json when is_binary(value) ->
         try do
           {:ok, Jason.decode!(value)}
         rescue
           _ -> {:error, :invalid_json}
         end
+
+      :json ->
+        {:error, :invalid_json}
 
       :code ->
         case validate_elixir_code(value) do
@@ -4363,7 +4484,7 @@ defmodule Dspy.Signature do
   defp parse_arrow_field(field_str, default_type) do
     case String.split(field_str, ":", parts: 2) do
       [name, type] ->
-        name = name |> String.trim() |> String.to_atom()
+        name = name |> String.trim() |> safe_field_atom!()
         type = type |> String.trim() |> normalize_type()
 
         {:ok,
@@ -4381,7 +4502,7 @@ defmodule Dspy.Signature do
         if name == "" do
           {:error, "Invalid field format - empty field name"}
         else
-          name = String.to_atom(name)
+          name = safe_field_atom!(name)
 
           {:ok,
            %{
@@ -4465,7 +4586,7 @@ defmodule Dspy.Signature do
   defp parse_single_field(field_str) do
     case String.split(field_str, ":", parts: 2) do
       [name, type] ->
-        name = name |> String.trim() |> String.to_atom()
+        name = name |> String.trim() |> safe_field_atom!()
         type = type |> String.trim() |> normalize_type()
 
         {:ok,
@@ -4492,7 +4613,33 @@ defmodule Dspy.Signature do
   defp normalize_type("boolean"), do: :boolean
   defp normalize_type("json"), do: :json
   defp normalize_type("code"), do: :code
-  defp normalize_type(type), do: String.to_atom(type)
+
+  defp normalize_type(type) do
+    raise ArgumentError, "Unknown field type: #{inspect(type)}"
+  end
+
+  # NOTE: This is used for parsing *developer-provided* signature strings.
+  # We intentionally avoid creating new atoms here; signature strings should not
+  # be fed by untrusted input.
+  #
+  # If you hit this error, ensure you use atom keys like `%{field: ...}` in your
+  # code (so the atom exists), or define your signature via `use Dspy.Signature`.
+  defp safe_field_atom!(name) when is_binary(name) do
+    name = String.trim(name)
+
+    if name == "" do
+      raise ArgumentError, "Invalid field name: empty"
+    end
+
+    try do
+      String.to_existing_atom(name)
+    rescue
+      ArgumentError ->
+        raise ArgumentError,
+              "Unknown field atom #{inspect(name)} in signature string; " <>
+                "use module-based signatures or ensure the atom exists in your code"
+    end
+  end
 
   defp humanize_field_name(atom) do
     atom

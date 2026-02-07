@@ -2,7 +2,7 @@
 
 ## Diagram
 
-![Progress loop: reference 5 acceptance tests 5 implementation 5 docs](./diagrams/progress_overview.svg)
+![Progress loop: reference → acceptance tests → implementation → docs](./diagrams/progress_overview.svg)
 
 ## What you can do today (proven, deterministic)
 
@@ -11,6 +11,10 @@ The items below are backed by deterministic tests (offline, using mock LMs).
 ### 1) Predict with arrow signatures + typed outputs
 
 Arrow signatures are supported, including `int`/`integer` normalization.
+
+Note: for safety, arrow-signature field names are parsed via `String.to_existing_atom/1`.
+In practice this means your code should already reference those atoms (e.g. you pass `%{name: ...}`),
+or you should use a module-based signature (`use Dspy.Signature`).
 
 ```elixir
 Dspy.configure(lm: %MyMockLM{})
@@ -51,13 +55,33 @@ pred.attrs.funnyness_0_to_10 #=> 7
 
 Proof: `test/acceptance/json_outputs_acceptance_test.exs`
 
-### 3) Evaluate (golden path)
+### 3) Constrained outputs (enum/Literal-style via `one_of`)
 
-A simple `Predict 5 Evaluate` loop runs deterministically (when you set `num_threads: 1` and use a mock LM).
+Signatures can constrain a field to a fixed set of allowed values using `one_of:`.
+
+```elixir
+defmodule Credentials do
+  use Dspy.Signature
+
+  input_field(:text, :string, "Message")
+  output_field(:safety, :string, "Label", one_of: ["safe", "unsafe"])
+end
+
+classifier = Dspy.Predict.new(Credentials)
+{:ok, pred} = Dspy.Module.forward(classifier, %{text: "my password is 123"})
+
+pred.attrs.safety #=> "unsafe"
+```
+
+Proof: `test/acceptance/classifier_credentials_acceptance_test.exs`
+
+### 4) Evaluate (golden path)
+
+A simple `Predict → Evaluate` loop runs deterministically (when you set `num_threads: 1` and use a mock LM).
 
 Proof: `test/evaluate_golden_path_test.exs`
 
-### 4) Teleprompters/optimizers (Predict-only, parameter-based; no dynamic modules)
+### 5) Teleprompters/optimizers (Predict-only, parameter-based; no dynamic modules)
 
 These teleprompters currently optimize **`%Dspy.Predict{}`** programs by updating optimizable parameters (e.g. `"predict.instructions"`, `"predict.examples"`). They **do not** generate new runtime modules.
 
@@ -74,12 +98,12 @@ Legend:
 - **2** deterministic acceptance test passes (offline)
 - **3** documented + ergonomic + stable contracts
 
-> Note: a folder can be partially covered; the Current column is about **end-to-end parity for the folders primary workflow**.
+> Note: a folder can be “partially covered”; the “Current” column is about **end-to-end parity for the folder’s primary workflow**.
 
 | `dspy-intro/src` area | Current | What is already covered here | Evidence |
 |---|---:|---|---|
 | `simplest/` | **2** | Predict + arrow signatures + int parsing; JSON fenced outputs parsing | `test/acceptance/simplest_predict_test.exs`, `test/acceptance/json_outputs_acceptance_test.exs` |
-| `classifier_credentials/` | 0 | (not ported yet) |  |
+| `classifier_credentials/` | **2** | Constrained output classification via `one_of` field constraint | `test/acceptance/classifier_credentials_acceptance_test.exs` |
 | `knowledge_graph/` | 1 | Building blocks exist: JSON outputs + Evaluate + teleprompters | (no KG acceptance test yet) |
 | `text_component_extract/` | 1 | LabeledFewShot loop works (Predict-only); structured extraction primitives exist | `test/teleprompt/labeled_few_shot_improvement_test.exs` |
 
@@ -87,21 +111,19 @@ Legend:
 
 | Subsystem | Level | Notes | Evidence |
 |---|---:|---|---|
-| Signatures (incl. arrow strings) | 2 | Arrow parsing + `int` normalization covered | `test/acceptance/simplest_predict_test.exs`, `test/signature_test.exs` |
+| Signatures (incl. arrow strings) | 2 | Arrow parsing + `int` normalization; `one_of` constraints for enum-like outputs | `test/acceptance/simplest_predict_test.exs`, `test/signature_test.exs`, `test/acceptance/classifier_credentials_acceptance_test.exs` |
 | Structured output parsing (JSON-ish) | 2 | JSON fenced output parsing + coercion | `test/acceptance/json_outputs_acceptance_test.exs` |
 | Evaluate | 2 | Deterministic golden path proven | `test/evaluate_golden_path_test.exs` |
 | Teleprompters | 2 | Predict-only, parameter-based (no dynamic modules) | `test/teleprompt/*` |
-| Tools/request map integration | 1 | Some tests exist; end-to-end tool logging workflow not ported | `test/tools_request_map_test.exs` |
+| Tools/request map integration | 1 | Some tests exist; end-to-end “tool logging” workflow not ported | `test/tools_request_map_test.exs` |
 | Provider support (real providers) | 1 | Interface exists; primary focus so far is deterministic offline acceptance | (provider acceptance tests TBD) |
 
 ## Ways ahead (what we would add next)
 
-These are intentionally phrased as **concrete milestones** with a proof artifact.
+These are intentionally phrased as **concrete milestones** with a “proof artifact”.
 
 ### Next workflow-parity milestones
 
-- `classifier_credentials/`: acceptance test for constrained classifier output
-  - Proof: new `test/acceptance/classifier_credentials_acceptance_test.exs`
 - `knowledge_graph/`: acceptance test for triplet extraction + reuse + evaluation
   - Proof: new `test/acceptance/knowledge_graph_triplets_test.exs`
 - `text_component_extract/`: acceptance test for structured extraction + LabeledFewShot improvement
