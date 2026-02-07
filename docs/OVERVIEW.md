@@ -105,7 +105,7 @@ Legend:
 | `simplest/` | **2** | Predict + arrow signatures + int parsing; JSON fenced outputs parsing | `test/acceptance/simplest_predict_test.exs`, `test/acceptance/json_outputs_acceptance_test.exs` |
 | `classifier_credentials/` | **2** | Constrained output classification via `one_of` field constraint | `test/acceptance/classifier_credentials_acceptance_test.exs` |
 | `knowledge_graph/` | **2** | Triplet extraction from text chunks + reuse existing context + evaluation | `test/acceptance/knowledge_graph_triplets_test.exs` |
-| `text_component_extract/` | 1 | LabeledFewShot loop works (Predict-only); structured extraction primitives exist | `test/teleprompt/labeled_few_shot_improvement_test.exs` |
+| `text_component_extract/` | **2** | Structured extraction via JSON + LabeledFewShot improvement loop | `test/acceptance/text_component_extract_acceptance_test.exs` |
 
 ## Implementation maturity (adoptability)
 
@@ -124,8 +124,6 @@ These are intentionally phrased as **concrete milestones** with a “proof artif
 
 ### Next workflow-parity milestones
 
-- `text_component_extract/`: acceptance test for structured extraction + LabeledFewShot improvement
-  - Proof: new `test/acceptance/text_component_extract_acceptance_test.exs`
 
 ### Next maturity milestones
 

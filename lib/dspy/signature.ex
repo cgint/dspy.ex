@@ -4223,10 +4223,23 @@ defmodule Dspy.Signature do
     fields
     |> Enum.map(fn field ->
       value = Map.get(example.attrs || example, field.name, "")
+      value = format_field_value(value)
       "#{String.capitalize(Atom.to_string(field.name))}: #{value}"
     end)
     |> Enum.join("\n")
   end
+
+  defp format_field_value(value) when is_binary(value), do: value
+  defp format_field_value(value) when is_atom(value), do: Atom.to_string(value)
+  defp format_field_value(value) when is_boolean(value), do: if(value, do: "true", else: "false")
+  defp format_field_value(value) when is_number(value), do: to_string(value)
+
+  defp format_field_value(value) when is_list(value) or is_map(value) do
+    # Keep this deterministic + single-line to avoid surprising prompt formatting.
+    inspect(value, pretty: false, limit: 100, sort_maps: true)
+  end
+
+  defp format_field_value(value), do: inspect(value, pretty: false, limit: 100, sort_maps: true)
 
   defp input_section(signature) do
     placeholder_inputs =
