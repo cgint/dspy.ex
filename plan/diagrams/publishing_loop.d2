@@ -1,0 +1,31 @@
+direction: down
+
+change: {
+  label: "**Change**\n(feature slice)"
+}
+
+verify: {
+  label: "**Verify**\n(mix test, precommit)"
+}
+
+evidence: {
+  label: "**Evidence**\n(det. acceptance test)"
+}
+
+docs: {
+  label: "**Update overview**\n(docs/OVERVIEW.md)"
+}
+
+publish: {
+  label: "**Publish**\n(git push main)"
+}
+
+tag: {
+  label: "**Tag release**\n(optional, 0.x)"
+}
+
+change -> evidence: "add/extend"
+evidence -> verify: "run"
+verify -> docs: "if green"
+docs -> publish: "push"
+publish -> tag: "when stable"

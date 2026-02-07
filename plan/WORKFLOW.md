@@ -53,5 +53,9 @@ This repository is iterating toward a “DSPy-style Elixir core” with minimal 
 - When unsure about idiomatic Elixir/OTP patterns or library design tradeoffs, ask the doc expert agent for Elixir best practices before refactoring.
 - Use `CHANGES_CHECK_BEST_PRACTICES.md` as a reference review of the recent commits’ alignment with current Elixir best practices (update it when making comparable architectural changes).
 
+## Publishing
+
+- See `plan/PUBLISHING_STRATEGY.md` for when we push incrementally (feature-by-feature) and what publishable means.
+
 ## Docs & diagrams
 - For any Markdown doc that describes a process/flow/sequence/state machine, add a D2 diagram (`*.d2`) and render it to SVG (`d2to.sh file.d2`), then embed it near the top as `![...](./file.svg)`.
