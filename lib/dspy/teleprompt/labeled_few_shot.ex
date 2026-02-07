@@ -2,6 +2,9 @@ defmodule Dspy.Teleprompt.LabeledFewShot do
   @moduledoc """
   LabeledFewShot teleprompt - Simple few-shot learning with labeled examples.
 
+  Current limitation: only supports optimizing `Dspy.Predict` programs (via
+  the `"predict.examples"` parameter).
+
   This is the most basic teleprompt that simply adds labeled examples
   to the program's signature to enable few-shot learning.
 
@@ -17,6 +20,8 @@ defmodule Dspy.Teleprompt.LabeledFewShot do
   alias Dspy.{Example, Trainset}
 
   defstruct [
+    # Metric function (optional; stored for interface consistency)
+    :metric,
     # Number of examples to include
     :k,
     # Random seed for example selection
@@ -28,6 +33,7 @@ defmodule Dspy.Teleprompt.LabeledFewShot do
   ]
 
   @type t :: %__MODULE__{
+          metric: function() | nil,
           k: pos_integer(),
           seed: integer(),
           selection_strategy: atom(),
@@ -39,6 +45,7 @@ defmodule Dspy.Teleprompt.LabeledFewShot do
 
   ## Options
 
+  - `:metric` - Optional metric function (accepted for interface consistency; currently unused)
   - `:k` - Number of few-shot examples to include (default: 3)
   - `:seed` - Random seed for reproducible example selection
   - `:selection_strategy` - Strategy for selecting examples (:random, :diverse, :balanced)
@@ -53,6 +60,7 @@ defmodule Dspy.Teleprompt.LabeledFewShot do
   @spec new(keyword()) :: t()
   def new(opts \\ []) do
     %__MODULE__{
+      metric: Keyword.get(opts, :metric),
       k: Keyword.get(opts, :k, 3),
       seed: Keyword.get(opts, :seed, :os.system_time(:microsecond)),
       selection_strategy: Keyword.get(opts, :selection_strategy, :random),
@@ -77,132 +85,45 @@ defmodule Dspy.Teleprompt.LabeledFewShot do
   @impl Dspy.Teleprompt
   @spec compile(t(), Dspy.Teleprompt.program_t(), list(Example.t())) ::
           Dspy.Teleprompt.compile_result()
-  def compile(%__MODULE__{} = teleprompt, program, trainset) do
+  def compile(%__MODULE__{} = teleprompt, %Dspy.Predict{} = program, trainset) do
     with {:ok, validated_trainset} <- Trainset.validate(trainset),
          {:ok, selected_examples} <- select_examples(teleprompt, validated_trainset) do
-      # Create optimized program with few-shot examples
-      optimized_program = create_few_shot_program(program, selected_examples, teleprompt)
+      selected_examples =
+        maybe_strip_reasoning(selected_examples, teleprompt.include_reasoning)
 
-      {:ok, optimized_program}
+      # Apply examples to the program via optimizable parameters (no dynamic modules)
+      with {:ok, optimized_program} <-
+             Dspy.Teleprompt.Util.set_predict_examples(program, selected_examples) do
+        {:ok, optimized_program}
+      end
     end
+  end
+
+  def compile(%__MODULE__{}, program, _trainset) do
+    mod = if is_struct(program), do: program.__struct__, else: program
+    {:error, {:unsupported_program, mod}}
   end
 
   # Private functions
 
   defp select_examples(%__MODULE__{k: k, selection_strategy: strategy, seed: seed}, trainset) do
     if length(trainset) == 0 do
-      {:error, "Empty training set"}
+      {:error, :empty_trainset}
     else
       selected = Trainset.sample(trainset, k, strategy: strategy, seed: seed)
       {:ok, selected}
     end
   end
 
-  defp create_few_shot_program(program, examples, %__MODULE__{
-         include_reasoning: include_reasoning
-       }) do
-    # Create a new module that wraps the original program with few-shot examples
-    {:module, optimized_program, _binary, _exports} =
-      defmodule OptimizedLabeledFewShotProgram do
-        @behaviour Dspy.Module
+  defp maybe_strip_reasoning(examples, true), do: examples
 
-        @program program
-        @examples examples
-        @include_reasoning include_reasoning
+  defp maybe_strip_reasoning(examples, false) do
+    Enum.map(examples, fn
+      %Dspy.Example{attrs: attrs} = ex when is_map(attrs) ->
+        %{ex | attrs: Map.delete(attrs, :reasoning)}
 
-        def __program__, do: @program
-        def __examples__, do: @examples
-        def __include_reasoning__, do: @include_reasoning
-
-        @impl Dspy.Module
-        def forward(input) do
-          program = __program__()
-          examples = __examples__()
-          include_reasoning = __include_reasoning__()
-
-          # Add examples to the program's context
-          enhanced_input = enhance_input_with_examples(input, examples, include_reasoning)
-
-          # Forward to original program
-          Dspy.Module.forward(program, enhanced_input)
-        end
-
-        @impl Dspy.Module
-        def parameters do
-          # Return parameters from the original program plus our examples
-          original_params = Dspy.Module.parameters(__program__())
-
-          example_params = %{
-            few_shot_examples: __examples__(),
-            num_examples: length(__examples__())
-          }
-
-          Map.merge(original_params, example_params)
-        end
-
-        defp enhance_input_with_examples(input, examples, include_reasoning) do
-          # Add few-shot examples to the input context
-          example_text = format_examples_as_text(examples, include_reasoning)
-
-          # Add examples to input (implementation depends on program structure)
-          case input do
-            %{} = input_map ->
-              Map.put(input_map, :few_shot_examples, example_text)
-
-            input ->
-              # For non-map inputs, we'll need to modify the signature
-              # This is a simplified implementation
-              %{input: input, few_shot_examples: example_text}
-          end
-        end
-
-        defp format_examples_as_text(examples, include_reasoning) do
-          examples
-          |> Enum.with_index(1)
-          |> Enum.map(fn {example, idx} ->
-            format_single_example(example, idx, include_reasoning)
-          end)
-          |> Enum.join("\n\n")
-        end
-
-        defp format_single_example(%Dspy.Example{attrs: attrs}, idx, include_reasoning) do
-          # Format example as demonstration
-          formatted_fields =
-            attrs
-            |> Enum.map(fn {key, value} ->
-              "#{humanize_field_name(key)}: #{value}"
-            end)
-            |> Enum.join("\n")
-
-          if include_reasoning and Map.has_key?(attrs, :reasoning) do
-            "Example #{idx}:\n#{formatted_fields}"
-          else
-            # Exclude reasoning field for cleaner examples
-            filtered_attrs = Map.delete(attrs, :reasoning)
-
-            formatted_fields =
-              filtered_attrs
-              |> Enum.map(fn {key, value} ->
-                "#{humanize_field_name(key)}: #{value}"
-              end)
-              |> Enum.join("\n")
-
-            "Example #{idx}:\n#{formatted_fields}"
-          end
-        end
-
-        defp humanize_field_name(field) when is_atom(field) do
-          field
-          |> Atom.to_string()
-          |> String.replace("_", " ")
-          |> String.split()
-          |> Enum.map(&String.capitalize/1)
-          |> Enum.join(" ")
-        end
-
-        defp humanize_field_name(field), do: to_string(field)
-      end
-
-    optimized_program
+      other ->
+        other
+    end)
   end
 end

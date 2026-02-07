@@ -22,7 +22,8 @@ North star docs:
   - [x] Add string-signature convenience: `Dspy.Predict.new("input -> output")`
   - [x] Add GEPA to the teleprompter roadmap (spec + tests) and de-emphasize Jido in planning docs
   - [x] Next: GEPA toy improvement acceptance test (baseline < optimized with seed)
-  - [ ] Next: decide whether to refactor legacy teleprompters away from dynamic modules
+  - [x] Next: decide whether to refactor legacy teleprompters away from dynamic modules
+  - [ ] Next: (optional) replace noisy `IO.puts` in teleprompters with Logger + verbosity flag
 - Evidence:
   - Evidence file: `test/acceptance/simplest_predict_test.exs`
   - Evidence file: `test/acceptance/json_outputs_acceptance_test.exs`
@@ -34,6 +35,11 @@ North star docs:
   - Evidence file: `lib/dspy/teleprompt/gepa.ex` (toy GEPA implementation)
   - Evidence file: `test/teleprompt/gepa_test.exs` (contract tests)
   - Evidence file: `test/teleprompt/gepa_improvement_test.exs` (toy improvement acceptance)
+  - Evidence file: `lib/dspy/teleprompt/util.ex` (parameter-based mutation helpers)
+  - Evidence file: `test/teleprompt/labeled_few_shot_improvement_test.exs`
+  - Evidence file: `lib/dspy/teleprompt/labeled_few_shot.ex` (no dynamic module creation)
+  - Evidence file: `lib/dspy/teleprompt/copro.ex` (no dynamic module creation)
+  - Evidence file: `lib/dspy/teleprompt/mipro_v2.ex` (no dynamic module creation)
   - Verification: `mix test`
 
 Current health:

@@ -48,4 +48,4 @@
 - R0 acceptance tests added for the `dspy-intro` "simplest" flows.
 - GEPA now exists as a **toy instruction-search teleprompter** with deterministic tests:
   - `test/teleprompt/gepa_improvement_test.exs`
-- Known technical debt: some legacy teleprompters still create dynamic modules; long-term direction is to optimize via `parameters/1` + `update_parameters/2` (no dynamic modules).
+- Known technical debt: legacy teleprompters were refactored away from dynamic module generation; some still rely on `Dspy.Predict` parameter names ("predict.*") and should eventually support richer program shapes.

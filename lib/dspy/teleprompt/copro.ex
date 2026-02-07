@@ -5,6 +5,9 @@ defmodule Dspy.Teleprompt.COPRO do
   COPRO optimizes prompts through coordinate ascent, generating and refining
   new instructions for each step in the program to maximize the given metric.
 
+  Current limitation: only supports optimizing `Dspy.Predict` programs (via
+  the `"predict.instructions"` parameter).
+
   ## Algorithm
 
   1. Generate candidate instructions for each program step
@@ -29,6 +32,8 @@ defmodule Dspy.Teleprompt.COPRO do
   """
 
   @behaviour Dspy.Teleprompt
+
+  require Logger
 
   alias Dspy.{Example, Evaluate, LM, Settings}
 
@@ -76,9 +81,9 @@ defmodule Dspy.Teleprompt.COPRO do
   - `:minibatch_size` - Evaluation minibatch size (default: 25)
   - `:temperature` - Temperature for instruction generation (default: 1.0)
   - `:max_instruction_length` - Max instruction length (default: 200)
-  - `:num_threads` - Parallel processing threads (default: auto)
+  - `:num_threads` - Parallel processing threads (default: 1)
   - `:seed` - Random seed for reproducibility
-  - `:verbose` - Print optimization progress (default: true)
+  - `:verbose` - Print optimization progress (default: false)
 
   """
   @impl Dspy.Teleprompt
@@ -95,9 +100,9 @@ defmodule Dspy.Teleprompt.COPRO do
       minibatch_size: Keyword.get(opts, :minibatch_size, 25),
       temperature: Keyword.get(opts, :temperature, 1.0),
       max_instruction_length: Keyword.get(opts, :max_instruction_length, 200),
-      num_threads: Keyword.get(opts, :num_threads, System.schedulers_online()),
+      num_threads: Keyword.get(opts, :num_threads, 1),
       seed: Keyword.get(opts, :seed, :os.system_time(:microsecond)),
-      verbose: Keyword.get(opts, :verbose, true)
+      verbose: Keyword.get(opts, :verbose, false)
     }
   end
 
@@ -115,9 +120,9 @@ defmodule Dspy.Teleprompt.COPRO do
   @impl Dspy.Teleprompt
   @spec compile(t(), Dspy.Teleprompt.program_t(), list(Example.t())) ::
           Dspy.Teleprompt.compile_result()
-  def compile(%__MODULE__{} = teleprompt, program, trainset) do
+  def compile(%__MODULE__{} = teleprompt, %Dspy.Predict{} = program, trainset) do
     if teleprompt.verbose do
-      IO.puts("Starting COPRO optimization...")
+      Logger.info("Starting COPRO optimization...")
     end
 
     with {:ok, validated_trainset} <- validate_trainset(trainset),
@@ -126,18 +131,23 @@ defmodule Dspy.Teleprompt.COPRO do
            optimize_instructions(teleprompt, program, program_analysis, validated_trainset),
          {:ok, optimized_program} <- create_optimized_program(program, optimized_instructions) do
       if teleprompt.verbose do
-        IO.puts("COPRO optimization completed successfully")
+        Logger.info("COPRO optimization completed successfully")
       end
 
       {:ok, optimized_program}
     end
   end
 
+  def compile(%__MODULE__{}, program, _trainset) do
+    mod = if is_struct(program), do: program.__struct__, else: program
+    {:error, {:unsupported_program, mod}}
+  end
+
   # Private functions
 
   defp validate_trainset(trainset) do
     if length(trainset) == 0 do
-      {:error, "Empty training set"}
+      {:error, :empty_trainset}
     else
       {:ok, trainset}
     end
@@ -184,7 +194,7 @@ defmodule Dspy.Teleprompt.COPRO do
       for round <- 1..max_rounds, reduce: initial_instructions do
         current_instructions ->
           if verbose do
-            IO.puts("COPRO round #{round}/#{max_rounds}")
+            Logger.debug("COPRO round #{round}/#{max_rounds}")
           end
 
           optimize_round(teleprompt, program, optimization_points, trainset, current_instructions)
@@ -222,7 +232,7 @@ defmodule Dspy.Teleprompt.COPRO do
     step_id = optimization_point.step_id
 
     if verbose do
-      IO.puts("  Optimizing step: #{step_id}")
+      Logger.debug("  Optimizing step: #{step_id}")
     end
 
     # Generate candidate instructions
@@ -233,20 +243,33 @@ defmodule Dspy.Teleprompt.COPRO do
         current_instructions[step_id]
       )
 
-    # Evaluate candidates
-    minibatch = Enum.take_random(trainset, min(minibatch_size, length(trainset)))
+    # Evaluate candidates (deterministic minibatch)
+    minibatch =
+      deterministic_take(
+        trainset,
+        min(minibatch_size, length(trainset)),
+        :erlang.phash2({teleprompt.seed, step_id})
+      )
 
     evaluations =
       candidate_instructions
       |> Enum.map(fn candidate ->
         # Create temporary program with candidate instruction
         temp_instructions = Map.put(current_instructions, step_id, candidate)
-        temp_program = create_temporary_program(program, temp_instructions)
 
-        # Evaluate on minibatch
-        result = Evaluate.evaluate(temp_program, minibatch, teleprompt.metric, progress: false)
+        score =
+          case create_temporary_program(program, temp_instructions) do
+            {:ok, temp_program} ->
+              Evaluate.evaluate(temp_program, minibatch, teleprompt.metric,
+                progress: false,
+                num_threads: teleprompt.num_threads
+              ).mean
 
-        {candidate, result.mean}
+            {:error, _reason} ->
+              -1.0
+          end
+
+        {candidate, score}
       end)
 
     # Select best candidate
@@ -254,13 +277,21 @@ defmodule Dspy.Teleprompt.COPRO do
       evaluations
       |> Enum.max_by(fn {_instruction, score} -> score end)
 
-    temp_program = create_temporary_program(program, current_instructions)
-    result = Evaluate.evaluate(temp_program, minibatch, teleprompt.metric, progress: false)
-    current_score = result.mean
+    current_score =
+      case create_temporary_program(program, current_instructions) do
+        {:ok, temp_program} ->
+          Evaluate.evaluate(temp_program, minibatch, teleprompt.metric,
+            progress: false,
+            num_threads: teleprompt.num_threads
+          ).mean
+
+        {:error, _reason} ->
+          -1.0
+      end
 
     if best_score > current_score do
       if verbose do
-        IO.puts(
+        Logger.debug(
           "    Improved score: #{Float.round(current_score, 3)} -> #{Float.round(best_score, 3)}"
         )
       end
@@ -268,7 +299,7 @@ defmodule Dspy.Teleprompt.COPRO do
       Map.put(current_instructions, step_id, best_instruction)
     else
       if verbose do
-        IO.puts("    No improvement found")
+        Logger.debug("    No improvement found")
       end
 
       current_instructions
@@ -343,7 +374,7 @@ defmodule Dspy.Teleprompt.COPRO do
   end
 
   defp vary_instruction(instruction) do
-    # Simple instruction variation as fallback
+    # Deterministic instruction variation as fallback
     variations = [
       "#{instruction} Be precise and accurate.",
       "#{instruction} Provide detailed reasoning.",
@@ -352,7 +383,8 @@ defmodule Dspy.Teleprompt.COPRO do
       "#{instruction} Be thorough and complete."
     ]
 
-    Enum.random(variations)
+    idx = rem(:erlang.phash2(instruction), length(variations))
+    Enum.at(variations, idx)
   end
 
   defp is_valid_instruction(instruction) when is_binary(instruction) do
@@ -363,98 +395,22 @@ defmodule Dspy.Teleprompt.COPRO do
   defp is_valid_instruction(_), do: false
 
   defp create_temporary_program(original_program, instructions) do
-    # Create a temporary program with modified instructions
-    # This is a simplified implementation
-    {:module, module_name, _binary, _exports} =
-      defmodule TemporaryCOPROProgram do
-        @behaviour Dspy.Module
+    main_instruction = Map.get(instructions, :main, "")
 
-        @original_program original_program
-        @instructions instructions
+    Dspy.Teleprompt.Util.set_predict_instructions(original_program, main_instruction)
+  end
 
-        def __original_program__, do: @original_program
-        def __instructions__, do: @instructions
-
-        @impl Dspy.Module
-        def forward(input) do
-          original = __original_program__()
-          instructions = __instructions__()
-
-          # Add optimized instructions to input context
-          enhanced_input = add_instructions_to_context(input, instructions)
-
-          # Forward to original program
-          Dspy.Module.forward(original, enhanced_input)
-        end
-
-        @impl Dspy.Module
-        def parameters do
-          original_params = Dspy.Module.parameters(__original_program__())
-
-          Map.merge(original_params, %{
-            optimized_instructions: __instructions__()
-          })
-        end
-
-        defp add_instructions_to_context(input, instructions) when is_map(input) do
-          main_instruction = Map.get(instructions, :main, "")
-          Map.put(input, :instruction, main_instruction)
-        end
-
-        defp add_instructions_to_context(input, instructions) do
-          main_instruction = Map.get(instructions, :main, "")
-          %{input: input, instruction: main_instruction}
-        end
-      end
-
-    module_name
+  defp deterministic_take(list, k, seed) do
+    list
+    |> Enum.with_index()
+    |> Enum.sort_by(fn {item, idx} -> :erlang.phash2({seed, item, idx}) end)
+    |> Enum.take(k)
+    |> Enum.map(&elem(&1, 0))
   end
 
   defp create_optimized_program(original_program, optimized_instructions) do
-    # Create final optimized program
-    {:module, optimized_program, _binary, _exports} =
-      defmodule OptimizedCOPROProgram do
-        @behaviour Dspy.Module
+    main_instruction = Map.get(optimized_instructions, :main, "")
 
-        @original_program original_program
-        @optimized_instructions optimized_instructions
-
-        def __original_program__, do: @original_program
-        def __optimized_instructions__, do: @optimized_instructions
-
-        @impl Dspy.Module
-        def forward(input) do
-          original = __original_program__()
-          instructions = __optimized_instructions__()
-
-          # Add optimized instructions to input context
-          enhanced_input = add_instructions_to_context(input, instructions)
-
-          # Forward to original program
-          Dspy.Module.forward(original, enhanced_input)
-        end
-
-        @impl Dspy.Module
-        def parameters do
-          original_params = Dspy.Module.parameters(__original_program__())
-
-          Map.merge(original_params, %{
-            copro_optimized_instructions: __optimized_instructions__(),
-            optimization_method: "COPRO"
-          })
-        end
-
-        defp add_instructions_to_context(input, instructions) when is_map(input) do
-          main_instruction = Map.get(instructions, :main, "")
-          Map.put(input, :instruction, main_instruction)
-        end
-
-        defp add_instructions_to_context(input, instructions) do
-          main_instruction = Map.get(instructions, :main, "")
-          %{input: input, instruction: main_instruction}
-        end
-      end
-
-    {:ok, optimized_program}
+    Dspy.Teleprompt.Util.set_predict_instructions(original_program, main_instruction)
   end
 end

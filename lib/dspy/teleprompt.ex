@@ -35,7 +35,7 @@ defmodule Dspy.Teleprompt do
 
   @type teleprompt_config :: Keyword.t()
 
-  @type program_t :: module() | struct()
+  @type program_t :: Dspy.Module.t()
 
   @type compile_result :: {:ok, program_t()} | {:error, term()}
 

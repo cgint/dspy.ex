@@ -2,6 +2,9 @@ defmodule Dspy.Teleprompt.MIPROv2 do
   @moduledoc """
   MIPROv2 (Multi-Stage Instruction Prompt Optimization v2) teleprompt.
 
+  Current limitation: only supports optimizing `Dspy.Predict` programs (via
+  `"predict.instructions"` and `"predict.examples"` parameters).
+
   MIPROv2 optimizes both instructions and few-shot examples jointly using:
   1. Bootstrapping few-shot example candidates
   2. Instruction generation with task dynamics awareness
@@ -25,6 +28,8 @@ defmodule Dspy.Teleprompt.MIPROv2 do
   """
 
   @behaviour Dspy.Teleprompt
+
+  require Logger
 
   alias Dspy.{Example, Evaluate, Trainset, LM, Settings}
 
@@ -95,7 +100,7 @@ defmodule Dspy.Teleprompt.MIPROv2 do
   - `:minibatch_size` - Evaluation minibatch size (default: 25)
   - `:max_instruction_candidates` - Max instructions to generate (auto-configured)
   - `:seed` - Random seed for reproducibility
-  - `:verbose` - Print optimization progress (default: true)
+  - `:verbose` - Print optimization progress (default: false)
   - `:task_model` - Model for executing tasks (default: from settings)
   - `:prompt_model` - Model for generating prompts (default: from settings)
 
@@ -128,9 +133,9 @@ defmodule Dspy.Teleprompt.MIPROv2 do
           auto_config.instruction_generation_rounds
         ),
       bayesian_opt_config: configure_bayesian_optimization(auto),
-      num_threads: Keyword.get(opts, :num_threads, System.schedulers_online()),
+      num_threads: Keyword.get(opts, :num_threads, 1),
       seed: Keyword.get(opts, :seed, :os.system_time(:microsecond)),
-      verbose: Keyword.get(opts, :verbose, true),
+      verbose: Keyword.get(opts, :verbose, false),
       task_model: Keyword.get(opts, :task_model, Settings.get().lm),
       prompt_model: Keyword.get(opts, :prompt_model, Settings.get().lm)
     }
@@ -151,9 +156,9 @@ defmodule Dspy.Teleprompt.MIPROv2 do
   @impl Dspy.Teleprompt
   @spec compile(t(), Dspy.Teleprompt.program_t(), list(Example.t())) ::
           Dspy.Teleprompt.compile_result()
-  def compile(%__MODULE__{} = teleprompt, program, trainset) do
+  def compile(%__MODULE__{} = teleprompt, %Dspy.Predict{} = program, trainset) do
     if teleprompt.verbose do
-      IO.puts("Starting MIPROv2 optimization (#{teleprompt.auto} intensity)...")
+      Logger.info("Starting MIPROv2 optimization (#{teleprompt.auto} intensity)...")
     end
 
     with {:ok, validated_trainset} <- validate_trainset(trainset),
@@ -172,11 +177,16 @@ defmodule Dspy.Teleprompt.MIPROv2 do
            ),
          {:ok, optimized_program} <- create_optimized_program(program, optimal_config) do
       if teleprompt.verbose do
-        IO.puts("MIPROv2 optimization completed successfully")
+        Logger.info("MIPROv2 optimization completed successfully")
       end
 
       {:ok, optimized_program}
     end
+  end
+
+  def compile(%__MODULE__{}, program, _trainset) do
+    mod = if is_struct(program), do: program.__struct__, else: program
+    {:error, {:unsupported_program, mod}}
   end
 
   # Private functions
@@ -226,7 +236,7 @@ defmodule Dspy.Teleprompt.MIPROv2 do
 
   defp validate_trainset(trainset) do
     if length(trainset) < 5 do
-      {:error, "Insufficient training data for MIPROv2 (need at least 5 examples)"}
+      {:error, {:insufficient_trainset, min_size: 5}}
     else
       {:ok, trainset}
     end
@@ -258,12 +268,12 @@ defmodule Dspy.Teleprompt.MIPROv2 do
     } = teleprompt
 
     if verbose do
-      IO.puts("Bootstrapping few-shot examples...")
+      Logger.debug("Bootstrapping few-shot examples...")
     end
 
     # Generate more candidates than needed, then select best
     candidate_inputs =
-      Trainset.sample(train_data, max_demos * 3, strategy: :diverse)
+      Trainset.sample(train_data, max_demos * 3, strategy: :diverse, seed: teleprompt.seed + 10)
       |> Enum.map(& &1.attrs)
 
     # Generate outputs using program
@@ -294,9 +304,9 @@ defmodule Dspy.Teleprompt.MIPROv2 do
     {:ok, bootstrapped}
   end
 
-  defp select_labeled_examples(%__MODULE__{max_labeled_demos: max_demos}, train_data) do
+  defp select_labeled_examples(%__MODULE__{max_labeled_demos: max_demos, seed: seed}, train_data) do
     # Select diverse labeled examples
-    selected = Trainset.sample(train_data, max_demos, strategy: :diverse)
+    selected = Trainset.sample(train_data, max_demos, strategy: :diverse, seed: seed + 20)
     {:ok, selected}
   end
 
@@ -309,7 +319,7 @@ defmodule Dspy.Teleprompt.MIPROv2 do
     } = teleprompt
 
     if verbose do
-      IO.puts("Generating instruction candidates...")
+      Logger.debug("Generating instruction candidates...")
     end
 
     # Analyze program and training data to generate contextual instructions
@@ -338,7 +348,11 @@ defmodule Dspy.Teleprompt.MIPROv2 do
       |> Enum.filter(&is_valid_instruction/1)
       |> Enum.take(max_candidates)
 
-    {:ok, unique_candidates}
+    if unique_candidates == [] do
+      {:error, :no_instruction_candidates}
+    else
+      {:ok, unique_candidates}
+    end
   end
 
   defp analyze_program_context(program) do
@@ -488,7 +502,7 @@ defmodule Dspy.Teleprompt.MIPROv2 do
     %{num_trials: num_trials, verbose: verbose} = teleprompt
 
     if verbose do
-      IO.puts("Running Bayesian optimization with #{num_trials} trials...")
+      Logger.debug("Running Bayesian optimization with #{num_trials} trials...")
     end
 
     # Define search space
@@ -530,13 +544,20 @@ defmodule Dspy.Teleprompt.MIPROv2 do
       for trial <- 1..num_trials, reduce: {best_config, best_score} do
         {current_best_config, current_best_score} ->
           # Sample configuration from search space
-          config = sample_configuration(search_space, bootstrapped, labeled, instructions)
+          config =
+            sample_configuration(
+              search_space,
+              bootstrapped,
+              labeled,
+              instructions,
+              :erlang.phash2({teleprompt.seed, trial})
+            )
 
           # Evaluate configuration
           score = evaluate_configuration(teleprompt, program, config, eval_data)
 
           if teleprompt.verbose and rem(trial, 5) == 0 do
-            IO.puts("  Trial #{trial}/#{num_trials}: score = #{Float.round(score, 3)}")
+            Logger.debug("  Trial #{trial}/#{num_trials}: score = #{Float.round(score, 3)}")
           end
 
           if score > current_best_score do
@@ -549,13 +570,13 @@ defmodule Dspy.Teleprompt.MIPROv2 do
     best_config
   end
 
-  defp sample_configuration(search_space, bootstrapped, labeled, instructions) do
-    instruction_idx = Enum.random(search_space.instruction_idx)
-    num_bootstrap = Enum.random(search_space.num_bootstrap)
-    num_labeled = Enum.random(search_space.num_labeled)
+  defp sample_configuration(search_space, bootstrapped, labeled, instructions, seed) do
+    instruction_idx = pick_one(Enum.to_list(search_space.instruction_idx), seed)
+    num_bootstrap = pick_one(Enum.to_list(search_space.num_bootstrap), seed + 1)
+    num_labeled = pick_one(Enum.to_list(search_space.num_labeled), seed + 2)
 
-    selected_bootstrap = Enum.take_random(bootstrapped, num_bootstrap)
-    selected_labeled = Enum.take_random(labeled, num_labeled)
+    selected_bootstrap = deterministic_take(bootstrapped, num_bootstrap, seed + 3)
+    selected_labeled = deterministic_take(labeled, num_labeled, seed + 4)
     selected_instruction = Enum.at(instructions, instruction_idx)
 
     %{
@@ -566,166 +587,72 @@ defmodule Dspy.Teleprompt.MIPROv2 do
   end
 
   defp evaluate_configuration(
-         %__MODULE__{minibatch_size_per_trial: minibatch_size, metric: metric},
+         %__MODULE__{
+           minibatch_size_per_trial: minibatch_size,
+           metric: metric,
+           seed: seed,
+           num_threads: num_threads
+         },
          program,
          config,
          eval_data
        ) do
     # Create temporary program with configuration
-    temp_program = create_temp_program_with_config(program, config)
+    # If parameter application fails, penalize this configuration.
+    case create_temp_program_with_config(program, config) do
+      {:ok, temp_program} ->
+        eval_minibatch =
+          deterministic_take(
+            eval_data,
+            min(minibatch_size, length(eval_data)),
+            :erlang.phash2({seed, config.instruction})
+          )
 
-    # Evaluate on minibatch
-    eval_minibatch = Enum.take_random(eval_data, min(minibatch_size, length(eval_data)))
-    result = Evaluate.evaluate(temp_program, eval_minibatch, metric, progress: false)
+        Evaluate.evaluate(temp_program, eval_minibatch, metric,
+          progress: false,
+          num_threads: num_threads
+        ).mean
 
-    result.mean
+      {:error, _reason} ->
+        -1.0
+    end
   end
 
   defp create_temp_program_with_config(original_program, config) do
-    {:module, temp_program, _binary, _exports} =
-      defmodule TempMIPROProgram do
-        @behaviour Dspy.Module
+    examples = config.bootstrap_examples ++ config.labeled_examples
 
-        @original_program original_program
-        @config config
+    with {:ok, prog} <-
+           Dspy.Teleprompt.Util.set_predict_instructions(original_program, config.instruction),
+         {:ok, prog} <- Dspy.Teleprompt.Util.set_predict_examples(prog, examples) do
+      {:ok, prog}
+    end
+  end
 
-        def __original_program__, do: @original_program
-        def __config__, do: @config
+  defp pick_one([], _seed), do: raise(ArgumentError, "empty candidate list")
 
-        @impl Dspy.Module
-        def forward(input) do
-          original = __original_program__()
-          config = __config__()
+  defp pick_one(list, seed) do
+    idx = rem(:erlang.phash2({seed, list}), length(list))
+    Enum.at(list, idx)
+  end
 
-          # Enhance input with MIPROv2 configuration
-          enhanced_input = enhance_input_with_mipro_config(input, config)
-
-          # Forward to original program
-          Dspy.Module.forward(original, enhanced_input)
-        end
-
-        @impl Dspy.Module
-        def parameters do
-          original_params = Dspy.Module.parameters(__original_program__())
-          config = __config__()
-
-          Map.merge(original_params, %{
-            mipro_instruction: config.instruction,
-            num_bootstrap_examples: length(config.bootstrap_examples),
-            num_labeled_examples: length(config.labeled_examples)
-          })
-        end
-
-        defp enhance_input_with_mipro_config(input, config) when is_map(input) do
-          # Add instruction and examples to input
-          examples_text =
-            format_examples_for_context(config.bootstrap_examples ++ config.labeled_examples)
-
-          input
-          |> Map.put(:instruction, config.instruction)
-          |> Map.put(:few_shot_examples, examples_text)
-        end
-
-        defp enhance_input_with_mipro_config(input, config) do
-          examples_text =
-            format_examples_for_context(config.bootstrap_examples ++ config.labeled_examples)
-
-          %{
-            input: input,
-            instruction: config.instruction,
-            few_shot_examples: examples_text
-          }
-        end
-
-        defp format_examples_for_context(examples) do
-          examples
-          |> Enum.with_index(1)
-          |> Enum.map(fn {example, idx} ->
-            fields =
-              example.attrs
-              |> Enum.map(fn {k, v} -> "#{k}: #{v}" end)
-              |> Enum.join("\n")
-
-            "Example #{idx}:\n#{fields}"
-          end)
-          |> Enum.join("\n\n")
-        end
-      end
-
-    temp_program
+  defp deterministic_take(list, k, seed) do
+    list
+    |> Enum.with_index()
+    |> Enum.sort_by(fn {item, idx} -> :erlang.phash2({seed, item, idx}) end)
+    |> Enum.take(k)
+    |> Enum.map(&elem(&1, 0))
   end
 
   defp create_optimized_program(original_program, optimal_config) do
-    {:module, optimized_program, _binary, _exports} =
-      defmodule OptimizedMIPROv2Program do
-        @behaviour Dspy.Module
+    examples = optimal_config.bootstrap_examples ++ optimal_config.labeled_examples
 
-        @original_program original_program
-        @optimal_config optimal_config
-
-        def __original_program__, do: @original_program
-        def __optimal_config__, do: @optimal_config
-
-        @impl Dspy.Module
-        def forward(input) do
-          original = __original_program__()
-          config = __optimal_config__()
-
-          # Apply MIPROv2 optimizations
-          enhanced_input = enhance_input_with_mipro_config(input, config)
-
-          # Forward to original program
-          Dspy.Module.forward(original, enhanced_input)
-        end
-
-        @impl Dspy.Module
-        def parameters do
-          original_params = Dspy.Module.parameters(__original_program__())
-          config = __optimal_config__()
-
-          Map.merge(original_params, %{
-            mipro_v2_instruction: config.instruction,
-            mipro_v2_bootstrap_examples: config.bootstrap_examples,
-            mipro_v2_labeled_examples: config.labeled_examples,
-            optimization_method: "MIPROv2"
-          })
-        end
-
-        defp enhance_input_with_mipro_config(input, config) when is_map(input) do
-          examples_text =
-            format_examples_for_context(config.bootstrap_examples ++ config.labeled_examples)
-
-          input
-          |> Map.put(:instruction, config.instruction)
-          |> Map.put(:few_shot_examples, examples_text)
-        end
-
-        defp enhance_input_with_mipro_config(input, config) do
-          examples_text =
-            format_examples_for_context(config.bootstrap_examples ++ config.labeled_examples)
-
-          %{
-            input: input,
-            instruction: config.instruction,
-            few_shot_examples: examples_text
-          }
-        end
-
-        defp format_examples_for_context(examples) do
-          examples
-          |> Enum.with_index(1)
-          |> Enum.map(fn {example, idx} ->
-            fields =
-              example.attrs
-              |> Enum.map(fn {k, v} -> "#{k}: #{v}" end)
-              |> Enum.join("\n")
-
-            "Example #{idx}:\n#{fields}"
-          end)
-          |> Enum.join("\n\n")
-        end
-      end
-
-    {:ok, optimized_program}
+    with {:ok, prog} <-
+           Dspy.Teleprompt.Util.set_predict_instructions(
+             original_program,
+             optimal_config.instruction
+           ),
+         {:ok, prog} <- Dspy.Teleprompt.Util.set_predict_examples(prog, examples) do
+      {:ok, prog}
+    end
   end
 end
