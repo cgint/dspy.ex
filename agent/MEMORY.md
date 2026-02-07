@@ -2,50 +2,53 @@
 
 ## What this repo is
 - Project: Elixir-native port of Python **DSPy** (upstream checkout at `../dspy`).
-- Goal: open-source, community-adoptable library that combines **DSPy’s program+optimization** concepts with **BEAM/Elixir** reliability and concurrency.
+- Goal: open-source, community-adoptable library that ports **DSPy’s program + optimization** concepts to BEAM/Elixir.
 
-## Non-negotiables (project constraints)
-- Keep core `:dspy` **library-first**.
-- Favor **interface familiarity** with:
+## Where to look first (human vs planning)
+- Human-friendly snapshot + multi-dimensional roadmap: **`docs/OVERVIEW.md`**
+- Agent/contributor entry point: `AGENTS.md`
+- Planning backlog / next tasks: `plan/STATUS.md`
+- Roadmap: `plan/RELEASE_MILESTONES.md`
+
+## Non-negotiables (constraints)
+- Core `:dspy` is **library-first**.
+- Favor interface familiarity with:
   - upstream Python DSPy (primary)
   - `../DSPex-snakepit` where it helps adoption
-- Prefer shipping **stable, frequently-used slices** over “feature completeness”.
-- Testing is mandatory: new functionality should be covered by deterministic tests where possible.
+- Prefer shipping **stable slices** over feature completeness.
+- Deterministic tests are the spec where possible.
 
-## Current big decisions (so far)
-- Provider layer: use **`req_llm`** via an adapter (`Dspy.LM.ReqLLM`), avoid maintaining provider-specific HTTP quirks in core.
-- Orchestration: **deferred for now** (no Jido integration work until core + teleprompters are solid).
-- Keep web UI separate (or gated); don’t let Phoenix/LiveView concerns define core.
-- Teleprompting: prioritize real optimizer value (**GEPA priority**).
+## Current big decisions
+- Provider layer: use **`req_llm`** via an adapter; avoid provider-specific HTTP quirks in core.
+- Orchestration/UI: deferred (no Jido / no Phoenix as core concerns).
+- Testing discipline:
+  - tests that touch global settings must snapshot+restore via `Dspy.TestSupport.restore_settings_on_exit/0`.
+  - prefer `num_threads: 1` + `progress: false` for determinism.
 
-## Upstream reference
-- Upstream repo path: `../dspy`
-- Pinned commit recorded in `plan/PORTING_CHARTER.md` and `plan/STRATEGIC_ROADMAP_DSPY_PORT.md`.
+## Reference workflows (acceptance spec source)
+- Python examples (local): `/Users/cgint/dev/dspy-intro/src`
+- Planning guide: `plan/REFERENCE_DSPY_INTRO.md`
 
-## Reference example suite (acceptance specs)
-- Python examples path (local, user-specific): `/Users/cgint/dev/dspy-intro/src`
-- Planning doc: `plan/REFERENCE_DSPY_INTRO.md`
+## Proven today (evidence anchors)
+- Acceptance tests (deterministic, offline):
+  - `test/acceptance/simplest_predict_test.exs` (arrow signatures + int parsing)
+  - `test/acceptance/json_outputs_acceptance_test.exs` (JSON fenced outputs parsing/coercion)
+- Evaluate golden path:
+  - `test/evaluate_golden_path_test.exs`
+- Teleprompters (deterministic tests):
+  - GEPA: `test/teleprompt/gepa_test.exs`, `test/teleprompt/gepa_improvement_test.exs`
+  - LabeledFewShot improvement: `test/teleprompt/labeled_few_shot_improvement_test.exs`
 
-## Repo navigation tips
-- Entry point: `AGENTS.md`
-- Planning artifacts: `plan/`
-  - also see `plan/INTERFACE_COMPATIBILITY.md` when working on parity
-- Classic docs: `docs/`
+## Teleprompter status (important constraint)
+- Legacy teleprompters were refactored to **avoid dynamic module generation**.
+- Current limitation: optimizers primarily support **`%Dspy.Predict{}`** programs by updating parameters:
+  - `"predict.instructions"`, `"predict.examples"`
+- Shared helper: `lib/dspy/teleprompt/util.ex` (`Dspy.Teleprompt.Util`).
 
-## “How to resume” checklist
-1. Read `plan/STATUS.md` (what’s next, what’s blocked).
-2. Read `plan/RELEASE_MILESTONES.md` (where we are in the roadmap).
-3. If a task references interface parity, open upstream at `../dspy` and compare behavior.
-4. Run verification (when implementing): `mix test` and `./precommit.sh`.
+## Loop automation (for delegated work)
+- Worker/review scripts live in `scripts/`.
+- Review gate: `scripts/loop_review.sh` (expects “Verdict: LGTM” by default).
 
 ## Verification habits
-- Prefer small changes that keep `mix test` green.
-- Add a failing test first (TDD) for behavior changes.
-- When tests touch global DSPy settings, always snapshot+restore (`Dspy.TestSupport.restore_settings_on_exit/0` in `test/test_helper.exs`).
-- Loop automation uses a review gate (`scripts/loop_review.sh`) before committing.
-
-## Recent progress snapshot
-- R0 acceptance tests added for the `dspy-intro` "simplest" flows.
-- GEPA now exists as a **toy instruction-search teleprompter** with deterministic tests:
-  - `test/teleprompt/gepa_improvement_test.exs`
-- Known technical debt: legacy teleprompters were refactored away from dynamic module generation; some still rely on `Dspy.Predict` parameter names ("predict.*") and should eventually support richer program shapes.
+- Keep `mix test` green.
+- Run `./precommit.sh` after larger changes.
