@@ -75,13 +75,20 @@ pred.attrs.safety #=> "unsafe"
 
 Proof: `test/acceptance/classifier_credentials_acceptance_test.exs`
 
-### 4) Evaluate (golden path)
+### 4) Refine loop (retry until a metric threshold is met)
+
+A minimal refinement loop runs a program multiple times, scoring each attempt and
+stopping early once a threshold is met.
+
+Proof: `test/acceptance/simplest_refine_acceptance_test.exs`
+
+### 5) Evaluate (golden path)
 
 A simple `Predict → Evaluate` loop runs deterministically (when you set `num_threads: 1` and use a mock LM).
 
 Proof: `test/evaluate_golden_path_test.exs`
 
-### 5) Teleprompters/optimizers (Predict-only, parameter-based; no dynamic modules)
+### 6) Teleprompters/optimizers (Predict-only, parameter-based; no dynamic modules)
 
 These teleprompters currently optimize **`%Dspy.Predict{}`** programs by updating optimizable parameters (e.g. `"predict.instructions"`, `"predict.examples"`). They **do not** generate new runtime modules.
 
@@ -102,7 +109,7 @@ Legend:
 
 | `dspy-intro/src` area | Current | What is already covered here | Evidence |
 |---|---:|---|---|
-| `simplest/` | **2** | Predict + arrow signatures + int parsing; JSON fenced outputs parsing; ReAct tool loop + tool logging callbacks | `test/acceptance/simplest_predict_test.exs`, `test/acceptance/json_outputs_acceptance_test.exs`, `test/acceptance/simplest_tool_logging_acceptance_test.exs` |
+| `simplest/` | **2** | Predict + arrow signatures + int parsing; JSON fenced outputs parsing; ReAct tool loop + tool logging callbacks; Refine loop | `test/acceptance/simplest_predict_test.exs`, `test/acceptance/json_outputs_acceptance_test.exs`, `test/acceptance/simplest_tool_logging_acceptance_test.exs`, `test/acceptance/simplest_refine_acceptance_test.exs` |
 | `classifier_credentials/` | **2** | Constrained output classification via `one_of` field constraint | `test/acceptance/classifier_credentials_acceptance_test.exs` |
 | `knowledge_graph/` | **2** | Triplet extraction from text chunks + reuse existing context + evaluation | `test/acceptance/knowledge_graph_triplets_test.exs` |
 | `text_component_extract/` | **2** | Structured extraction via JSON + LabeledFewShot improvement loop | `test/acceptance/text_component_extract_acceptance_test.exs` |
