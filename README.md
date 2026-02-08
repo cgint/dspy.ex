@@ -6,6 +6,7 @@ Status: **alpha**. We ship in small, usable slices.
 
 - If you want the fastest overview: start at **`docs/OVERVIEW.md`**.
 - If you want provider setup: **`docs/PROVIDERS.md`** (via `req_llm`).
+- If you want to pick a tag intentionally: **`docs/RELEASES.md`**.
 
 ## Stability / how to pin versions
 

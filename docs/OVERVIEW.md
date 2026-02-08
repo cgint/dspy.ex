@@ -4,7 +4,7 @@
 
 - Want to know what’s usable today? Read **“What you can do today”** below.
 - Want provider setup? See `docs/PROVIDERS.md` (uses `req_llm`).
-- Want stability? Use **semver tags**; `main` moves quickly (see `README.md`).
+- Want stability? Use **semver tags**; `main` moves quickly (see `README.md` + `docs/RELEASES.md`).
 
 ## Diagram
 
