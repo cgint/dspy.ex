@@ -4,7 +4,7 @@
 ![Reference examples to tests](./diagrams/dspy_intro_to_tests.svg)
 
 ## Summary
-The directory `/Users/cgint/dev/dspy-intro/src` contains important, real-world **Python DSPy usage examples** that we will treat as a *behavior reference suite*.
+A local checkout of `dspy-intro/src` (path varies) contains important, real-world **Python DSPy usage examples** that we will treat as a *behavior reference suite*.
 
 We will use these scripts to:
 - decide what needs to work **early** (adoption-first)
@@ -12,7 +12,7 @@ We will use these scripts to:
 - prevent regressions and keep maintenance **hassle-free** as the codebase grows
 
 ## User request (verbatim)
-> /Users/cgint/dev/dspy-intro/src contains some sample/learning usage of python dspy that I deem important - pls also not that down so we might use this for rahter important opportunities that should work rather soon on the way - pls make tests that mimic such behaviour so that we also build up a proper set of tests (aka specification) for professional and hasstle free maintainance on the go - i plan to also put you in charge of organising issue-handling and maintainance later on and i would like to learn from your outcome as well - so pls put the quality bar high but smart - seek for best practices from the stack through web-search and asks.sh - reflect on the best-practices regularly as we need to produce well maintainable logic as code and in tests
+> `dspy-intro/src` contains some sample/learning usage of python dspy that I deem important - pls also not that down so we might use this for rahter important opportunities that should work rather soon on the way - pls make tests that mimic such behaviour so that we also build up a proper set of tests (aka specification) for professional and hasstle free maintainance on the go - i plan to also put you in charge of organising issue-handling and maintainance later on and i would like to learn from your outcome as well - so pls put the quality bar high but smart - seek for best practices from the stack through web-search and asks.sh - reflect on the best-practices regularly as we need to produce well maintainable logic as code and in tests
 
 ## What’s inside `dspy-intro/src` (high-level)
 - `simplest/` — minimal Predict usage, JSONAdapter structured outputs, tools/callback logging, Refine loop, RLM demo, multimodal attachments/images.

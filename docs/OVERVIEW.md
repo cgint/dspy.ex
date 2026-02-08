@@ -131,6 +131,9 @@ map where the user message content is a list of parts (text + `input_file`).
 
 Proof: `test/acceptance/simplest_attachments_acceptance_test.exs`
 
+Related (composition proof): PDF attachment + JSON-structured output in one workflow:
+`test/acceptance/simplest_contracts_acceptance_test.exs`
+
 ### 6) Evaluate (golden path)
 
 A simple `Predict → Evaluate` loop runs deterministically (when you set `num_threads: 1` and use a mock LM).
@@ -158,7 +161,7 @@ Legend:
 
 | `dspy-intro/src` area | Current | What is already covered here | Evidence |
 |---|---:|---|---|
-| `simplest/` | **2** | Predict + arrow signatures + int parsing; JSON fenced outputs parsing; ReAct tool loop + tool logging callbacks; Refine loop; Attachments (multimodal request parts) | `test/acceptance/simplest_predict_test.exs`, `test/acceptance/json_outputs_acceptance_test.exs`, `test/acceptance/simplest_tool_logging_acceptance_test.exs`, `test/acceptance/simplest_refine_acceptance_test.exs`, `test/acceptance/simplest_attachments_acceptance_test.exs` |
+| `simplest/` | **2** | Predict + arrow signatures + int parsing; JSON fenced outputs parsing; ReAct tool loop + tool logging callbacks; Refine loop; Attachments (multimodal request parts); Contracts-style PDF→JSON extraction + Q&A | `test/acceptance/simplest_predict_test.exs`, `test/acceptance/json_outputs_acceptance_test.exs`, `test/acceptance/simplest_tool_logging_acceptance_test.exs`, `test/acceptance/simplest_refine_acceptance_test.exs`, `test/acceptance/simplest_attachments_acceptance_test.exs`, `test/acceptance/simplest_contracts_acceptance_test.exs` |
 | `classifier_credentials/` | **2** | Constrained output classification via `one_of` field constraint | `test/acceptance/classifier_credentials_acceptance_test.exs` |
 | `knowledge_graph/` | **2** | Triplet extraction from text chunks + reuse existing context + evaluation | `test/acceptance/knowledge_graph_triplets_test.exs` |
 | `text_component_extract/` | **2** | Structured extraction via JSON + LabeledFewShot improvement loop | `test/acceptance/text_component_extract_acceptance_test.exs` |
