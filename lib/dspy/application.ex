@@ -3,54 +3,66 @@ defmodule Dspy.Application do
 
   use Application
 
+  require Logger
+
   @impl true
   def start(_type, _args) do
-    children = [
-      # Phoenix PubSub
-      {Phoenix.PubSub, name: Dspy.PubSub},
-
-      # DSPy Core Services
-      {Dspy.Settings, []},
-      {Registry, keys: :unique, name: Dspy.MultiAgentChat.Registry},
-      {Dspy.MultiAgentLogger, []},
-
-      # Godmode Services
-      {Dspy.GodmodeCoordinator, []},
-      {Dspy.RealtimeMonitor, []},
-
-      # Phoenix Endpoint
-      DspyWeb.Endpoint,
-
-      # LM Configuration Task
-      {Task, fn -> configure_language_model() end}
-    ]
+    # Library-first: start only the minimal core services by default.
+    # Optional/web/experimental services are gated behind config so `mix test`
+    # (and normal library usage) stays quiet and deterministic.
+    children =
+      [
+        {Dspy.Settings, []}
+      ] ++ optional_children()
 
     opts = [strategy: :one_for_one, name: Dspy.Supervisor]
-    {:ok, pid} = Supervisor.start_link(children, opts)
 
-    # Give a moment for Settings to start then configure
-    Process.sleep(100)
-    configure_language_model()
-
-    {:ok, pid}
+    with {:ok, pid} <- Supervisor.start_link(children, opts) do
+      maybe_configure_language_model()
+      {:ok, pid}
+    end
   end
 
-  # Tell Phoenix to update the endpoint configuration
-  # whenever the application is updated.
+  # Tell Phoenix to update the endpoint configuration whenever the application is updated.
   @impl true
   def config_change(changed, _new, removed) do
-    DspyWeb.Endpoint.config_change(changed, removed)
+    if optional_services_enabled?() and is_pid(Process.whereis(DspyWeb.Endpoint)) do
+      DspyWeb.Endpoint.config_change(changed, removed)
+    end
+
     :ok
   end
 
-  defp configure_language_model do
+  defp optional_children do
+    if optional_services_enabled?() do
+      [
+        # Phoenix PubSub
+        {Phoenix.PubSub, name: Dspy.PubSub},
+
+        # Multi-agent / experimental services
+        {Registry, keys: :unique, name: Dspy.MultiAgentChat.Registry},
+        {Dspy.MultiAgentLogger, []},
+
+        # Godmode services
+        {Dspy.GodmodeCoordinator, []},
+        {Dspy.RealtimeMonitor, []},
+
+        # Phoenix Endpoint
+        DspyWeb.Endpoint
+      ]
+    else
+      []
+    end
+  end
+
+  defp optional_services_enabled? do
+    Application.get_env(:dspy, :start_optional_services, false) == true
+  end
+
+  defp maybe_configure_language_model do
     case Application.get_env(:dspy, :lm) do
       %{module: module, api_key: api_key, model: model} = config ->
-        lm =
-          module.new(
-            api_key: api_key,
-            model: model
-          )
+        lm = module.new(api_key: api_key, model: model)
 
         :ok =
           Dspy.Settings.configure(
@@ -59,13 +71,13 @@ defmodule Dspy.Application do
             temperature: Map.get(config, :temperature, 0.0)
           )
 
-        IO.puts("✅ DSPy LM configured: #{model}")
+        Logger.info("DSPy LM configured: #{model}")
 
       _ ->
-        IO.puts("⚠️  No LM configuration found")
+        :ok
     end
   rescue
     error ->
-      IO.puts("❌ Failed to configure LM: #{inspect(error)}")
+      Logger.error("Failed to configure LM:\n" <> Exception.format(:error, error, __STACKTRACE__))
   end
 end

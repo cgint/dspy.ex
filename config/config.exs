@@ -2,6 +2,9 @@ import Config
 
 config :phoenix, :json_library, Jason
 
+# Library-first by default: optional web/"godmode" services must be explicitly enabled.
+config :dspy, :start_optional_services, false
+
 # Minimal defaults so the in-tree Phoenix endpoint can compile and the application can boot.
 # This repo is moving toward "library-only"; until `lib/dspy_web/*` is relocated/gated, we keep
 # the endpoint non-serving by default.
