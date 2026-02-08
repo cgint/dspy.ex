@@ -112,9 +112,10 @@ defmodule Dspy.Teleprompt.Ensemble do
   @spec compile(t(), Dspy.Teleprompt.program_t(), list(Example.t())) ::
           Dspy.Teleprompt.compile_result()
   def compile(%__MODULE__{} = teleprompt, program, trainset) do
-    if teleprompt.verbose do
-      IO.puts("Starting Ensemble compilation with #{teleprompt.size} members...")
-    end
+    Dspy.Teleprompt.Util.log(
+      teleprompt,
+      "Starting Ensemble compilation with #{teleprompt.size} members..."
+    )
 
     with {:ok, validated_trainset} <- validate_trainset(trainset),
          {:ok, {train_data, val_data}} <- split_data(teleprompt, validated_trainset),
@@ -122,9 +123,7 @@ defmodule Dspy.Teleprompt.Ensemble do
          {:ok, member_weights} <- calculate_member_weights(teleprompt, ensemble_members, val_data),
          {:ok, ensemble_program} <-
            create_ensemble_program(teleprompt, ensemble_members, member_weights) do
-      if teleprompt.verbose do
-        IO.puts("Ensemble compilation completed successfully")
-      end
+      Dspy.Teleprompt.Util.log(teleprompt, "Ensemble compilation completed successfully")
 
       {:ok, ensemble_program}
     end
@@ -162,13 +161,10 @@ defmodule Dspy.Teleprompt.Ensemble do
       base_teleprompt_config: base_config,
       diversity_strategy: diversity_strategy,
       num_threads: num_threads,
-      verbose: verbose,
       seed: seed
     } = teleprompt
 
-    if verbose do
-      IO.puts("Training #{size} ensemble members...")
-    end
+    Dspy.Teleprompt.Util.log(teleprompt, "Training #{size} ensemble members...")
 
     # Generate diverse training configurations
     training_configs =
@@ -180,9 +176,7 @@ defmodule Dspy.Teleprompt.Ensemble do
       |> Enum.with_index(1)
       |> Task.async_stream(
         fn {config, idx} ->
-          if verbose do
-            IO.puts("  Training member #{idx}/#{size}")
-          end
+          Dspy.Teleprompt.Util.log(teleprompt, "  Training member #{idx}/#{size}")
 
           train_single_member(base_type, program, config)
         end,

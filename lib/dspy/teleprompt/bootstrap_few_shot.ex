@@ -34,7 +34,7 @@ defmodule Dspy.Teleprompt.BootstrapFewShot do
     :teacher,
     # Max bootstrapped examples
     :max_bootstrapped_demos,
-    # Max labeled examples  
+    # Max labeled examples
     :max_labeled_demos,
     # Max bootstrap rounds
     :max_rounds,
@@ -47,7 +47,9 @@ defmodule Dspy.Teleprompt.BootstrapFewShot do
     # Random seed
     :seed,
     # Bootstrap sampling strategy
-    :bootstrap_strategy
+    :bootstrap_strategy,
+    # Whether to emit progress logs
+    :verbose
   ]
 
   @type t :: %__MODULE__{
@@ -60,7 +62,8 @@ defmodule Dspy.Teleprompt.BootstrapFewShot do
           num_candidate_programs: pos_integer(),
           num_threads: pos_integer(),
           seed: integer(),
-          bootstrap_strategy: atom()
+          bootstrap_strategy: atom(),
+          verbose: boolean()
         }
 
   @doc """
@@ -97,7 +100,8 @@ defmodule Dspy.Teleprompt.BootstrapFewShot do
       num_candidate_programs: Keyword.get(opts, :num_candidate_programs, 16),
       num_threads: Keyword.get(opts, :num_threads, System.schedulers_online()),
       seed: Keyword.get(opts, :seed, :os.system_time(:microsecond)),
-      bootstrap_strategy: Keyword.get(opts, :bootstrap_strategy, :random)
+      bootstrap_strategy: Keyword.get(opts, :bootstrap_strategy, :random),
+      verbose: Keyword.get(opts, :verbose, false)
     }
   end
 
@@ -117,7 +121,7 @@ defmodule Dspy.Teleprompt.BootstrapFewShot do
   @spec compile(t(), Dspy.Teleprompt.program_t(), list(Example.t())) ::
           Dspy.Teleprompt.compile_result()
   def compile(%__MODULE__{} = teleprompt, student, trainset) do
-    IO.puts("Starting BootstrapFewShot compilation...")
+    Dspy.Teleprompt.Util.log(teleprompt, "Starting BootstrapFewShot compilation...")
 
     with {:ok, validated_trainset} <- Trainset.validate(trainset),
          {:ok, teacher} <- get_teacher_program(teleprompt, student),
@@ -133,7 +137,7 @@ defmodule Dspy.Teleprompt.BootstrapFewShot do
            ),
          {:ok, best_program} <-
            select_best_program(teleprompt, candidate_programs, validated_trainset) do
-      IO.puts("BootstrapFewShot compilation completed successfully")
+      Dspy.Teleprompt.Util.log(teleprompt, "BootstrapFewShot compilation completed successfully")
       {:ok, best_program}
     end
   end
@@ -144,7 +148,10 @@ defmodule Dspy.Teleprompt.BootstrapFewShot do
   defp get_teacher_program(%__MODULE__{teacher: teacher}, _student), do: {:ok, teacher}
 
   defp bootstrap_examples(%__MODULE__{} = teleprompt, teacher, trainset) do
-    IO.puts("Bootstrapping examples from #{length(trainset)} training examples...")
+    Dspy.Teleprompt.Util.log(
+      teleprompt,
+      "Bootstrapping examples from #{length(trainset)} training examples..."
+    )
 
     %{
       max_bootstrapped_demos: max_demos,
@@ -161,7 +168,7 @@ defmodule Dspy.Teleprompt.BootstrapFewShot do
     all_examples =
       for round <- 1..max_rounds, reduce: [] do
         acc_examples ->
-          IO.puts("Bootstrap round #{round}/#{max_rounds}")
+          Dspy.Teleprompt.Util.log(teleprompt, "Bootstrap round #{round}/#{max_rounds}")
 
           round_examples =
             bootstrap_round(
@@ -185,7 +192,11 @@ defmodule Dspy.Teleprompt.BootstrapFewShot do
       |> Enum.take(max_demos)
       |> Enum.map(fn {example, _score} -> example end)
 
-    IO.puts("Bootstrapped #{length(best_examples)} high-quality examples")
+    Dspy.Teleprompt.Util.log(
+      teleprompt,
+      "Bootstrapped #{length(best_examples)} high-quality examples"
+    )
+
     {:ok, best_examples}
   end
 
@@ -269,12 +280,12 @@ defmodule Dspy.Teleprompt.BootstrapFewShot do
   end
 
   defp generate_candidate_programs(
-         %__MODULE__{num_candidate_programs: num_candidates, seed: seed},
+         %__MODULE__{num_candidate_programs: num_candidates, seed: seed} = teleprompt,
          student,
          bootstrapped,
          labeled
        ) do
-    IO.puts("Generating #{num_candidates} candidate programs...")
+    Dspy.Teleprompt.Util.log(teleprompt, "Generating #{num_candidates} candidate programs...")
 
     :rand.seed(:exsss, {seed + 1000, seed + 1001, seed + 1002})
 
@@ -313,11 +324,11 @@ defmodule Dspy.Teleprompt.BootstrapFewShot do
   end
 
   defp select_best_program(
-         %__MODULE__{metric: metric, num_threads: num_threads},
+         %__MODULE__{metric: metric, num_threads: num_threads} = teleprompt,
          candidates,
          validation_set
        ) do
-    IO.puts("Evaluating #{length(candidates)} candidate programs...")
+    Dspy.Teleprompt.Util.log(teleprompt, "Evaluating #{length(candidates)} candidate programs...")
 
     # Evaluate each candidate on validation set
     evaluations =
@@ -339,7 +350,8 @@ defmodule Dspy.Teleprompt.BootstrapFewShot do
       evaluations
       |> Enum.max_by(fn {_program, result} -> result.mean end)
 
-    IO.puts(
+    Dspy.Teleprompt.Util.log(
+      teleprompt,
       "Best program score: #{Float.round(best_result.mean, 3)} ± #{Float.round(best_result.std, 3)}"
     )
 

@@ -1,6 +1,8 @@
 defmodule Dspy.Teleprompt.Util do
   @moduledoc false
 
+  require Logger
+
   alias Dspy.Parameter
 
   @type error_reason ::
@@ -80,5 +82,28 @@ defmodule Dspy.Teleprompt.Util do
           {:ok, Dspy.Module.t()} | {:error, error_reason()}
   def set_predict_examples(program, examples) when is_list(examples) do
     set_parameter(program, "predict.examples", :examples, examples)
+  end
+
+  @spec verbose?(struct()) :: boolean()
+  def verbose?(%{} = teleprompt) do
+    cond do
+      Map.has_key?(teleprompt, :verbose) ->
+        teleprompt.verbose == true
+
+      true ->
+        case Process.whereis(Dspy.Settings) do
+          nil -> false
+          _pid -> Dspy.Settings.get(:teleprompt_verbose) == true
+        end
+    end
+  end
+
+  @spec log(struct(), String.t(), Logger.level()) :: :ok
+  def log(%{} = teleprompt, message, level \\ :info) when is_binary(message) do
+    if verbose?(teleprompt) do
+      Logger.log(level, message)
+    end
+
+    :ok
   end
 end

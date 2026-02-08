@@ -13,7 +13,8 @@ defmodule Dspy.Settings do
     max_tokens: 2048,
     temperature: 0.0,
     cache: true,
-    experimental: []
+    experimental: [],
+    teleprompt_verbose: false
   ]
 
   @type t :: %__MODULE__{
@@ -21,7 +22,8 @@ defmodule Dspy.Settings do
           max_tokens: pos_integer(),
           temperature: float(),
           cache: boolean(),
-          experimental: [atom()]
+          experimental: [atom()],
+          teleprompt_verbose: boolean()
         }
 
   def start_link(opts \\ []) do
