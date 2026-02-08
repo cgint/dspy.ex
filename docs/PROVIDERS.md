@@ -67,6 +67,13 @@ Prefer the in-memory form for stricter sandboxing:
 }
 ```
 
+## Local inference (Bumblebee)
+
+If you want a fully BEAM/Nx local model runtime (no external HTTP providers), see:
+- `docs/BUMBLEBEE.md`
+
+Note: `dspy.ex` does not yet ship a built-in Bumblebee adapter; this is currently an integration guide.
+
 ## Evidence
 
 - Multipart + attachment safety: `test/lm/req_llm_multimodal_test.exs`

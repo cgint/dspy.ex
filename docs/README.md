@@ -10,4 +10,6 @@ Human-friendly overview (what works today + ways ahead): `docs/OVERVIEW.md`.
 
 Provider integration (via `req_llm`) + attachment safety config: `docs/PROVIDERS.md`.
 
+Local BEAM/Nx inference notes (Bumblebee): `docs/BUMBLEBEE.md`.
+
 Release/tag notes (what each semver tag contains): `docs/RELEASES.md`.
