@@ -10,8 +10,12 @@ This repo ships in **small, user-usable slices**.
 
 The table below is maintained on `main`, but links are **tag-pinned** so they don’t drift.
 
-| Tag | Commit | What you get | Evidence (tag-pinned) |
-|---|---|---|---|
-| `v0.1.0` | `1bdb0e38` | First public, pin-worthy slice: `Predict` + signatures (module + arrow-string), JSON fenced output parsing + coercion, `one_of` constraints, tools (ReAct + callbacks), attachments request parts + ReqLLM multipart/safety (tested with mocks; no real network calls in CI), and quiet teleprompter logging via Logger | Overview: https://github.com/cgint/dspy.ex/blob/v0.1.0/docs/OVERVIEW.md  \
+| Tag | What you get | Evidence (tag-pinned) |
+|---|---|---|
+| `v0.1.1` | Adds additional adoption slices and hygiene on top of `v0.1.0`: contracts-style PDF→JSON→Q&A acceptance workflow, image transcription workflow, quieter library-first startup (optional web/godmode services gated), BootstrapFewShot sampling made explicit + determinism regression test, and Bumblebee local-inference notes | Overview: https://github.com/cgint/dspy.ex/blob/v0.1.1/docs/OVERVIEW.md  \
+Acceptance tests: https://github.com/cgint/dspy.ex/tree/v0.1.1/test/acceptance  \
+Optional services gate (library-first startup): https://github.com/cgint/dspy.ex/blob/v0.1.1/lib/dspy/application.ex  \
+Bumblebee note: https://github.com/cgint/dspy.ex/blob/v0.1.1/docs/BUMBLEBEE.md |
+| `v0.1.0` | First public, pin-worthy slice: `Predict` + signatures (module + arrow-string), JSON fenced output parsing + coercion, `one_of` constraints, tools (ReAct + callbacks), attachments request parts + ReqLLM multipart/safety (tested with mocks; no real network calls in CI), and quiet teleprompter logging via Logger | Overview: https://github.com/cgint/dspy.ex/blob/v0.1.0/docs/OVERVIEW.md  \
 Acceptance tests: https://github.com/cgint/dspy.ex/tree/v0.1.0/test/acceptance  \
 ReqLLM multipart/attachments safety: https://github.com/cgint/dspy.ex/blob/v0.1.0/test/lm/req_llm_multimodal_test.exs |
