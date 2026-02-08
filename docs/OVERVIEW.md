@@ -32,7 +32,7 @@ Proof: `test/acceptance/simplest_predict_test.exs`
 
 ### 2) Structured JSON outputs (JSON-in-markdown-fences parsing)
 
-If the LM returns outputs as a JSON object (e.g. in ```json fences), DSPex will parse and coerce to signature output field types.
+If the LM returns outputs as a JSON object (e.g. in ```json fences), `dspy.ex` will parse and coerce to signature output field types.
 
 ```elixir
 defmodule JokeWithRating do
@@ -130,7 +130,7 @@ Legend:
 | Evaluate | 2 | Deterministic golden path proven | `test/evaluate_golden_path_test.exs` |
 | Teleprompters | 2 | Predict-only, parameter-based (no dynamic modules) | `test/teleprompt/*` |
 | Tools/request map integration | 2 | ReAct runs with request maps; tool start/end callbacks supported (tool logging) | `test/tools_request_map_test.exs`, `test/acceptance/simplest_tool_logging_acceptance_test.exs` |
-| Provider support (real providers) | 1 | Interface exists; primary focus so far is deterministic offline acceptance | (provider acceptance tests TBD) |
+| Provider support (real providers) | 2 | `Dspy.LM.ReqLLM` adapter proven (offline) incl. multipart/attachments request shape + safety gates; real network providers still considered prototype | `test/lm/req_llm_multimodal_test.exs`, `lib/dspy/lm/req_llm.ex` |
 
 ## Ways ahead (what we would add next)
 

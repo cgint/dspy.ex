@@ -7,3 +7,5 @@ Planning / roadmap / status artifacts live in `plan/`.
 Start at the repo entry point: `AGENTS.md`.
 
 Human-friendly overview (what works today + ways ahead): `docs/OVERVIEW.md`.
+
+Provider integration (via `req_llm`) + attachment safety config: `docs/PROVIDERS.md`.
