@@ -303,8 +303,8 @@ defmodule Dspy.Teleprompt.BootstrapFewShot do
             num_bootstrap = :rand.uniform(length(bootstrapped) + 1) - 1
             num_labeled = :rand.uniform(length(labeled) + 1) - 1
 
-            selected_bootstrap = Enum.take_random(bootstrapped, num_bootstrap)
-            selected_labeled = Enum.take_random(labeled, num_labeled)
+            selected_bootstrap = take_random_subset(bootstrapped, num_bootstrap)
+            selected_labeled = take_random_subset(labeled, num_labeled)
 
             all_examples = selected_bootstrap ++ selected_labeled
 
@@ -321,6 +321,20 @@ defmodule Dspy.Teleprompt.BootstrapFewShot do
     Dspy.Module.update_parameters(student, [
       Dspy.Parameter.new("predict.examples", :examples, examples)
     ])
+  end
+
+  # Deterministic sampling: `generate_candidate_programs/4` seeds `:rand` first.
+  # We avoid `Enum.take_random/2` here so our behavior is explicit and less sensitive
+  # to stdlib implementation details across Elixir/OTP versions.
+  defp take_random_subset(_list, n) when is_integer(n) and n <= 0, do: []
+  defp take_random_subset([], _n), do: []
+
+  defp take_random_subset(list, n) when is_list(list) and is_integer(n) do
+    n = min(n, length(list))
+
+    list
+    |> Enum.shuffle()
+    |> Enum.take(n)
   end
 
   defp select_best_program(
