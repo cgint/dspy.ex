@@ -17,6 +17,27 @@ This document is a **design/integration note** for a future “fully BEAM-self-c
 
 ## Integrating Bumblebee (practical guide)
 
+### Integration strategy for *this* repo (keep it separate, split later)
+
+Current intent:
+
+- Keep a Bumblebee-based provider **in this repo for now** to speed up development.
+- Implement it as an **isolated/optional provider** so it doesn’t become a hard requirement for users who only want HTTP providers.
+- Structure it so it can be **split into a separate Hex package/repo later** with minimal churn.
+
+Practical implications:
+
+- Put the adapter under a dedicated namespace, e.g. `lib/dspex/providers/bumblebee/*`.
+- Avoid coupling to private internals; depend only on the public provider behaviour/API.
+- Keep core tests independent; run Bumblebee tests as opt-in integration tests.
+
+Open decision (matters for implementation):
+
+- Should the provider module **compile even when Bumblebee/Nx/EXLA are not in deps**?
+  - If **yes**, implement a small stub that raises a helpful error unless `Code.ensure_loaded?(Bumblebee)` (conditional compilation / runtime checks).
+  - If **no**, accept that enabling the provider requires adding deps and configuring an Nx backend.
+
+
 ### 1) Add dependencies
 
 These dependencies/config snippets are for **your integrating application** (or a future optional adapter package), not for `dspy.ex` itself today.
