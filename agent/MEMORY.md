@@ -40,6 +40,8 @@
   - `test/acceptance/text_component_extract_acceptance_test.exs` (structured extraction + improvement)
   - `test/acceptance/simplest_tool_logging_acceptance_test.exs` (ReAct tools + callbacks)
   - `test/acceptance/simplest_attachments_acceptance_test.exs` (attachments request parts)
+  - `test/acceptance/simplest_contracts_acceptance_test.exs` (PDF attachment → JSON extraction → Q&A)
+  - `test/acceptance/simplest_transcription_acceptance_test.exs` (image attachment → transcription → postprocess)
   - `test/acceptance/simplest_refine_acceptance_test.exs` (refine loop)
 - ReqLLM adapter (offline-proven):
   - `test/lm/req_llm_multimodal_test.exs` (multipart conversion + attachment safety gates)
@@ -48,6 +50,7 @@
 - Teleprompters (deterministic tests):
   - GEPA: `test/teleprompt/gepa_test.exs`, `test/teleprompt/gepa_improvement_test.exs`
   - LabeledFewShot improvement: `test/teleprompt/labeled_few_shot_improvement_test.exs`
+  - BootstrapFewShot determinism regression: `test/teleprompt/bootstrap_few_shot_determinism_test.exs`
 
 ## Teleprompter status (important constraint)
 - Legacy teleprompters were refactored to **avoid dynamic module generation**.
@@ -55,6 +58,9 @@
 - Current limitation: optimizers primarily support **`%Dspy.Predict{}`** programs by updating parameters:
   - `"predict.instructions"`, `"predict.examples"`
 - Shared helper: `lib/dspy/teleprompt/util.ex` (`Dspy.Teleprompt.Util`).
+
+## Optional services gate (library-first runtime)
+- Optional Phoenix/"godmode" services are gated behind `config :dspy, :start_optional_services, true`.
 
 ## Loop automation (for delegated work)
 - Worker/review scripts live in `scripts/`.

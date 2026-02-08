@@ -30,6 +30,8 @@ North star docs:
 - Evidence:
   - Evidence file: `test/acceptance/simplest_predict_test.exs`
   - Evidence file: `test/acceptance/json_outputs_acceptance_test.exs`
+  - Evidence file: `test/acceptance/simplest_contracts_acceptance_test.exs`
+  - Evidence file: `test/acceptance/simplest_transcription_acceptance_test.exs`
   - Evidence file: `lib/dspy/signature.ex` (arrow signatures + `int`/`:integer` parsing)
   - Evidence file: `lib/dspy/predict.ex` (accept string signatures)
   - Evidence file: `plan/GEPA.md`
@@ -43,15 +45,17 @@ North star docs:
   - Evidence file: `lib/dspy/teleprompt/labeled_few_shot.ex` (no dynamic module creation)
   - Evidence file: `lib/dspy/teleprompt/copro.ex` (no dynamic module creation)
   - Evidence file: `lib/dspy/teleprompt/mipro_v2.ex` (no dynamic module creation)
+  - Evidence file: `test/teleprompt/bootstrap_few_shot_determinism_test.exs`
+  - Evidence file: `lib/dspy/application.ex` (`:start_optional_services` gate + optional `:os_mon` start)
+  - Evidence file: `docs/BUMBLEBEE.md` (local inference notes)
   - Verification: `mix test`
 
 Current health:
-- `mix test` passes, but only after adding missing dependencies needed by in-tree modules:
-  - Phoenix/LiveView stack for `lib/dspy_web/*`
-  - `GenStage` for coordination modules
-  - `HTTPoison` for existing HTTP usage
-- Added minimal `config/config.exs` defaults with `server: false` so the endpoint can boot without serving HTTP.
-- This is a **temporary “unblock compilation”** move; we still intend `dspy.ex` to be library-first and may relocate/gate web concerns later.
+- `mix test` passes.
+- App startup is **library-first by default**:
+  - Optional web/"godmode" services are gated behind `config :dspy, :start_optional_services, true`.
+  - Heavy/noisy OTP apps (e.g. `:os_mon`) are **not** started by default.
+- Phoenix/LiveView + other deps still exist in-tree to compile optional modules; we may later relocate them to a separate package/app.
 
 Execution checklist (iterate/commit-friendly):
 - Loop automation now includes an LLM review gate before commits (see `scripts/loop_review.sh`).
@@ -73,7 +77,8 @@ Execution checklist (iterate/commit-friendly):
 - [x] Make `BootstrapFewShot` teleprompter run end-to-end (no dynamic modules) + add smoke test proving improvement
 - [x] Add R0 acceptance tests derived from the external `dspy-intro` workflow suite (see `plan/REFERENCE_DSPY_INTRO.md`)
 - [x] Add “string signature” convenience (`Dspy.Predict.new("input -> output")`) to match Python DSPy usage
-- [ ] Revisit repo shape: relocate/gate `lib/dspy_web/*` + GenStage “godmode” modules into separate package/app
+- [x] Gate optional web/"godmode" services behind `:start_optional_services` for quiet, library-first startup
+- [ ] Revisit repo shape: relocate `lib/dspy_web/*` + “godmode” modules into separate package/app (and clean up deps)
 
 Success criteria:
 - Planning docs in `plan/` clearly state that Jido integration targets **Jido v2** (`2.0.0-rc.1` on Hex) and that `../jido` is the main-branch checkout.
@@ -115,6 +120,7 @@ Notes:
 - **2026-02-08**: Clarified public landing docs: `README.md` + `docs/OVERVIEW.md` now emphasize usable slices, offline quick start, and pinning via semver tags.
 - **2026-02-08**: Added `docs/RELEASES.md` with tag-pinned evidence links; cut and pushed tag `v0.1.0`.
 - **2026-02-08**: Added additional acceptance slices (contracts + transcription), made app startup library-first by gating optional services, and added determinism regression coverage; cut and pushed tag `v0.1.1`.
+- **2026-02-08**: Further reduced noise and hardened determinism; cut and pushed tag `v0.1.2`.
 - **2026-01-21**: Initialized `plan/WORKFLOW.md` (originally `docs/INSTRUCTIONS.md`) with guidelines on maintaining documentation. Added `Log` section to `plan/STATUS.md` (originally `docs/STATUS.md`) to track project evolution.
 - **2026-01-21**: Unblocked compilation by adding missing deps/config for in-tree web modules; established “req_llm for providers, Jido v2 optional later”; added checklist to support small iterative commits.
 - **2026-01-21**: Made `mix compile --warnings-as-errors` + `./precommit.sh` pass; added a regression test for `Dspy.LM.generate/3` request-map normalization.
