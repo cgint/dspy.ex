@@ -14,6 +14,9 @@ North star docs:
 - `agent/MEMORY.md` (context window)
 - `agent/SOUL.md` (agent operating principles)
 
+## Releases
+- Current recommended stable tag: `v0.1.0` (see `docs/RELEASES.md`)
+
 ## Loop status
 - Loop state: ACTIVE
 - Backlog (ordered):
@@ -23,7 +26,7 @@ North star docs:
   - [x] Add GEPA to the teleprompter roadmap (spec + tests) and de-emphasize Jido in planning docs
   - [x] Next: GEPA toy improvement acceptance test (baseline < optimized with seed)
   - [x] Next: decide whether to refactor legacy teleprompters away from dynamic modules
-  - [ ] Next: (optional) replace noisy `IO.puts` in teleprompters with Logger + verbosity flag
+  - [x] Replace noisy `IO.puts` in teleprompters with Logger + verbosity flag
 - Evidence:
   - Evidence file: `test/acceptance/simplest_predict_test.exs`
   - Evidence file: `test/acceptance/json_outputs_acceptance_test.exs`
@@ -35,7 +38,7 @@ North star docs:
   - Evidence file: `lib/dspy/teleprompt/gepa.ex` (toy GEPA implementation)
   - Evidence file: `test/teleprompt/gepa_test.exs` (contract tests)
   - Evidence file: `test/teleprompt/gepa_improvement_test.exs` (toy improvement acceptance)
-  - Evidence file: `lib/dspy/teleprompt/util.ex` (parameter-based mutation helpers)
+  - Evidence file: `lib/dspy/teleprompt/util.ex` (parameter-based mutation helpers + verbosity-gated Logger)
   - Evidence file: `test/teleprompt/labeled_few_shot_improvement_test.exs`
   - Evidence file: `lib/dspy/teleprompt/labeled_few_shot.ex` (no dynamic module creation)
   - Evidence file: `lib/dspy/teleprompt/copro.ex` (no dynamic module creation)
@@ -68,8 +71,8 @@ Execution checklist (iterate/commit-friendly):
 - [x] Make `Predict` expose `parameters/1` + `update_parameters/2` (teleprompt-friendly)
 - [x] Add deterministic `Predict` → `Evaluate` golden-path test with a mock LM
 - [x] Make `BootstrapFewShot` teleprompter run end-to-end (no dynamic modules) + add smoke test proving improvement
-- [ ] Add R0 acceptance tests derived from the external `dspy-intro` workflow suite (see `plan/REFERENCE_DSPY_INTRO.md`)
-- [ ] Add “string signature” convenience (`Dspy.Predict.new("input -> output")`) to match Python DSPy usage
+- [x] Add R0 acceptance tests derived from the external `dspy-intro` workflow suite (see `plan/REFERENCE_DSPY_INTRO.md`)
+- [x] Add “string signature” convenience (`Dspy.Predict.new("input -> output")`) to match Python DSPy usage
 - [ ] Revisit repo shape: relocate/gate `lib/dspy_web/*` + GenStage “godmode” modules into separate package/app
 
 Success criteria:
@@ -109,6 +112,8 @@ Notes:
 
 ## Log
 
+- **2026-02-08**: Clarified public landing docs: `README.md` + `docs/OVERVIEW.md` now emphasize usable slices, offline quick start, and pinning via semver tags.
+- **2026-02-08**: Added `docs/RELEASES.md` with tag-pinned evidence links; cut and pushed tag `v0.1.0`.
 - **2026-01-21**: Initialized `plan/WORKFLOW.md` (originally `docs/INSTRUCTIONS.md`) with guidelines on maintaining documentation. Added `Log` section to `plan/STATUS.md` (originally `docs/STATUS.md`) to track project evolution.
 - **2026-01-21**: Unblocked compilation by adding missing deps/config for in-tree web modules; established “req_llm for providers, Jido v2 optional later”; added checklist to support small iterative commits.
 - **2026-01-21**: Made `mix compile --warnings-as-errors` + `./precommit.sh` pass; added a regression test for `Dspy.LM.generate/3` request-map normalization.

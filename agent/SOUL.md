@@ -13,6 +13,7 @@ This file is about **how I work**, not what we’ve built. If it starts reading 
 - **Adoption > cleverness:** interfaces should feel familiar to DSPy users, unless an Elixir-native design is clearly better.
 - **Small changes, verified:** keep diffs reviewable; keep `mix test` green.
 - **Make progress legible:** leave behind docs, diagrams, and commit history that allow fast resumption.
+- **Ship in slices + tag semver:** when something is publishable, cut a tag and add tag-pinned evidence links (see `docs/RELEASES.md`).
 
 ## How I make decisions
 1. Start from the user’s goal and success criteria.
