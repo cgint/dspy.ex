@@ -61,7 +61,8 @@ defmodule Dspy.Predict do
   def forward(predict, inputs) do
     with :ok <- Dspy.Signature.validate_inputs(predict.signature, inputs),
          {:ok, prompt} <- build_prompt(predict, inputs),
-         {:ok, response} <- generate_with_retries(prompt, predict.max_retries),
+         {:ok, response} <-
+           generate_with_retries(prompt, predict.signature, inputs, predict.max_retries),
          {:ok, outputs} <- parse_response(predict, response) do
       prediction = Dspy.Prediction.new(outputs)
       {:ok, prediction}
@@ -84,27 +85,83 @@ defmodule Dspy.Predict do
     prompt_template = Dspy.Signature.to_prompt(predict.signature, predict.examples)
 
     filled_prompt =
-      Enum.reduce(inputs, prompt_template, fn {key, value}, acc ->
-        placeholder = "[input]"
-        field_name = String.capitalize(Atom.to_string(key))
-        String.replace(acc, "#{field_name}: #{placeholder}", "#{field_name}: #{value}")
+      Enum.reduce(predict.signature.input_fields, prompt_template, fn %{name: name}, acc ->
+        case Map.fetch(inputs, name) do
+          :error ->
+            acc
+
+          {:ok, %Dspy.Attachments{}} ->
+            placeholder = "[input]"
+            field_name = String.capitalize(Atom.to_string(name))
+            String.replace(acc, "#{field_name}: #{placeholder}", "#{field_name}: <attachments>")
+
+          {:ok, value} ->
+            placeholder = "[input]"
+            field_name = String.capitalize(Atom.to_string(name))
+            formatted = format_input_value(value)
+            String.replace(acc, "#{field_name}: #{placeholder}", "#{field_name}: #{formatted}")
+        end
       end)
 
     {:ok, filled_prompt}
   end
 
-  defp generate_with_retries(prompt, retries) do
-    case Dspy.LM.generate_text(prompt) do
+  defp format_input_value(value) when is_binary(value), do: value
+
+  defp format_input_value(value) do
+    inspect(value, pretty: false, limit: 100, sort_maps: true)
+  end
+
+  defp generate_with_retries(prompt, signature, inputs, retries) do
+    case generate_once(prompt, signature, inputs) do
       {:ok, response} ->
         {:ok, response}
 
       {:error, _reason} when retries > 0 ->
-        Process.sleep(1000)
-        generate_with_retries(prompt, retries - 1)
+        Process.sleep(retry_sleep_ms())
+        generate_with_retries(prompt, signature, inputs, retries - 1)
 
       {:error, reason} ->
         {:error, reason}
     end
+  end
+
+  defp retry_sleep_ms do
+    Application.get_env(:dspy, :predict_retry_sleep_ms, 1000)
+  end
+
+  defp generate_once(prompt, signature, inputs) do
+    attachments = extract_attachments(signature, inputs)
+
+    content =
+      if attachments == [] do
+        prompt
+      else
+        [%{"type" => "text", "text" => prompt}] ++ attachments
+      end
+
+    request = %{
+      messages: [
+        %{
+          role: "user",
+          content: content
+        }
+      ]
+    }
+
+    with {:ok, response} <- Dspy.LM.generate(request),
+         {:ok, text} <- Dspy.LM.text_from_response(response) do
+      {:ok, text}
+    end
+  end
+
+  defp extract_attachments(%Dspy.Signature{} = signature, inputs) when is_map(inputs) do
+    Enum.flat_map(signature.input_fields, fn %{name: name} ->
+      case Map.get(inputs, name) do
+        %Dspy.Attachments{} = a -> Dspy.Attachments.to_message_parts(a)
+        _ -> []
+      end
+    end)
   end
 
   defp parse_response(predict, response_text) do
