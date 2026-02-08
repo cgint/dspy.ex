@@ -10,6 +10,8 @@ defmodule Dspy.Application do
     # Library-first: start only the minimal core services by default.
     # Optional/web/experimental services are gated behind config so `mix test`
     # (and normal library usage) stays quiet and deterministic.
+    ensure_optional_apps_started_if_enabled()
+
     children =
       [
         {Dspy.Settings, []}
@@ -57,6 +59,26 @@ defmodule Dspy.Application do
 
   defp optional_services_enabled? do
     Application.get_env(:dspy, :start_optional_services, false) == true
+  end
+
+  defp ensure_optional_apps_started_if_enabled do
+    if optional_services_enabled?() do
+      # Optional services may use `:os_mon` (system monitoring).
+      # Keep it out of the default startup to avoid noisy logs in library/test usage.
+      case Application.ensure_all_started(:os_mon) do
+        {:ok, _apps} ->
+          :ok
+
+        {:error, reason} ->
+          Logger.warning(
+            "Optional services are enabled, but failed to start :os_mon: #{inspect(reason)}"
+          )
+
+          :ok
+      end
+    else
+      :ok
+    end
   end
 
   defp maybe_configure_language_model do

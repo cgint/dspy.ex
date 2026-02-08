@@ -15,7 +15,7 @@ North star docs:
 - `agent/SOUL.md` (agent operating principles)
 
 ## Releases
-- Current recommended stable tag: `v0.1.1` (see `docs/RELEASES.md`)
+- Current recommended stable tag: `v0.1.2` (see `docs/RELEASES.md`)
 
 ## Loop status
 - Loop state: ACTIVE

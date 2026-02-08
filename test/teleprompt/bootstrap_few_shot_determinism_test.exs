@@ -11,14 +11,18 @@ defmodule Dspy.Teleprompt.BootstrapFewShotDeterminismTest do
     def generate(_lm, request) do
       prompt = request.messages |> List.first() |> Map.fetch!(:content)
 
+      # Extract the *last* "Question: ...\nAnswer:" block. This is less brittle than
+      # simple string splitting when the prompt contains few-shot examples.
+      matches = Regex.scan(~r/Question:\s*(.*?)\nAnswer:/s, prompt, capture: :all_but_first)
+
       question =
-        prompt
-        |> String.split("Question:")
-        |> List.last()
-        |> String.split("\nAnswer:", parts: 2)
-        |> List.first()
-        |> to_string()
-        |> String.trim()
+        case List.last(matches) do
+          [q] ->
+            String.trim(q)
+
+          other ->
+            raise "Expected prompt to contain a Question/Answer block, got: #{inspect(other)}"
+        end
 
       {:ok,
        %{

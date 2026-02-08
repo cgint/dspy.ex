@@ -4,7 +4,7 @@ defmodule Dspy.MixProject do
   def project do
     [
       app: :dspy,
-      version: "0.1.1",
+      version: "0.1.2",
       elixir: "~> 1.18",
       start_permanent: Mix.env() == :prod,
       deps: deps()
@@ -14,7 +14,9 @@ defmodule Dspy.MixProject do
   # Run "mix help compile.app" to learn about applications.
   def application do
     [
-      extra_applications: [:logger, :inets, :ssl, :os_mon, :tools],
+      # Keep the library quiet by default; optional services can start their own
+      # heavier dependencies when enabled.
+      extra_applications: [:logger, :inets, :ssl],
       mod: {Dspy.Application, []}
     ]
   end
