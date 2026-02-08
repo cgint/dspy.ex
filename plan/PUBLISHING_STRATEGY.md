@@ -13,10 +13,11 @@ This doc defines what we consider **publishable** and **when** we push changes.
 ## Policy (default)
 
 - **Push continuously to `main`** once a change is *publishable* (see checklist below).
-- Use **periodic tags/releases** (0.x) to give users a stable reference point.
-  - `main` can move quickly; tags are the user pin.
+- Use **semver tags/releases** (0.x) to give users a stable reference point.
+  - `main` can move quickly; tags are the user pin.
+  - Policy: when a change is publishable, tag it as the next patch/minor in `0.x`.
 
-If the repo later adopts branch protection / PR-only workflow, we can switch to: push branch 5 PR 5 merge, while keeping the same publishable checklist.
+If the repo later adopts branch protection / PR-only workflow, we can switch to: push a branch → open a PR → merge, while keeping the same publishable checklist.
 
 ## What is “publishable” (minimum bar)
 
@@ -44,5 +45,5 @@ A change is publishable when:
 
 ## Notes
 
-- We prefer small, shippable increments over large batches.
+- We prefer "small", "shippable" increments over large batches.
 - The acceptance suite derived from `dspy-intro/src` is the primary driver for user-facing parity.

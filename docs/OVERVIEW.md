@@ -1,5 +1,11 @@
 # Overview (what works today + ways ahead)
 
+## TL;DR (start here)
+
+- Want to know what’s usable today? Read **“What you can do today”** below.
+- Want provider setup? See `docs/PROVIDERS.md` (uses `req_llm`).
+- Want stability? Use **semver tags**; `main` moves quickly (see `README.md`).
+
 ## Diagram
 
 ![Progress loop: reference → acceptance tests → implementation → docs](./diagrams/progress_overview.svg)
@@ -7,6 +13,42 @@
 ## What you can do today (proven, deterministic)
 
 The items below are backed by deterministic tests (offline, using mock LMs).
+
+### Quick start (offline)
+
+If you just want to sanity-check the API surface without any provider keys:
+
+```elixir
+# in iex -S mix
+
+defmodule DemoLM do
+  @behaviour Dspy.LM
+
+  @impl true
+  def generate(_lm, _request) do
+    {:ok,
+     %{choices: [%{message: %{role: "assistant", content: "Answer: ok"}, finish_reason: "stop"}], usage: nil}}
+  end
+
+  @impl true
+  def supports?(_lm, _feature), do: true
+end
+
+Dspy.configure(lm: %DemoLM{})
+
+predict = Dspy.Predict.new("question -> answer")
+{:ok, pred} = Dspy.Module.forward(predict, %{question: "Hello?"})
+
+pred.attrs.answer
+```
+
+### Quick start (real providers)
+
+```elixir
+Dspy.configure(lm: Dspy.LM.ReqLLM.new(model: "openai:gpt-4.1-mini"))
+```
+
+Provider details + attachment safety: `docs/PROVIDERS.md`.
 
 ### 1) Predict with arrow signatures + typed outputs
 
