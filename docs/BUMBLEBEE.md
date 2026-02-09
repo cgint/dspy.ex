@@ -204,7 +204,9 @@ If your app/framework expects a provider module (e.g. `generate/2`, `chat/2`, st
   - or options handled at runtime (if supported by your serving/function)
 - post-processes output into your framework’s response struct
 
-**Chat-style requests**: most local LLM integrations start by *linearizing* messages:
+**Chat-style requests**: most local LLM integrations start by *linearizing* messages.
+
+Note: `Dspy.LM.Bumblebee` accepts chat-shaped inputs (`messages`), but it is not template-aware chat; it simply linearizes `messages` to a prompt.
 
 ```text
 System: ...

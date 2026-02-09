@@ -108,6 +108,8 @@ defmodule Dspy.LM.Bumblebee do
   @impl true
   def supports?(_lm, feature) do
     case feature do
+      # NOTE: this adapter accepts `messages` inputs, but it is *not* template-aware
+      # chat (it linearizes messages into a single prompt).
       :generate -> true
       :text_generation -> true
       :chat -> true

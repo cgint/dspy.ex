@@ -206,6 +206,7 @@ This repo ships an **optional** local inference adapter: `Dspy.LM.Bumblebee`.
 
 - Core `:dspy` does **not** depend on Bumblebee/Nx/EXLA.
 - To use it, add those deps in your **application** and build an `Nx.Serving`.
+- The adapter accepts `messages` inputs, but it is not template-aware chat; it linearizes messages into a single prompt.
 
 Guide: `docs/BUMBLEBEE.md`
 

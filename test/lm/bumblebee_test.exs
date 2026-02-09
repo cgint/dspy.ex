@@ -161,6 +161,7 @@ defmodule Dspy.LM.BumblebeeTest do
   test "supports?/2 reports unsupported features" do
     lm = Dspy.LM.Bumblebee.new(serving: :fake, runner_module: FakeRunner2)
 
+    assert Dspy.LM.Bumblebee.supports?(lm, :chat)
     refute Dspy.LM.Bumblebee.supports?(lm, :tools)
     refute Dspy.LM.Bumblebee.supports?(lm, :multipart)
     refute Dspy.LM.Bumblebee.supports?(lm, :attachments)
