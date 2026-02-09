@@ -12,6 +12,10 @@ The table below is maintained on `main`, but links are **tag-pinned** so they do
 
 | Tag | What you get | Evidence (tag-pinned) |
 |---|---|---|
+| `v0.2.2` | **ReqLLM provider wiring**: apply `Dspy.configure/1` defaults (`temperature`/`max_tokens`) to request maps; add ReqLLM+Predict offline acceptance; add opt-in real-provider smoke test | Settings defaults applied: https://github.com/cgint/dspy.ex/blob/v0.2.2/test/lm/request_defaults_test.exs  \
+ReqLLM Predict acceptance: https://github.com/cgint/dspy.ex/blob/v0.2.2/test/acceptance/req_llm_predict_acceptance_test.exs  \
+ReqLLM real-provider smoke (opt-in): https://github.com/cgint/dspy.ex/blob/v0.2.2/test/integration/req_llm_predict_integration_test.exs  \
+Provider docs: https://github.com/cgint/dspy.ex/blob/v0.2.2/docs/PROVIDERS.md |
 | `v0.2.1` | **Evaluation + optimization maturity**: per-example evaluation results (`return_all: true`), deterministic `Trainset.split/2` + `Trainset.sample/3` tests, deterministic SIMBA improvement, teleprompt errors standardized (no bare strings), parameter export/apply, and ChainOfThought end-to-end acceptance | Evaluate detailed results: https://github.com/cgint/dspy.ex/blob/v0.2.1/test/evaluate_detailed_results_test.exs  \
 SIMBA improvement: https://github.com/cgint/dspy.ex/blob/v0.2.1/test/teleprompt/simba_improvement_test.exs  \
 Teleprompt error shapes: https://github.com/cgint/dspy.ex/blob/v0.2.1/test/teleprompt/error_shapes_test.exs  \

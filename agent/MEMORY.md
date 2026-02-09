@@ -7,7 +7,7 @@
 ## Where to look first (human vs planning)
 - Human-friendly snapshot + multi-dimensional roadmap: **`docs/OVERVIEW.md`**
 - Releases/tags (what each semver tag contains): `docs/RELEASES.md`
-- Current recommended stable tag: `v0.2.1`
+- Current recommended stable tag: `v0.2.2`
 - Agent/contributor entry point: `AGENTS.md`
 - Planning backlog / next tasks: `plan/STATUS.md`
 - Roadmap: `plan/RELEASE_MILESTONES.md`
