@@ -10,6 +10,8 @@
 #   DSPY_BUMBLEBEE_MODEL=sshleifer/tiny-gpt2
 #   DSPY_BUMBLEBEE_MAX_NEW_TOKENS=32
 
+IO.puts("NOTE: This example is manual/non-deterministic and may download model weights from Hugging Face.")
+
 model_id = System.get_env("DSPY_BUMBLEBEE_MODEL") || "hf-internal-testing/tiny-random-gpt2"
 max_new_tokens =
   case System.get_env("DSPY_BUMBLEBEE_MAX_NEW_TOKENS") do

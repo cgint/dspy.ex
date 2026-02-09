@@ -122,6 +122,42 @@ defmodule Dspy.LM.BumblebeeTest do
     assert {:error, :missing_prompt} = Dspy.LM.Bumblebee.generate(lm, %{})
   end
 
+  test "generate/2 validates request opts" do
+    lm =
+      Dspy.LM.Bumblebee.new(
+        serving: :fake,
+        runner_module: FakeRunner3,
+        available_fun: fn -> true end
+      )
+
+    assert {:error, {:invalid_request_opt, :temperature, "hot"}} =
+             Dspy.LM.Bumblebee.generate(lm, %{
+               messages: [%{role: "user", content: "Hi"}],
+               temperature: "hot"
+             })
+
+    assert {:error, {:invalid_request_opt, :max_tokens, 0}} =
+             Dspy.LM.Bumblebee.generate(lm, %{
+               messages: [%{role: "user", content: "Hi"}],
+               max_tokens: 0
+             })
+
+    assert {:error, {:invalid_request_opt, :stop, [1]}} =
+             Dspy.LM.Bumblebee.generate(lm, %{
+               messages: [%{role: "user", content: "Hi"}],
+               stop: [1]
+             })
+
+    assert {:ok, resp} =
+             Dspy.LM.Bumblebee.generate(lm, %{
+               messages: [%{role: "user", content: "Hi"}],
+               stop: "END"
+             })
+
+    assert %{choices: [%{message: %{content: content}}]} = resp
+    assert String.contains?(content, "stop")
+  end
+
   test "supports?/2 reports unsupported features" do
     lm = Dspy.LM.Bumblebee.new(serving: :fake, runner_module: FakeRunner2)
 

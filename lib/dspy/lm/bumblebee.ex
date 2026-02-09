@@ -235,14 +235,39 @@ defmodule Dspy.LM.Bumblebee do
     temperature = Map.get(request, :temperature) || Map.get(request, "temperature")
     stop = Map.get(request, :stop) || Map.get(request, "stop")
 
-    request_opts =
-      []
-      |> maybe_put(:max_new_tokens, max_tokens)
-      |> maybe_put(:temperature, temperature)
-      |> maybe_put(:stop, stop)
+    with {:ok, max_tokens} <- validate_max_tokens(max_tokens),
+         {:ok, temperature} <- validate_temperature(temperature),
+         {:ok, stop} <- validate_stop(stop) do
+      request_opts =
+        []
+        |> maybe_put(:max_new_tokens, max_tokens)
+        |> maybe_put(:temperature, temperature)
+        |> maybe_put(:stop, stop)
 
-    {:ok, Keyword.merge(lm.default_opts, request_opts)}
+      {:ok, Keyword.merge(lm.default_opts, request_opts)}
+    end
   end
+
+  defp validate_max_tokens(nil), do: {:ok, nil}
+  defp validate_max_tokens(n) when is_integer(n) and n > 0, do: {:ok, n}
+  defp validate_max_tokens(other), do: {:error, {:invalid_request_opt, :max_tokens, other}}
+
+  defp validate_temperature(nil), do: {:ok, nil}
+  defp validate_temperature(t) when is_number(t), do: {:ok, t}
+  defp validate_temperature(other), do: {:error, {:invalid_request_opt, :temperature, other}}
+
+  defp validate_stop(nil), do: {:ok, nil}
+  defp validate_stop(stop) when is_binary(stop), do: {:ok, [stop]}
+
+  defp validate_stop(stop) when is_list(stop) do
+    if Enum.all?(stop, &is_binary/1) do
+      {:ok, stop}
+    else
+      {:error, {:invalid_request_opt, :stop, stop}}
+    end
+  end
+
+  defp validate_stop(other), do: {:error, {:invalid_request_opt, :stop, other}}
 
   defp maybe_put(opts, _key, nil), do: opts
   defp maybe_put(opts, key, value), do: Keyword.put(opts, key, value)
