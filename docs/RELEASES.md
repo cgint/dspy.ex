@@ -12,6 +12,7 @@ The table below is maintained on `main`, but links are **tag-pinned** so they do
 
 | Tag | What you get | Evidence (tag-pinned) |
 |---|---|---|
+| `v0.2.10` | **Offline workflow demo**: ChainOfThought + LabeledFewShot + JSON parameter persistence | Example: https://github.com/cgint/dspy.ex/blob/v0.2.10/examples/chain_of_thought_teleprompt_persistence_offline.exs<br>Overview docs: https://github.com/cgint/dspy.ex/blob/v0.2.10/docs/OVERVIEW.md |
 | `v0.2.9` | **BootstrapFewShot + GEPA proven for ChainOfThought**: deterministic improvement for CoT via `predict.examples` and `predict.instructions` | BootstrapFewShot CoT proof: https://github.com/cgint/dspy.ex/blob/v0.2.9/test/teleprompt/bootstrap_few_shot_chain_of_thought_improvement_test.exs<br>GEPA CoT proof: https://github.com/cgint/dspy.ex/blob/v0.2.9/test/teleprompt/gepa_chain_of_thought_improvement_test.exs |
 | `v0.2.8` | **SIMBA proven for ChainOfThought**: deterministic improvement via `predict.instructions` on `%Dspy.ChainOfThought{}` | CoT improvement proof: https://github.com/cgint/dspy.ex/blob/v0.2.8/test/teleprompt/simba_chain_of_thought_improvement_test.exs  \
 SIMBA teleprompter: https://github.com/cgint/dspy.ex/blob/v0.2.8/lib/dspy/teleprompt/simba.ex |

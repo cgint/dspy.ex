@@ -15,7 +15,7 @@ North star docs:
 - `agent/SOUL.md` (agent operating principles)
 
 ## Releases
-- Current recommended stable tag: `v0.2.9` (see `docs/RELEASES.md`)
+- Current recommended stable tag: `v0.2.10` (see `docs/RELEASES.md`)
 
 ## Loop status
 - Loop state: ACTIVE
@@ -170,6 +170,8 @@ Notes:
 - **2026-02-09**: LabeledFewShot now supports `%Dspy.ChainOfThought{}` (via `predict.examples`) + docs update to reflect Predict-like teleprompters. Verification: `mix test`.
 - **2026-02-09**: SIMBA proven for `%Dspy.ChainOfThought{}` (seeded improvement via `predict.instructions`); documented BootstrapFewShot in overview. Verification: `mix test`.
 - **2026-02-09**: BootstrapFewShot + GEPA proven for `%Dspy.ChainOfThought{}` (seeded improvements via `predict.examples` / `predict.instructions`); updated docs and SIMBA moduledoc. Verification: `mix test`.
+- **2026-02-09**: Added offline demo: ChainOfThought + LabeledFewShot + JSON parameter persistence. Verification: `mix run examples/chain_of_thought_teleprompt_persistence_offline.exs`, `mix test`.
+- **2026-02-09**: Cut tag `v0.2.10` (offline workflow demo: CoT teleprompt + persistence).
 - **2026-02-09**: Cut tag `v0.2.9` (BootstrapFewShot + GEPA proven for ChainOfThought).
 - **2026-02-09**: Cut tag `v0.2.8` (SIMBA proven for ChainOfThought).
 - **2026-02-09**: Cut tag `v0.2.7` (LabeledFewShot supports ChainOfThought; docs clarify Predict-like teleprompters).
