@@ -4,7 +4,7 @@
 
 - Want to know what’s usable today? Read **“What you can do today”** below.
 - Want provider setup? See `docs/PROVIDERS.md` (uses `req_llm`).
-- Want stability? Use **semver tags**; `main` moves quickly. Current recommended stable tag: `v0.2.3` (see `README.md` + `docs/RELEASES.md`).
+- Want stability? Use **semver tags**; `main` moves quickly. Current recommended stable tag: `v0.2.4` (see `README.md` + `docs/RELEASES.md`).
 
 ## Diagram
 
@@ -270,5 +270,5 @@ These are intentionally phrased as **concrete milestones** with a “proof artif
 
 ### Next maturity milestones
 
-- (Optional) Add file helpers for parameter persistence (save/load JSON from disk)
+- (Optional) Expand JSON parameter persistence to more structs (beyond `%Dspy.Example{}`)
 - (Optional) Add more provider smoke tests (Anthropic, etc.) behind `:integration`/`:network` tags
