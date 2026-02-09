@@ -140,13 +140,22 @@ Related (composition proof):
 - PDF attachment + JSON-structured output + Q&A: `test/acceptance/simplest_contracts_acceptance_test.exs`
 - Image attachment + transcription + postprocess: `test/acceptance/simplest_transcription_acceptance_test.exs`
 
-### 6) Evaluate (golden path)
+### 6) Retrieval + RAG (embeddings-backed, offline)
+
+A minimal Retrieval-Augmented Generation flow can be run deterministically by:
+- generating embeddings via `req_llm` (mocked in tests)
+- retrieving top-k by cosine similarity
+- generating an answer with `Dspy.Retrieve.RAGPipeline`
+
+Proof: `test/acceptance/retrieve_rag_with_embeddings_acceptance_test.exs`
+
+### 7) Evaluate (golden path)
 
 A simple `Predict → Evaluate` loop runs deterministically (when you set `num_threads: 1` and use a mock LM).
 
 Proof: `test/evaluate_golden_path_test.exs`
 
-### 7) Teleprompters/optimizers (Predict-only, parameter-based; no dynamic modules)
+### 8) Teleprompters/optimizers (Predict-only, parameter-based; no dynamic modules)
 
 These teleprompters currently optimize **`%Dspy.Predict{}`** programs by updating optimizable parameters (e.g. `"predict.instructions"`, `"predict.examples"`). They **do not** generate new runtime modules.
 
@@ -181,7 +190,7 @@ Legend:
 | Evaluate | 2 | Deterministic golden path proven | `test/evaluate_golden_path_test.exs` |
 | Teleprompters | 2 | Predict-only, parameter-based (no dynamic modules) | `test/teleprompt/*` |
 | Tools/request map integration | 2 | ReAct runs with request maps; tool start/end callbacks supported (tool logging) | `test/tools_request_map_test.exs`, `test/acceptance/simplest_tool_logging_acceptance_test.exs` |
-| Provider support (real providers) | 2 | `Dspy.LM.ReqLLM` adapter proven (offline) incl. multipart/attachments request shape + safety gates; real network providers still considered prototype | `test/lm/req_llm_multimodal_test.exs`, `lib/dspy/lm/req_llm.ex` |
+| Provider support (real providers) | 2 | `Dspy.LM.ReqLLM` adapter proven (offline) incl. multipart/attachments request shape + safety gates; embeddings adapter via `req_llm` proven (offline); real network providers still considered prototype | `test/lm/req_llm_multimodal_test.exs`, `lib/dspy/lm/req_llm.ex`, `test/retrieve/req_llm_embeddings_test.exs` |
 
 ## Ways ahead (what we would add next)
 
