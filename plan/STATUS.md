@@ -136,6 +136,7 @@ Notes:
 - **2026-02-09**: Standardized teleprompter error shapes (no bare strings); added contract tests. Verification: `mix test`.
 - **2026-02-09**: Added explicit program parameter persistence helpers (`export_parameters/1` + `apply_parameters/2`) + roundtrip test. Verification: `mix test`.
 - **2026-02-09**: Added ChainOfThought end-to-end acceptance test + docs update. Verification: `mix test`.
+- **2026-02-09**: Cut tag `v0.2.1` (Evaluate `return_all`, SIMBA improvement, teleprompt error-shape standardization, parameter persistence, CoT acceptance).
 - **2026-02-08**: Clarified public landing docs: `README.md` + `docs/OVERVIEW.md` now emphasize usable slices, offline quick start, and pinning via semver tags.
 - **2026-02-08**: Added `docs/RELEASES.md` with tag-pinned evidence links; cut and pushed tag `v0.1.0`.
 - **2026-02-08**: Added additional acceptance slices (contracts + transcription), made app startup library-first by gating optional services, and added determinism regression coverage; cut and pushed tag `v0.1.1`.
