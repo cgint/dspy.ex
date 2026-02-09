@@ -151,6 +151,7 @@ Notes:
 - **2026-02-09**: Added unit tests for `Dspy.Teleprompt.Util.set_parameter/4`. Verification: `mix test`.
 - **2026-02-09**: Rewrote `Dspy` moduledoc to match the adoption-first slices (avoid overpromising). Verification: `mix test`.
 - **2026-02-09**: Provider wiring: apply `Dspy.Settings` defaults (`temperature`/`max_tokens`) to request maps; added offline ReqLLM+Predict acceptance and opt-in real-provider smoke test; updated `docs/PROVIDERS.md`. Verification: `mix test`.
+- **2026-02-09**: Cut tag `v0.2.2` (ReqLLM wiring + Predict acceptance + Settings-driven request defaults).
 - **2026-02-09**: Cut tag `v0.2.1` (Evaluate `return_all`, SIMBA improvement, teleprompt error-shape standardization, parameter persistence, CoT acceptance).
 - **2026-02-08**: Clarified public landing docs: `README.md` + `docs/OVERVIEW.md` now emphasize usable slices, offline quick start, and pinning via semver tags.
 - **2026-02-08**: Added `docs/RELEASES.md` with tag-pinned evidence links; cut and pushed tag `v0.1.0`.
