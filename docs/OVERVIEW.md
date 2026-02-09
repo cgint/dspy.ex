@@ -253,6 +253,5 @@ These are intentionally phrased as **concrete milestones** with a “proof artif
 
 ### Next maturity milestones
 
-- Add unit tests for `Dspy.Teleprompt.Util.set_parameter/4` (update/append/not-applied/type mismatch)
 - Provider-layer acceptance tests (via `req_llm` adapter) once the adapter is wired as the default integration path
 - (Optional) Make parameter persistence more portable (e.g. JSON-friendly export/import)
