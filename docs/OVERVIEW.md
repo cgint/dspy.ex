@@ -158,7 +158,22 @@ Guide: `docs/RETRIEVE_RAG.md`
 
 A simple `Predict → Evaluate` loop runs deterministically (when you set `num_threads: 1` and use a mock LM).
 
-Proof: `test/evaluate_golden_path_test.exs`
+Tip: to inspect per-example results (including forward/metric failures), pass `return_all: true` and look at `result.items`.
+
+```elixir
+result =
+  Dspy.Evaluate.evaluate(program, testset, metric,
+    num_threads: 1,
+    progress: false,
+    return_all: true
+  )
+
+Enum.take(result.items, 3)
+```
+
+Proof:
+- `test/evaluate_golden_path_test.exs`
+- `test/evaluate_detailed_results_test.exs`
 
 ### 8) Teleprompters/optimizers (Predict-only, parameter-based; no dynamic modules)
 
@@ -192,7 +207,7 @@ Legend:
 |---|---:|---|---|
 | Signatures (incl. arrow strings) | 2 | Arrow parsing + `int` normalization; `one_of` constraints for enum-like outputs | `test/acceptance/simplest_predict_test.exs`, `test/signature_test.exs`, `test/acceptance/classifier_credentials_acceptance_test.exs` |
 | Structured output parsing (JSON-ish) | 2 | JSON fenced output parsing + coercion (incl. list/map outputs via `:json`) | `test/acceptance/json_outputs_acceptance_test.exs`, `test/acceptance/knowledge_graph_triplets_test.exs` |
-| Evaluate | 2 | Deterministic golden path proven | `test/evaluate_golden_path_test.exs` |
+| Evaluate | 2 | Deterministic golden path proven (incl. per-example return data via `return_all: true`) | `test/evaluate_golden_path_test.exs`, `test/evaluate_detailed_results_test.exs` |
 | Retrieve/RAG | 2 | Deterministic RAG pipeline with mocked embeddings provider (`req_llm`) | `test/acceptance/retrieve_rag_with_embeddings_acceptance_test.exs`, `test/retrieve/req_llm_embeddings_test.exs` |
 | Teleprompters | 2 | Predict-only, parameter-based (no dynamic modules) | `test/teleprompt/*` |
 | Tools/request map integration | 2 | ReAct runs with request maps; tool start/end callbacks supported (tool logging) | `test/tools_request_map_test.exs`, `test/acceptance/simplest_tool_logging_acceptance_test.exs` |
