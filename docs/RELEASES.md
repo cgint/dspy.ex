@@ -12,6 +12,9 @@ The table below is maintained on `main`, but links are **tag-pinned** so they do
 
 | Tag | What you get | Evidence (tag-pinned) |
 |---|---|---|
+| `v0.2.7` | **Teleprompter parity**: LabeledFewShot supports ChainOfThought; docs clarify Predict-like parameter callbacks | LabeledFewShot: https://github.com/cgint/dspy.ex/blob/v0.2.7/lib/dspy/teleprompt/labeled_few_shot.ex  \
+CoT improvement proof: https://github.com/cgint/dspy.ex/blob/v0.2.7/test/teleprompt/labeled_few_shot_chain_of_thought_improvement_test.exs  \
+Overview docs: https://github.com/cgint/dspy.ex/blob/v0.2.7/docs/OVERVIEW.md |
 | `v0.2.6` | **ChainOfThought parity**: supports arrow-string signatures, attachments request parts, and teleprompt parameter callbacks | CoT implementation: https://github.com/cgint/dspy.ex/blob/v0.2.6/lib/dspy/chain_of_thought.ex  \
 CoT acceptance: https://github.com/cgint/dspy.ex/blob/v0.2.6/test/acceptance/chain_of_thought_acceptance_test.exs  \
 CoT attachments: https://github.com/cgint/dspy.ex/blob/v0.2.6/test/acceptance/chain_of_thought_attachments_acceptance_test.exs |

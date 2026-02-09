@@ -15,7 +15,7 @@ North star docs:
 - `agent/SOUL.md` (agent operating principles)
 
 ## Releases
-- Current recommended stable tag: `v0.2.6` (see `docs/RELEASES.md`)
+- Current recommended stable tag: `v0.2.7` (see `docs/RELEASES.md`)
 
 ## Loop status
 - Loop state: ACTIVE
@@ -163,6 +163,7 @@ Notes:
 - **2026-02-09**: Parameter persistence file helpers (`write_json!/2`, `read_json!/1`) + tests + offline demo. Verification: `mix test`.
 - **2026-02-09**: ChainOfThought parity: arrow signatures + attachments request parts + teleprompt parameter callbacks. Verification: `mix test`.
 - **2026-02-09**: LabeledFewShot now supports `%Dspy.ChainOfThought{}` (via `predict.examples`) + docs update to reflect Predict-like teleprompters. Verification: `mix test`.
+- **2026-02-09**: Cut tag `v0.2.7` (LabeledFewShot supports ChainOfThought; docs clarify Predict-like teleprompters).
 - **2026-02-09**: Cut tag `v0.2.6` (ChainOfThought parity: arrow sigs + attachments + parameters).
 - **2026-02-09**: Cut tag `v0.2.5` (dependency slimming: remove Bumblebee/Nx/EXLA deps from core).
 - **2026-02-09**: Cut tag `v0.2.4` (parameter persistence file helpers + demo).
