@@ -181,6 +181,8 @@ These teleprompters currently optimize **`%Dspy.Predict{}`** programs by updatin
 
 - `Dspy.Teleprompt.LabeledFewShot` (sets `predict.examples`)
   - Proof: `test/teleprompt/labeled_few_shot_improvement_test.exs`
+- `Dspy.Teleprompt.SIMBA` (updates `predict.instructions`; seeded improvement)
+  - Proof: `test/teleprompt/simba_improvement_test.exs`
 - `Dspy.Teleprompt.GEPA` (toy deterministic optimizer)
   - Proof: `test/teleprompt/gepa_test.exs`, `test/teleprompt/gepa_improvement_test.exs`
 
