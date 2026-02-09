@@ -14,6 +14,8 @@
 
 Note: the core `:dspy` library is intentionally low-dependency. Optional Phoenix/"godmode"/GenStage modules live in `extras/dspy_extras`.
 
+Contributor note: `scripts/verify_all.sh` verifies both core and extras (format check, compile with warnings-as-errors, tests).
+
 The items below are backed by deterministic tests (offline, using mock LMs).
 
 ### Quick start (offline)

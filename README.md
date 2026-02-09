@@ -24,6 +24,18 @@ end
 
 Publishing policy: `plan/PUBLISHING_STRATEGY.md`.
 
+## Contributing / verification
+
+Before opening a PR, run:
+
+```bash
+scripts/verify_all.sh
+```
+
+This verifies:
+- core `:dspy` (format check, compile with warnings-as-errors, tests)
+- `extras/dspy_extras` (format check, compile with warnings-as-errors, tests if any)
+
 ## Optional extras (Phoenix/UI, GenStage, legacy HTTP)
 
 Core `:dspy` intentionally keeps dependencies minimal.

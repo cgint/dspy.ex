@@ -12,7 +12,7 @@ Loop scripts:
 - `loop_review.sh`: run an LLM-based code review of the current git diff; logs go to `plan/research/loop_resume/*`.
 
 Verification helper:
-- `verify_all.sh`: runs core `mix test` and also verifies `extras/dspy_extras` (compile + tests)
+- `verify_all.sh`: verifies both core and extras (format check, compile with warnings-as-errors, tests)
 
 Model policy:
 - Use `--models gpt-5.2 --thinking medium` (provider is linked to model; do not specify provider explicitly).
