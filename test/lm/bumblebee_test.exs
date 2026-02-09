@@ -73,9 +73,18 @@ defmodule Dspy.LM.BumblebeeTest do
     assert %{choices: [%{message: %{content: content}}]} = resp
     assert String.contains?(content, "foo: 1")
     assert String.contains?(content, "temperature")
+
+    assert {:ok, resp2} =
+             Dspy.LM.Bumblebee.generate(lm, %{
+               "messages" => [%{"role" => "user", "content" => "Hi"}],
+               "temperature" => 0.0
+             })
+
+    assert %{choices: [%{message: %{content: content2}}]} = resp2
+    assert String.contains?(content2, "temperature")
   end
 
-  test "generate/2 rejects tools" do
+  test "generate/2 rejects tools (but allows tools: [])" do
     lm =
       Dspy.LM.Bumblebee.new(
         serving: :fake,
@@ -83,11 +92,34 @@ defmodule Dspy.LM.BumblebeeTest do
         available_fun: fn -> true end
       )
 
+    assert {:ok, _resp} =
+             Dspy.LM.Bumblebee.generate(lm, %{
+               messages: [%{role: "user", content: "Hi"}],
+               tools: []
+             })
+
     assert {:error, :tools_not_supported} =
              Dspy.LM.Bumblebee.generate(lm, %{
                messages: [%{role: "user", content: "Hi"}],
                tools: [%{name: "x"}]
              })
+
+    assert {:error, :tools_not_supported} =
+             Dspy.LM.Bumblebee.generate(lm, %{
+               "messages" => [%{"role" => "user", "content" => "Hi"}],
+               "tools" => [%{"name" => "x"}]
+             })
+  end
+
+  test "generate/2 errors when prompt/messages are missing" do
+    lm =
+      Dspy.LM.Bumblebee.new(
+        serving: :fake,
+        runner_module: FakeRunner2,
+        available_fun: fn -> true end
+      )
+
+    assert {:error, :missing_prompt} = Dspy.LM.Bumblebee.generate(lm, %{})
   end
 
   test "supports?/2 reports unsupported features" do

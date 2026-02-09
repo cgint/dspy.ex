@@ -76,6 +76,9 @@ Offline (no network) Retrieval + RAG demos:
 - `mix run examples/retrieve_rag_offline.exs`
 - `mix run examples/retrieve_rag_genserver_offline.exs`
 
+Optional local inference (manual; may download weights):
+- `mix run examples/bumblebee_predict_local.exs`
+
 ## Quick start (offline, deterministic)
 
 This runs without network calls (useful to understand the API surface):

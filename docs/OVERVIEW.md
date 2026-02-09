@@ -211,6 +211,8 @@ Guide: `docs/BUMBLEBEE.md`
 
 Proof artifact (manual/opt-in): `test/integration/bumblebee_predict_integration_test.exs`
 
+Repo example (manual; may download weights): `mix run examples/bumblebee_predict_local.exs`
+
 ## Ways ahead (what we would add next)
 
 These are intentionally phrased as **concrete milestones** with a “proof artifact”.

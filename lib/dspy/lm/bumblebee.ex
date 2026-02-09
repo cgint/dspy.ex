@@ -149,21 +149,42 @@ defmodule Dspy.LM.Bumblebee do
   end
 
   defp request_to_prompt(%__MODULE__{} = lm, request) do
+    tools = Map.get(request, :tools) || Map.get(request, "tools")
+
     cond do
-      not is_nil(request[:tools]) ->
-        {:error, :tools_not_supported}
-
-      is_list(request[:messages]) ->
-        msgs = request[:messages]
-
-        if Enum.all?(msgs, fn m -> text_only_message?(m) end) do
-          {:ok, lm.prompt_builder.(msgs)}
-        else
-          {:error, :unsupported_message_shape}
-        end
+      tools in [nil, []] ->
+        :ok
 
       true ->
-        {:ok, request[:prompt] || request[:text] || request[:input] || ""}
+        {:error, :tools_not_supported}
+    end
+    |> case do
+      :ok ->
+        messages = Map.get(request, :messages) || Map.get(request, "messages")
+
+        cond do
+          is_list(messages) ->
+            if Enum.all?(messages, fn m -> text_only_message?(m) end) do
+              {:ok, lm.prompt_builder.(messages)}
+            else
+              {:error, :unsupported_message_shape}
+            end
+
+          true ->
+            prompt =
+              Map.get(request, :prompt) || Map.get(request, "prompt") ||
+                Map.get(request, :text) || Map.get(request, "text") ||
+                Map.get(request, :input) || Map.get(request, "input")
+
+            if is_binary(prompt) do
+              {:ok, prompt}
+            else
+              {:error, :missing_prompt}
+            end
+        end
+
+      {:error, _} = err ->
+        err
     end
   end
 
@@ -210,11 +231,15 @@ defmodule Dspy.LM.Bumblebee do
     # Many Bumblebee servables bake generation options in at build-time.
     # We still pass opts if the runner supports `run/3`.
     # Bumblebee generation typically uses `:max_new_tokens`.
+    max_tokens = Map.get(request, :max_tokens) || Map.get(request, "max_tokens")
+    temperature = Map.get(request, :temperature) || Map.get(request, "temperature")
+    stop = Map.get(request, :stop) || Map.get(request, "stop")
+
     request_opts =
       []
-      |> maybe_put(:max_new_tokens, request[:max_tokens])
-      |> maybe_put(:temperature, request[:temperature])
-      |> maybe_put(:stop, request[:stop])
+      |> maybe_put(:max_new_tokens, max_tokens)
+      |> maybe_put(:temperature, temperature)
+      |> maybe_put(:stop, stop)
 
     {:ok, Keyword.merge(lm.default_opts, request_opts)}
   end

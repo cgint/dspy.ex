@@ -53,7 +53,13 @@ Then call DSPy normally (`Dspy.Predict`, `Dspy.LM.generate/1`, etc.).
 This repo includes an opt-in integration smoke test that runs a tiny HF model through
 `Dspy.Predict`.
 
-Run it locally (may download weights):
+Repo example (manual; may download weights):
+
+```bash
+mix run examples/bumblebee_predict_local.exs
+```
+
+Run the smoke test locally (may download weights):
 
 ```bash
 mix test --include integration --include network \
