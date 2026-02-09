@@ -45,7 +45,7 @@ The north star is **adoption + reliability**: users should be able to pick up th
 
 ## Early-adoption priorities
 - Use real reference workflows as acceptance specs:
-  - `/Users/cgint/dev/dspy-intro/src` (see `plan/REFERENCE_DSPY_INTRO.md`)
+  - local checkout of `dspy-intro/src` (path varies; see `plan/REFERENCE_DSPY_INTRO.md`)
 - Output parsing that works in practice for real models:
   - label-based parsing
   - JSON object outputs ("JSONAdapter"-style behavior)

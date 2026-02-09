@@ -14,6 +14,9 @@ Each milestone should include:
 - examples in `examples/`
 - deterministic tests proving it works
 - a compatibility note (Python DSPy / DSPex-snakepit alignment)
+- a **core-vs-extras** decision:
+  - keep core `:dspy` lightweight (minimal deps)
+  - move heavy/optional concerns (Phoenix/UI, GenStage-heavy coordination, legacy HTTP) to `extras/dspy_extras`
 
 ## R0 — Adoption Baseline (Predict/CoT + JSON output parsing + providers)
 **Goal:** make the *most common* usage reliable.
@@ -27,7 +30,7 @@ Users can:
 Hard requirements:
 - deterministic golden-path tests
 - output parsing tests (label format + JSON object fallback)
-- acceptance tests derived from `/Users/cgint/dev/dspy-intro/src` for the common workflows (see `plan/REFERENCE_DSPY_INTRO.md`)
+- acceptance tests derived from a local checkout of `dspy-intro/src` (path varies; see `plan/REFERENCE_DSPY_INTRO.md`)
 
 ## R1 — Evaluation you can trust
 **Goal:** enable measurable iteration.
@@ -67,5 +70,6 @@ Hard requirements:
 **Goal:** keep core clean while enabling production usage.
 
 Deliverables (optional, separate):
+- `extras/dspy_extras` (Phoenix/UI, GenStage-heavy coordination, legacy HTTP prototypes)
 - Jido v2 runner integration layer
-- Phoenix/LiveView UI (separate app/package)
+- Phoenix/LiveView UI (as separate app/package if we ever publish it beyond in-tree extras)
