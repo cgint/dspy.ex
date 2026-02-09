@@ -12,6 +12,8 @@ The table below is maintained on `main`, but links are **tag-pinned** so they do
 
 | Tag | What you get | Evidence (tag-pinned) |
 |---|---|---|
+| `v0.2.8` | **SIMBA proven for ChainOfThought**: deterministic improvement via `predict.instructions` on `%Dspy.ChainOfThought{}` | CoT improvement proof: https://github.com/cgint/dspy.ex/blob/v0.2.8/test/teleprompt/simba_chain_of_thought_improvement_test.exs  \
+SIMBA teleprompter: https://github.com/cgint/dspy.ex/blob/v0.2.8/lib/dspy/teleprompt/simba.ex |
 | `v0.2.7` | **Teleprompter parity**: LabeledFewShot supports ChainOfThought; docs clarify Predict-like parameter callbacks | LabeledFewShot: https://github.com/cgint/dspy.ex/blob/v0.2.7/lib/dspy/teleprompt/labeled_few_shot.ex  \
 CoT improvement proof: https://github.com/cgint/dspy.ex/blob/v0.2.7/test/teleprompt/labeled_few_shot_chain_of_thought_improvement_test.exs  \
 Overview docs: https://github.com/cgint/dspy.ex/blob/v0.2.7/docs/OVERVIEW.md |

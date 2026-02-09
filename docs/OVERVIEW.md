@@ -4,7 +4,7 @@
 
 - Want to know what’s usable today? Read **“What you can do today”** below.
 - Want provider setup? See `docs/PROVIDERS.md` (uses `req_llm`).
-- Want stability? Use **semver tags**; `main` moves quickly. Current recommended stable tag: `v0.2.7` (see `README.md` + `docs/RELEASES.md`).
+- Want stability? Use **semver tags**; `main` moves quickly. Current recommended stable tag: `v0.2.8` (see `README.md` + `docs/RELEASES.md`).
 
 ## Diagram
 
@@ -188,7 +188,9 @@ These teleprompters optimize **Predict-like programs** by updating optimizable p
 - `Dspy.Teleprompt.LabeledFewShot` (sets `predict.examples`)
   - Proof: `test/teleprompt/labeled_few_shot_improvement_test.exs`, `test/teleprompt/labeled_few_shot_chain_of_thought_improvement_test.exs`
 - `Dspy.Teleprompt.SIMBA` (updates `predict.instructions`; seeded improvement)
-  - Proof: `test/teleprompt/simba_improvement_test.exs`
+  - Proof: `test/teleprompt/simba_improvement_test.exs`, `test/teleprompt/simba_chain_of_thought_improvement_test.exs`
+- `Dspy.Teleprompt.BootstrapFewShot` (bootstraps demos via a teacher program; deterministic toy improvement)
+  - Proof: `test/bootstrap_few_shot_smoke_test.exs`, `test/teleprompt/bootstrap_few_shot_determinism_test.exs`
 - `Dspy.Teleprompt.GEPA` (toy deterministic optimizer)
   - Proof: `test/teleprompt/gepa_test.exs`, `test/teleprompt/gepa_improvement_test.exs`
 

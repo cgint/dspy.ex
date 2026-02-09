@@ -18,7 +18,7 @@ For stability, depend on a **semver tag** (recommended):
 ```elixir
 def deps do
   [
-    {:dspy, github: "cgint/dspy.ex", tag: "v0.2.7"}
+    {:dspy, github: "cgint/dspy.ex", tag: "v0.2.8"}
   ]
 end
 ```
@@ -64,6 +64,7 @@ Optional/experimental modules (Phoenix LiveView UI, “godmode” coordinator, G
 - Retrieval + RAG (embeddings-backed; offline-proven with mocks)
 - Teleprompters (parameter-based; no dynamic modules; Predict-like programs):
   - `LabeledFewShot` (sets `predict.examples`; proven for `Dspy.Predict` + `Dspy.ChainOfThought`)
+  - `SIMBA` (updates `predict.instructions`; seeded improvement; proven for `Dspy.Predict` + `Dspy.ChainOfThought`)
   - `BootstrapFewShot`
   - `GEPA` (toy deterministic optimizer)
 - Provider adapter: `Dspy.LM.ReqLLM` (offline-proven request mapping incl. multipart + safety gates)

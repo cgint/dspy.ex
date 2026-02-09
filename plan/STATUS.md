@@ -15,7 +15,7 @@ North star docs:
 - `agent/SOUL.md` (agent operating principles)
 
 ## Releases
-- Current recommended stable tag: `v0.2.7` (see `docs/RELEASES.md`)
+- Current recommended stable tag: `v0.2.8` (see `docs/RELEASES.md`)
 
 ## Loop status
 - Loop state: ACTIVE
@@ -35,6 +35,7 @@ North star docs:
   - [x] Program parameter persistence (export/apply parameters for optimized programs)
   - [x] ChainOfThought parity: arrow signatures + attachments request parts + teleprompt parameters
   - [x] LabeledFewShot supports `%Dspy.ChainOfThought{}` (via `predict.examples` parameter)
+  - [x] SIMBA supports `%Dspy.ChainOfThought{}` (via `predict.instructions` parameter)
   - [x] Add unit tests for `Dspy.Teleprompt.Util.set_parameter/4`
   - [x] Provider-layer acceptance tests (ReqLLM default wiring + “real provider” smoke behind tags)
   - [x] Clean up top-level `Dspy` moduledoc to avoid overpromising
@@ -66,10 +67,12 @@ North star docs:
   - Evidence file: `test/teleprompt/labeled_few_shot_improvement_test.exs`
   - Evidence file: `test/teleprompt/labeled_few_shot_chain_of_thought_improvement_test.exs`
   - Evidence file: `test/teleprompt/simba_improvement_test.exs`
+  - Evidence file: `test/teleprompt/simba_chain_of_thought_improvement_test.exs`
   - Evidence file: `test/teleprompt/error_shapes_test.exs`
   - Evidence file: `lib/dspy/teleprompt/labeled_few_shot.ex` (no dynamic module creation)
   - Evidence file: `lib/dspy/teleprompt/copro.ex` (no dynamic module creation)
   - Evidence file: `lib/dspy/teleprompt/mipro_v2.ex` (no dynamic module creation)
+  - Evidence file: `test/bootstrap_few_shot_smoke_test.exs`
   - Evidence file: `test/teleprompt/bootstrap_few_shot_determinism_test.exs`
   - Evidence file: `lib/dspy/application.ex` (library-first startup)
   - Evidence file: `lib/dspy/evaluate.ex` (`return_all: true` items + quiet `cross_validate/4`)
@@ -163,6 +166,8 @@ Notes:
 - **2026-02-09**: Parameter persistence file helpers (`write_json!/2`, `read_json!/1`) + tests + offline demo. Verification: `mix test`.
 - **2026-02-09**: ChainOfThought parity: arrow signatures + attachments request parts + teleprompt parameter callbacks. Verification: `mix test`.
 - **2026-02-09**: LabeledFewShot now supports `%Dspy.ChainOfThought{}` (via `predict.examples`) + docs update to reflect Predict-like teleprompters. Verification: `mix test`.
+- **2026-02-09**: SIMBA proven for `%Dspy.ChainOfThought{}` (seeded improvement via `predict.instructions`); documented BootstrapFewShot in overview. Verification: `mix test`.
+- **2026-02-09**: Cut tag `v0.2.8` (SIMBA proven for ChainOfThought).
 - **2026-02-09**: Cut tag `v0.2.7` (LabeledFewShot supports ChainOfThought; docs clarify Predict-like teleprompters).
 - **2026-02-09**: Cut tag `v0.2.6` (ChainOfThought parity: arrow sigs + attachments + parameters).
 - **2026-02-09**: Cut tag `v0.2.5` (dependency slimming: remove Bumblebee/Nx/EXLA deps from core).
