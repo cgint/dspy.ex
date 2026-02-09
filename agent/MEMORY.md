@@ -67,6 +67,8 @@
 - Program parameter persistence:
   - `test/module_parameter_persistence_test.exs` (`export_parameters/1` + `apply_parameters/2`)
   - `test/module_parameter_json_persistence_test.exs` (`Dspy.Parameter.encode_json!/1` + `decode_json/1`)
+  - `test/parameter_file_persistence_test.exs` (`write_json/2` + `read_json/1`)
+  - `mix run examples/parameter_persistence_json_offline.exs` (offline demo)
 
 ## Teleprompter status (important constraint)
 - Legacy teleprompters were refactored to **avoid dynamic module generation**.

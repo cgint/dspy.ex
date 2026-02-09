@@ -202,6 +202,11 @@ You can also persist an optimized program’s parameter set and re-apply it late
 json = Dspy.Parameter.encode_json!(params)
 {:ok, params2} = Dspy.Parameter.decode_json(json)
 {:ok, restored2} = Dspy.Module.apply_parameters(Dspy.Predict.new(MySignature), params2)
+
+# File convenience helpers
+:ok = Dspy.Parameter.write_json!(params, "params.json")
+params3 = Dspy.Parameter.read_json!("params.json")
+{:ok, restored3} = Dspy.Module.apply_parameters(Dspy.Predict.new(MySignature), params3)
 ```
 
 Proof:

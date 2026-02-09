@@ -17,6 +17,11 @@ defmodule Dspy.Parameter do
 
       {:ok, restored} = Dspy.Module.apply_parameters(fresh_program, params2)
 
+  For convenience when persisting to disk:
+
+      :ok = Dspy.Parameter.write_json!(params, "params.json")
+      params2 = Dspy.Parameter.read_json!("params.json")
+
   Notes:
   - Only a small set of structs is supported for export/import today (notably
     `%Dspy.Example{}`), to avoid unsafe or surprising coercions.
@@ -125,6 +130,68 @@ defmodule Dspy.Parameter do
     else
       {:error, _} = err -> err
       other -> {:error, other}
+    end
+  end
+
+  @doc """
+  Write a parameter list to a file as JSON.
+
+  This is a convenience wrapper around `encode_json/1` + `File.write/2`.
+  """
+  @spec write_json([t()], Path.t()) :: :ok | {:error, term()}
+  def write_json(parameters, path) when is_list(parameters) and is_binary(path) do
+    with {:ok, json} <- encode_json(parameters),
+         :ok <- File.write(path, json) do
+      :ok
+    else
+      {:error, reason} when is_atom(reason) -> {:error, {:file_write_failed, path, reason}}
+      {:error, _reason} = err -> err
+      other -> {:error, other}
+    end
+  end
+
+  @doc """
+  Like `write_json/2`, but raises on error.
+  """
+  @spec write_json!([t()], Path.t()) :: :ok
+  def write_json!(parameters, path) when is_list(parameters) and is_binary(path) do
+    case write_json(parameters, path) do
+      :ok ->
+        :ok
+
+      {:error, reason} ->
+        raise ArgumentError, "failed to write parameters JSON: #{inspect(reason)}"
+    end
+  end
+
+  @doc """
+  Read a parameter list from a JSON file.
+
+  This is a convenience wrapper around `File.read/1` + `decode_json/1`.
+  """
+  @spec read_json(Path.t()) :: {:ok, [t()]} | {:error, term()}
+  def read_json(path) when is_binary(path) do
+    with {:ok, json} <- File.read(path),
+         {:ok, params} <- decode_json(json) do
+      {:ok, params}
+    else
+      {:error, reason} when is_atom(reason) -> {:error, {:file_read_failed, path, reason}}
+      {:error, _reason} = err -> err
+      other -> {:error, other}
+    end
+  end
+
+  @doc """
+  Like `read_json/1`, but raises on error.
+  """
+  @spec read_json!(Path.t()) :: [t()]
+  def read_json!(path) when is_binary(path) do
+    case read_json(path) do
+      {:ok, params} ->
+        params
+
+      {:error, reason} ->
+        raise ArgumentError, "failed to read parameters JSON: #{inspect(reason)}"
     end
   end
 

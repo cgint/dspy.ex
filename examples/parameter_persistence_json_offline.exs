@@ -9,6 +9,7 @@ defmodule ParameterPersistenceJSONOfflineDemo do
 
   defmodule ExampleAwareMockLM do
     @behaviour Dspy.LM
+    defstruct []
 
     @impl true
     def generate(_lm, request) do
@@ -80,15 +81,14 @@ defmodule ParameterPersistenceJSONOfflineDemo do
     # Export as Parameter structs...
     {:ok, params} = Dspy.Module.export_parameters(optimized)
 
-    # ...encode to JSON...
-    json = Dspy.Parameter.encode_json!(params)
-
     path = Path.join(System.tmp_dir!(), "dspy_params_#{System.unique_integer([:positive])}.json")
-    File.write!(path, json)
+
+    # ...encode to JSON and write to disk...
+    :ok = Dspy.Parameter.write_json!(params, path)
     IO.puts("Wrote params to: #{path}")
 
     # ...later: read/decode/apply.
-    {:ok, params2} = path |> File.read!() |> Dspy.Parameter.decode_json()
+    params2 = Dspy.Parameter.read_json!(path)
 
     {:ok, restored} = Dspy.Module.apply_parameters(Dspy.Predict.new(TestQA), params2)
 

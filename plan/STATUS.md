@@ -38,6 +38,7 @@ North star docs:
   - [x] Provider-layer acceptance tests (ReqLLM default wiring + “real provider” smoke behind tags)
   - [x] Clean up top-level `Dspy` moduledoc to avoid overpromising
   - [x] JSON-friendly parameter export/import (`Dspy.Parameter.encode_json!/1`, `decode_json/1`)
+  - [x] File helpers for parameter persistence (`Dspy.Parameter.write_json!/2`, `read_json!/1`)
 - Evidence:
   - Evidence file: `test/acceptance/simplest_predict_test.exs`
   - Evidence file: `test/acceptance/json_outputs_acceptance_test.exs`
@@ -75,6 +76,8 @@ North star docs:
   - Evidence file: `lib/dspy/parameter.ex` (JSON-friendly parameter export/import)
   - Evidence file: `test/module_parameter_persistence_test.exs`
   - Evidence file: `test/module_parameter_json_persistence_test.exs`
+  - Evidence file: `test/parameter_file_persistence_test.exs`
+  - Evidence file: `examples/parameter_persistence_json_offline.exs`
   - Evidence dir: `extras/dspy_extras/` (optional Phoenix/"godmode"/GenStage/legacy HTTP modules)
   - Evidence file: `docs/BUMBLEBEE.md` (local inference notes)
   - Evidence file: `docs/PROVIDERS.md`
