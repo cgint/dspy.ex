@@ -4,7 +4,7 @@
 
 - Want to know what’s usable today? Read **“What you can do today”** below.
 - Want provider setup? See `docs/PROVIDERS.md` (uses `req_llm`).
-- Want stability? Use **semver tags**; `main` moves quickly. Current recommended stable tag: `v0.2.5` (see `README.md` + `docs/RELEASES.md`).
+- Want stability? Use **semver tags**; `main` moves quickly. Current recommended stable tag: `v0.2.6` (see `README.md` + `docs/RELEASES.md`).
 
 ## Diagram
 
@@ -79,9 +79,11 @@ score_pred.attrs.funnyness_0_to_10 #=> 7
 
 Proof: `test/acceptance/simplest_predict_test.exs`
 
-Also: `Dspy.ChainOfThought` runs end-to-end and parses a `:reasoning` output field.
+Also: `Dspy.ChainOfThought` runs end-to-end, parses a `:reasoning` output field, and supports attachments request parts.
 
-Proof: `test/acceptance/chain_of_thought_acceptance_test.exs`
+Proof:
+- `test/acceptance/chain_of_thought_acceptance_test.exs`
+- `test/acceptance/chain_of_thought_attachments_acceptance_test.exs`
 
 ### 2) Structured JSON outputs (JSON-in-markdown-fences parsing)
 

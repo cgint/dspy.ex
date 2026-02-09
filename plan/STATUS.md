@@ -15,7 +15,7 @@ North star docs:
 - `agent/SOUL.md` (agent operating principles)
 
 ## Releases
-- Current recommended stable tag: `v0.2.5` (see `docs/RELEASES.md`)
+- Current recommended stable tag: `v0.2.6` (see `docs/RELEASES.md`)
 
 ## Loop status
 - Loop state: ACTIVE
@@ -33,7 +33,7 @@ North star docs:
   - [x] SIMBA improvement acceptance test (seeded; baseline < optimized)
   - [x] Standardize teleprompter error shapes (no bare strings; tagged tuples)
   - [x] Program parameter persistence (export/apply parameters for optimized programs)
-  - [x] ChainOfThought end-to-end acceptance test (forward + parses reasoning + answer)
+  - [x] ChainOfThought parity: arrow signatures + attachments request parts + teleprompt parameters
   - [x] Add unit tests for `Dspy.Teleprompt.Util.set_parameter/4`
   - [x] Provider-layer acceptance tests (ReqLLM default wiring + “real provider” smoke behind tags)
   - [x] Clean up top-level `Dspy` moduledoc to avoid overpromising
@@ -45,6 +45,7 @@ North star docs:
   - Evidence file: `test/acceptance/simplest_contracts_acceptance_test.exs`
   - Evidence file: `test/acceptance/simplest_transcription_acceptance_test.exs`
   - Evidence file: `test/acceptance/chain_of_thought_acceptance_test.exs`
+  - Evidence file: `test/acceptance/chain_of_thought_attachments_acceptance_test.exs`
   - Evidence file: `test/acceptance/req_llm_predict_acceptance_test.exs`
   - Evidence file: `test/integration/req_llm_predict_integration_test.exs`
   - Evidence file: `test/lm/request_defaults_test.exs`

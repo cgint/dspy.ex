@@ -12,6 +12,9 @@ The table below is maintained on `main`, but links are **tag-pinned** so they do
 
 | Tag | What you get | Evidence (tag-pinned) |
 |---|---|---|
+| `v0.2.6` | **ChainOfThought parity**: supports arrow-string signatures, attachments request parts, and teleprompt parameter callbacks | CoT implementation: https://github.com/cgint/dspy.ex/blob/v0.2.6/lib/dspy/chain_of_thought.ex  \
+CoT acceptance: https://github.com/cgint/dspy.ex/blob/v0.2.6/test/acceptance/chain_of_thought_acceptance_test.exs  \
+CoT attachments: https://github.com/cgint/dspy.ex/blob/v0.2.6/test/acceptance/chain_of_thought_attachments_acceptance_test.exs |
 | `v0.2.5` | **Dependency slimming**: core `:dspy` no longer depends on Bumblebee/Nx/EXLA (local inference remains an opt-in adapter) | Core deps: https://github.com/cgint/dspy.ex/blob/v0.2.5/mix.exs  \
 Bumblebee adapter note: https://github.com/cgint/dspy.ex/blob/v0.2.5/docs/BUMBLEBEE.md |
 | `v0.2.4` | **Parameter persistence (file helpers)**: write/read parameters JSON to/from disk; offline demo script | File persistence tests: https://github.com/cgint/dspy.ex/blob/v0.2.4/test/parameter_file_persistence_test.exs  \

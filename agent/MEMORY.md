@@ -7,7 +7,7 @@
 ## Where to look first (human vs planning)
 - Human-friendly snapshot + multi-dimensional roadmap: **`docs/OVERVIEW.md`**
 - Releases/tags (what each semver tag contains): `docs/RELEASES.md`
-- Current recommended stable tag: `v0.2.5`
+- Current recommended stable tag: `v0.2.6`
 - Agent/contributor entry point: `AGENTS.md`
 - Planning backlog / next tasks: `plan/STATUS.md`
 - Roadmap: `plan/RELEASE_MILESTONES.md`
@@ -46,6 +46,7 @@
   - `test/acceptance/simplest_transcription_acceptance_test.exs` (image attachment → transcription → postprocess)
   - `test/acceptance/simplest_refine_acceptance_test.exs` (refine loop)
   - `test/acceptance/chain_of_thought_acceptance_test.exs` (CoT end-to-end)
+  - `test/acceptance/chain_of_thought_attachments_acceptance_test.exs` (CoT attachments request parts)
 - ReqLLM adapter (offline-proven):
   - `test/lm/req_llm_multimodal_test.exs` (multipart conversion + attachment safety gates)
   - `test/acceptance/req_llm_predict_acceptance_test.exs` (Predict end-to-end via ReqLLM; no network)
