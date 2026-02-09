@@ -58,6 +58,7 @@
   - LabeledFewShot improvement: `test/teleprompt/labeled_few_shot_improvement_test.exs`
   - SIMBA improvement: `test/teleprompt/simba_improvement_test.exs`
   - Error shapes: `test/teleprompt/error_shapes_test.exs`
+  - Teleprompt.Util set_parameter contracts: `test/teleprompt/util_test.exs`
   - BootstrapFewShot determinism regression: `test/teleprompt/bootstrap_few_shot_determinism_test.exs`
 - Program parameter persistence:
   - `test/module_parameter_persistence_test.exs` (`export_parameters/1` + `apply_parameters/2`)

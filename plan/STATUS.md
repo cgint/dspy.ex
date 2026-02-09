@@ -34,6 +34,10 @@ North star docs:
   - [x] Standardize teleprompter error shapes (no bare strings; tagged tuples)
   - [x] Program parameter persistence (export/apply parameters for optimized programs)
   - [x] ChainOfThought end-to-end acceptance test (forward + parses reasoning + answer)
+  - [x] Add unit tests for `Dspy.Teleprompt.Util.set_parameter/4`
+  - [ ] Next: Provider-layer acceptance tests (ReqLLM default wiring + “real provider” smoke behind tags)
+  - [ ] Next: Clean up top-level `Dspy` moduledoc to avoid overpromising
+  - [ ] (Optional) JSON-friendly parameter export/import
 - Evidence:
   - Evidence file: `test/acceptance/simplest_predict_test.exs`
   - Evidence file: `test/acceptance/json_outputs_acceptance_test.exs`
@@ -49,6 +53,7 @@ North star docs:
   - Evidence file: `test/teleprompt/gepa_test.exs` (contract tests)
   - Evidence file: `test/teleprompt/gepa_improvement_test.exs` (toy improvement acceptance)
   - Evidence file: `lib/dspy/teleprompt/util.ex` (parameter-based mutation helpers + verbosity-gated Logger)
+  - Evidence file: `test/teleprompt/util_test.exs`
   - Evidence file: `test/teleprompt/labeled_few_shot_improvement_test.exs`
   - Evidence file: `test/teleprompt/simba_improvement_test.exs`
   - Evidence file: `test/teleprompt/error_shapes_test.exs`
@@ -136,6 +141,7 @@ Notes:
 - **2026-02-09**: Standardized teleprompter error shapes (no bare strings); added contract tests. Verification: `mix test`.
 - **2026-02-09**: Added explicit program parameter persistence helpers (`export_parameters/1` + `apply_parameters/2`) + roundtrip test. Verification: `mix test`.
 - **2026-02-09**: Added ChainOfThought end-to-end acceptance test + docs update. Verification: `mix test`.
+- **2026-02-09**: Added unit tests for `Dspy.Teleprompt.Util.set_parameter/4`. Verification: `mix test`.
 - **2026-02-09**: Cut tag `v0.2.1` (Evaluate `return_all`, SIMBA improvement, teleprompt error-shape standardization, parameter persistence, CoT acceptance).
 - **2026-02-08**: Clarified public landing docs: `README.md` + `docs/OVERVIEW.md` now emphasize usable slices, offline quick start, and pinning via semver tags.
 - **2026-02-08**: Added `docs/RELEASES.md` with tag-pinned evidence links; cut and pushed tag `v0.1.0`.
