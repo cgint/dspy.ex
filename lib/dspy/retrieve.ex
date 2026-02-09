@@ -633,11 +633,19 @@ defmodule Dspy.Retrieve do
     defp build_context(documents, template) do
       context_pieces =
         Enum.map(documents, fn doc ->
-          String.replace(template, "{content}", doc.content)
+          template
+          |> String.replace("{content}", safe_placeholder(doc.content))
+          |> String.replace("{source}", safe_placeholder(doc.source))
+          |> String.replace("{score}", safe_placeholder(Map.get(doc, :score)))
         end)
 
       Enum.join(context_pieces, "\n\n")
     end
+
+    defp safe_placeholder(nil), do: ""
+    defp safe_placeholder(v) when is_binary(v), do: v
+    defp safe_placeholder(v) when is_number(v), do: to_string(v)
+    defp safe_placeholder(v), do: inspect(v)
 
     defp build_rag_prompt(query, context, opts) do
       instruction = opts[:instruction] || "Answer the question based on the provided context."

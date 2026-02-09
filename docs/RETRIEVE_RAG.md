@@ -68,4 +68,23 @@ See:
 - A retriever is a **module** implementing `Dspy.Retrieve.Retriever` (`retrieve/2`).
   `Dspy.Retrieve.RAGPipeline` calls `retriever.retrieve(query, k: ...)`. You can set `k:` at pipeline
   construction time, and also override it per call via `RAGPipeline.generate(..., k: ...)`.
+
+## Context templates
+
+`Dspy.Retrieve.RAGPipeline` builds a context string by applying `context_template` to each retrieved
+chunk.
+
+Supported placeholders:
+- `{content}` (required for most useful contexts)
+- `{source}` (from `doc.source`, if present)
+- `{score}` (from `doc.score`, if present)
+
+Example:
+
+```elixir
+pipeline = Dspy.Retrieve.RAGPipeline.new(retriever, lm,
+  k: 3,
+  context_template: "SOURCE={source} score={score}\n{content}"
+)
+```
 - Core `:dspy` remains library-first/minimal dependency; anything heavy belongs in `extras/dspy_extras`.

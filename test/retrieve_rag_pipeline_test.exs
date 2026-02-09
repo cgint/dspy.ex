@@ -68,6 +68,23 @@ defmodule Dspy.RetrieveRAGPipelineTest do
     assert String.contains?(msg, ":bad_query")
   end
 
+  test "RAGPipeline context_template can reference {content}, {source}, {score}" do
+    lm = %FakeLM{test_pid: self(), reply_text: "ok"}
+
+    pipeline =
+      Dspy.Retrieve.RAGPipeline.new(DummyRetriever, lm,
+        k: 1,
+        context_template: "S={source} score={score} :: {content}"
+      )
+
+    assert {:ok, %{context: context}} =
+             Dspy.Retrieve.RAGPipeline.generate(pipeline, "What is this?", max_tokens: 9)
+
+    assert String.contains?(context, "S=source-1")
+    assert String.contains?(context, "score=1.0")
+    assert String.contains?(context, "Doc 1")
+  end
+
   test "RAGPipeline can override k per call" do
     lm = %FakeLM{test_pid: self(), reply_text: "ok"}
     pipeline = Dspy.Retrieve.RAGPipeline.new(KOverrideRetriever, lm, k: 1)
