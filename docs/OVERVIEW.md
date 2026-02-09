@@ -253,5 +253,5 @@ These are intentionally phrased as **concrete milestones** with a “proof artif
 
 ### Next maturity milestones
 
-- Provider-layer acceptance tests (via `req_llm` adapter) once the adapter is wired as the default integration path
 - (Optional) Make parameter persistence more portable (e.g. JSON-friendly export/import)
+- (Optional) Add more provider smoke tests (Anthropic, etc.) behind `:integration`/`:network` tags
