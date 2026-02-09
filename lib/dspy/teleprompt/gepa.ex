@@ -10,7 +10,7 @@ defmodule Dspy.Teleprompt.GEPA do
 
   @behaviour Dspy.Teleprompt
 
-  alias Dspy.Example
+  alias Dspy.{Example, Trainset}
 
   defstruct [:metric, :seed, :candidates]
 
@@ -53,7 +53,7 @@ defmodule Dspy.Teleprompt.GEPA do
   @spec compile(t(), Dspy.Teleprompt.program_t(), list(Example.t())) ::
           Dspy.Teleprompt.compile_result()
   def compile(%__MODULE__{} = tp, program, trainset) do
-    with {:ok, validated_trainset} <- Dspy.Trainset.validate(trainset) do
+    with {:ok, validated_trainset} <- validate_trainset(trainset) do
       baseline =
         Dspy.Evaluate.evaluate(program, validated_trainset, tp.metric,
           num_threads: 1,
@@ -81,6 +81,15 @@ defmodule Dspy.Teleprompt.GEPA do
         end)
 
       {:ok, best_program}
+    end
+  end
+
+  defp validate_trainset([]), do: {:error, :empty_trainset}
+
+  defp validate_trainset(trainset) do
+    case Trainset.validate(trainset) do
+      {:ok, validated_trainset} -> {:ok, validated_trainset}
+      {:error, reason} -> {:error, {:invalid_trainset, reason}}
     end
   end
 

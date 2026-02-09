@@ -123,7 +123,7 @@ defmodule Dspy.Teleprompt.BootstrapFewShot do
   def compile(%__MODULE__{} = teleprompt, student, trainset) do
     Dspy.Teleprompt.Util.log(teleprompt, "Starting BootstrapFewShot compilation...")
 
-    with {:ok, validated_trainset} <- Trainset.validate(trainset),
+    with {:ok, validated_trainset} <- validate_trainset(trainset),
          {:ok, teacher} <- get_teacher_program(teleprompt, student),
          {:ok, bootstrapped_examples} <-
            bootstrap_examples(teleprompt, teacher, validated_trainset),
@@ -143,6 +143,15 @@ defmodule Dspy.Teleprompt.BootstrapFewShot do
   end
 
   # Private functions
+
+  defp validate_trainset([]), do: {:error, :empty_trainset}
+
+  defp validate_trainset(trainset) do
+    case Trainset.validate(trainset) do
+      {:ok, validated_trainset} -> {:ok, validated_trainset}
+      {:error, reason} -> {:error, {:invalid_trainset, reason}}
+    end
+  end
 
   defp get_teacher_program(%__MODULE__{teacher: nil}, student), do: {:ok, student}
   defp get_teacher_program(%__MODULE__{teacher: teacher}, _student), do: {:ok, teacher}

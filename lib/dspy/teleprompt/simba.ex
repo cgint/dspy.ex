@@ -94,13 +94,27 @@ defmodule Dspy.Teleprompt.SIMBA do
     end
   end
 
-  defp validate_trainset(trainset) do
-    if length(trainset) < 5 do
-      {:error, "Insufficient training data for SIMBA (need at least 5 examples)"}
-    else
-      {:ok, trainset}
+  defp validate_trainset(trainset) when is_list(trainset) do
+    cond do
+      trainset == [] ->
+        {:error, :empty_trainset}
+
+      true ->
+        case Trainset.validate(trainset) do
+          {:ok, validated_trainset} ->
+            if length(validated_trainset) < 5 do
+              {:error, {:insufficient_trainset, min: 5, got: length(validated_trainset)}}
+            else
+              {:ok, validated_trainset}
+            end
+
+          {:error, reason} ->
+            {:error, {:invalid_trainset, reason}}
+        end
     end
   end
+
+  defp validate_trainset(other), do: {:error, {:invalid_trainset, {:not_a_list, other}}}
 
   defp ensure_program_supported(program) do
     if function_exported?(program.__struct__, :update_parameters, 2) do

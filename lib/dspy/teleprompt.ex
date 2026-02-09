@@ -101,7 +101,7 @@ defmodule Dspy.Teleprompt do
   def compile(%SIMBA{} = tp, program, trainset), do: SIMBA.compile(tp, program, trainset)
   def compile(%Ensemble{} = tp, program, trainset), do: Ensemble.compile(tp, program, trainset)
   def compile(%GEPA{} = tp, program, trainset), do: GEPA.compile(tp, program, trainset)
-  def compile(tp, _program, _trainset), do: {:error, "Unknown teleprompt type: #{inspect(tp)}"}
+  def compile(tp, _program, _trainset), do: {:error, {:unknown_teleprompt, tp}}
 
   @doc """
   Helper to validate teleprompt configuration.

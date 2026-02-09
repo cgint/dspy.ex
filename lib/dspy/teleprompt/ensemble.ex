@@ -131,13 +131,27 @@ defmodule Dspy.Teleprompt.Ensemble do
 
   # Private functions
 
-  defp validate_trainset(trainset) do
-    if length(trainset) < 10 do
-      {:error, "Insufficient training data for ensemble (need at least 10 examples)"}
-    else
-      {:ok, trainset}
+  defp validate_trainset(trainset) when is_list(trainset) do
+    cond do
+      trainset == [] ->
+        {:error, :empty_trainset}
+
+      true ->
+        case Trainset.validate(trainset) do
+          {:ok, validated_trainset} ->
+            if length(validated_trainset) < 10 do
+              {:error, {:insufficient_trainset, min: 10, got: length(validated_trainset)}}
+            else
+              {:ok, validated_trainset}
+            end
+
+          {:error, reason} ->
+            {:error, {:invalid_trainset, reason}}
+        end
     end
   end
+
+  defp validate_trainset(other), do: {:error, {:invalid_trainset, {:not_a_list, other}}}
 
   defp split_data(%__MODULE__{validation_split: val_split, seed: seed}, trainset) do
     :rand.seed(:exsss, {seed, seed + 1, seed + 2})
@@ -191,7 +205,7 @@ defmodule Dspy.Teleprompt.Ensemble do
       |> Enum.map(fn {:ok, member} -> member end)
 
     if length(members) < 2 do
-      {:error, "Failed to train sufficient ensemble members"}
+      {:error, {:insufficient_ensemble_members, min: 2, got: length(members)}}
     else
       {:ok, members}
     end
@@ -365,7 +379,7 @@ defmodule Dspy.Teleprompt.Ensemble do
             |> Enum.filter(&(&1 != nil))
 
           if length(member_predictions) == 0 do
-            {:error, "All ensemble members failed"}
+            {:error, :all_ensemble_members_failed}
           else
             # Combine predictions using strategy
             combined_prediction = combine_predictions(member_predictions, weights, strategy)
