@@ -26,6 +26,8 @@
 - Testing discipline:
   - tests that touch global settings must snapshot+restore via `Dspy.TestSupport.restore_settings_on_exit/0`.
   - prefer `num_threads: 1` + `progress: false` for determinism.
+  - **integration/network tests are excluded by default** (see `test/test_helper.exs`).
+    - run explicitly via `mix test --include integration --include network test/...`
 
 ## Reference workflows (acceptance spec source)
 - Python examples (`dspy-intro`) live in a **local checkout** (path varies); see `plan/REFERENCE_DSPY_INTRO.md` for expectations and how we derive acceptance tests.
@@ -62,6 +64,12 @@
 ## Optional services (separate package)
 - Optional Phoenix/"godmode" and other experimental modules live in `extras/dspy_extras`.
 - Core `:dspy` remains lightweight and does not depend on Phoenix/GenStage/HTTPoison.
+
+## Optional local inference (Bumblebee)
+- Core ships an **optional** adapter module: `Dspy.LM.Bumblebee` (runtime-gated; no core deps on Bumblebee/Nx/EXLA).
+- There is an **opt-in integration smoke test** (may download weights): `test/integration/bumblebee_predict_integration_test.exs`
+  - run with: `mix test --include integration --include network test/integration/bumblebee_predict_integration_test.exs`
+  - docs: `docs/BUMBLEBEE.md`
 
 ## Loop automation (for delegated work)
 - Worker/review scripts live in `scripts/`.

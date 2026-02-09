@@ -71,5 +71,6 @@ Hard requirements:
 
 Deliverables (optional, separate):
 - `extras/dspy_extras` (Phoenix/UI, GenStage-heavy coordination, legacy HTTP prototypes)
+- Local inference integration notes + adapter(s) (Bumblebee/Nx) (core remains dependency-free; adapter is runtime-gated)
 - Jido v2 runner integration layer
 - Phoenix/LiveView UI (as separate app/package if we ever publish it beyond in-tree extras)

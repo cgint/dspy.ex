@@ -20,6 +20,8 @@ North star docs:
 ## Loop status
 - Loop state: ACTIVE
 - Backlog (ordered):
+  - [x] Optional local inference: add `Dspy.LM.Bumblebee` (runtime-gated; no core deps)
+  - [x] Add opt-in integration smoke test for Bumblebee + default exclude `:integration`/`:network` in `mix test`
   - [x] R0 acceptance tests: port `simplest/simplest_dspy.py` behavior into `test/acceptance/*`
   - [x] R0 acceptance tests: port `simplest/simplest_dspy_with_signature_onefile.py` behavior (JSON-ish structured output expectations)
   - [x] Add string-signature convenience: `Dspy.Predict.new("input -> output")`

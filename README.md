@@ -6,6 +6,7 @@ Status: **alpha**. We ship in small, usable slices.
 
 - If you want the fastest overview: start at **`docs/OVERVIEW.md`**.
 - If you want provider setup: **`docs/PROVIDERS.md`** (via `req_llm`).
+- If you want local inference (optional): **`docs/BUMBLEBEE.md`**.
 - If you want to pick a tag intentionally: **`docs/RELEASES.md`**.
 
 ## Stability / how to pin versions
@@ -30,6 +31,13 @@ Before opening a PR, run:
 
 ```bash
 scripts/verify_all.sh
+```
+
+Note: `mix test` excludes `:integration`/`:network` tests by default (to keep CI deterministic/offline).
+Run them locally via:
+
+```bash
+mix test --include integration --include network test/...
 ```
 
 This verifies:

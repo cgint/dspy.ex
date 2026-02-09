@@ -16,6 +16,9 @@ Note: the core `:dspy` library is intentionally low-dependency. Optional Phoenix
 
 Contributor note: `scripts/verify_all.sh` verifies both core and extras (format check, compile with warnings-as-errors, tests).
 
+Note on test hygiene: by default, `mix test` excludes tests tagged `:integration` and `:network` (see `test/test_helper.exs`).
+To run them locally, use `mix test --include integration --include network ...`.
+
 The items below are backed by deterministic tests (offline, using mock LMs).
 
 ### Quick start (offline)
@@ -194,6 +197,19 @@ Legend:
 | Teleprompters | 2 | Predict-only, parameter-based (no dynamic modules) | `test/teleprompt/*` |
 | Tools/request map integration | 2 | ReAct runs with request maps; tool start/end callbacks supported (tool logging) | `test/tools_request_map_test.exs`, `test/acceptance/simplest_tool_logging_acceptance_test.exs` |
 | Provider support (real providers) | 2 | `Dspy.LM.ReqLLM` adapter proven (offline) incl. multipart/attachments request shape + safety gates; embeddings adapter via `req_llm` proven (offline); real network providers still considered prototype | `test/lm/req_llm_multimodal_test.exs`, `lib/dspy/lm/req_llm.ex`, `test/retrieve/req_llm_embeddings_test.exs` |
+
+## Optional integrations (manual / non-deterministic)
+
+### Local inference (Bumblebee)
+
+This repo ships an **optional** local inference adapter: `Dspy.LM.Bumblebee`.
+
+- Core `:dspy` does **not** depend on Bumblebee/Nx/EXLA.
+- To use it, add those deps in your **application** and build an `Nx.Serving`.
+
+Guide: `docs/BUMBLEBEE.md`
+
+Proof artifact (manual/opt-in): `test/integration/bumblebee_predict_integration_test.exs`
 
 ## Ways ahead (what we would add next)
 
