@@ -534,13 +534,18 @@ defmodule Dspy.AutonomousMetaAgent do
   defp parse_implementation_files(_implementation_result) do
     # Mock file parsing - in real implementation would parse LLM output
     [
-      {"/tmp/generated_module.ex", "defmodule GeneratedModule do\n  def test, do: :ok\nend"}
+      {generated_tmp_path(), "defmodule GeneratedModule do\n  def test, do: :ok\nend"}
     ]
   end
 
   defp get_module_source(module) do
     # Get source code for a module - simplified
     "defmodule #{module} do\n  def test, do: :ok\nend"
+  end
+
+  defp generated_tmp_path do
+    name = "generated_module_#{System.unique_integer([:positive])}.ex"
+    Path.join(System.tmp_dir!(), name)
   end
 
   defp get_system_capabilities do

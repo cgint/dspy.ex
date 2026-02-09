@@ -1,0 +1,46 @@
+name: ci
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+
+    env:
+      MIX_ENV: test
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up BEAM
+        uses: erlef/setup-beam@v1
+        with:
+          otp-version: '27.2'
+          elixir-version: '1.18.2'
+
+      - name: Core deps
+        run: mix deps.get
+
+      - name: Core format
+        run: mix format --check-formatted
+
+      - name: Core compile (warnings as errors)
+        run: mix compile --warnings-as-errors
+
+      - name: Core test
+        run: mix test
+
+      - name: Extras deps
+        run: cd extras/dspy_extras && mix deps.get
+
+      - name: Extras format
+        run: cd extras/dspy_extras && mix format --check-formatted
+
+      - name: Extras compile (warnings as errors)
+        run: cd extras/dspy_extras && mix compile --warnings-as-errors
+
+      - name: Extras test
+        run: cd extras/dspy_extras && mix test

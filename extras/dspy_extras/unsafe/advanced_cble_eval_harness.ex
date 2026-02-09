@@ -2,6 +2,11 @@ defmodule Dspy.AdvancedCBLEEvalHarness do
   @moduledoc """
   Advanced CBLE Evaluation Harness with multi-modal reasoning, adaptive testing,
   performance analytics, and intelligent error recovery.
+
+  ## Safety / hygiene
+
+  This module lives under `extras/dspy_extras/unsafe/` and is **not compiled by default**.
+  It is an experimental prototype and may contain nondeterminism and side effects.
   """
 
   require Logger
@@ -68,7 +73,13 @@ defmodule Dspy.AdvancedCBLEEvalHarness do
 
   # Initialize advanced evaluation harness
   def new(opts \\ []) do
-    base_path = Keyword.get(opts, :exam_data_path, "/Users/agent/evalscompany/cble_dataset")
+    base_path = Keyword.get(opts, :exam_data_path)
+
+    if is_nil(base_path) do
+      raise ArgumentError,
+            ":exam_data_path is required (no default; avoids machine-specific absolute paths)"
+    end
+
     output_path = Keyword.get(opts, :output_path, "./cble_results")
 
     %__MODULE__{
