@@ -92,3 +92,6 @@ This keeps embeddings provider-agnostic, like the chat/generation path.
 
 - Multipart + attachment safety: `test/lm/req_llm_multimodal_test.exs`
 - ReqLLM embeddings adapter (mocked): `test/retrieve/req_llm_embeddings_test.exs`
+- Offline retrieval/RAG examples:
+  - `examples/retrieve_rag_offline.exs`
+  - `examples/retrieve_rag_genserver_offline.exs`
