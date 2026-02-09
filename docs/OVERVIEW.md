@@ -4,7 +4,7 @@
 
 - Want to know what’s usable today? Read **“What you can do today”** below.
 - Want provider setup? See `docs/PROVIDERS.md` (uses `req_llm`).
-- Want stability? Use **semver tags**; `main` moves quickly. Current recommended stable tag: `v0.2.2` (see `README.md` + `docs/RELEASES.md`).
+- Want stability? Use **semver tags**; `main` moves quickly. Current recommended stable tag: `v0.2.3` (see `README.md` + `docs/RELEASES.md`).
 
 ## Diagram
 
@@ -194,10 +194,19 @@ You can also persist an optimized program’s parameter set and re-apply it late
 
 ```elixir
 {:ok, params} = Dspy.Module.export_parameters(optimized)
+
+# In-memory / Erlang terms
 {:ok, restored} = Dspy.Module.apply_parameters(Dspy.Predict.new(MySignature), params)
+
+# JSON-friendly
+json = Dspy.Parameter.encode_json!(params)
+{:ok, params2} = Dspy.Parameter.decode_json(json)
+{:ok, restored2} = Dspy.Module.apply_parameters(Dspy.Predict.new(MySignature), params2)
 ```
 
-Proof: `test/module_parameter_persistence_test.exs`
+Proof:
+- `test/module_parameter_persistence_test.exs`
+- `test/module_parameter_json_persistence_test.exs`
 
 ## Workflow parity vs `dspy-intro/src` (high-level)
 
@@ -253,5 +262,5 @@ These are intentionally phrased as **concrete milestones** with a “proof artif
 
 ### Next maturity milestones
 
-- (Optional) Make parameter persistence more portable (e.g. JSON-friendly export/import)
+- (Optional) Add file helpers for parameter persistence (save/load JSON from disk)
 - (Optional) Add more provider smoke tests (Anthropic, etc.) behind `:integration`/`:network` tags

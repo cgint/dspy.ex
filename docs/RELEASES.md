@@ -12,6 +12,9 @@ The table below is maintained on `main`, but links are **tag-pinned** so they do
 
 | Tag | What you get | Evidence (tag-pinned) |
 |---|---|---|
+| `v0.2.3` | **JSON-friendly parameter persistence**: encode/decode parameter lists to JSON (supports `%Dspy.Example{}` values) | JSON roundtrip proof: https://github.com/cgint/dspy.ex/blob/v0.2.3/test/module_parameter_json_persistence_test.exs  \
+Encoder/decoder: https://github.com/cgint/dspy.ex/blob/v0.2.3/lib/dspy/parameter.ex  \
+Overview: https://github.com/cgint/dspy.ex/blob/v0.2.3/docs/OVERVIEW.md |
 | `v0.2.2` | **ReqLLM provider wiring**: apply `Dspy.configure/1` defaults (`temperature`/`max_tokens`) to request maps; add ReqLLM+Predict offline acceptance; add opt-in real-provider smoke test | Settings defaults applied: https://github.com/cgint/dspy.ex/blob/v0.2.2/test/lm/request_defaults_test.exs  \
 ReqLLM Predict acceptance: https://github.com/cgint/dspy.ex/blob/v0.2.2/test/acceptance/req_llm_predict_acceptance_test.exs  \
 ReqLLM real-provider smoke (opt-in): https://github.com/cgint/dspy.ex/blob/v0.2.2/test/integration/req_llm_predict_integration_test.exs  \

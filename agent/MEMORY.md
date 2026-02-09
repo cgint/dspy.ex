@@ -7,7 +7,7 @@
 ## Where to look first (human vs planning)
 - Human-friendly snapshot + multi-dimensional roadmap: **`docs/OVERVIEW.md`**
 - Releases/tags (what each semver tag contains): `docs/RELEASES.md`
-- Current recommended stable tag: `v0.2.2`
+- Current recommended stable tag: `v0.2.3`
 - Agent/contributor entry point: `AGENTS.md`
 - Planning backlog / next tasks: `plan/STATUS.md`
 - Roadmap: `plan/RELEASE_MILESTONES.md`
@@ -66,6 +66,7 @@
   - BootstrapFewShot determinism regression: `test/teleprompt/bootstrap_few_shot_determinism_test.exs`
 - Program parameter persistence:
   - `test/module_parameter_persistence_test.exs` (`export_parameters/1` + `apply_parameters/2`)
+  - `test/module_parameter_json_persistence_test.exs` (`Dspy.Parameter.encode_json!/1` + `decode_json/1`)
 
 ## Teleprompter status (important constraint)
 - Legacy teleprompters were refactored to **avoid dynamic module generation**.
