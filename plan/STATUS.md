@@ -29,6 +29,10 @@ North star docs:
   - [x] Next: GEPA toy improvement acceptance test (baseline < optimized with seed)
   - [x] Next: decide whether to refactor legacy teleprompters away from dynamic modules
   - [x] Replace noisy `IO.puts` in teleprompters with Logger + verbosity flag
+  - [x] R1: Harden `Evaluate` (per-example results via `return_all: true`; quiet `cross_validate/4`) + add deterministic `Trainset.split/2` + `Trainset.sample/3` tests
+  - [ ] Next: SIMBA improvement acceptance test (seeded; baseline < optimized)
+  - [ ] Next: Standardize teleprompter error shapes (no bare strings; tagged tuples)
+  - [ ] Next: Program parameter persistence (export/apply parameters for optimized programs)
 - Evidence:
   - Evidence file: `test/acceptance/simplest_predict_test.exs`
   - Evidence file: `test/acceptance/json_outputs_acceptance_test.exs`
@@ -49,6 +53,9 @@ North star docs:
   - Evidence file: `lib/dspy/teleprompt/mipro_v2.ex` (no dynamic module creation)
   - Evidence file: `test/teleprompt/bootstrap_few_shot_determinism_test.exs`
   - Evidence file: `lib/dspy/application.ex` (library-first startup)
+  - Evidence file: `lib/dspy/evaluate.ex` (`return_all: true` items + quiet `cross_validate/4`)
+  - Evidence file: `test/evaluate_detailed_results_test.exs`
+  - Evidence file: `test/trainset_test.exs`
   - Evidence dir: `extras/dspy_extras/` (optional Phoenix/"godmode"/GenStage/legacy HTTP modules)
   - Evidence file: `docs/BUMBLEBEE.md` (local inference notes)
   - Verification: `mix test`
@@ -119,6 +126,7 @@ Notes:
 
 ## Log
 
+- **2026-02-09**: Hardened evaluation: `return_all: true` per-example items; `cross_validate/4` quiet-by-default; added deterministic `Trainset.split/2` + `Trainset.sample/3` tests; updated `docs/OVERVIEW.md`. Verification: `mix test`, `./precommit.sh`.
 - **2026-02-08**: Clarified public landing docs: `README.md` + `docs/OVERVIEW.md` now emphasize usable slices, offline quick start, and pinning via semver tags.
 - **2026-02-08**: Added `docs/RELEASES.md` with tag-pinned evidence links; cut and pushed tag `v0.1.0`.
 - **2026-02-08**: Added additional acceptance slices (contracts + transcription), made app startup library-first by gating optional services, and added determinism regression coverage; cut and pushed tag `v0.1.1`.
