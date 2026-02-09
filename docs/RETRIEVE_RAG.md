@@ -87,4 +87,11 @@ pipeline = Dspy.Retrieve.RAGPipeline.new(retriever, lm,
   context_template: "SOURCE={source} score={score}\n{content}"
 )
 ```
+
+Default template (when you don't pass `context_template:`):
+
+```text
+Source: {source}
+{content}
+```
 - Core `:dspy` remains library-first/minimal dependency; anything heavy belongs in `extras/dspy_extras`.

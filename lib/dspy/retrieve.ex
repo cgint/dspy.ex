@@ -670,7 +670,7 @@ defmodule Dspy.Retrieve do
     end
 
     defp default_context_template do
-      "Source: {content}"
+      "Source: {source}\n{content}"
     end
   end
 

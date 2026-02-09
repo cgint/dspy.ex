@@ -51,6 +51,7 @@ defmodule Dspy.RetrieveRAGPipelineTest do
              Dspy.Retrieve.RAGPipeline.generate(pipeline, "What is this?", max_tokens: 9)
 
     assert String.contains?(context, "Source:")
+    assert String.contains?(context, "source-1")
 
     assert_receive {:lm_request, request}
     assert request.max_tokens == 9
