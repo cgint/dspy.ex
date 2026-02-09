@@ -48,6 +48,23 @@ Dspy.configure(lm: lm)
 
 Then call DSPy normally (`Dspy.Predict`, `Dspy.LM.generate/1`, etc.).
 
+### Repo integration smoke test (opt-in)
+
+This repo includes an opt-in integration smoke test that runs a tiny HF model through
+`Dspy.Predict`.
+
+Run it locally (may download weights):
+
+```bash
+mix test --include integration --include network \
+  test/integration/bumblebee_predict_integration_test.exs
+
+# optionally override the tiny model used by the smoke test:
+DSPY_BUMBLEBEE_TEST_MODEL=sshleifer/tiny-gpt2 \
+  mix test --include integration --include network \
+  test/integration/bumblebee_predict_integration_test.exs
+```
+
 - **What it is**: [Bumblebee](https://github.com/elixir-nx/bumblebee) is the Elixir/Nx library that runs HuggingFace models (including many LLMs) **locally on the BEAM**.
 - **How you use it**: you typically load a model + tokenizer, build an **`Nx.Serving`** using `Bumblebee.Text.generation/3`, and then call `Nx.Serving.run/2` to generate text.
 - **Why it matters**: it enables **on-device / on-prem inference** (privacy, cost control, low-latency) and integrates naturally with Elixir supervision, concurrency, and distribution.

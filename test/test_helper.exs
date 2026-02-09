@@ -1,4 +1,4 @@
-ExUnit.start()
+ExUnit.start(exclude: [integration: true, network: true])
 
 defmodule Dspy.TestSupport do
   @moduledoc false
