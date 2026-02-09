@@ -23,7 +23,8 @@ defmodule Dspy.Teleprompt.UtilTest do
   test "set_parameter/4 returns a type mismatch error when a parameter exists with a different type" do
     program = Dspy.Predict.new("question -> answer")
 
-    assert {:error, {:parameter_type_mismatch, "predict.examples", expected: :prompt, got: :examples}} =
+    assert {:error,
+            {:parameter_type_mismatch, "predict.examples", expected: :prompt, got: :examples}} =
              Util.set_parameter(program, "predict.examples", :prompt, "x")
   end
 
