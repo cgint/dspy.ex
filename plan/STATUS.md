@@ -33,11 +33,13 @@ North star docs:
   - [x] SIMBA improvement acceptance test (seeded; baseline < optimized)
   - [x] Standardize teleprompter error shapes (no bare strings; tagged tuples)
   - [x] Program parameter persistence (export/apply parameters for optimized programs)
+  - [x] ChainOfThought end-to-end acceptance test (forward + parses reasoning + answer)
 - Evidence:
   - Evidence file: `test/acceptance/simplest_predict_test.exs`
   - Evidence file: `test/acceptance/json_outputs_acceptance_test.exs`
   - Evidence file: `test/acceptance/simplest_contracts_acceptance_test.exs`
   - Evidence file: `test/acceptance/simplest_transcription_acceptance_test.exs`
+  - Evidence file: `test/acceptance/chain_of_thought_acceptance_test.exs`
   - Evidence file: `lib/dspy/signature.ex` (arrow signatures + `int`/`:integer` parsing)
   - Evidence file: `lib/dspy/predict.ex` (accept string signatures)
   - Evidence file: `plan/GEPA.md`
@@ -133,6 +135,7 @@ Notes:
 - **2026-02-09**: Hardened evaluation: `return_all: true` per-example items; `cross_validate/4` quiet-by-default; added deterministic `Trainset.split/2` + `Trainset.sample/3` tests; added deterministic `SIMBA` improvement acceptance test; updated `docs/OVERVIEW.md`. Verification: `mix test`, `./precommit.sh`.
 - **2026-02-09**: Standardized teleprompter error shapes (no bare strings); added contract tests. Verification: `mix test`.
 - **2026-02-09**: Added explicit program parameter persistence helpers (`export_parameters/1` + `apply_parameters/2`) + roundtrip test. Verification: `mix test`.
+- **2026-02-09**: Added ChainOfThought end-to-end acceptance test + docs update. Verification: `mix test`.
 - **2026-02-08**: Clarified public landing docs: `README.md` + `docs/OVERVIEW.md` now emphasize usable slices, offline quick start, and pinning via semver tags.
 - **2026-02-08**: Added `docs/RELEASES.md` with tag-pinned evidence links; cut and pushed tag `v0.1.0`.
 - **2026-02-08**: Added additional acceptance slices (contracts + transcription), made app startup library-first by gating optional services, and added determinism regression coverage; cut and pushed tag `v0.1.1`.
