@@ -45,14 +45,22 @@
   - `test/acceptance/simplest_contracts_acceptance_test.exs` (PDF attachment → JSON extraction → Q&A)
   - `test/acceptance/simplest_transcription_acceptance_test.exs` (image attachment → transcription → postprocess)
   - `test/acceptance/simplest_refine_acceptance_test.exs` (refine loop)
+  - `test/acceptance/chain_of_thought_acceptance_test.exs` (CoT end-to-end)
 - ReqLLM adapter (offline-proven):
   - `test/lm/req_llm_multimodal_test.exs` (multipart conversion + attachment safety gates)
-- Evaluate golden path:
+- Evaluate:
   - `test/evaluate_golden_path_test.exs`
+  - `test/evaluate_detailed_results_test.exs` (`return_all: true` items + quiet cross_validate)
+- Trainset determinism:
+  - `test/trainset_test.exs` (seeded split/sample)
 - Teleprompters (deterministic tests):
   - GEPA: `test/teleprompt/gepa_test.exs`, `test/teleprompt/gepa_improvement_test.exs`
   - LabeledFewShot improvement: `test/teleprompt/labeled_few_shot_improvement_test.exs`
+  - SIMBA improvement: `test/teleprompt/simba_improvement_test.exs`
+  - Error shapes: `test/teleprompt/error_shapes_test.exs`
   - BootstrapFewShot determinism regression: `test/teleprompt/bootstrap_few_shot_determinism_test.exs`
+- Program parameter persistence:
+  - `test/module_parameter_persistence_test.exs` (`export_parameters/1` + `apply_parameters/2`)
 
 ## Teleprompter status (important constraint)
 - Legacy teleprompters were refactored to **avoid dynamic module generation**.
