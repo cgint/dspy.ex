@@ -580,7 +580,9 @@ defmodule Dspy.Retrieve do
 
     def generate(pipeline, query, opts \\ []) do
       # Step 1: Retrieve relevant documents
-      case pipeline.retriever.retrieve(query, k: pipeline.k) do
+      k = Keyword.get(opts, :k, pipeline.k)
+
+      case pipeline.retriever.retrieve(query, k: k) do
         {:ok, documents} ->
           # Step 2: Optionally rerank documents
           reranked_docs =

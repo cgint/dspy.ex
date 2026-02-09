@@ -27,6 +27,22 @@ defmodule Dspy.RetrieveRAGPipelineTest do
     end
   end
 
+  defmodule KOverrideRetriever do
+    def retrieve(_query, opts) do
+      send(self(), {:retriever_opts, opts})
+
+      k = Keyword.get(opts, :k, 1)
+
+      docs =
+        1..k
+        |> Enum.map(fn i ->
+          %{content: "Doc #{i}", score: 1.0 / i, source: "source-#{i}"}
+        end)
+
+      {:ok, docs}
+    end
+  end
+
   test "RAGPipeline generates using request maps and returns answer text" do
     lm = %FakeLM{test_pid: self(), reply_text: "ok"}
     pipeline = Dspy.Retrieve.RAGPipeline.new(DummyRetriever, lm, k: 1)
@@ -50,5 +66,20 @@ defmodule Dspy.RetrieveRAGPipelineTest do
     assert is_binary(msg)
     assert String.contains?(msg, "Retrieval failed")
     assert String.contains?(msg, ":bad_query")
+  end
+
+  test "RAGPipeline can override k per call" do
+    lm = %FakeLM{test_pid: self(), reply_text: "ok"}
+    pipeline = Dspy.Retrieve.RAGPipeline.new(KOverrideRetriever, lm, k: 1)
+
+    assert {:ok, %{context: context, sources: sources}} =
+             Dspy.Retrieve.RAGPipeline.generate(pipeline, "What is this?", k: 2)
+
+    assert_receive {:retriever_opts, opts}, 1_000
+    assert Keyword.get(opts, :k) == 2
+
+    assert String.contains?(context, "Doc 1")
+    assert String.contains?(context, "Doc 2")
+    assert Enum.sort(sources) == ["source-1", "source-2"]
   end
 end

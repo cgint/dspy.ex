@@ -66,5 +66,6 @@ See:
 ## Notes / constraints
 
 - A retriever is a **module** implementing `Dspy.Retrieve.Retriever` (`retrieve/2`).
-  `Dspy.Retrieve.RAGPipeline` currently calls `retriever.retrieve(query, k: ...)`.
+  `Dspy.Retrieve.RAGPipeline` calls `retriever.retrieve(query, k: ...)`. You can set `k:` at pipeline
+  construction time, and also override it per call via `RAGPipeline.generate(..., k: ...)`.
 - Core `:dspy` remains library-first/minimal dependency; anything heavy belongs in `extras/dspy_extras`.
