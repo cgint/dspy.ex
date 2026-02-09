@@ -196,10 +196,12 @@ defmodule Dspy.LM.ReqLLMMultimodalTest do
     prev_roots = Application.get_env(:dspy, :attachment_roots)
     prev_abs = Application.get_env(:dspy, :allow_absolute_attachment_paths)
 
+    token = :crypto.strong_rand_bytes(4) |> Base.encode16(case: :lower)
+
     tmp =
       Path.join(
         System.tmp_dir!(),
-        "dspy_req_llm_symlink_root_#{System.unique_integer([:positive])}"
+        "dspy_req_llm_symlink_root_#{System.unique_integer([:positive])}_#{token}"
       )
 
     root = Path.join(tmp, "root")
@@ -253,10 +255,12 @@ defmodule Dspy.LM.ReqLLMMultimodalTest do
     prev_roots = Application.get_env(:dspy, :attachment_roots)
     prev_abs = Application.get_env(:dspy, :allow_absolute_attachment_paths)
 
+    token = :crypto.strong_rand_bytes(4) |> Base.encode16(case: :lower)
+
     tmp =
       Path.join(
         System.tmp_dir!(),
-        "dspy_req_llm_symlink_sub_#{System.unique_integer([:positive])}"
+        "dspy_req_llm_symlink_sub_#{System.unique_integer([:positive])}_#{token}"
       )
 
     root = Path.join(tmp, "root")

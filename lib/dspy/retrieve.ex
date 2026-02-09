@@ -376,62 +376,167 @@ defmodule Dspy.Retrieve do
     """
     def process_documents(documents, opts \\ []) do
       embedding_provider = opts[:embedding_provider] || OpenAIEmbeddings
+      embedding_provider_opts = opts[:embedding_provider_opts] || []
       chunk_size = opts[:chunk_size] || 512
       overlap = opts[:overlap] || 50
 
-      Task.async_stream(
-        documents,
-        fn doc ->
-          process_single_document(doc, embedding_provider, chunk_size, overlap)
-        end,
-        max_concurrency: 4
-      )
-      |> Enum.to_list()
+      timeout_ms = opts[:timeout_ms] || 30_000
+
+      results =
+        Task.async_stream(
+          documents,
+          fn doc ->
+            safe_process_single_document(
+              doc,
+              embedding_provider,
+              embedding_provider_opts,
+              chunk_size,
+              overlap
+            )
+          end,
+          max_concurrency: 4,
+          timeout: timeout_ms,
+          on_timeout: :kill_task
+        )
+        |> Enum.to_list()
+
+      Enum.zip(documents, results)
       |> Enum.flat_map(fn
-        {:ok, chunks} -> chunks
-        {:error, _} -> []
+        {_doc, {:ok, chunks}} when is_list(chunks) ->
+          chunks
+
+        {doc, {:ok, other}} ->
+          fallback_without_embeddings_from_doc(doc, chunk_size, overlap,
+            document_error: {:invalid_task_result, other}
+          )
+
+        {doc, {:exit, reason}} ->
+          fallback_without_embeddings_from_doc(doc, chunk_size, overlap,
+            document_error: {:task_exit, reason}
+          )
+
+        {doc, {:error, reason}} ->
+          fallback_without_embeddings_from_doc(doc, chunk_size, overlap,
+            document_error: {:task_error, reason}
+          )
       end)
     end
 
-    defp process_single_document(doc, embedding_provider, chunk_size, overlap) do
-      content = doc[:content] || doc["content"] || ""
+    defp process_single_document(
+           doc,
+           embedding_provider,
+           embedding_provider_opts,
+           chunk_size,
+           overlap
+         ) do
+      {content, doc_id, metadata, source} = doc_parts(doc)
+
       chunks = chunk_text(content, chunk_size: chunk_size, overlap: overlap)
 
       # Generate embeddings for chunks
-      case embedding_provider.embed_batch(chunks) do
-        {:ok, embeddings} ->
-          Enum.zip(chunks, embeddings)
-          |> Enum.with_index()
-          |> Enum.map(fn {{chunk_text, embedding}, index} ->
-            %Document{
-              id: "#{doc[:id] || generate_id()}_chunk_#{index}",
-              content: chunk_text,
-              embedding: embedding,
-              metadata:
-                Map.merge(doc[:metadata] || %{}, %{
-                  chunk_index: index,
-                  original_doc_id: doc[:id]
-                }),
-              source: doc[:source]
-            }
-          end)
+      case embed_batch(embedding_provider, chunks, embedding_provider_opts) do
+        {:ok, embeddings} when is_list(embeddings) ->
+          if length(embeddings) == length(chunks) do
+            Enum.zip(chunks, embeddings)
+            |> Enum.with_index()
+            |> Enum.map(fn {{chunk_text, embedding}, index} ->
+              %Document{
+                id: "#{doc_id}_chunk_#{index}",
+                content: chunk_text,
+                embedding: embedding,
+                metadata:
+                  Map.merge(metadata, %{
+                    chunk_index: index,
+                    original_doc_id: doc_id
+                  }),
+                source: source
+              }
+            end)
+          else
+            fallback_without_embeddings(chunks, doc_id, metadata, source,
+              embedding_error:
+                {:embedding_count_mismatch, expected: length(chunks), got: length(embeddings)}
+            )
+          end
 
-        {:error, _reason} ->
-          # Fallback without embeddings
-          Enum.with_index(chunks)
-          |> Enum.map(fn {chunk_text, index} ->
-            %Document{
-              id: "#{doc[:id] || generate_id()}_chunk_#{index}",
-              content: chunk_text,
-              embedding: nil,
-              metadata:
-                Map.merge(doc[:metadata] || %{}, %{
-                  chunk_index: index,
-                  original_doc_id: doc[:id]
-                }),
-              source: doc[:source]
-            }
-          end)
+        {:ok, other} ->
+          fallback_without_embeddings(chunks, doc_id, metadata, source,
+            embedding_error: {:invalid_embeddings, other}
+          )
+
+        {:error, reason} ->
+          fallback_without_embeddings(chunks, doc_id, metadata, source, embedding_error: reason)
+      end
+    end
+
+    defp safe_process_single_document(
+           doc,
+           embedding_provider,
+           embedding_provider_opts,
+           chunk_size,
+           overlap
+         ) do
+      process_single_document(
+        doc,
+        embedding_provider,
+        embedding_provider_opts,
+        chunk_size,
+        overlap
+      )
+    rescue
+      e ->
+        fallback_without_embeddings_from_doc(doc, chunk_size, overlap,
+          document_error: {:exception, e.__struct__}
+        )
+    catch
+      kind, reason ->
+        fallback_without_embeddings_from_doc(doc, chunk_size, overlap,
+          document_error: {kind, reason}
+        )
+    end
+
+    defp doc_parts(doc) do
+      content = doc[:content] || doc["content"] || ""
+      doc_id = doc[:id] || doc["id"] || generate_id()
+      metadata = doc[:metadata] || doc["metadata"] || %{}
+      metadata = if is_map(metadata), do: metadata, else: %{}
+      source = doc[:source] || doc["source"]
+
+      {content, doc_id, metadata, source}
+    end
+
+    defp fallback_without_embeddings_from_doc(doc, chunk_size, overlap, extra_meta) do
+      {content, doc_id, metadata, source} = doc_parts(doc)
+      chunks = chunk_text(content, chunk_size: chunk_size, overlap: overlap)
+      fallback_without_embeddings(chunks, doc_id, metadata, source, extra_meta)
+    end
+
+    defp fallback_without_embeddings(chunks, doc_id, metadata, source, extra_meta) do
+      Enum.with_index(chunks)
+      |> Enum.map(fn {chunk_text, index} ->
+        %Document{
+          id: "#{doc_id}_chunk_#{index}",
+          content: chunk_text,
+          embedding: nil,
+          metadata:
+            metadata
+            |> Map.merge(%{chunk_index: index, original_doc_id: doc_id})
+            |> Map.merge(Map.new(extra_meta)),
+          source: source
+        }
+      end)
+    end
+
+    defp embed_batch(provider, chunks, provider_opts) do
+      cond do
+        is_atom(provider) and function_exported?(provider, :embed_batch, 2) ->
+          provider.embed_batch(chunks, provider_opts)
+
+        is_atom(provider) and function_exported?(provider, :embed_batch, 1) ->
+          provider.embed_batch(chunks)
+
+        true ->
+          {:error, :embedding_provider_missing_embed_batch}
       end
     end
 
