@@ -17,7 +17,7 @@ defmodule Dspy do
   - `Dspy.Predict` — basic program
   - `Dspy.ChainOfThought` — Predict-style program that adds a `:reasoning` output field
   - `Dspy.Evaluate` — deterministic evaluation harness
-  - `Dspy.Teleprompt` — optimizers/teleprompters (currently parameter-based for `%Dspy.Predict{}`)
+  - `Dspy.Teleprompt` — optimizers/teleprompters (currently parameter-based for Predict-like programs such as `%Dspy.Predict{}` and `%Dspy.ChainOfThought{}`)
 
   Provider access is delegated to `req_llm` via `Dspy.LM.ReqLLM` (the core library does
   not maintain provider-specific HTTP quirks).

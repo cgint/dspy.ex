@@ -62,8 +62,8 @@ Optional/experimental modules (Phoenix LiveView UI, “godmode” coordinator, G
 - Attachments request shape via `%Dspy.Attachments{}` (multimodal `messages[].content` parts)
 - Tools: ReAct loop + tool logging callbacks
 - Retrieval + RAG (embeddings-backed; offline-proven with mocks)
-- Teleprompters (currently **Predict-only**, parameter-based; no dynamic modules):
-  - `LabeledFewShot`
+- Teleprompters (parameter-based; no dynamic modules; Predict-like programs):
+  - `LabeledFewShot` (sets `predict.examples`; proven for `Dspy.Predict` + `Dspy.ChainOfThought`)
   - `BootstrapFewShot`
   - `GEPA` (toy deterministic optimizer)
 - Provider adapter: `Dspy.LM.ReqLLM` (offline-proven request mapping incl. multipart + safety gates)
@@ -123,7 +123,7 @@ More: `docs/PROVIDERS.md`.
 ## Expectations / limitations (important)
 
 - Many features in this repo are **not yet acceptance-tested** and should be treated as experimental.
-- Teleprompters currently optimize `%Dspy.Predict{}` programs only.
+- Teleprompters are parameter-based (e.g. `predict.examples`, `predict.instructions`) and work with Predict-like programs such as `%Dspy.Predict{}` and `%Dspy.ChainOfThought{}`. Some experimental teleprompters may still be Predict-only.
 - Attachments are supported as a **request-map/multipart contract**; reading local files is **disabled by default** and must be explicitly enabled (see `docs/PROVIDERS.md`).
 
 ## Contributing

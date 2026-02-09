@@ -181,12 +181,12 @@ Proof:
 - `test/evaluate_golden_path_test.exs`
 - `test/evaluate_detailed_results_test.exs`
 
-### 8) Teleprompters/optimizers (Predict-only, parameter-based; no dynamic modules)
+### 8) Teleprompters/optimizers (parameter-based; no dynamic modules)
 
-These teleprompters currently optimize **`%Dspy.Predict{}`** programs by updating optimizable parameters (e.g. `"predict.instructions"`, `"predict.examples"`). They **do not** generate new runtime modules.
+These teleprompters optimize **Predict-like programs** by updating optimizable parameters (e.g. `"predict.instructions"`, `"predict.examples"`). In practice this includes `%Dspy.Predict{}` and `%Dspy.ChainOfThought{}` (when the program exposes those parameters). They **do not** generate new runtime modules.
 
 - `Dspy.Teleprompt.LabeledFewShot` (sets `predict.examples`)
-  - Proof: `test/teleprompt/labeled_few_shot_improvement_test.exs`
+  - Proof: `test/teleprompt/labeled_few_shot_improvement_test.exs`, `test/teleprompt/labeled_few_shot_chain_of_thought_improvement_test.exs`
 - `Dspy.Teleprompt.SIMBA` (updates `predict.instructions`; seeded improvement)
   - Proof: `test/teleprompt/simba_improvement_test.exs`
 - `Dspy.Teleprompt.GEPA` (toy deterministic optimizer)
@@ -243,7 +243,7 @@ Legend:
 | Structured output parsing (JSON-ish) | 2 | JSON fenced output parsing + coercion (incl. list/map outputs via `:json`) | `test/acceptance/json_outputs_acceptance_test.exs`, `test/acceptance/knowledge_graph_triplets_test.exs` |
 | Evaluate | 2 | Deterministic golden path proven (incl. per-example return data via `return_all: true`) | `test/evaluate_golden_path_test.exs`, `test/evaluate_detailed_results_test.exs` |
 | Retrieve/RAG | 2 | Deterministic RAG pipeline with mocked embeddings provider (`req_llm`) | `test/acceptance/retrieve_rag_with_embeddings_acceptance_test.exs`, `test/retrieve/req_llm_embeddings_test.exs` |
-| Teleprompters | 2 | Predict-only, parameter-based (no dynamic modules) | `test/teleprompt/*` |
+| Teleprompters | 2 | Parameter-based (no dynamic modules); proven for Predict-like programs (`Dspy.Predict` + `Dspy.ChainOfThought`) | `test/teleprompt/*` |
 | Tools/request map integration | 2 | ReAct runs with request maps; tool start/end callbacks supported (tool logging) | `test/tools_request_map_test.exs`, `test/acceptance/simplest_tool_logging_acceptance_test.exs` |
 | Provider support (real providers) | 2 | `Dspy.LM.ReqLLM` adapter proven (offline) incl. multipart/attachments request shape + safety gates; embeddings adapter via `req_llm` proven (offline); real network providers still considered prototype | `test/lm/req_llm_multimodal_test.exs`, `lib/dspy/lm/req_llm.ex`, `test/retrieve/req_llm_embeddings_test.exs` |
 
