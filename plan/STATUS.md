@@ -15,7 +15,7 @@ North star docs:
 - `agent/SOUL.md` (agent operating principles)
 
 ## Releases
-- Current recommended stable tag: `v0.2.8` (see `docs/RELEASES.md`)
+- Current recommended stable tag: `v0.2.9` (see `docs/RELEASES.md`)
 
 ## Loop status
 - Loop state: ACTIVE
@@ -62,6 +62,7 @@ North star docs:
   - Evidence file: `lib/dspy/teleprompt/gepa.ex` (toy GEPA implementation)
   - Evidence file: `test/teleprompt/gepa_test.exs` (contract tests)
   - Evidence file: `test/teleprompt/gepa_improvement_test.exs` (toy improvement acceptance)
+  - Evidence file: `test/teleprompt/gepa_chain_of_thought_improvement_test.exs`
   - Evidence file: `lib/dspy/teleprompt/util.ex` (parameter-based mutation helpers + verbosity-gated Logger)
   - Evidence file: `test/teleprompt/util_test.exs`
   - Evidence file: `test/teleprompt/labeled_few_shot_improvement_test.exs`
@@ -73,6 +74,7 @@ North star docs:
   - Evidence file: `lib/dspy/teleprompt/copro.ex` (no dynamic module creation)
   - Evidence file: `lib/dspy/teleprompt/mipro_v2.ex` (no dynamic module creation)
   - Evidence file: `test/bootstrap_few_shot_smoke_test.exs`
+  - Evidence file: `test/teleprompt/bootstrap_few_shot_chain_of_thought_improvement_test.exs`
   - Evidence file: `test/teleprompt/bootstrap_few_shot_determinism_test.exs`
   - Evidence file: `lib/dspy/application.ex` (library-first startup)
   - Evidence file: `lib/dspy/evaluate.ex` (`return_all: true` items + quiet `cross_validate/4`)
@@ -167,6 +169,8 @@ Notes:
 - **2026-02-09**: ChainOfThought parity: arrow signatures + attachments request parts + teleprompt parameter callbacks. Verification: `mix test`.
 - **2026-02-09**: LabeledFewShot now supports `%Dspy.ChainOfThought{}` (via `predict.examples`) + docs update to reflect Predict-like teleprompters. Verification: `mix test`.
 - **2026-02-09**: SIMBA proven for `%Dspy.ChainOfThought{}` (seeded improvement via `predict.instructions`); documented BootstrapFewShot in overview. Verification: `mix test`.
+- **2026-02-09**: BootstrapFewShot + GEPA proven for `%Dspy.ChainOfThought{}` (seeded improvements via `predict.examples` / `predict.instructions`); updated docs and SIMBA moduledoc. Verification: `mix test`.
+- **2026-02-09**: Cut tag `v0.2.9` (BootstrapFewShot + GEPA proven for ChainOfThought).
 - **2026-02-09**: Cut tag `v0.2.8` (SIMBA proven for ChainOfThought).
 - **2026-02-09**: Cut tag `v0.2.7` (LabeledFewShot supports ChainOfThought; docs clarify Predict-like teleprompters).
 - **2026-02-09**: Cut tag `v0.2.6` (ChainOfThought parity: arrow sigs + attachments + parameters).

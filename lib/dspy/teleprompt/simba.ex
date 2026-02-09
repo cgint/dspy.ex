@@ -6,7 +6,8 @@ defmodule Dspy.Teleprompt.SIMBA do
   generation) to avoid BEAM atom leaks.
 
   It is currently a conservative, deterministic(-when-seeded) optimizer intended
-  for `%Dspy.Predict{}` programs.
+  for Predict-like programs (e.g. `%Dspy.Predict{}` and `%Dspy.ChainOfThought{}`)
+  that expose `predict.instructions` / `predict.examples` parameters.
 
   """
 
