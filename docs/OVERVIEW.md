@@ -149,6 +149,8 @@ A minimal Retrieval-Augmented Generation flow can be run deterministically by:
 
 Proof: `test/acceptance/retrieve_rag_with_embeddings_acceptance_test.exs`
 
+Guide: `docs/RETRIEVE_RAG.md`
+
 ### 7) Evaluate (golden path)
 
 A simple `Predict → Evaluate` loop runs deterministically (when you set `num_threads: 1` and use a mock LM).

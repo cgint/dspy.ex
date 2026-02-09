@@ -1,0 +1,30 @@
+direction: down
+
+"**Inputs**" {
+  "Documents (id/content/source)"
+  "Query"
+}
+
+"**Indexing**" {
+  "DocumentProcessor\n(chunk_text + embed_batch)"
+  "EmbeddingProvider\n(ReqLLM-backed)"
+  "Indexed chunks\n(%Dspy.Retrieve.Document{embedding})"
+}
+
+"**Retrieval + Generation**" {
+  "Retriever\n(top-k via similarity)"
+  "RAGPipeline\n(build context + prompt)"
+  "LM.generate/2\n(request map)"
+  "Answer + sources"
+}
+
+"Documents (id/content/source)" -> "DocumentProcessor\n(chunk_text + embed_batch)"
+"DocumentProcessor\n(chunk_text + embed_batch)" -> "EmbeddingProvider\n(ReqLLM-backed)": "embed_batch"
+"EmbeddingProvider\n(ReqLLM-backed)" -> "Indexed chunks\n(%Dspy.Retrieve.Document{embedding})"
+
+"Query" -> "Retriever\n(top-k via similarity)": "embed query"
+"Indexed chunks\n(%Dspy.Retrieve.Document{embedding})" -> "Retriever\n(top-k via similarity)": "corpus"
+
+"Retriever\n(top-k via similarity)" -> "RAGPipeline\n(build context + prompt)": "docs"
+"RAGPipeline\n(build context + prompt)" -> "LM.generate/2\n(request map)"
+"LM.generate/2\n(request map)" -> "Answer + sources"
