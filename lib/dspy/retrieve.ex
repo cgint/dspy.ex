@@ -185,11 +185,17 @@ defmodule Dspy.Retrieve do
   defmodule EmbeddingProvider do
     @moduledoc """
     Interface for embedding generation providers.
+
+    Note: error shapes are intentionally `term()` so adapters can return structured
+    reasons (e.g. `:missing_model`, `{:http_error, ...}`) while call sites can still
+    present user-friendly messages.
     """
 
-    @callback embed_text(String.t(), keyword()) :: {:ok, list(float())} | {:error, String.t()}
+    @type error_reason :: term()
+
+    @callback embed_text(String.t(), keyword()) :: {:ok, list(float())} | {:error, error_reason()}
     @callback embed_batch(list(String.t()), keyword()) ::
-                {:ok, list(list(float()))} | {:error, String.t()}
+                {:ok, list(list(float()))} | {:error, error_reason()}
   end
 
   defmodule OpenAIEmbeddings do

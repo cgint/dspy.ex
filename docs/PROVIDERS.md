@@ -80,6 +80,15 @@ Core `:dspy` does not include Phoenix/UI or legacy HTTP-based provider code.
 
 Optional/experimental code lives in `extras/dspy_extras` (in-tree). This is also where any legacy HTTP-backed embedding/provider prototypes belong.
 
+## Embeddings (via `req_llm`)
+
+For retrieval workflows, `:dspy` provides an embedding provider backed by `req_llm`:
+
+- `Dspy.Retrieve.Embeddings.ReqLLM`
+
+This keeps embeddings provider-agnostic, like the chat/generation path.
+
 ## Evidence
 
 - Multipart + attachment safety: `test/lm/req_llm_multimodal_test.exs`
+- ReqLLM embeddings adapter (mocked): `test/retrieve/req_llm_embeddings_test.exs`
