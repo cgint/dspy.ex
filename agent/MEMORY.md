@@ -48,6 +48,10 @@
   - `test/acceptance/chain_of_thought_acceptance_test.exs` (CoT end-to-end)
 - ReqLLM adapter (offline-proven):
   - `test/lm/req_llm_multimodal_test.exs` (multipart conversion + attachment safety gates)
+  - `test/acceptance/req_llm_predict_acceptance_test.exs` (Predict end-to-end via ReqLLM; no network)
+  - `test/lm/request_defaults_test.exs` (Settings defaults applied to request maps)
+- ReqLLM (real provider smoke, opt-in):
+  - `test/integration/req_llm_predict_integration_test.exs` (tagged `:integration`/`:network`)
 - Evaluate:
   - `test/evaluate_golden_path_test.exs`
   - `test/evaluate_detailed_results_test.exs` (`return_all: true` items + quiet cross_validate)

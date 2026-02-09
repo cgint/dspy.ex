@@ -35,7 +35,7 @@ North star docs:
   - [x] Program parameter persistence (export/apply parameters for optimized programs)
   - [x] ChainOfThought end-to-end acceptance test (forward + parses reasoning + answer)
   - [x] Add unit tests for `Dspy.Teleprompt.Util.set_parameter/4`
-  - [ ] Next: Provider-layer acceptance tests (ReqLLM default wiring + “real provider” smoke behind tags)
+  - [x] Provider-layer acceptance tests (ReqLLM default wiring + “real provider” smoke behind tags)
   - [x] Clean up top-level `Dspy` moduledoc to avoid overpromising
   - [ ] (Optional) JSON-friendly parameter export/import
 - Evidence:
@@ -44,9 +44,14 @@ North star docs:
   - Evidence file: `test/acceptance/simplest_contracts_acceptance_test.exs`
   - Evidence file: `test/acceptance/simplest_transcription_acceptance_test.exs`
   - Evidence file: `test/acceptance/chain_of_thought_acceptance_test.exs`
+  - Evidence file: `test/acceptance/req_llm_predict_acceptance_test.exs`
+  - Evidence file: `test/integration/req_llm_predict_integration_test.exs`
+  - Evidence file: `test/lm/request_defaults_test.exs`
   - Evidence file: `lib/dspy/signature.ex` (arrow signatures + `int`/`:integer` parsing)
   - Evidence file: `lib/dspy/predict.ex` (accept string signatures)
   - Evidence file: `lib/dspy.ex` (public surface + moduledoc aligned to proven slices)
+  - Evidence file: `lib/dspy/lm.ex` (applies Settings defaults to request maps)
+  - Evidence file: `lib/dspy/settings.ex` (Settings defaults for generation opts)
   - Evidence file: `plan/GEPA.md`
   - Evidence file: `plan/diagrams/gepa_flow.d2`
   - Evidence file: `plan/diagrams/gepa_flow.svg`
@@ -70,6 +75,7 @@ North star docs:
   - Evidence file: `test/module_parameter_persistence_test.exs`
   - Evidence dir: `extras/dspy_extras/` (optional Phoenix/"godmode"/GenStage/legacy HTTP modules)
   - Evidence file: `docs/BUMBLEBEE.md` (local inference notes)
+  - Evidence file: `docs/PROVIDERS.md`
   - Verification: `mix test`
 
 Current health:
@@ -144,6 +150,7 @@ Notes:
 - **2026-02-09**: Added ChainOfThought end-to-end acceptance test + docs update. Verification: `mix test`.
 - **2026-02-09**: Added unit tests for `Dspy.Teleprompt.Util.set_parameter/4`. Verification: `mix test`.
 - **2026-02-09**: Rewrote `Dspy` moduledoc to match the adoption-first slices (avoid overpromising). Verification: `mix test`.
+- **2026-02-09**: Provider wiring: apply `Dspy.Settings` defaults (`temperature`/`max_tokens`) to request maps; added offline ReqLLM+Predict acceptance and opt-in real-provider smoke test; updated `docs/PROVIDERS.md`. Verification: `mix test`.
 - **2026-02-09**: Cut tag `v0.2.1` (Evaluate `return_all`, SIMBA improvement, teleprompt error-shape standardization, parameter persistence, CoT acceptance).
 - **2026-02-08**: Clarified public landing docs: `README.md` + `docs/OVERVIEW.md` now emphasize usable slices, offline quick start, and pinning via semver tags.
 - **2026-02-08**: Added `docs/RELEASES.md` with tag-pinned evidence links; cut and pushed tag `v0.1.0`.

@@ -13,6 +13,23 @@ In `dspy.ex`, the main integration point is:
 Dspy.configure(lm: Dspy.LM.ReqLLM.new(model: "openai:gpt-4.1-mini"))
 ```
 
+## Default generation parameters (global)
+
+You can set global defaults for common generation parameters via `Dspy.configure/1`.
+These are applied to request maps **only when the request does not specify them**.
+
+```elixir
+Dspy.configure(
+  lm: Dspy.LM.ReqLLM.new(model: "openai:gpt-4.1-mini"),
+  temperature: 0.0,
+  max_tokens: 128
+)
+```
+
+Defaults:
+- `temperature: nil` (provider/runtime default)
+- `max_tokens: nil` (provider/runtime default)
+
 ## Request-map contract
 
 Core modules (e.g. `Dspy.Predict`) call LMs with a **request map**:
@@ -93,6 +110,8 @@ This keeps embeddings provider-agnostic, like the chat/generation path.
 
 ## Evidence
 
+- Predict + ReqLLM (offline acceptance): `test/acceptance/req_llm_predict_acceptance_test.exs`
+- Predict + ReqLLM (real provider, opt-in): `test/integration/req_llm_predict_integration_test.exs`
 - Multipart + attachment safety: `test/lm/req_llm_multimodal_test.exs`
 - ReqLLM embeddings adapter (mocked): `test/retrieve/req_llm_embeddings_test.exs`
 - Offline retrieval/RAG examples:
