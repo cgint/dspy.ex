@@ -158,6 +158,7 @@ Notes:
 - **2026-02-09**: Provider wiring: apply `Dspy.Settings` defaults (`temperature`/`max_tokens`) to request maps; added offline ReqLLM+Predict acceptance and opt-in real-provider smoke test; updated `docs/PROVIDERS.md`. Verification: `mix test`.
 - **2026-02-09**: JSON-friendly parameter persistence: `Dspy.Parameter.encode_json!/1` + `decode_json/1` + roundtrip tests; docs update. Verification: `mix test`.
 - **2026-02-09**: Parameter persistence file helpers (`write_json!/2`, `read_json!/1`) + tests + offline demo. Verification: `mix test`.
+- **2026-02-09**: Cut tag `v0.2.4` (parameter persistence file helpers + demo).
 - **2026-02-09**: Cut tag `v0.2.3` (JSON-friendly parameter persistence).
 - **2026-02-09**: Cut tag `v0.2.2` (ReqLLM wiring + Predict acceptance + Settings-driven request defaults).
 - **2026-02-09**: Cut tag `v0.2.1` (Evaluate `return_all`, SIMBA improvement, teleprompt error-shape standardization, parameter persistence, CoT acceptance).
