@@ -1,3 +1,3 @@
 import Config
 
-config :dspy, DspyWeb.Endpoint, server: false
+# Core `:dspy` is library-first; optional Phoenix/UI config lives in `extras/dspy_extras`.

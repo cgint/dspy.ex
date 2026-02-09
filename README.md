@@ -17,12 +17,19 @@ For stability, depend on a **semver tag** (recommended):
 ```elixir
 def deps do
   [
-    {:dspy, github: "cgint/dspy.ex", tag: "v0.1.2"}
+    {:dspy, github: "cgint/dspy.ex", tag: "v0.2.0"}
   ]
 end
 ```
 
 Publishing policy: `plan/PUBLISHING_STRATEGY.md`.
+
+## Optional extras (Phoenix/UI, GenStage, legacy HTTP)
+
+Core `:dspy` intentionally keeps dependencies minimal.
+
+Optional/experimental modules (Phoenix LiveView UI, “godmode” coordinator, GenStage-heavy coordination, legacy HTTP clients) live in:
+- `extras/dspy_extras`
 
 ## What works today (proven by deterministic tests)
 

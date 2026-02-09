@@ -1,6 +1,3 @@
 import Config
 
-# Tests should run quiet + deterministic; keep optional services off.
-config :dspy, :start_optional_services, false
-
-config :dspy, DspyWeb.Endpoint, server: false
+# Core `:dspy` tests should be deterministic and offline; no optional services are started.

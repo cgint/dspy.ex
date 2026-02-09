@@ -1,5 +1,5 @@
 defmodule DspyWeb.Endpoint do
-  use Phoenix.Endpoint, otp_app: :dspy
+  use Phoenix.Endpoint, otp_app: :dspy_extras
 
   # The session will be stored in the cookie and signed,
   # this means its contents can be read but not tampered with.
@@ -19,7 +19,7 @@ defmodule DspyWeb.Endpoint do
   # Serve at "/" the static files from "priv/static" directory.
   plug(Plug.Static,
     at: "/",
-    from: :dspy,
+    from: :dspy_extras,
     gzip: false,
     only: DspyWeb.static_paths()
   )

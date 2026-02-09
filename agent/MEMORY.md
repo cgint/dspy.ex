@@ -7,7 +7,7 @@
 ## Where to look first (human vs planning)
 - Human-friendly snapshot + multi-dimensional roadmap: **`docs/OVERVIEW.md`**
 - Releases/tags (what each semver tag contains): `docs/RELEASES.md`
-- Current recommended stable tag: `v0.1.2`
+- Current recommended stable tag: `v0.2.0`
 - Agent/contributor entry point: `AGENTS.md`
 - Planning backlog / next tasks: `plan/STATUS.md`
 - Roadmap: `plan/RELEASE_MILESTONES.md`
@@ -59,8 +59,9 @@
   - `"predict.instructions"`, `"predict.examples"`
 - Shared helper: `lib/dspy/teleprompt/util.ex` (`Dspy.Teleprompt.Util`).
 
-## Optional services gate (library-first runtime)
-- Optional Phoenix/"godmode" services are gated behind `config :dspy, :start_optional_services, true`.
+## Optional services (separate package)
+- Optional Phoenix/"godmode" and other experimental modules live in `extras/dspy_extras`.
+- Core `:dspy` remains lightweight and does not depend on Phoenix/GenStage/HTTPoison.
 
 ## Loop automation (for delegated work)
 - Worker/review scripts live in `scripts/`.

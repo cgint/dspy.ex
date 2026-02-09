@@ -83,7 +83,8 @@ defmodule DspyWeb.GodmodeCoordinatorLive do
   @impl true
   def handle_event("execute_coordinated_task", %{"task_type" => task_type}, socket) do
     task_spec = %{
-      type: String.to_atom(task_type),
+      # Keep this as a string to avoid atom leaks from user input.
+      type: task_type,
       description: "User-initiated #{task_type} task",
       complexity: :medium,
       priority: :high
@@ -111,30 +112,41 @@ defmodule DspyWeb.GodmodeCoordinatorLive do
 
   @impl true
   def handle_event("spawn_agent_swarm", %{"count" => count_str}, socket) do
-    count = String.to_integer(count_str)
+    count =
+      case Integer.parse(to_string(count_str)) do
+        {n, ""} when n >= 1 and n <= 100 -> n
+        _ -> :invalid
+      end
 
-    agent_specs =
-      Enum.map(1..count, fn i ->
-        %{
-          id: "swarm_agent_#{i}",
-          model: "gpt-4.1",
-          task_type: :general,
-          coordination_level: :high
-        }
-      end)
+    if count == :invalid do
+      {:noreply, put_flash(socket, :error, "Invalid swarm count")}
+    else
+      agent_specs =
+        Enum.map(1..count, fn i ->
+          %{
+            id: "swarm_agent_#{i}",
+            model: "gpt-4.1",
+            task_type: :general,
+            coordination_level: :high
+          }
+        end)
 
-    case GodmodeCoordinator.spawn_agent_swarm(agent_specs) do
-      {:ok, swarm_id, agents, _coordination_result} ->
-        socket =
-          socket
-          |> put_flash(:info, "🚀 Agent swarm #{swarm_id} spawned with #{map_size(agents)} agents")
-          |> update_system_status()
+      case GodmodeCoordinator.spawn_agent_swarm(agent_specs) do
+        {:ok, swarm_id, agents, _coordination_result} ->
+          socket =
+            socket
+            |> put_flash(
+              :info,
+              "🚀 Agent swarm #{swarm_id} spawned with #{map_size(agents)} agents"
+            )
+            |> update_system_status()
 
-        {:noreply, socket}
+          {:noreply, socket}
 
-      {:error, reason} ->
-        socket = put_flash(socket, :error, "Agent swarm spawn failed: #{inspect(reason)}")
-        {:noreply, socket}
+        {:error, reason} ->
+          socket = put_flash(socket, :error, "Agent swarm spawn failed: #{inspect(reason)}")
+          {:noreply, socket}
+      end
     end
   end
 

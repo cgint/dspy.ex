@@ -200,78 +200,15 @@ defmodule Dspy.Retrieve do
     @behaviour Dspy.Retrieve.EmbeddingProvider
 
     @impl true
-    def embed_text(text, opts \\ []) do
-      model = opts[:model] || "text-embedding-3-small"
-      api_key = opts[:api_key] || System.get_env("OPENAI_API_KEY")
-
-      request_body = %{
-        input: text,
-        model: model
-      }
-
-      headers = [
-        {"Authorization", "Bearer #{api_key}"},
-        {"Content-Type", "application/json"}
-      ]
-
-      case HTTPoison.post(
-             "https://api.openai.com/v1/embeddings",
-             Jason.encode!(request_body),
-             headers
-           ) do
-        {:ok, %HTTPoison.Response{status_code: 200, body: body}} ->
-          case Jason.decode(body) do
-            {:ok, %{"data" => [%{"embedding" => embedding}]}} ->
-              {:ok, embedding}
-
-            {:error, _} ->
-              {:error, "Failed to decode embedding response"}
-          end
-
-        {:ok, %HTTPoison.Response{status_code: status, body: error_body}} ->
-          {:error, "Embedding API failed with status #{status}: #{error_body}"}
-
-        {:error, %HTTPoison.Error{reason: reason}} ->
-          {:error, "Network error: #{reason}"}
-      end
+    def embed_text(_text, _opts \\ []) do
+      {:error,
+       "OpenAIEmbeddings is not available in core :dspy (use :dspy_extras or provide a custom embedding provider)"}
     end
 
     @impl true
-    def embed_batch(texts, opts \\ []) when is_list(texts) do
-      model = opts[:model] || "text-embedding-3-small"
-      api_key = opts[:api_key] || System.get_env("OPENAI_API_KEY")
-
-      request_body = %{
-        input: texts,
-        model: model
-      }
-
-      headers = [
-        {"Authorization", "Bearer #{api_key}"},
-        {"Content-Type", "application/json"}
-      ]
-
-      case HTTPoison.post(
-             "https://api.openai.com/v1/embeddings",
-             Jason.encode!(request_body),
-             headers
-           ) do
-        {:ok, %HTTPoison.Response{status_code: 200, body: body}} ->
-          case Jason.decode(body) do
-            {:ok, %{"data" => embeddings}} ->
-              embedding_vectors = Enum.map(embeddings, & &1["embedding"])
-              {:ok, embedding_vectors}
-
-            {:error, _} ->
-              {:error, "Failed to decode batch embedding response"}
-          end
-
-        {:ok, %HTTPoison.Response{status_code: status, body: error_body}} ->
-          {:error, "Batch embedding API failed with status #{status}: #{error_body}"}
-
-        {:error, %HTTPoison.Error{reason: reason}} ->
-          {:error, "Network error: #{reason}"}
-      end
+    def embed_batch(_texts, _opts \\ []) do
+      {:error,
+       "OpenAIEmbeddings is not available in core :dspy (use :dspy_extras or provide a custom embedding provider)"}
     end
   end
 

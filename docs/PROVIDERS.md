@@ -74,6 +74,12 @@ If you want a fully BEAM/Nx local model runtime (no external HTTP providers), se
 
 Note: `dspy.ex` does not yet ship a built-in Bumblebee adapter; this is currently an integration guide.
 
+## Optional extras
+
+Core `:dspy` does not include Phoenix/UI or legacy HTTP-based provider code.
+
+Optional/experimental code lives in `extras/dspy_extras` (in-tree). This is also where any legacy HTTP-backed embedding/provider prototypes belong.
+
 ## Evidence
 
 - Multipart + attachment safety: `test/lm/req_llm_multimodal_test.exs`

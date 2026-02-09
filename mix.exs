@@ -4,7 +4,7 @@ defmodule Dspy.MixProject do
   def project do
     [
       app: :dspy,
-      version: "0.1.2",
+      version: "0.2.0",
       elixir: "~> 1.18",
       start_permanent: Mix.env() == :prod,
       deps: deps()
@@ -14,8 +14,7 @@ defmodule Dspy.MixProject do
   # Run "mix help compile.app" to learn about applications.
   def application do
     [
-      # Keep the library quiet by default; optional services can start their own
-      # heavier dependencies when enabled.
+      # Keep the core library lightweight and quiet by default.
       extra_applications: [:logger, :inets, :ssl],
       mod: {Dspy.Application, []}
     ]
@@ -25,16 +24,6 @@ defmodule Dspy.MixProject do
   defp deps do
     [
       {:jason, "~> 1.4"},
-
-      # Temporary: required for existing in-tree web + GenStage modules to compile.
-      # We may later relocate these modules to keep `dspy.ex` library-only.
-      {:phoenix, "~> 1.7"},
-      {:phoenix_live_view, "~> 1.0"},
-      {:phoenix_html, "~> 4.0"},
-      {:phoenix_pubsub, "~> 2.1"},
-      {:plug_cowboy, "~> 2.7"},
-      {:gen_stage, "~> 1.2"},
-      {:httpoison, "~> 2.2"},
 
       # LLM provider access (unified client; no provider maintenance in `dspy.ex`)
       {:req_llm, "~> 1.3"}

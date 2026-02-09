@@ -279,20 +279,30 @@ defmodule Dspy.MetaHotswap do
   # Private helper functions
 
   defp backup_existing_module(module_name) do
-    module_atom = String.to_atom("Elixir.#{module_name}")
+    module_atom =
+      try do
+        String.to_existing_atom("Elixir." <> module_name)
+      rescue
+        ArgumentError -> nil
+      end
 
-    case Code.ensure_loaded(module_atom) do
-      {:module, _} ->
-        # Get module info and source if available
-        %{
-          module: module_atom,
-          functions: module_atom.__info__(:functions),
-          attributes: module_atom.__info__(:attributes),
-          timestamp: DateTime.utc_now()
-        }
+    case module_atom do
+      nil ->
+        %{module: module_name, exists: false, timestamp: DateTime.utc_now()}
 
-      {:error, _} ->
-        %{module: module_atom, exists: false, timestamp: DateTime.utc_now()}
+      module_atom ->
+        case Code.ensure_loaded(module_atom) do
+          {:module, _} ->
+            %{
+              module: module_atom,
+              functions: module_atom.__info__(:functions),
+              attributes: module_atom.__info__(:attributes),
+              timestamp: DateTime.utc_now()
+            }
+
+          {:error, _} ->
+            %{module: module_atom, exists: false, timestamp: DateTime.utc_now()}
+        end
     end
   end
 

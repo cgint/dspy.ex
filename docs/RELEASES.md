@@ -12,6 +12,8 @@ The table below is maintained on `main`, but links are **tag-pinned** so they do
 
 | Tag | What you get | Evidence (tag-pinned) |
 |---|---|---|
+| `v0.2.0` | **Dependency slimming / library-first core**: extracted optional Phoenix/"godmode"/GenStage/legacy HTTP modules into `extras/dspy_extras` and removed Phoenix/GenStage/HTTPoison deps from core `:dspy` | Optional package: https://github.com/cgint/dspy.ex/tree/v0.2.0/extras/dspy_extras  \
+Core deps (slim): https://github.com/cgint/dspy.ex/blob/v0.2.0/mix.exs |
 | `v0.1.2` | Quieter + more deterministic developer experience on top of `v0.1.1`: don’t start `:os_mon` by default (avoids alarm/log noise in library/test usage); when optional services are enabled, attempt to start `:os_mon` with an explicit warning on failure; make `BootstrapFewShot` determinism test fail loudly if prompt format changes | Optional services startup gate: https://github.com/cgint/dspy.ex/blob/v0.1.2/lib/dspy/application.ex  \
 BootstrapFewShot determinism test: https://github.com/cgint/dspy.ex/blob/v0.1.2/test/teleprompt/bootstrap_few_shot_determinism_test.exs |
 | `v0.1.1` | Adds additional adoption slices and hygiene on top of `v0.1.0`: contracts-style PDF→JSON→Q&A acceptance workflow, image transcription workflow, quieter library-first startup (optional web/godmode services gated), BootstrapFewShot sampling made explicit + determinism regression test, and Bumblebee local-inference notes | Overview: https://github.com/cgint/dspy.ex/blob/v0.1.1/docs/OVERVIEW.md  \

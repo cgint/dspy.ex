@@ -4,13 +4,15 @@
 
 - Want to know what’s usable today? Read **“What you can do today”** below.
 - Want provider setup? See `docs/PROVIDERS.md` (uses `req_llm`).
-- Want stability? Use **semver tags**; `main` moves quickly. Current recommended stable tag: `v0.1.2` (see `README.md` + `docs/RELEASES.md`).
+- Want stability? Use **semver tags**; `main` moves quickly. Current recommended stable tag: `v0.2.0` (see `README.md` + `docs/RELEASES.md`).
 
 ## Diagram
 
 ![Progress loop: reference → acceptance tests → implementation → docs](./diagrams/progress_overview.svg)
 
 ## What you can do today (proven, deterministic)
+
+Note: the core `:dspy` library is intentionally low-dependency. Optional Phoenix/"godmode"/GenStage modules live in `extras/dspy_extras`.
 
 The items below are backed by deterministic tests (offline, using mock LMs).
 

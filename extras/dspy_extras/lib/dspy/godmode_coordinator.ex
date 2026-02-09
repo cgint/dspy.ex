@@ -22,10 +22,7 @@ defmodule Dspy.GodmodeCoordinator do
   use GenServer
   require Logger
 
-  alias Dspy.{
-    MetaHotswap,
-    ParallelMultiModelAgent
-  }
+  alias Dspy.ParallelMultiModelAgent
 
   @type coordinator_state :: %{
           status: :active | :passive | :maintenance,
@@ -165,8 +162,8 @@ defmodule Dspy.GodmodeCoordinator do
       performance_baseline: 1.0
     }
 
-    # Start essential subsystems
-    {:ok, _} = MetaHotswap.start_link([])
+    # Optional subsystem: MetaHotswap (unsafe, not compiled by default)
+    _ = maybe_start_meta_hotswap()
 
     # Schedule periodic optimization
     if state.auto_optimization do
@@ -518,13 +515,13 @@ defmodule Dspy.GodmodeCoordinator do
   defp perform_behavior_override(target, override_spec) do
     case target do
       {:module, module_name} ->
-        MetaHotswap.swap_module(module_name, override_spec.new_code)
+        maybe_meta_hotswap(:swap_module, [module_name, override_spec.new_code])
 
       {:function, module, function} ->
         override_function(module, function, override_spec)
 
       {:signature, signature_name} ->
-        MetaHotswap.swap_signature(signature_name, override_spec.new_signature)
+        maybe_meta_hotswap(:swap_signature, [signature_name, override_spec.new_signature])
 
       _ ->
         {:error, :unsupported_target}
@@ -535,13 +532,17 @@ defmodule Dspy.GodmodeCoordinator do
     Enum.map(hotswap_spec.targets, fn target ->
       case target.type do
         :module ->
-          MetaHotswap.swap_module(target.name, target.code)
+          maybe_meta_hotswap(:swap_module, [target.name, target.code])
 
         :signature ->
-          MetaHotswap.swap_signature(target.name, target.definition)
+          maybe_meta_hotswap(:swap_signature, [target.name, target.definition])
 
         :reasoning ->
-          MetaHotswap.swap_reasoning_pattern(target.module, target.pattern, target.implementation)
+          maybe_meta_hotswap(:swap_reasoning_pattern, [
+            target.module,
+            target.pattern,
+            target.implementation
+          ])
       end
     end)
   end
@@ -642,6 +643,24 @@ defmodule Dspy.GodmodeCoordinator do
   defp estimate_duration(_task_spec), do: 30_000
   defp select_coordination_strategy(_analysis, state), do: hd(state.coordination_strategies)
   defp monitor_task_execution(_task_id, _agents), do: :ok
+
+  defp maybe_start_meta_hotswap do
+    if Code.ensure_loaded?(Dspy.MetaHotswap) and
+         function_exported?(Dspy.MetaHotswap, :start_link, 1) do
+      apply(Dspy.MetaHotswap, :start_link, [[]])
+    else
+      :ok
+    end
+  end
+
+  defp maybe_meta_hotswap(fun, args) when is_atom(fun) and is_list(args) do
+    if Code.ensure_loaded?(Dspy.MetaHotswap) and
+         function_exported?(Dspy.MetaHotswap, fun, length(args)) do
+      apply(Dspy.MetaHotswap, fun, args)
+    else
+      {:error, :meta_hotswap_not_enabled}
+    end
+  end
 
   defp execute_adaptive_coordination(_agents, _task_spec),
     do: %{result: "adaptive coordination complete"}
