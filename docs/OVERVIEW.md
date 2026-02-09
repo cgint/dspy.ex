@@ -208,6 +208,9 @@ Proof:
 - `test/module_parameter_persistence_test.exs`
 - `test/module_parameter_json_persistence_test.exs`
 
+Example (offline):
+- `mix run examples/parameter_persistence_json_offline.exs`
+
 ## Workflow parity vs `dspy-intro/src` (high-level)
 
 Legend:
