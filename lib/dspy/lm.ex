@@ -6,9 +6,13 @@ defmodule Dspy.LM do
   like OpenAI, Anthropic, local models, etc.
   """
 
+  @type content_part :: map()
+
+  @type content :: String.t() | [content_part()]
+
   @type message :: %{
           role: String.t(),
-          content: String.t()
+          content: content()
         }
 
   @type request :: %{
