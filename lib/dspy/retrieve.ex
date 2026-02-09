@@ -619,7 +619,7 @@ defmodule Dspy.Retrieve do
           end
 
         {:error, reason} ->
-          {:error, "Retrieval failed: #{reason}"}
+          {:error, "Retrieval failed: #{inspect(reason)}"}
       end
     end
 

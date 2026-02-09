@@ -21,6 +21,12 @@ defmodule Dspy.RetrieveRAGPipelineTest do
     end
   end
 
+  defmodule ErrorRetriever do
+    def retrieve(_query, _opts) do
+      {:error, {:bad_query, %{details: "nope"}}}
+    end
+  end
+
   test "RAGPipeline generates using request maps and returns answer text" do
     lm = %FakeLM{test_pid: self(), reply_text: "ok"}
     pipeline = Dspy.Retrieve.RAGPipeline.new(DummyRetriever, lm, k: 1)
@@ -34,5 +40,15 @@ defmodule Dspy.RetrieveRAGPipelineTest do
     assert request.max_tokens == 9
     assert [%{role: "user", content: content}] = request.messages
     assert String.contains?(content, "Question: What is this?")
+  end
+
+  test "RAGPipeline retrieval errors are inspect-safe (non-string reasons)" do
+    lm = %FakeLM{test_pid: self(), reply_text: "ok"}
+    pipeline = Dspy.Retrieve.RAGPipeline.new(ErrorRetriever, lm, k: 1)
+
+    assert {:error, msg} = Dspy.Retrieve.RAGPipeline.generate(pipeline, "What is this?")
+    assert is_binary(msg)
+    assert String.contains?(msg, "Retrieval failed")
+    assert String.contains?(msg, ":bad_query")
   end
 end
