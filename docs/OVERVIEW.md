@@ -79,6 +79,10 @@ score_pred.attrs.funnyness_0_to_10 #=> 7
 
 Proof: `test/acceptance/simplest_predict_test.exs`
 
+Also: `Dspy.ChainOfThought` runs end-to-end and parses a `:reasoning` output field.
+
+Proof: `test/acceptance/chain_of_thought_acceptance_test.exs`
+
 ### 2) Structured JSON outputs (JSON-in-markdown-fences parsing)
 
 If the LM returns outputs as a JSON object (e.g. in ```json fences), `dspy.ex` will parse and coerce to signature output field types.
