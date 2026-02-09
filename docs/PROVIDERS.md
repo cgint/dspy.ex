@@ -72,7 +72,10 @@ Prefer the in-memory form for stricter sandboxing:
 If you want a fully BEAM/Nx local model runtime (no external HTTP providers), see:
 - `docs/BUMBLEBEE.md`
 
-Note: `dspy.ex` does not yet ship a built-in Bumblebee adapter; this is currently an integration guide.
+Note: core `:dspy` does not depend on Bumblebee/Nx/EXLA, but it **does** ship an adapter module:
+- `Dspy.LM.Bumblebee`
+
+To use it, add Bumblebee/Nx/EXLA dependencies in your application.
 
 ## Optional extras
 

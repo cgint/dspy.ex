@@ -2,11 +2,51 @@
 
 ## Status
 
-This repo does **not** yet ship a `Dspy.LM` adapter for Bumblebee.
+This repo ships an **optional** `Dspy.LM` adapter for Bumblebee: `Dspy.LM.Bumblebee`.
+
+Important: core `:dspy` intentionally does **not** depend on Bumblebee/Nx/EXLA. To use the adapter,
+add those dependencies in your application.
 
 This document is a **design/integration note** for a future “fully BEAM-self-contained” runtime option (no external HTTP providers), complementary to the current `req_llm` provider path.
 
 ## Overview (most important)
+
+### Quick start using `Dspy.LM.Bumblebee`
+
+1) Add deps in *your app* (not in `:dspy`):
+
+```elixir
+# mix.exs
+
+defp deps do
+  [
+    {:bumblebee, "~> 0.6"},
+    {:nx, "~> 0.7"},
+    {:exla, "~> 0.7"}
+  ]
+end
+```
+
+2) Configure an Nx backend (example):
+
+```elixir
+# config/runtime.exs or config/config.exs
+config :nx, default_backend: EXLA.Backend
+```
+
+3) Build a serving and configure DSPy:
+
+```elixir
+{:ok, model_info} = Bumblebee.load_model({:hf, "gpt2"})
+{:ok, tokenizer} = Bumblebee.load_tokenizer({:hf, "gpt2"})
+
+serving = Bumblebee.Text.generation(model_info, tokenizer, max_new_tokens: 64)
+
+lm = Dspy.LM.Bumblebee.new(serving: serving)
+Dspy.configure(lm: lm)
+```
+
+Then call DSPy normally (`Dspy.Predict`, `Dspy.LM.generate/1`, etc.).
 
 - **What it is**: [Bumblebee](https://github.com/elixir-nx/bumblebee) is the Elixir/Nx library that runs HuggingFace models (including many LLMs) **locally on the BEAM**.
 - **How you use it**: you typically load a model + tokenizer, build an **`Nx.Serving`** using `Bumblebee.Text.generation/3`, and then call `Nx.Serving.run/2` to generate text.
@@ -17,25 +57,17 @@ This document is a **design/integration note** for a future “fully BEAM-self-c
 
 ## Integrating Bumblebee (practical guide)
 
-### Integration strategy for *this* repo (keep it separate, split later)
+### Integration strategy for *this* repo
 
-Current intent:
+Implemented decision:
 
-- Keep a Bumblebee-based provider **in this repo for now** to speed up development.
-- Implement it as an **isolated/optional provider** so it doesn’t become a hard requirement for users who only want HTTP providers.
-- Structure it so it can be **split into a separate Hex package/repo later** with minimal churn.
+- The adapter ships as **`Dspy.LM.Bumblebee`** in core `:dspy`.
+- Core `:dspy` still does **not** depend on Bumblebee/Nx/EXLA.
+- The adapter is **runtime-gated**:
+  - if `Nx.Serving` is not available, it returns `{:error, :bumblebee_not_available}`
+  - model loading/serving construction remains the responsibility of your application
 
-Practical implications:
-
-- Put the adapter under a dedicated namespace, e.g. `lib/dspex/providers/bumblebee/*`.
-- Avoid coupling to private internals; depend only on the public provider behaviour/API.
-- Keep core tests independent; run Bumblebee tests as opt-in integration tests.
-
-Open decision (matters for implementation):
-
-- Should the provider module **compile even when Bumblebee/Nx/EXLA are not in deps**?
-  - If **yes**, implement a small stub that raises a helpful error unless `Code.ensure_loaded?(Bumblebee)` (conditional compilation / runtime checks).
-  - If **no**, accept that enabling the provider requires adding deps and configuring an Nx backend.
+This keeps core lightweight while making a local LM option available behind an opt-in dependency.
 
 
 ### 1) Add dependencies
