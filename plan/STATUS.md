@@ -34,6 +34,7 @@ North star docs:
   - [x] Standardize teleprompter error shapes (no bare strings; tagged tuples)
   - [x] Program parameter persistence (export/apply parameters for optimized programs)
   - [x] ChainOfThought parity: arrow signatures + attachments request parts + teleprompt parameters
+  - [x] LabeledFewShot supports `%Dspy.ChainOfThought{}` (via `predict.examples` parameter)
   - [x] Add unit tests for `Dspy.Teleprompt.Util.set_parameter/4`
   - [x] Provider-layer acceptance tests (ReqLLM default wiring + “real provider” smoke behind tags)
   - [x] Clean up top-level `Dspy` moduledoc to avoid overpromising
@@ -63,6 +64,7 @@ North star docs:
   - Evidence file: `lib/dspy/teleprompt/util.ex` (parameter-based mutation helpers + verbosity-gated Logger)
   - Evidence file: `test/teleprompt/util_test.exs`
   - Evidence file: `test/teleprompt/labeled_few_shot_improvement_test.exs`
+  - Evidence file: `test/teleprompt/labeled_few_shot_chain_of_thought_improvement_test.exs`
   - Evidence file: `test/teleprompt/simba_improvement_test.exs`
   - Evidence file: `test/teleprompt/error_shapes_test.exs`
   - Evidence file: `lib/dspy/teleprompt/labeled_few_shot.ex` (no dynamic module creation)
@@ -160,6 +162,7 @@ Notes:
 - **2026-02-09**: JSON-friendly parameter persistence: `Dspy.Parameter.encode_json!/1` + `decode_json/1` + roundtrip tests; docs update. Verification: `mix test`.
 - **2026-02-09**: Parameter persistence file helpers (`write_json!/2`, `read_json!/1`) + tests + offline demo. Verification: `mix test`.
 - **2026-02-09**: ChainOfThought parity: arrow signatures + attachments request parts + teleprompt parameter callbacks. Verification: `mix test`.
+- **2026-02-09**: LabeledFewShot now supports `%Dspy.ChainOfThought{}` (via `predict.examples`) + docs update to reflect Predict-like teleprompters. Verification: `mix test`.
 - **2026-02-09**: Cut tag `v0.2.6` (ChainOfThought parity: arrow sigs + attachments + parameters).
 - **2026-02-09**: Cut tag `v0.2.5` (dependency slimming: remove Bumblebee/Nx/EXLA deps from core).
 - **2026-02-09**: Cut tag `v0.2.4` (parameter persistence file helpers + demo).

@@ -61,6 +61,7 @@
 - Teleprompters (deterministic tests):
   - GEPA: `test/teleprompt/gepa_test.exs`, `test/teleprompt/gepa_improvement_test.exs`
   - LabeledFewShot improvement: `test/teleprompt/labeled_few_shot_improvement_test.exs`
+  - LabeledFewShot + ChainOfThought improvement: `test/teleprompt/labeled_few_shot_chain_of_thought_improvement_test.exs`
   - SIMBA improvement: `test/teleprompt/simba_improvement_test.exs`
   - Error shapes: `test/teleprompt/error_shapes_test.exs`
   - Teleprompt.Util set_parameter contracts: `test/teleprompt/util_test.exs`
@@ -74,8 +75,9 @@
 ## Teleprompter status (important constraint)
 - Legacy teleprompters were refactored to **avoid dynamic module generation**.
 - Teleprompter progress logging is now via `Logger` and gated by `teleprompt.verbose` (or global `Dspy.Settings.teleprompt_verbose`).
-- Current limitation: optimizers primarily support **`%Dspy.Predict{}`** programs by updating parameters:
+- Optimizers are parameter-based (no dynamic modules) and support **Predict-like** programs (e.g. `%Dspy.Predict{}` and `%Dspy.ChainOfThought{}`) by updating parameters:
   - `"predict.instructions"`, `"predict.examples"`
+- Some experimental teleprompters may still be Predict-only.
 - Shared helper: `lib/dspy/teleprompt/util.ex` (`Dspy.Teleprompt.Util`).
 
 ## Optional services (separate package)
