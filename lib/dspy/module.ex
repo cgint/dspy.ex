@@ -69,6 +69,58 @@ defmodule Dspy.Module do
   end
 
   @doc """
+  Export a module's optimizable parameters.
+
+  This is an explicit, error-returning variant of `parameters/1` intended for
+  persistence/teleprompt workflows.
+
+  ## Returns
+
+  - `{:ok, params}` when the module implements `c:parameters/1`
+  - `{:error, {:unsupported_program, mod}}` otherwise
+  """
+  @spec export_parameters(t()) :: {:ok, [Dspy.Parameter.t()]} | {:error, term()}
+  def export_parameters(%_{} = module) do
+    if function_exported?(module.__struct__, :parameters, 1) do
+      params = module.__struct__.parameters(module)
+
+      if is_list(params) and Enum.all?(params, &match?(%Dspy.Parameter{}, &1)) do
+        {:ok, params}
+      else
+        {:error, {:invalid_parameters, params}}
+      end
+    else
+      {:error, {:unsupported_program, module.__struct__}}
+    end
+  end
+
+  def export_parameters(other), do: {:error, {:unsupported_program, other}}
+
+  @doc """
+  Apply a list of parameters to a module.
+
+  ## Returns
+
+  - `{:ok, updated_module}` when the module implements `c:update_parameters/2`
+  - `{:error, {:unsupported_program, mod}}` otherwise
+  """
+  @spec apply_parameters(t(), [Dspy.Parameter.t()]) :: {:ok, t()} | {:error, term()}
+  def apply_parameters(%_{} = module, parameters) when is_list(parameters) do
+    cond do
+      not Enum.all?(parameters, &match?(%Dspy.Parameter{}, &1)) ->
+        {:error, {:invalid_parameters, parameters}}
+
+      function_exported?(module.__struct__, :update_parameters, 2) ->
+        {:ok, module.__struct__.update_parameters(module, parameters)}
+
+      true ->
+        {:error, {:unsupported_program, module.__struct__}}
+    end
+  end
+
+  def apply_parameters(other, _parameters), do: {:error, {:unsupported_program, other}}
+
+  @doc """
   Compose multiple modules in sequence.
   """
   def compose(modules) when is_list(modules) do

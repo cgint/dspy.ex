@@ -186,6 +186,15 @@ These teleprompters currently optimize **`%Dspy.Predict{}`** programs by updatin
 - `Dspy.Teleprompt.GEPA` (toy deterministic optimizer)
   - Proof: `test/teleprompt/gepa_test.exs`, `test/teleprompt/gepa_improvement_test.exs`
 
+You can also persist an optimized program’s parameter set and re-apply it later:
+
+```elixir
+{:ok, params} = Dspy.Module.export_parameters(optimized)
+{:ok, restored} = Dspy.Module.apply_parameters(Dspy.Predict.new(MySignature), params)
+```
+
+Proof: `test/module_parameter_persistence_test.exs`
+
 ## Workflow parity vs `dspy-intro/src` (high-level)
 
 Legend:
