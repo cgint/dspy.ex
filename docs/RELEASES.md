@@ -12,6 +12,8 @@ The table below is maintained on `main`, but links are **tag-pinned** so they do
 
 | Tag | What you get | Evidence (tag-pinned) |
 |---|---|---|
+| `v0.2.5` | **Dependency slimming**: core `:dspy` no longer depends on Bumblebee/Nx/EXLA (local inference remains an opt-in adapter) | Core deps: https://github.com/cgint/dspy.ex/blob/v0.2.5/mix.exs  \
+Bumblebee adapter note: https://github.com/cgint/dspy.ex/blob/v0.2.5/docs/BUMBLEBEE.md |
 | `v0.2.4` | **Parameter persistence (file helpers)**: write/read parameters JSON to/from disk; offline demo script | File persistence tests: https://github.com/cgint/dspy.ex/blob/v0.2.4/test/parameter_file_persistence_test.exs  \
 Offline demo: https://github.com/cgint/dspy.ex/blob/v0.2.4/examples/parameter_persistence_json_offline.exs  \
 Helpers: https://github.com/cgint/dspy.ex/blob/v0.2.4/lib/dspy/parameter.ex |
