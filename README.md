@@ -18,7 +18,7 @@ For stability, depend on a **semver tag** (recommended):
 ```elixir
 def deps do
   [
-    {:dspy, github: "cgint/dspy.ex", tag: "v0.2.0"}
+    {:dspy, github: "cgint/dspy.ex", tag: "v0.2.1"}
   ]
 end
 ```
