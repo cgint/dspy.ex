@@ -363,18 +363,14 @@ defmodule Dspy.Parameter do
   end
 
   defp import_example_attrs(attrs) when is_map(attrs) do
-    Enum.reduce(attrs, %{}, fn {k, v}, acc ->
+    Enum.reduce_while(attrs, {:ok, %{}}, fn {k, v}, {:ok, acc} ->
       key = maybe_to_existing_atom_key(k)
 
-      val =
-        case import_value(v) do
-          {:ok, x} -> x
-          {:error, _} -> v
-        end
-
-      Map.put(acc, key, val)
+      case import_value(v) do
+        {:ok, imported} -> {:cont, {:ok, Map.put(acc, key, imported)}}
+        {:error, reason} -> {:halt, {:error, reason}}
+      end
     end)
-    |> then(fn map -> {:ok, map} end)
   end
 
   defp maybe_to_existing_atom_key(k) when is_atom(k), do: k
