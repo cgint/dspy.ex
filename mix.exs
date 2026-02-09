@@ -26,7 +26,12 @@ defmodule Dspy.MixProject do
       {:jason, "~> 1.4"},
 
       # LLM provider access (unified client; no provider maintenance in `dspy.ex`)
-      {:req_llm, "~> 1.3"}
+      {:req_llm, "~> 1.3"},
+
+      # Local inference (Bumblebee)
+      {:bumblebee, "~> 0.6"},
+      {:nx, "~> 0.7"},
+      {:exla, "~> 0.7"}
     ]
   end
 end

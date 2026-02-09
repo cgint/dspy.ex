@@ -27,7 +27,11 @@ defp deps do
 end
 ```
 
-2) Configure an Nx backend (example):
+2) (Optional) configure an Nx backend.
+
+Without configuration, Nx uses a pure Elixir backend (slow but simplest).
+
+If you add EXLA, configure it like:
 
 ```elixir
 # config/runtime.exs or config/config.exs
@@ -58,6 +62,9 @@ Repo example (manual; may download weights):
 ```bash
 mix run examples/bumblebee_predict_local.exs
 ```
+
+Note: if you run this from *within this repo*, it will only work if Bumblebee/Nx are present in the dependency graph.
+The intended path is to copy/adapt the script into **your integrating application** (where you add the deps).
 
 Run the smoke test locally (may download weights):
 
@@ -97,7 +104,7 @@ This keeps core lightweight while making a local LM option available behind an o
 
 These dependencies/config snippets are for **your integrating application** (or a future optional adapter package), not for `dspy.ex` itself today.
 
-Add Bumblebee and an execution backend. Most setups use EXLA.
+Add Bumblebee (and Nx). For better performance, add EXLA as an optional execution backend.
 
 ```elixir
 # mix.exs
@@ -121,6 +128,28 @@ config :nx, default_backend: EXLA.Backend
 Notes:
 - GPU support depends on your EXLA/XLA installation.
 - Some models may require additional dependencies (e.g. tokenizers / tooling) depending on the model family.
+
+### Troubleshooting
+
+#### `failed to extract xla archive, reason: :invalid_tar_checksum`
+
+This is typically a **corrupted cached download** for EXLA/XLA.
+
+Try:
+
+1) Remove the specific cached archive mentioned in the error message.
+   In your log it looked like:
+
+   `~/Library/Caches/xla/.../xla_extension-...tar.gz`
+
+2) Re-run compilation:
+
+```bash
+mix deps.clean exla
+mix deps.compile exla --force
+```
+
+If you don’t need EXLA yet, the simplest workaround is to **remove `:exla`** and let Nx use the default backend.
 
 ### 2) Load a model + tokenizer
 
