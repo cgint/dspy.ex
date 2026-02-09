@@ -40,7 +40,7 @@ defmodule Dspy.Acceptance.ChainOfThoughtAcceptanceTest do
   end
 
   test "ChainOfThought runs end-to-end and parses reasoning + answer" do
-    cot = Dspy.ChainOfThought.new(TestQA)
+    cot = Dspy.ChainOfThought.new("question -> answer")
 
     assert {:ok, pred} = Dspy.Module.forward(cot, %{question: "What is 2+2?"})
     assert pred.attrs.answer == "4"
