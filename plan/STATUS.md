@@ -145,7 +145,7 @@ Verification run:
 - `./precommit.sh`
 
 Notes:
-- `./precommit.sh` currently warns about `mix.lock` containing unused deps (leftover lock entries) and `assets.deploy` task not existing; both are non-blocking.
+- `./precommit.sh` may warn about `assets.deploy` task not existing; this is non-blocking for a library-only repo.
 - `./precommit.sh` now only flags TODO/FIXME/XXX when they appear in comments (avoids false positives from literal strings).
 
 ## Log
