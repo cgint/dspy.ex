@@ -27,8 +27,8 @@ defmodule Dspy.Application do
         :ok =
           Dspy.Settings.configure(
             lm: lm,
-            max_tokens: Map.get(config, :max_tokens, 2048),
-            temperature: Map.get(config, :temperature, 0.0)
+            max_tokens: Map.get(config, :max_tokens),
+            temperature: Map.get(config, :temperature)
           )
 
         Logger.info("DSPy LM configured: #{model}")

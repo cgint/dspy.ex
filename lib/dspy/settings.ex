@@ -10,8 +10,8 @@ defmodule Dspy.Settings do
 
   defstruct [
     :lm,
-    max_tokens: 2048,
-    temperature: 0.0,
+    max_tokens: nil,
+    temperature: nil,
     cache: true,
     experimental: [],
     teleprompt_verbose: false
@@ -19,8 +19,8 @@ defmodule Dspy.Settings do
 
   @type t :: %__MODULE__{
           lm: Dspy.LM.t() | nil,
-          max_tokens: pos_integer(),
-          temperature: float(),
+          max_tokens: pos_integer() | nil,
+          temperature: number() | nil,
           cache: boolean(),
           experimental: [atom()],
           teleprompt_verbose: boolean()

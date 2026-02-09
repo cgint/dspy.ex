@@ -30,15 +30,15 @@ defmodule Dspy do
 
   @type dspy_config :: [
           lm: module(),
-          max_tokens: pos_integer(),
-          temperature: float(),
+          max_tokens: pos_integer() | nil,
+          temperature: number() | nil,
           cache: boolean()
         ]
 
   @type settings :: %{
           lm: module(),
-          max_tokens: pos_integer(),
-          temperature: float(),
+          max_tokens: pos_integer() | nil,
+          temperature: number() | nil,
           cache: boolean(),
           metadata: map()
         }
@@ -49,8 +49,8 @@ defmodule Dspy do
   ## Options
 
   - `:lm` - Language model client (required)
-  - `:max_tokens` - Maximum tokens per generation (default: 2048)
-  - `:temperature` - Sampling temperature (default: 0.0)
+  - `:max_tokens` - Maximum tokens per generation (default: `nil`, provider/runtime default)
+  - `:temperature` - Sampling temperature (default: `nil`, provider/runtime default)
   - `:cache` - Enable response caching (default: true)
 
   ## Examples

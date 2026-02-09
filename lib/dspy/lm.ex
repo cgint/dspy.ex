@@ -70,8 +70,13 @@ defmodule Dspy.LM do
 
   @doc """
   Generate a completion using a specific language model.
+
+  This function also applies global defaults from `Dspy.Settings` (if running)
+  for request fields like `:temperature` and `:max_tokens`, without overriding
+  per-request values.
   """
   def generate(lm, request) do
+    request = apply_settings_defaults(request)
     lm.__struct__.generate(lm, request)
   end
 
@@ -247,6 +252,27 @@ defmodule Dspy.LM do
 
       {:error, reason} ->
         {:error, reason}
+    end
+  end
+
+  defp apply_settings_defaults(request) when is_map(request) do
+    if Process.whereis(Dspy.Settings) do
+      request
+      |> put_default(:temperature, Dspy.Settings.get(:temperature))
+      |> put_default(:max_tokens, Dspy.Settings.get(:max_tokens))
+    else
+      request
+    end
+  end
+
+  defp apply_settings_defaults(other), do: other
+
+  defp put_default(request, _key, nil), do: request
+
+  defp put_default(request, key, default) do
+    case Map.get(request, key) do
+      nil -> Map.put(request, key, default)
+      _ -> request
     end
   end
 end
