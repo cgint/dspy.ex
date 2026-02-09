@@ -373,6 +373,16 @@ defmodule Dspy.Retrieve do
 
     @doc """
     Process documents for indexing.
+
+    Options:
+    - `:embedding_provider` - module implementing `Dspy.Retrieve.EmbeddingProvider` (default: `OpenAIEmbeddings`)
+    - `:embedding_provider_opts` - options passed to the provider (e.g. `model:` when using `Dspy.Retrieve.Embeddings.ReqLLM`)
+    - `:chunk_size` / `:overlap` - chunking controls (word-based)
+    - `:timeout_ms` - per-document processing timeout (default: 30_000)
+
+    Failure semantics (best-effort):
+    - if embedding fails, chunks are returned with `embedding: nil` and `metadata[:embedding_error]`
+    - if a document task errors/exits/times out, chunks are returned with `embedding: nil` and `metadata[:document_error]`
     """
     def process_documents(documents, opts \\ []) do
       embedding_provider = opts[:embedding_provider] || OpenAIEmbeddings

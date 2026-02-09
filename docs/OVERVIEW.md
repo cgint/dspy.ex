@@ -188,6 +188,7 @@ Legend:
 | Signatures (incl. arrow strings) | 2 | Arrow parsing + `int` normalization; `one_of` constraints for enum-like outputs | `test/acceptance/simplest_predict_test.exs`, `test/signature_test.exs`, `test/acceptance/classifier_credentials_acceptance_test.exs` |
 | Structured output parsing (JSON-ish) | 2 | JSON fenced output parsing + coercion (incl. list/map outputs via `:json`) | `test/acceptance/json_outputs_acceptance_test.exs`, `test/acceptance/knowledge_graph_triplets_test.exs` |
 | Evaluate | 2 | Deterministic golden path proven | `test/evaluate_golden_path_test.exs` |
+| Retrieve/RAG | 2 | Deterministic RAG pipeline with mocked embeddings provider (`req_llm`) | `test/acceptance/retrieve_rag_with_embeddings_acceptance_test.exs`, `test/retrieve/req_llm_embeddings_test.exs` |
 | Teleprompters | 2 | Predict-only, parameter-based (no dynamic modules) | `test/teleprompt/*` |
 | Tools/request map integration | 2 | ReAct runs with request maps; tool start/end callbacks supported (tool logging) | `test/tools_request_map_test.exs`, `test/acceptance/simplest_tool_logging_acceptance_test.exs` |
 | Provider support (real providers) | 2 | `Dspy.LM.ReqLLM` adapter proven (offline) incl. multipart/attachments request shape + safety gates; embeddings adapter via `req_llm` proven (offline); real network providers still considered prototype | `test/lm/req_llm_multimodal_test.exs`, `lib/dspy/lm/req_llm.ex`, `test/retrieve/req_llm_embeddings_test.exs` |

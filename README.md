@@ -53,6 +53,7 @@ Optional/experimental modules (Phoenix LiveView UI, “godmode” coordinator, G
 - `Dspy.Refine` loop (retry until a metric threshold is met)
 - Attachments request shape via `%Dspy.Attachments{}` (multimodal `messages[].content` parts)
 - Tools: ReAct loop + tool logging callbacks
+- Retrieval + RAG (embeddings-backed; offline-proven with mocks)
 - Teleprompters (currently **Predict-only**, parameter-based; no dynamic modules):
   - `LabeledFewShot`
   - `BootstrapFewShot`
