@@ -4,7 +4,7 @@ defmodule Dspy.MixProject do
   def project do
     [
       app: :dspy,
-      version: "0.2.0",
+      version: "0.2.5",
       elixir: "~> 1.18",
       start_permanent: Mix.env() == :prod,
       deps: deps()
@@ -26,12 +26,10 @@ defmodule Dspy.MixProject do
       {:jason, "~> 1.4"},
 
       # LLM provider access (unified client; no provider maintenance in `dspy.ex`)
-      {:req_llm, "~> 1.3"},
+      {:req_llm, "~> 1.3"}
 
-      # Local inference (Bumblebee)
-      {:bumblebee, "~> 0.6"},
-      {:nx, "~> 0.7"},
-      {:exla, "~> 0.7"}
+      # NOTE: Local inference deps (Bumblebee/Nx/EXLA) are intentionally NOT
+      # dependencies of core `:dspy`. See `docs/BUMBLEBEE.md`.
     ]
   end
 end
