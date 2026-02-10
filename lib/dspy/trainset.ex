@@ -380,23 +380,28 @@ defmodule Dspy.Trainset do
 
   defp diverse_sample(trainset, num_samples, _opts) do
     # Simple diversity based on text similarity
-    # Start with random example, then select most dissimilar
-    if length(trainset) <= num_samples do
-      trainset
-    else
-      [first | remaining] = Enum.shuffle(trainset)
+    # Start with a random example, then select the most dissimilar.
+    cond do
+      num_samples <= 1 ->
+        trainset |> Enum.shuffle() |> Enum.take(num_samples)
 
-      Enum.reduce(1..(num_samples - 1), [first], fn _, selected ->
-        candidate =
-          remaining
-          |> Enum.reject(&Enum.member?(selected, &1))
-          |> Enum.max_by(fn candidate ->
-            selected |> Enum.map(&text_similarity(&1, candidate)) |> Enum.min()
-          end)
+      length(trainset) <= num_samples ->
+        trainset
 
-        [candidate | selected]
-      end)
-      |> Enum.reverse()
+      true ->
+        [first | remaining] = Enum.shuffle(trainset)
+
+        Enum.reduce(1..(num_samples - 1), [first], fn _, selected ->
+          candidate =
+            remaining
+            |> Enum.reject(&Enum.member?(selected, &1))
+            |> Enum.max_by(fn candidate ->
+              selected |> Enum.map(&text_similarity(&1, candidate)) |> Enum.min()
+            end)
+
+          [candidate | selected]
+        end)
+        |> Enum.reverse()
     end
   end
 

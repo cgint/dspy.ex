@@ -234,11 +234,18 @@ defmodule Dspy.Teleprompt.MIPROv2 do
     end
   end
 
-  defp validate_trainset(trainset) do
-    if length(trainset) < 5 do
-      {:error, {:insufficient_trainset, min_size: 5}}
-    else
-      {:ok, trainset}
+  defp validate_trainset(trainset) when is_list(trainset) do
+    n = length(trainset)
+
+    cond do
+      n == 0 ->
+        {:error, :empty_trainset}
+
+      n < 5 ->
+        {:error, {:insufficient_trainset, min: 5, got: n}}
+
+      true ->
+        {:ok, trainset}
     end
   end
 
@@ -272,20 +279,21 @@ defmodule Dspy.Teleprompt.MIPROv2 do
     end
 
     # Generate more candidates than needed, then select best
-    candidate_inputs =
+    candidate_examples =
       Trainset.sample(train_data, max_demos * 3, strategy: :diverse, seed: teleprompt.seed + 10)
-      |> Enum.map(& &1.attrs)
 
     # Generate outputs using program
     bootstrapped =
-      candidate_inputs
+      candidate_examples
       |> Task.async_stream(
-        fn input ->
-          case Dspy.Module.forward(program, input) do
+        fn %Example{} = gold ->
+          inputs = gold.attrs
+
+          case Dspy.Module.forward(program, inputs) do
             {:ok, prediction} ->
-              example = Example.new(Map.merge(input, prediction.attrs))
-              score = Dspy.Teleprompt.run_metric(metric, example, prediction)
-              {example, score}
+              score = Dspy.Teleprompt.run_metric(metric, gold, prediction)
+              bootstrapped = Example.new(Map.merge(inputs, prediction.attrs))
+              {bootstrapped, score}
 
             {:error, _} ->
               nil

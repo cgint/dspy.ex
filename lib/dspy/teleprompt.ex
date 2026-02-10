@@ -13,6 +13,7 @@ defmodule Dspy.Teleprompt do
   - `LabeledFewShot` — sets `predict.examples`
   - `BootstrapFewShot` — bootstraps demos and sets `predict.examples`
   - `COPRO` — coordinate-ascent optimizer that selects better `predict.instructions`
+  - `MIPROv2` — joint optimizer for `predict.instructions` + `predict.examples` (Predict-only)
   - `SIMBA` — updates `predict.instructions`
   - `GEPA` — toy deterministic optimizer (finite candidate instructions)
   - `Ensemble` — trains multiple members and combines predictions (e.g. `:majority_vote`)
@@ -30,7 +31,7 @@ defmodule Dspy.Teleprompt do
   """
 
   alias Dspy.Example
-  alias Dspy.Teleprompt.{LabeledFewShot, BootstrapFewShot, COPRO, SIMBA, Ensemble, GEPA}
+  alias Dspy.Teleprompt.{LabeledFewShot, BootstrapFewShot, COPRO, MIPROv2, SIMBA, Ensemble, GEPA}
 
   @type metric_fun :: (Example.t() -> number()) | (Example.t(), Dspy.Prediction.t() -> number())
 
@@ -56,7 +57,7 @@ defmodule Dspy.Teleprompt do
 
   ## Parameters
 
-  - `type` - Teleprompt type (`:bootstrap_few_shot`, `:simba`, `:gepa`, etc.)
+  - `type` - Teleprompt type (`:bootstrap_few_shot`, `:mipro_v2`, `:simba`, `:gepa`, etc.)
   - `opts` - Configuration options
 
   ## Examples
@@ -70,6 +71,7 @@ defmodule Dspy.Teleprompt do
   def new(:labeled_few_shot, opts), do: LabeledFewShot.new(opts)
   def new(:bootstrap_few_shot, opts), do: BootstrapFewShot.new(opts)
   def new(:copro, opts), do: COPRO.new(opts)
+  def new(:mipro_v2, opts), do: MIPROv2.new(opts)
   def new(:simba, opts), do: SIMBA.new(opts)
   def new(:ensemble, opts), do: Ensemble.new(opts)
   def new(:gepa, opts), do: GEPA.new(opts)
@@ -97,6 +99,7 @@ defmodule Dspy.Teleprompt do
     do: BootstrapFewShot.compile(tp, program, trainset)
 
   def compile(%COPRO{} = tp, program, trainset), do: COPRO.compile(tp, program, trainset)
+  def compile(%MIPROv2{} = tp, program, trainset), do: MIPROv2.compile(tp, program, trainset)
 
   def compile(%SIMBA{} = tp, program, trainset), do: SIMBA.compile(tp, program, trainset)
   def compile(%Ensemble{} = tp, program, trainset), do: Ensemble.compile(tp, program, trainset)

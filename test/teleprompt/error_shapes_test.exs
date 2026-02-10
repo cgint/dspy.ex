@@ -2,7 +2,7 @@ defmodule Dspy.Teleprompt.ErrorShapesTest do
   use ExUnit.Case, async: true
 
   alias Dspy.Example
-  alias Dspy.Teleprompt.{BootstrapFewShot, COPRO, Ensemble, GEPA, LabeledFewShot, SIMBA}
+  alias Dspy.Teleprompt.{BootstrapFewShot, COPRO, Ensemble, GEPA, LabeledFewShot, MIPROv2, SIMBA}
 
   defmodule UnknownTeleprompt do
     defstruct []
@@ -65,6 +65,16 @@ defmodule Dspy.Teleprompt.ErrorShapesTest do
              Ensemble.compile(tp, program, examples(9))
   end
 
+  test "MIPROv2.compile/3 returns a structured error for insufficient trainset" do
+    tp =
+      MIPROv2.new(metric: fn _example, _pred -> 0.0 end, seed: 0, num_threads: 1, verbose: false)
+
+    program = Dspy.Predict.new("q -> a")
+
+    assert {:error, {:insufficient_trainset, min: 5, got: 4}} =
+             MIPROv2.compile(tp, program, examples(4))
+  end
+
   test "GEPA.compile/3 returns a structured error for unsupported programs" do
     tp = GEPA.new(metric: fn _example, _pred -> 0.0 end, seed: 0, candidates: ["x"])
     program = %NoParameterProgram{}
@@ -96,6 +106,16 @@ defmodule Dspy.Teleprompt.ErrorShapesTest do
              COPRO.compile(tp, program, examples(1))
   end
 
+  test "MIPROv2.compile/3 returns a structured error for unsupported programs" do
+    tp =
+      MIPROv2.new(metric: fn _example, _pred -> 0.0 end, seed: 0, num_threads: 1, verbose: false)
+
+    program = %NoParameterProgram{}
+
+    assert {:error, {:unsupported_program, NoParameterProgram}} =
+             MIPROv2.compile(tp, program, examples(1))
+  end
+
   test "teleprompters return :empty_trainset (not a string) for empty training data" do
     program = Dspy.Predict.new("q -> a")
 
@@ -113,6 +133,13 @@ defmodule Dspy.Teleprompt.ErrorShapesTest do
     assert {:error, :empty_trainset} =
              COPRO.compile(
                COPRO.new(metric: metric, seed: 0, num_threads: 1, verbose: false),
+               program,
+               []
+             )
+
+    assert {:error, :empty_trainset} =
+             MIPROv2.compile(
+               MIPROv2.new(metric: metric, seed: 0, num_threads: 1, verbose: false),
                program,
                []
              )
