@@ -195,6 +195,8 @@ These teleprompters optimize **Predict-like programs** by updating optimizable p
   - Proof: `test/bootstrap_few_shot_smoke_test.exs`, `test/teleprompt/bootstrap_few_shot_chain_of_thought_improvement_test.exs`, `test/teleprompt/bootstrap_few_shot_determinism_test.exs`
 - `Dspy.Teleprompt.COPRO` (coordinate-ascent optimizer; selects improved `predict.instructions`)
   - Proof: `test/teleprompt/copro_improvement_test.exs`, `test/teleprompt/copro_chain_of_thought_improvement_test.exs`
+- `Dspy.Teleprompt.MIPROv2` (joint optimizer for `predict.instructions` + `predict.examples`; currently Predict-only)
+  - Proof: `test/teleprompt/mipro_v2_improvement_test.exs`
 - `Dspy.Teleprompt.GEPA` (toy deterministic optimizer)
   - Proof: `test/teleprompt/gepa_test.exs`, `test/teleprompt/gepa_improvement_test.exs`, `test/teleprompt/gepa_chain_of_thought_improvement_test.exs`
 - `Dspy.Teleprompt.Ensemble` (trains multiple members via a base teleprompt and combines predictions; proven for Predict + ChainOfThought, `:majority_vote`)
@@ -225,6 +227,7 @@ Proof:
 
 Example (offline):
 - `mix run examples/parameter_persistence_json_offline.exs`
+- `mix run examples/predict_mipro_v2_persistence_offline.exs`
 - `mix run examples/chain_of_thought_teleprompt_persistence_offline.exs`
 - `mix run examples/chain_of_thought_simba_persistence_offline.exs`
 - `mix run examples/chain_of_thought_copro_persistence_offline.exs`
@@ -281,7 +284,7 @@ These are intentionally phrased as **concrete milestones** with a “proof artif
 
 ### Next workflow-parity milestones
 
-- **Teleprompts beyond the proven set**: `MIPROv2` is currently quarantined (not part of core). Either prove it deterministically and promote it back into core, or keep it extras-only and document the boundary.
+- **Teleprompts beyond the proven set**: extend `MIPROv2` to `%Dspy.ChainOfThought{}` (currently Predict-only), or keep it Predict-only and document the boundary clearly.
 - **Interface familiarity audit**: for the already-proven workflows, check shapes vs upstream Python DSPy + DSPex-snakepit and document intentional divergences.
 
 ### Next maturity milestones

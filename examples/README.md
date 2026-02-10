@@ -14,6 +14,8 @@ These should run without network calls:
 
 - Parameter persistence (JSON + files):
   - `mix run examples/parameter_persistence_json_offline.exs`
+- Predict + MIPROv2 + persistence:
+  - `mix run examples/predict_mipro_v2_persistence_offline.exs`
 - ChainOfThought + LabeledFewShot + persistence:
   - `mix run examples/chain_of_thought_teleprompt_persistence_offline.exs`
 - ChainOfThought + SIMBA + persistence:
