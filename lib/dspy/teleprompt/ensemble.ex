@@ -200,7 +200,7 @@ defmodule Dspy.Teleprompt.Ensemble do
   @behaviour Dspy.Teleprompt
 
   alias Dspy.{Example, Evaluate, Trainset}
-  alias Dspy.Teleprompt.{BootstrapFewShot, LabeledFewShot, COPRO}
+  alias Dspy.Teleprompt.{BootstrapFewShot, LabeledFewShot}
 
   alias __MODULE__.Program
 
@@ -408,7 +408,6 @@ defmodule Dspy.Teleprompt.Ensemble do
         case base_type do
           :bootstrap_few_shot -> BootstrapFewShot.new(config)
           :labeled_few_shot -> LabeledFewShot.new(config)
-          :copro -> COPRO.new(config)
           _ -> BootstrapFewShot.new(config)
         end
 

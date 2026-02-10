@@ -10,7 +10,7 @@ defmodule DspyTest do
 
   describe "configuration" do
     test "can configure DSPy settings" do
-      lm = %Dspy.LM.OpenAI{model: "gpt-4.1", api_key: "test-key"}
+      lm = Dspy.LM.ReqLLM.new(model: "openai:gpt-4.1-mini")
 
       assert :ok = Dspy.configure(lm: lm, max_tokens: 1000)
 
@@ -20,7 +20,7 @@ defmodule DspyTest do
     end
 
     test "can get specific settings" do
-      lm = %Dspy.LM.OpenAI{model: "gpt-4.1-nano", api_key: "test-key"}
+      lm = Dspy.LM.ReqLLM.new(model: "openai:gpt-4.1-nano")
       Dspy.configure(lm: lm)
 
       assert Dspy.Settings.get(:lm) == lm

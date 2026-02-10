@@ -29,6 +29,7 @@
   - `../DSPex-snakepit` where it helps adoption
 - Prefer shipping **stable slices** over feature completeness.
 - Deterministic tests are the spec where possible.
+- Core is curated for adoption: unproven/experimental modules are quarantined under `extras/dspy_extras/unsafe/quarantine/`.
 
 ## Current big decisions
 - Provider layer: use **`req_llm`** via an adapter; avoid provider-specific HTTP quirks in core.

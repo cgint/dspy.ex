@@ -56,7 +56,7 @@ defmodule Dspy do
   ## Examples
 
       Dspy.configure(
-        lm: %Dspy.LM.OpenAI{model: "gpt-4.1", api_key: "sk-..."},
+        lm: Dspy.LM.ReqLLM.new(model: "openai:gpt-4.1-mini"),
         max_tokens: 4096,
         temperature: 0.1,
         cache: true
@@ -78,7 +78,7 @@ defmodule Dspy do
   ## Examples
 
       settings = Dspy.settings()
-      # %{lm: %Dspy.LM.OpenAI{...}, max_tokens: 2048, ...}
+      # %{lm: %Dspy.LM.ReqLLM{...}, max_tokens: 2048, ...}
 
   """
   @spec settings() :: settings()

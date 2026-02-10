@@ -16,11 +16,6 @@ defmodule Dspy.Teleprompt do
   - `GEPA` — toy deterministic optimizer (finite candidate instructions)
   - `Ensemble` — trains multiple members and combines predictions (e.g. `:majority_vote`)
 
-  ## Experimental / incomplete
-
-  - `COPRO`
-  - `MIPROv2`
-
   Teleprompts in core are parameter-based and avoid runtime module generation.
 
   ## Usage
@@ -34,7 +29,7 @@ defmodule Dspy.Teleprompt do
   """
 
   alias Dspy.Example
-  alias Dspy.Teleprompt.{LabeledFewShot, BootstrapFewShot, COPRO, MIPROv2, SIMBA, Ensemble, GEPA}
+  alias Dspy.Teleprompt.{LabeledFewShot, BootstrapFewShot, SIMBA, Ensemble, GEPA}
 
   @type metric_fun :: (Example.t() -> number()) | (Example.t(), Dspy.Prediction.t() -> number())
 
@@ -66,15 +61,13 @@ defmodule Dspy.Teleprompt do
   ## Examples
 
       teleprompt = Dspy.Teleprompt.new(:bootstrap_few_shot, metric: my_metric)
-      teleprompt = Dspy.Teleprompt.new(:mipro_v2, auto: "medium")
+      teleprompt = Dspy.Teleprompt.new(:simba, metric: my_metric)
 
   """
   @spec new(atom(), teleprompt_config()) :: struct()
   def new(type, opts \\ [])
   def new(:labeled_few_shot, opts), do: LabeledFewShot.new(opts)
   def new(:bootstrap_few_shot, opts), do: BootstrapFewShot.new(opts)
-  def new(:copro, opts), do: COPRO.new(opts)
-  def new(:mipro_v2, opts), do: MIPROv2.new(opts)
   def new(:simba, opts), do: SIMBA.new(opts)
   def new(:ensemble, opts), do: Ensemble.new(opts)
   def new(:gepa, opts), do: GEPA.new(opts)
@@ -101,8 +94,6 @@ defmodule Dspy.Teleprompt do
   def compile(%BootstrapFewShot{} = tp, program, trainset),
     do: BootstrapFewShot.compile(tp, program, trainset)
 
-  def compile(%COPRO{} = tp, program, trainset), do: COPRO.compile(tp, program, trainset)
-  def compile(%MIPROv2{} = tp, program, trainset), do: MIPROv2.compile(tp, program, trainset)
   def compile(%SIMBA{} = tp, program, trainset), do: SIMBA.compile(tp, program, trainset)
   def compile(%Ensemble{} = tp, program, trainset), do: Ensemble.compile(tp, program, trainset)
   def compile(%GEPA{} = tp, program, trainset), do: GEPA.compile(tp, program, trainset)

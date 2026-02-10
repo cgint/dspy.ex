@@ -7,8 +7,15 @@ defmodule DspyExtras.MixProject do
       version: "0.0.0",
       elixir: "~> 1.18",
       start_permanent: Mix.env() == :prod,
+      elixirc_paths: elixirc_paths(Mix.env()),
       deps: deps()
     ]
+  end
+
+  defp elixirc_paths(_env) do
+    # Compile the optional UI/coordination modules in `lib/` and also compile
+    # quarantined/experimental modules that were moved out of core `:dspy`.
+    ["lib", "unsafe/quarantine/lib"]
   end
 
   def application do

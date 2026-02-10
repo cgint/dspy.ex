@@ -31,9 +31,13 @@ These should run without network calls:
 
 ## Experimental / exploratory scripts
 
-Many other scripts in this directory are exploratory and may:
+Experimental scripts live in:
+
+- `examples/experimental/`
+
+They may:
 - require API keys/network
-- depend on non-core modules
+- depend on non-core/quarantined modules
 - change or be removed without notice
 
 For “what’s stable”, rely on:

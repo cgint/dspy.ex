@@ -28,8 +28,8 @@ North star docs:
 - Backlog (ordered):
   - [x] Contribution UX: add `CONTRIBUTING.md` + GitHub issue templates + minimal repro guidance
   - [x] Curate examples: clearly separate “official deterministic” examples from experimental scripts (reduce onboarding noise)
-  - [ ] Core scope audit: identify unproven/experimental modules in `lib/dspy/*` and move them to `extras/` (or explicitly mark them experimental)
-  - [ ] Teleprompt parity: either prove COPRO/MIPROv2 with deterministic tests or move them to experimental/extras
+  - [x] Core scope audit: moved unproven/experimental modules out of core `lib/` into `extras/dspy_extras/unsafe/quarantine/`
+  - [x] Teleprompt parity: COPRO/MIPROv2 moved out of core until proven (see quarantine)
   - [ ] Provider parity: add more opt-in `:integration`/`:network` smoke tests + docs updates
   - [x] Optional local inference: add `Dspy.LM.Bumblebee` (runtime-gated; no core deps)
   - [x] Add opt-in integration smoke test for Bumblebee + default exclude `:integration`/`:network` in `mix test`
@@ -84,9 +84,10 @@ North star docs:
   - Evidence file: `test/teleprompt/simba_chain_of_thought_improvement_test.exs`
   - Evidence file: `test/teleprompt/error_shapes_test.exs`
   - Evidence file: `lib/dspy/teleprompt/labeled_few_shot.ex` (no dynamic module creation)
-  - Evidence file: `lib/dspy/teleprompt/copro.ex` (no dynamic module creation)
-  - Evidence file: `lib/dspy/teleprompt/mipro_v2.ex` (no dynamic module creation)
   - Evidence file: `lib/dspy/teleprompt/ensemble.ex` (struct-based; no runtime modules)
+  - Evidence file: `plan/CORE_SCOPE_AUDIT.md` (core scope + quarantine rationale)
+  - Evidence file: `plan/diagrams/core_scope_triage.d2`
+  - Evidence file: `plan/diagrams/core_scope_triage.svg`
   - Evidence file: `test/teleprompt/ensemble_program_test.exs`
   - Evidence file: `test/teleprompt/ensemble_compile_improvement_test.exs`
   - Evidence file: `test/teleprompt/ensemble_chain_of_thought_improvement_test.exs`
