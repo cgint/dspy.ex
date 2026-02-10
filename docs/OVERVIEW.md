@@ -155,10 +155,12 @@ Related (composition proof):
 
 A minimal Retrieval-Augmented Generation flow can be run deterministically by:
 - generating embeddings via `req_llm` (mocked in tests)
-- retrieving top-k by cosine similarity
+- retrieving top-k by cosine similarity (built-in `Dspy.Retrieve.InMemoryRetriever`)
 - generating an answer with `Dspy.Retrieve.RAGPipeline`
 
-Proof: `test/acceptance/retrieve_rag_with_embeddings_acceptance_test.exs`
+Proof:
+- `test/acceptance/retrieve_rag_with_embeddings_acceptance_test.exs`
+- `test/acceptance/retrieve_rag_in_memory_retriever_acceptance_test.exs`
 
 Guide: `docs/RETRIEVE_RAG.md`
 
@@ -226,6 +228,7 @@ Proof:
 - `test/module_parameter_json_persistence_test.exs`
 
 Example (offline):
+- `scripts/verify_examples.sh` (runs all official offline examples)
 - `mix run examples/parameter_persistence_json_offline.exs`
 - `mix run examples/predict_mipro_v2_persistence_offline.exs`
 - `mix run examples/chain_of_thought_teleprompt_persistence_offline.exs`
