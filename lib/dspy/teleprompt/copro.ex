@@ -5,8 +5,9 @@ defmodule Dspy.Teleprompt.COPRO do
   COPRO optimizes prompts through coordinate ascent, generating and refining
   new instructions for each step in the program to maximize the given metric.
 
-  Current limitation: only supports optimizing `Dspy.Predict` programs (via
-  the `"predict.instructions"` parameter).
+  Current limitation: only supports optimizing Predict-like programs that expose
+  the `"predict.instructions"` parameter (currently `%Dspy.Predict{}` and
+  `%Dspy.ChainOfThought{}`).
 
   ## Algorithm
 
@@ -120,7 +121,18 @@ defmodule Dspy.Teleprompt.COPRO do
   @impl Dspy.Teleprompt
   @spec compile(t(), Dspy.Teleprompt.program_t(), list(Example.t())) ::
           Dspy.Teleprompt.compile_result()
-  def compile(%__MODULE__{} = teleprompt, %Dspy.Predict{} = program, trainset) do
+  def compile(%__MODULE__{} = teleprompt, %Dspy.Predict{} = program, trainset),
+    do: do_compile(teleprompt, program, trainset)
+
+  def compile(%__MODULE__{} = teleprompt, %Dspy.ChainOfThought{} = program, trainset),
+    do: do_compile(teleprompt, program, trainset)
+
+  def compile(%__MODULE__{}, program, _trainset) do
+    mod = if is_struct(program), do: program.__struct__, else: program
+    {:error, {:unsupported_program, mod}}
+  end
+
+  defp do_compile(%__MODULE__{} = teleprompt, program, trainset) do
     if teleprompt.verbose do
       Logger.info("Starting COPRO optimization...")
     end
@@ -136,11 +148,6 @@ defmodule Dspy.Teleprompt.COPRO do
 
       {:ok, optimized_program}
     end
-  end
-
-  def compile(%__MODULE__{}, program, _trainset) do
-    mod = if is_struct(program), do: program.__struct__, else: program
-    {:error, {:unsupported_program, mod}}
   end
 
   # Private functions
@@ -169,16 +176,24 @@ defmodule Dspy.Teleprompt.COPRO do
     {:ok, optimization_points}
   end
 
+  defp get_current_instruction(%{signature: %Dspy.Signature{instructions: instructions}})
+       when is_binary(instructions) and instructions != "" do
+    instructions
+  end
+
   defp get_current_instruction(_program) do
-    # Extract current instruction from program
-    # This would need to be implemented based on program structure
     "Answer the question accurately and concisely."
   end
 
+  defp get_program_signature(%{signature: %Dspy.Signature{} = signature}) do
+    %{
+      input_fields: Enum.map(signature.input_fields, & &1.name),
+      output_fields: Enum.map(signature.output_fields, & &1.name)
+    }
+  end
+
   defp get_program_signature(_program) do
-    # Extract signature information from program
-    # This would need to be implemented based on program structure
-    %{input_fields: [:question], output_fields: [:answer]}
+    %{input_fields: [], output_fields: []}
   end
 
   defp optimize_instructions(%__MODULE__{} = teleprompt, program, optimization_points, trainset) do

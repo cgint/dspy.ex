@@ -194,7 +194,7 @@ These teleprompters optimize **Predict-like programs** by updating optimizable p
 - `Dspy.Teleprompt.BootstrapFewShot` (bootstraps demos via a teacher program; deterministic toy improvement)
   - Proof: `test/bootstrap_few_shot_smoke_test.exs`, `test/teleprompt/bootstrap_few_shot_chain_of_thought_improvement_test.exs`, `test/teleprompt/bootstrap_few_shot_determinism_test.exs`
 - `Dspy.Teleprompt.COPRO` (coordinate-ascent optimizer; selects improved `predict.instructions`)
-  - Proof: `test/teleprompt/copro_improvement_test.exs`
+  - Proof: `test/teleprompt/copro_improvement_test.exs`, `test/teleprompt/copro_chain_of_thought_improvement_test.exs`
 - `Dspy.Teleprompt.GEPA` (toy deterministic optimizer)
   - Proof: `test/teleprompt/gepa_test.exs`, `test/teleprompt/gepa_improvement_test.exs`, `test/teleprompt/gepa_chain_of_thought_improvement_test.exs`
 - `Dspy.Teleprompt.Ensemble` (trains multiple members via a base teleprompt and combines predictions; proven for Predict + ChainOfThought, `:majority_vote`)
