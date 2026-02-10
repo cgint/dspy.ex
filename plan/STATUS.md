@@ -179,6 +179,9 @@ Notes:
 
 ## Log
 
+- **2026-02-10**: Quiet-by-default provider UX: `Dspy.LM.ReqLLM` maps token limits to `max_completion_tokens` for OpenAI reasoning models (avoids `req_llm` warning spam); `GEPA.compile/3` skips baseline evaluation when no candidates are provided (prevents accidental LM calls and speeds up the loop). Proof: `test/lm/req_llm_token_limits_test.exs`, `test/teleprompt/gepa_test.exs`. Verification: `mix compile --warnings-as-errors`, `mix test`.
+- **2026-02-10**: Cut tag `v0.3.13` (quiet ReqLLM token limits).
+
 - **2026-02-10**: Interface familiarity: added `Dspy.Example.with_inputs/2` + `Dspy.Example.inputs/1` and updated `Evaluate` + key teleprompt flows to forward only configured input keys (DSPy-like example semantics). Proof: `test/example_with_inputs_test.exs`. Verification: `mix compile --warnings-as-errors`, `mix test`.
 - **2026-02-10**: Cut tag `v0.3.12` (Example.with_inputs).
 
