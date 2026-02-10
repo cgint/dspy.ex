@@ -579,19 +579,19 @@ defmodule Dspy.Tools do
     [
       %Tool{
         name: "search",
-        description: "Search for information on the internet",
+        description: "Mock search tool (no network; deterministic sample results)",
         function: &search_tool/1,
         parameters: [
           %{name: "query", type: "string", description: "Search query"},
           %{name: "num_results", type: "integer", description: "Number of results to return"}
         ],
-        return_type: :list,
+        return_type: :string,
         timeout: 10_000,
         retry_attempts: 2
       },
       %Tool{
         name: "calculate",
-        description: "Perform mathematical calculations",
+        description: "Evaluate a safe math expression (offline; no Code.eval_string)",
         function: &calculate_tool/1,
         parameters: [
           %{
@@ -600,13 +600,13 @@ defmodule Dspy.Tools do
             description: "Mathematical expression to evaluate"
           }
         ],
-        return_type: :number,
+        return_type: :string,
         timeout: 5_000,
         retry_attempts: 1
       },
       %Tool{
         name: "datetime",
-        description: "Get current date and time information",
+        description: "Get current UTC date/time (non-deterministic)",
         function: &datetime_tool/1,
         parameters: [
           %{name: "format", type: "string", description: "Date format (optional)"}
