@@ -43,6 +43,33 @@ A change is publishable when:
 - Tag a release when a new user-visible workflow slice becomes stable enough to recommend publicly.
 - Keep early versions in `0.x` and document limitations explicitly.
 
+## Version single source of truth
+
+- The repo-root `VERSION` file is the **canonical** library version.
+- The recommended stable git tag is always: `v` + `VERSION`.
+- `mix.exs` reads `VERSION` at compile-time; do not hardcode versions across multiple docs.
+
+## Release checklist (minimal)
+
+1. Update `VERSION` to `X.Y.Z`.
+2. Run verification:
+   - `./precommit.sh`
+   - (optionally) `scripts/verify_all.sh`
+3. Prepend a new row to `docs/RELEASES.md` for `vX.Y.Z` with tag-pinned evidence links.
+4. Commit changes.
+5. Create an annotated tag:
+
+   ```bash
+   git tag -a vX.Y.Z -m "vX.Y.Z: <short summary>"
+   ```
+
+6. Push `main` and the tag:
+
+   ```bash
+   git push origin main
+   git push origin vX.Y.Z
+   ```
+
 ## Notes
 
 - We prefer "small", "shippable" increments over large batches.
