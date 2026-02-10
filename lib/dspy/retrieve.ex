@@ -665,16 +665,16 @@ defmodule Dspy.Retrieve do
 
     defp rerank_documents(documents, _query, _reranker) do
       # Simple reranking based on score - could be more sophisticated
-      Enum.sort_by(documents, & &1.score, :desc)
+      Enum.sort_by(documents, &doc_field(&1, :score), :desc)
     end
 
     defp build_context(documents, template) do
       context_pieces =
         Enum.map(documents, fn doc ->
           template
-          |> String.replace("{content}", safe_placeholder(doc.content))
-          |> String.replace("{source}", safe_placeholder(doc.source))
-          |> String.replace("{score}", safe_placeholder(Map.get(doc, :score)))
+          |> String.replace("{content}", safe_placeholder(doc_field(doc, :content)))
+          |> String.replace("{source}", safe_placeholder(doc_field(doc, :source)))
+          |> String.replace("{score}", safe_placeholder(doc_field(doc, :score)))
         end)
 
       Enum.join(context_pieces, "\n\n")
@@ -684,6 +684,10 @@ defmodule Dspy.Retrieve do
     defp safe_placeholder(v) when is_binary(v), do: v
     defp safe_placeholder(v) when is_number(v), do: to_string(v)
     defp safe_placeholder(v), do: inspect(v)
+
+    defp doc_field(doc, key) when is_map(doc) and is_atom(key) do
+      Map.get(doc, key) || Map.get(doc, Atom.to_string(key))
+    end
 
     defp build_rag_prompt(query, context, opts) do
       instruction = opts[:instruction] || "Answer the question based on the provided context."
@@ -702,7 +706,7 @@ defmodule Dspy.Retrieve do
 
     defp extract_sources(documents) do
       documents
-      |> Enum.map(& &1.source)
+      |> Enum.map(&doc_field(&1, :source))
       |> Enum.reject(&is_nil/1)
       |> Enum.uniq()
     end
