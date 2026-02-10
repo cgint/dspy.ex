@@ -40,9 +40,17 @@ defmodule Dspy.ToolsRequestMapTest do
     lm = %FakeLM{test_pid: self(), reply_text: "Answer: done"}
     react = Dspy.Tools.React.new(lm, [], stop_words: ["Answer:"])
 
-    assert {:ok, %{answer: "done"}} = Dspy.Tools.React.run(react, "Question?")
+    assert {:ok, %{answer: "done"}} =
+             Dspy.Tools.React.run(react, "Question?",
+               max_tokens: 7,
+               max_completion_tokens: 13,
+               temperature: 0.2
+             )
 
     assert_receive {:lm_request, request}
+    assert request.max_tokens == 7
+    assert request.max_completion_tokens == 13
+    assert request.temperature == 0.2
     assert request.stop == ["Answer:"]
   end
 end

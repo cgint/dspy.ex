@@ -230,6 +230,9 @@ defmodule Dspy.Tools do
       :observation_prefix,
       :answer_prefix,
       :stop_words,
+      :max_tokens,
+      :max_completion_tokens,
+      :temperature,
       callbacks: []
     ]
 
@@ -242,6 +245,9 @@ defmodule Dspy.Tools do
             observation_prefix: String.t(),
             answer_prefix: String.t(),
             stop_words: list(),
+            max_tokens: pos_integer() | nil,
+            max_completion_tokens: pos_integer() | nil,
+            temperature: number() | nil,
             callbacks: list(callback_entry())
           }
 
@@ -255,6 +261,9 @@ defmodule Dspy.Tools do
         observation_prefix: opts[:observation_prefix] || "Observation:",
         answer_prefix: opts[:answer_prefix] || "Answer:",
         stop_words: opts[:stop_words] || ["Observation:", "Answer:"],
+        max_tokens: opts[:max_tokens],
+        max_completion_tokens: opts[:max_completion_tokens],
+        temperature: opts[:temperature],
         callbacks: opts[:callbacks] || []
       }
     end
@@ -264,7 +273,16 @@ defmodule Dspy.Tools do
       callbacks = Keyword.get(opts, :callbacks, react.callbacks)
 
       with :ok <- validate_callbacks(callbacks) do
-        execute_react_loop(%{react | callbacks: callbacks}, initial_prompt, [], 0)
+        react = %{
+          react
+          | callbacks: callbacks,
+            max_tokens: Keyword.get(opts, :max_tokens, react.max_tokens),
+            max_completion_tokens:
+              Keyword.get(opts, :max_completion_tokens, react.max_completion_tokens),
+            temperature: Keyword.get(opts, :temperature, react.temperature)
+        }
+
+        execute_react_loop(react, initial_prompt, [], 0)
       end
     end
 
@@ -317,6 +335,9 @@ defmodule Dspy.Tools do
     defp execute_react_loop(react, prompt, history, step) when step < react.max_steps do
       request = %{
         messages: [Dspy.LM.user_message(prompt)],
+        max_tokens: react.max_tokens,
+        max_completion_tokens: react.max_completion_tokens,
+        temperature: react.temperature,
         stop: react.stop_words
       }
 
