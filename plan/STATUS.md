@@ -15,7 +15,7 @@ North star docs:
 - `agent/SOUL.md` (agent operating principles)
 
 ## Releases
-- Current recommended stable tag: `v0.3.8` (see `docs/RELEASES.md`)
+- Current recommended stable tag: `v0.3.9` (see `docs/RELEASES.md`)
 
 ## User-centric OSS posture
 - **Docs are evidence-backed**: `docs/OVERVIEW.md` should only claim what has deterministic proof artifacts.
@@ -178,6 +178,9 @@ Notes:
 - `./precommit.sh` now only flags TODO/FIXME/XXX when they appear in comments (avoids false positives from literal strings).
 
 ## Log
+
+- **2026-02-10**: Interface familiarity: `Dspy.Example` now implements `Access` (`ex[:question]`) and both `Example`/`Prediction` preserve string-key attrs when updating via atom keys (JSON-friendly). Proof: `test/example_prediction_access_test.exs`. Verification: `mix compile --warnings-as-errors`, `mix test`.
+- **2026-02-10**: Cut tag `v0.3.9` (Example/Prediction Access).
 
 - **2026-02-10**: Interface familiarity: accept string-key inputs in core programs (Predict + ChainOfThought) by updating `Signature.validate_inputs/2` + prompt filling/attachments extraction. Proof: `test/predict_test.exs`. Verification: `mix compile --warnings-as-errors`, `mix test`.
 - **2026-02-10**: Cut tag `v0.3.8` (string-key inputs).
