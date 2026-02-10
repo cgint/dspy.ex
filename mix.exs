@@ -4,7 +4,7 @@ defmodule Dspy.MixProject do
   def project do
     [
       app: :dspy,
-      version: "0.2.12",
+      version: "0.2.13",
       elixir: "~> 1.18",
       start_permanent: Mix.env() == :prod,
       deps: deps()

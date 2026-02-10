@@ -7,7 +7,7 @@
 ## Where to look first (human vs planning)
 - Human-friendly snapshot + multi-dimensional roadmap: **`docs/OVERVIEW.md`**
 - Releases/tags (what each semver tag contains): `docs/RELEASES.md`
-- Current recommended stable tag: `v0.2.12`
+- Current recommended stable tag: `v0.2.13`
 - Agent/contributor entry point: `AGENTS.md`
 - Planning backlog / next tasks: `plan/STATUS.md`
 - Roadmap: `plan/RELEASE_MILESTONES.md`
@@ -75,6 +75,7 @@
   - `test/parameter_file_persistence_test.exs` (`write_json/2` + `read_json/1`)
   - `mix run examples/parameter_persistence_json_offline.exs` (offline demo)
   - `mix run examples/chain_of_thought_teleprompt_persistence_offline.exs` (offline CoT + teleprompt + persistence demo)
+  - `mix run examples/ensemble_offline.exs` (offline Ensemble teleprompt demo)
 
 ## Teleprompter status (important constraint)
 - Legacy teleprompters were refactored to **avoid dynamic module generation**.

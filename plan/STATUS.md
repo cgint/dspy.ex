@@ -15,7 +15,7 @@ North star docs:
 - `agent/SOUL.md` (agent operating principles)
 
 ## Releases
-- Current recommended stable tag: `v0.2.12` (see `docs/RELEASES.md`)
+- Current recommended stable tag: `v0.2.13` (see `docs/RELEASES.md`)
 
 ## Loop status
 - Loop state: ACTIVE
@@ -91,6 +91,8 @@ North star docs:
   - Evidence file: `test/module_parameter_json_persistence_test.exs`
   - Evidence file: `test/parameter_file_persistence_test.exs`
   - Evidence file: `examples/parameter_persistence_json_offline.exs`
+  - Evidence file: `examples/chain_of_thought_teleprompt_persistence_offline.exs`
+  - Evidence file: `examples/ensemble_offline.exs`
   - Evidence dir: `extras/dspy_extras/` (optional Phoenix/"godmode"/GenStage/legacy HTTP modules)
   - Evidence file: `docs/BUMBLEBEE.md` (local inference notes)
   - Evidence file: `docs/PROVIDERS.md`
@@ -178,6 +180,8 @@ Notes:
 - **2026-02-09**: Added offline demo: ChainOfThought + LabeledFewShot + JSON parameter persistence. Verification: `mix run examples/chain_of_thought_teleprompt_persistence_offline.exs`, `mix test`.
 - **2026-02-09**: Fixed Ensemble teleprompt: returns a struct program (no runtime modules) + deterministic tests. Verification: `mix test`.
 - **2026-02-09**: Ensemble proven for `%Dspy.ChainOfThought{}` and teleprompt docs clarified proven vs experimental teleprompters. Verification: `mix test`.
+- **2026-02-09**: Added offline Ensemble teleprompt demo script. Verification: `mix run examples/ensemble_offline.exs`.
+- **2026-02-09**: Cut tag `v0.2.13` (offline Ensemble demo).
 - **2026-02-09**: Cut tag `v0.2.12` (Ensemble proven for ChainOfThought; teleprompt docs clarity).
 - **2026-02-09**: Cut tag `v0.2.11` (Ensemble teleprompt fixed; no runtime modules).
 - **2026-02-09**: Cut tag `v0.2.10` (offline workflow demo: CoT teleprompt + persistence).
