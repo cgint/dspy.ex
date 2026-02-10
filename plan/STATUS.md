@@ -179,6 +179,9 @@ Notes:
 
 ## Log
 
+- **2026-02-10**: Docs: added the official offline Tools/ReAct example to `README.md` for discoverability. Verification: `mix test`.
+- **2026-02-10**: Cut tag `v0.3.24` (README tools example).
+
 - **2026-02-10**: Tools safety: ToolRegistry API (`register_tool/get_tool/list_tools/search_tools`) now starts the registry on-demand to avoid `:noproc` crashes. Proof: `test/tools_registry_autostart_test.exs`. Verification: `mix compile --warnings-as-errors`, `mix test`.
 - **2026-02-10**: Cut tag `v0.3.23` (ToolRegistry auto-start).
 
