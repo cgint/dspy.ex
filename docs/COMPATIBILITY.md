@@ -187,6 +187,7 @@ pipeline = Dspy.Retrieve.RAGPipeline.new(retriever, lm, k: 3)
 
 Evidence:
 - RAG pipeline + ReqLLM-backed embeddings (mocked): `test/acceptance/retrieve_rag_with_embeddings_acceptance_test.exs`
+- Built-in GenServer retriever (`Dspy.Retrieve.InMemoryRetriever`): `test/acceptance/retrieve_rag_in_memory_retriever_acceptance_test.exs`
 
 ## Proven surface mapping table
 
@@ -227,7 +228,7 @@ Evidence:
 | Python DSPy | `dspy.ex` | Notes | Evidence |
 |---|---|---|---|
 | tools + ReAct | `Dspy.Tools.new_tool/4`, `Dspy.Tools.React` | Callback hooks for tool logging | `test/acceptance/simplest_tool_logging_acceptance_test.exs` |
-| retrieval + RAG | `Dspy.Retrieve.*` | RAG pipeline with mocked embeddings provider | `test/acceptance/retrieve_rag_with_embeddings_acceptance_test.exs` |
+| retrieval + RAG | `Dspy.Retrieve.*` | RAG pipeline with mocked embeddings provider; includes built-in `Dspy.Retrieve.InMemoryRetriever` | `test/acceptance/retrieve_rag_with_embeddings_acceptance_test.exs`, `test/acceptance/retrieve_rag_in_memory_retriever_acceptance_test.exs` |
 
 ### Providers
 

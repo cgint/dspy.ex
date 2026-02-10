@@ -70,6 +70,8 @@ defmodule OfflineLM do
   @moduledoc false
   @behaviour Dspy.LM
 
+  defstruct []
+
   @impl true
   def generate(_lm, _request) do
     {:ok,
@@ -80,7 +82,7 @@ defmodule OfflineLM do
   def supports?(_lm, _feature), do: true
 end
 
-Dspy.configure(lm: %OfflineLM{})
+Dspy.configure(lm: struct(OfflineLM))
 
 embedding_provider = Dspy.Retrieve.Embeddings.ReqLLM
 embedding_opts = [model: "openai:text-embedding-3-small", req_llm: OfflineReqLLMEmbeddings]
