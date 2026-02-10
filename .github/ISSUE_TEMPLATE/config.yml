@@ -1,0 +1,5 @@
+blank_issues_enabled: false
+contact_links:
+  - name: Questions / discussion
+    url: https://github.com/cgint/dspy.ex/discussions
+    about: Please ask questions here if you’re not sure it’s a bug.

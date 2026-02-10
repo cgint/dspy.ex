@@ -1,0 +1,59 @@
+name: Bug report
+description: Report a bug (please include a minimal reproduction)
+title: "[Bug]: "
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for taking the time to report a bug.
+
+        This repo is adoption-first: the best bug reports include a minimal reproduction (ideally offline/deterministic).
+
+  - type: input
+    id: version
+    attributes:
+      label: dspy.ex version/tag
+      description: e.g. v0.2.18 (see docs/RELEASES.md)
+      placeholder: v0.2.x
+    validations:
+      required: true
+
+  - type: input
+    id: elixir
+    attributes:
+      label: Elixir / OTP version
+      description: Paste the output of `elixir -v`
+      placeholder: Elixir 1.18.x / Erlang/OTP ...
+    validations:
+      required: true
+
+  - type: textarea
+    id: repro
+    attributes:
+      label: Minimal reproduction
+      description: Prefer a single .exs or a small code snippet.
+      render: elixir
+    validations:
+      required: true
+
+  - type: textarea
+    id: expected
+    attributes:
+      label: Expected behavior
+    validations:
+      required: true
+
+  - type: textarea
+    id: actual
+    attributes:
+      label: Actual behavior
+    validations:
+      required: true
+
+  - type: textarea
+    id: logs
+    attributes:
+      label: Logs / stacktrace
+      render: text
+    validations:
+      required: false

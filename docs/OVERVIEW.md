@@ -14,7 +14,7 @@
 
 Note: the core `:dspy` library is intentionally low-dependency. Optional Phoenix/"godmode"/GenStage modules live in `extras/dspy_extras`.
 
-Contributor note: `scripts/verify_all.sh` verifies both core and extras (format check, compile with warnings-as-errors, tests).
+Contributor note: `scripts/verify_all.sh` verifies both core and extras (format check, compile with warnings-as-errors, tests). Contribution guide: `CONTRIBUTING.md`.
 
 Note on test hygiene: by default, `mix test` excludes tests tagged `:integration` and `:network` (see `test/test_helper.exs`).
 To run them locally, use `mix test --include integration --include network ...`.

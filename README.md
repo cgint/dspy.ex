@@ -138,4 +138,6 @@ More: `docs/PROVIDERS.md`.
 
 Start here: `AGENTS.md`.
 
+If you want to contribute code/docs, see `CONTRIBUTING.md`.
+
 License: MIT.

@@ -14,7 +14,8 @@
 
 ## User-centric OSS posture (how we keep adoption easy)
 - For stability: pin a semver tag (don’t depend on `main`).
-- Start with `docs/OVERVIEW.md` and the offline examples; only then wire real providers.
+- Start with `docs/OVERVIEW.md` and the offline examples (`examples/README.md`); only then wire real providers.
+- If contributing, start with `CONTRIBUTING.md`.
 - Every advertised capability should have:
   - a deterministic proof test, and
   - an evidence link in `docs/OVERVIEW.md` or `docs/RELEASES.md`.

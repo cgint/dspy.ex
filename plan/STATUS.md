@@ -26,8 +26,8 @@ North star docs:
 ## Loop status
 - Loop state: ACTIVE
 - Backlog (ordered):
-  - [ ] Contribution UX: add `CONTRIBUTING.md` + GitHub issue templates + minimal repro guidance (prefer single `.exs`, consider `Mix.install/2`)
-  - [ ] Curate examples: clearly separate “official deterministic” examples from experimental scripts (reduce onboarding noise)
+  - [x] Contribution UX: add `CONTRIBUTING.md` + GitHub issue templates + minimal repro guidance
+  - [x] Curate examples: clearly separate “official deterministic” examples from experimental scripts (reduce onboarding noise)
   - [ ] Core scope audit: identify unproven/experimental modules in `lib/dspy/*` and move them to `extras/` (or explicitly mark them experimental)
   - [ ] Teleprompt parity: either prove COPRO/MIPROv2 with deterministic tests or move them to experimental/extras
   - [ ] Provider parity: add more opt-in `:integration`/`:network` smoke tests + docs updates
