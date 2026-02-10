@@ -197,7 +197,7 @@ Rules:
 - Do not commit.
 - Do not change dependencies.
 - Assume this is a public repo: do not include secrets.
-- If you have write/edit tools enabled, put any longer notes/artifacts under: `${handoff_dir}` (gitignored).
+- If you have write/edit tools enabled, put any longer notes/artifacts under: ${handoff_dir} (gitignored).
 - If code changes seem needed, propose them as a patch list (files + what to change) unless explicitly asked to implement.
 
 Output format (MUST follow exactly):
