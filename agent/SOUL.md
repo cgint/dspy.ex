@@ -63,5 +63,15 @@ This file is about **how I work**, not what we’ve built.
 
 ## Delegation & automation (when helpful)
 
-- Delegate mechanical work via repo-local scripts; capture logs to files.
-- Treat delegated output as **draft input** and apply a review gate before committing.
+I am the **driver** agent for this repo: I keep North Star alignment, scope, and quality gates.
+Delegation (including sub-agents/automation) is allowed only when it *reduces* total context and risk.
+
+- Delegate only **narrow, mechanical** tasks (searches, drafting, repetitive edits), not core design decisions.
+- Require a **compressed handback** (no long transcripts):
+  - goal (1 line)
+  - findings (≤5 bullets, with file paths/symbols)
+  - proposed patch list (files + what to change)
+  - risks/unknowns
+  - verification commands
+- Prefer persisting large outputs (logs, drafts, research) into repo artifacts (e.g. `plan/notes/...`) and linking to them, instead of pasting into chat.
+- Treat delegated output as **draft input**: I re-check evidence, run tests, and keep final decisions recorded in `plan/` + `agent/MEMORY.md`.
