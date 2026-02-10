@@ -12,6 +12,7 @@ The table below is maintained on `main`, but links are **tag-pinned** so they do
 
 | Tag | What you get | Evidence (tag-pinned) |
 |---|---|---|
+| `v0.3.34` | **Overview retrieval docs refresh**: `docs/OVERVIEW.md` retrieval section now points at the built-in `InMemoryRetriever` and includes full proof list; also mentions `scripts/verify_examples.sh` for running all offline examples | Overview: https://github.com/cgint/dspy.ex/blob/v0.3.34/docs/OVERVIEW.md |
 | `v0.3.33` | **Offline example for request defaults**: added a deterministic script showing how `Dspy.configure/1` defaults propagate into request maps; included it in offline example verification list | Example: https://github.com/cgint/dspy.ex/blob/v0.3.33/examples/request_defaults_offline.exs<br>Verifier: https://github.com/cgint/dspy.ex/blob/v0.3.33/scripts/verify_examples.sh |
 | `v0.3.32` | **Providers docs updated**: documented global `max_completion_tokens` defaults and clarified `max_tokens` vs `max_completion_tokens` guidance with evidence pointers | Providers doc: https://github.com/cgint/dspy.ex/blob/v0.3.32/docs/PROVIDERS.md |
 | `v0.3.31` | **Trainset determinism + honest docs**: tightened `Dspy.Trainset` moduledoc to avoid overpromising; added deterministic tests for sampling strategies (`:diverse`, `:hard`, `:uncertainty`, `bootstrap_sample/3`) | Trainset: https://github.com/cgint/dspy.ex/blob/v0.3.31/lib/dspy/trainset.ex<br>Proof: https://github.com/cgint/dspy.ex/blob/v0.3.31/test/trainset_test.exs |
