@@ -179,6 +179,9 @@ Notes:
 
 ## Log
 
+- **2026-02-10**: Retrieval ergonomics: `Dspy.Retrieve.RAGPipeline` now accepts retriever documents as maps (atom or string keys) for `content`/`source`/`score`; added proof test. Verification: `mix compile --warnings-as-errors`, `mix test`.
+- **2026-02-10**: Cut tag `v0.3.19` (RAG doc shapes).
+
 - **2026-02-10**: Determinism: `Dspy.Trainset.stratified_sample/3` now iterates groups in stable order, making `Trainset.sample(..., strategy: :balanced, seed: ...)` deterministic; added proof test. Verification: `mix compile --warnings-as-errors`, `mix test`.
 - **2026-02-10**: Cut tag `v0.3.18` (balanced sampling determinism).
 
