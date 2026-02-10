@@ -16,6 +16,7 @@ Ad-hoc delegation:
 
 Verification helpers:
 - `verify_all.sh`: verifies both core and extras (format check, compile with warnings-as-errors, tests)
+- `verify_examples.sh`: runs the **official deterministic (offline)** examples under `examples/` to ensure they still work
 - `ship.sh`: convenience wrapper that runs `./precommit.sh` + `scripts/verify_all.sh`
 - `release_lint.sh`: lightweight check that `VERSION` + `docs/RELEASES.md` are aligned before cutting a tag
 - `sharpen.sh`: appends a timeboxed workflow-improvement template entry to `agent/SHARPENING_LOG.md`
