@@ -20,6 +20,8 @@ These should run without network calls:
   - `mix run examples/chain_of_thought_teleprompt_persistence_offline.exs`
 - ChainOfThought + SIMBA + persistence:
   - `mix run examples/chain_of_thought_simba_persistence_offline.exs`
+- ChainOfThought + MIPROv2 + persistence:
+  - `mix run examples/chain_of_thought_mipro_v2_persistence_offline.exs`
 - ChainOfThought + COPRO + persistence:
   - `mix run examples/chain_of_thought_copro_persistence_offline.exs`
 - Ensemble teleprompt demo (offline):

@@ -66,7 +66,7 @@ Optional/experimental modules (Phoenix LiveView UI, “godmode” coordinator, G
   - `LabeledFewShot` (sets `predict.examples`; proven for `Dspy.Predict` + `Dspy.ChainOfThought`)
   - `SIMBA` (updates `predict.instructions`; seeded improvement; proven for `Dspy.Predict` + `Dspy.ChainOfThought`)
   - `COPRO` (coordinate-ascent optimizer; selects `predict.instructions`; proven for `Dspy.Predict` + `Dspy.ChainOfThought`)
-  - `MIPROv2` (joint optimizer for `predict.instructions` + `predict.examples`; proven for `Dspy.Predict`)
+  - `MIPROv2` (joint optimizer for `predict.instructions` + `predict.examples`; proven for `Dspy.Predict` + `Dspy.ChainOfThought`)
   - `BootstrapFewShot` (sets `predict.examples`; proven for `Dspy.Predict` + `Dspy.ChainOfThought`)
   - `GEPA` (toy deterministic optimizer; selects `predict.instructions`; proven for `Dspy.Predict` + `Dspy.ChainOfThought`)
   - `Ensemble` (trains multiple members + majority vote; proven for `Dspy.Predict` + `Dspy.ChainOfThought`; returns `%Dspy.Teleprompt.Ensemble.Program{}`)
@@ -85,6 +85,7 @@ Offline (no network) teleprompt + parameter persistence demos:
 - `mix run examples/predict_mipro_v2_persistence_offline.exs`
 - `mix run examples/chain_of_thought_teleprompt_persistence_offline.exs`
 - `mix run examples/chain_of_thought_simba_persistence_offline.exs`
+- `mix run examples/chain_of_thought_mipro_v2_persistence_offline.exs`
 - `mix run examples/chain_of_thought_copro_persistence_offline.exs`
 - `mix run examples/ensemble_offline.exs`
 
