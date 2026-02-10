@@ -8,15 +8,20 @@ defmodule Dspy.Teleprompt do
   - Building datasets for finetuning
   - Optimizing program parameters
 
-  ## Available Teleprompts
+  ## Proven teleprompts (deterministic tests)
 
-  - `LabeledFewShot` - Simple labeled example integration
-  - `BootstrapFewShot` - Automatic few-shot example selection
-  - `COPRO` - Cooperative prompt optimization
-  - `MIPROv2` - Multi-stage instruction prompt optimization
-  - `SIMBA` - Stochastic iterative mini-batch ascent
-  - `Ensemble` - Program ensemble optimization
-  - `GEPA` - (Planned) teleprompter; roadmap/spec-first
+  - `LabeledFewShot` — sets `predict.examples`
+  - `BootstrapFewShot` — bootstraps demos and sets `predict.examples`
+  - `SIMBA` — updates `predict.instructions`
+  - `GEPA` — toy deterministic optimizer (finite candidate instructions)
+  - `Ensemble` — trains multiple members and combines predictions (e.g. `:majority_vote`)
+
+  ## Experimental / incomplete
+
+  - `COPRO`
+  - `MIPROv2`
+
+  Teleprompts in core are parameter-based and avoid runtime module generation.
 
   ## Usage
 

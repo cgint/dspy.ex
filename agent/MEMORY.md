@@ -7,7 +7,7 @@
 ## Where to look first (human vs planning)
 - Human-friendly snapshot + multi-dimensional roadmap: **`docs/OVERVIEW.md`**
 - Releases/tags (what each semver tag contains): `docs/RELEASES.md`
-- Current recommended stable tag: `v0.2.11`
+- Current recommended stable tag: `v0.2.12`
 - Agent/contributor entry point: `AGENTS.md`
 - Planning backlog / next tasks: `plan/STATUS.md`
 - Roadmap: `plan/RELEASE_MILESTONES.md`
@@ -64,7 +64,7 @@
   - LabeledFewShot + ChainOfThought improvement: `test/teleprompt/labeled_few_shot_chain_of_thought_improvement_test.exs`
   - SIMBA improvement: `test/teleprompt/simba_improvement_test.exs`
   - SIMBA + ChainOfThought improvement: `test/teleprompt/simba_chain_of_thought_improvement_test.exs`
-  - Ensemble (struct-based; no runtime modules): `test/teleprompt/ensemble_compile_improvement_test.exs`, `test/teleprompt/ensemble_program_test.exs`
+  - Ensemble (struct-based; no runtime modules): `test/teleprompt/ensemble_compile_improvement_test.exs`, `test/teleprompt/ensemble_chain_of_thought_improvement_test.exs`, `test/teleprompt/ensemble_program_test.exs`
   - Error shapes: `test/teleprompt/error_shapes_test.exs`
   - Teleprompt.Util set_parameter contracts: `test/teleprompt/util_test.exs`
   - BootstrapFewShot smoke/improvement: `test/bootstrap_few_shot_smoke_test.exs`, `test/teleprompt/bootstrap_few_shot_chain_of_thought_improvement_test.exs`
