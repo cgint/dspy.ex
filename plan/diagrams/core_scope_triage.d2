@@ -1,0 +1,23 @@
+direction: down
+
+CoreScopeTriage: {
+  label: "**Core scope triage (adoption-first)**"
+
+  Inventory: "**Inventory**\nList lib/dspy/*.ex"
+  Classify: "**Classify**\ncore/proven vs experimental"
+  Quarantine: "**Quarantine**\n`git mv` experimental files\n→ extras/dspy_extras/unsafe/"
+  Verify: "**Verify**\nformat + compile + tests"
+  Docs: "**Docs update**\nOVERVIEW + STATUS + notes"
+
+  Inventory -> Classify -> Quarantine -> Verify -> Docs
+
+  Decision: {
+    label: "**Decision gate**"
+    "Core/proven?" -> "Keep in lib/dspy/": yes
+    "Core/proven?" -> "Move to quarantine": no
+  }
+
+  Classify -> Decision
+  Decision."Keep in lib/dspy/" -> Verify
+  Decision."Move to quarantine" -> Quarantine
+}
