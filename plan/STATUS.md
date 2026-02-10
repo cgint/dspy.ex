@@ -179,6 +179,9 @@ Notes:
 
 ## Log
 
+- **2026-02-10**: Tools safety: ToolRegistry API (`register_tool/get_tool/list_tools/search_tools`) now starts the registry on-demand to avoid `:noproc` crashes. Proof: `test/tools_registry_autostart_test.exs`. Verification: `mix compile --warnings-as-errors`, `mix test`.
+- **2026-02-10**: Cut tag `v0.3.23` (ToolRegistry auto-start).
+
 - **2026-02-10**: Retrieval safety: `Dspy.Retrieve.ColBERTv2` is now an explicit placeholder (no `VectorStore` crash if not started); Retriever behaviour callback types allow structured `term()` error reasons. Proof: `test/retrieve/colbert_stub_test.exs`. Verification: `mix compile --warnings-as-errors`, `mix test`.
 - **2026-02-10**: Cut tag `v0.3.22` (safe placeholder retriever).
 
