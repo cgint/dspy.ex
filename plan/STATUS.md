@@ -15,7 +15,7 @@ North star docs:
 - `agent/SOUL.md` (agent operating principles)
 
 ## Releases
-- Current recommended stable tag: `v0.2.18` (see `docs/RELEASES.md`)
+- Current recommended stable tag: `v0.3.0` (see `docs/RELEASES.md`)
 
 ## User-centric OSS posture
 - **Docs are evidence-backed**: `docs/OVERVIEW.md` should only claim what has deterministic proof artifacts.
@@ -178,6 +178,9 @@ Notes:
 - `./precommit.sh` now only flags TODO/FIXME/XXX when they appear in comments (avoids false positives from literal strings).
 
 ## Log
+
+- **2026-02-10**: Core scope audit quarantine: moved unproven/experimental modules out of core `lib/` into `extras/dspy_extras/unsafe/quarantine/`; removed COPRO/MIPROv2 from core teleprompt factory; curated examples into `examples/experimental/`; updated `dspy_extras` to compile quarantine modules. Verification: `mix compile --warnings-as-errors`, `mix test`, `scripts/verify_all.sh`.
+- **2026-02-10**: Cut tag `v0.3.0` (core scope quarantine + examples curation).
 
 - **2026-02-09**: Hardened evaluation: `return_all: true` per-example items; `cross_validate/4` quiet-by-default; added deterministic `Trainset.split/2` + `Trainset.sample/3` tests; added deterministic `SIMBA` improvement acceptance test; updated `docs/OVERVIEW.md`. Verification: `mix test`, `./precommit.sh`.
 - **2026-02-09**: Standardized teleprompter error shapes (no bare strings); added contract tests. Verification: `mix test`.
