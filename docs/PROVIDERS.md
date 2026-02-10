@@ -43,13 +43,26 @@ Dspy.configure(
 Defaults:
 - `temperature: nil` (provider/runtime default)
 - `max_tokens: nil` (provider/runtime default)
+- `max_completion_tokens: nil` (provider/runtime default)
+
+### `max_tokens` vs `max_completion_tokens` (OpenAI reasoning models)
+
+Some OpenAI model families ("reasoning" models) use `max_completion_tokens` instead of `max_tokens`.
+
+To keep logs quiet and behavior predictable, `Dspy.LM.ReqLLM` will normalize token limits for those models:
+- if you pass `max_tokens`, it will be forwarded as `max_completion_tokens`
+- `max_tokens` will not be forwarded in that case
+
+If you want to be explicit, pass `max_completion_tokens` directly in the request map.
+
+Evidence: `test/lm/req_llm_token_limits_test.exs`.
 
 ## Request-map contract
 
 Core modules (e.g. `Dspy.Predict`) call LMs with a **request map**:
 
 - `messages: [%{role: "user", content: ...}]`
-- plus optional keys like `:temperature`, `:max_tokens`, `:stop`, `:tools`
+- plus optional keys like `:temperature`, `:max_tokens`, `:max_completion_tokens`, `:stop`, `:tools`
 
 `content` can be either:
 

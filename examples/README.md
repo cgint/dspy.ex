@@ -29,6 +29,8 @@ These should run without network calls:
 - Retrieval + RAG (offline):
   - `mix run examples/retrieve_rag_offline.exs`
   - `mix run examples/retrieve_rag_genserver_offline.exs`
+- Tools + ReAct + callbacks (offline):
+  - `mix run examples/react_tool_logging_offline.exs`
 
 ## Manual / opt-in (may be heavy)
 
