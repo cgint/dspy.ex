@@ -86,15 +86,25 @@ defmodule Dspy.Retrieve do
     end
 
     def add_documents(documents) do
-      GenServer.call(__MODULE__, {:add_documents, documents})
+      safe_call({:add_documents, documents}, default: {:error, :vector_store_not_started})
     end
 
     def search(query_embedding, opts \\ []) do
-      GenServer.call(__MODULE__, {:search, query_embedding, opts})
+      safe_call({:search, query_embedding, opts}, default: {:error, :vector_store_not_started})
     end
 
     def clear do
-      GenServer.call(__MODULE__, :clear)
+      safe_call(:clear, default: {:error, :vector_store_not_started})
+    end
+
+    defp safe_call(message, opts) do
+      default = Keyword.fetch!(opts, :default)
+
+      try do
+        GenServer.call(__MODULE__, message)
+      catch
+        :exit, {:noproc, _} -> default
+      end
     end
 
     def handle_call({:add_documents, documents}, _from, state) do
