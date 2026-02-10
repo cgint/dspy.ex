@@ -12,6 +12,15 @@
 - Planning backlog / next tasks: `plan/STATUS.md`
 - Roadmap: `plan/RELEASE_MILESTONES.md`
 
+## User-centric OSS posture (how we keep adoption easy)
+- For stability: pin a semver tag (don’t depend on `main`).
+- Start with `docs/OVERVIEW.md` and the offline examples; only then wire real providers.
+- Every advertised capability should have:
+  - a deterministic proof test, and
+  - an evidence link in `docs/OVERVIEW.md` or `docs/RELEASES.md`.
+- When reporting bugs: include the tag/version, Elixir/OTP versions, and a minimal repro (ideally a single `.exs`).
+- When contributing: keep diffs small and add/adjust tests first (“tests are the spec”).
+
 ## Non-negotiables (constraints)
 - Core `:dspy` is **library-first**.
 - Favor interface familiarity with:

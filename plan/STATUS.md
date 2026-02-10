@@ -1,6 +1,6 @@
 # Status
 
-Goal: Build an **Elixir-native port** of upstream **Python DSPy** (`../dspy`) with a maintainable foundation: **`req_llm` for provider access**, a **library-only** core, and real optimization value via teleprompters (**GEPA priority**). (Jido/orchestration is deferred for now.)
+Goal: Build an **Elixir-native port** of upstream **Python DSPy** (`../dspy`) that is **adoption-first**: stable `Predict`/`ChainOfThought`, robust output parsing, deterministic evaluation, proven parameter-based teleprompters, provider access via **`req_llm`**, and persistence of optimized programs. (Orchestration/UI remain optional and live outside core.)
 
 North star docs:
 - `AGENTS.md` (entry point)
@@ -17,9 +17,20 @@ North star docs:
 ## Releases
 - Current recommended stable tag: `v0.2.18` (see `docs/RELEASES.md`)
 
+## User-centric OSS posture
+- **Docs are evidence-backed**: `docs/OVERVIEW.md` should only claim what has deterministic proof artifacts.
+- **Pin tags for stability**: `main` moves quickly; semver tags are the user contract.
+- **Safe + quiet defaults**: no surprise provider overrides; no noisy logging by default; integration/network tests are opt-in.
+- **Contributions are product work**: small, reviewable diffs; tests-as-spec; keep core minimal and move heavy/optional concerns into `extras/`.
+
 ## Loop status
 - Loop state: ACTIVE
 - Backlog (ordered):
+  - [ ] Contribution UX: add `CONTRIBUTING.md` + GitHub issue templates + minimal repro guidance (prefer single `.exs`, consider `Mix.install/2`)
+  - [ ] Curate examples: clearly separate “official deterministic” examples from experimental scripts (reduce onboarding noise)
+  - [ ] Core scope audit: identify unproven/experimental modules in `lib/dspy/*` and move them to `extras/` (or explicitly mark them experimental)
+  - [ ] Teleprompt parity: either prove COPRO/MIPROv2 with deterministic tests or move them to experimental/extras
+  - [ ] Provider parity: add more opt-in `:integration`/`:network` smoke tests + docs updates
   - [x] Optional local inference: add `Dspy.LM.Bumblebee` (runtime-gated; no core deps)
   - [x] Add opt-in integration smoke test for Bumblebee + default exclude `:integration`/`:network` in `mix test`
   - [x] R0 acceptance tests: port `simplest/simplest_dspy.py` behavior into `test/acceptance/*`
