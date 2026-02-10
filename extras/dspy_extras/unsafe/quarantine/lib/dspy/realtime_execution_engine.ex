@@ -533,7 +533,7 @@ defmodule Dspy.RealtimeExecutionEngine do
 
   defp create_signature_from_example(_example) do
     # Create a basic question-answer signature for the example
-    Dspy.Signature.get_predefined(:question_answer)
+    Dspy.Signature.define("question -> answer")
   end
 
   defp extract_inputs_from_example(example) do
