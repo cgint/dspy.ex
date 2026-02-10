@@ -261,7 +261,7 @@ Legend:
 | Retrieve/RAG | 2 | Deterministic RAG pipeline with mocked embeddings provider (`req_llm`) | `test/acceptance/retrieve_rag_with_embeddings_acceptance_test.exs`, `test/retrieve/req_llm_embeddings_test.exs` |
 | Teleprompters | 2 | Parameter-based (no dynamic modules); proven for Predict-like programs (`Dspy.Predict` + `Dspy.ChainOfThought`) | `test/teleprompt/*` |
 | Tools/request map integration | 2 | ReAct runs with request maps; tool start/end callbacks supported (tool logging) | `test/tools_request_map_test.exs`, `test/acceptance/simplest_tool_logging_acceptance_test.exs` |
-| Provider support (real providers) | 2 | `Dspy.LM.ReqLLM` adapter proven (offline) incl. multipart/attachments request shape + safety gates; embeddings adapter via `req_llm` proven (offline); real network providers still considered prototype | `test/lm/req_llm_multimodal_test.exs`, `lib/dspy/lm/req_llm.ex`, `test/retrieve/req_llm_embeddings_test.exs` |
+| Provider support (real providers) | 2 | `Dspy.LM.ReqLLM` adapter proven (offline) incl. multipart/attachments request shape + safety gates; embeddings adapter via `req_llm` proven (offline); real network providers still considered prototype (opt-in smoke tests exist) | `test/lm/req_llm_multimodal_test.exs`, `lib/dspy/lm/req_llm.ex`, `test/retrieve/req_llm_embeddings_test.exs`, `test/integration/req_llm_predict_integration_test.exs`, `test/integration/req_llm_embeddings_integration_test.exs` |
 
 ## Optional integrations (manual / non-deterministic)
 

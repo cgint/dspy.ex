@@ -7,8 +7,13 @@
 # Run locally:
 #
 #   export DSPY_REQ_LLM_SMOKE=1
-#   export OPENAI_API_KEY=...          # or whichever provider you choose
-#   export DSPY_REQ_LLM_TEST_MODEL=openai:gpt-4.1-mini
+#   export DSPY_REQ_LLM_TEST_MODEL=openai:gpt-4.1-mini   # or anthropic:..., openrouter:..., groq:...
+#
+#   # Provider keys (used by req_llm)
+#   export OPENAI_API_KEY=...                            # for openai:*
+#   export ANTHROPIC_API_KEY=...                         # for anthropic:*
+#   export OPENROUTER_API_KEY=...                        # for openrouter:*
+#   export GROQ_API_KEY=...                              # for groq:*
 #
 #   mix test --include integration --include network \
 #     test/integration/req_llm_predict_integration_test.exs
@@ -30,10 +35,19 @@ defmodule Dspy.ReqLLMPredictIntegrationTest do
   # You can change the model string to target other req_llm providers.
   @model System.get_env("DSPY_REQ_LLM_TEST_MODEL") || "openai:gpt-4.1-mini"
 
-  # Minimal gating: only enforce OPENAI_API_KEY when the model targets OpenAI.
-  if @run_smoke? and String.starts_with?(@model, "openai:") and
-       System.get_env("OPENAI_API_KEY") in [nil, ""] do
-    @moduletag skip: "OPENAI_API_KEY not set"
+  if @run_smoke? do
+    required_env_key =
+      cond do
+        String.starts_with?(@model, "openai:") -> "OPENAI_API_KEY"
+        String.starts_with?(@model, "anthropic:") -> "ANTHROPIC_API_KEY"
+        String.starts_with?(@model, "openrouter:") -> "OPENROUTER_API_KEY"
+        String.starts_with?(@model, "groq:") -> "GROQ_API_KEY"
+        true -> nil
+      end
+
+    if is_binary(required_env_key) and System.get_env(required_env_key) in [nil, ""] do
+      @moduletag skip: "#{required_env_key} not set"
+    end
   end
 
   setup do

@@ -13,6 +13,20 @@ In `dspy.ex`, the main integration point is:
 Dspy.configure(lm: Dspy.LM.ReqLLM.new(model: "openai:gpt-4.1-mini"))
 ```
 
+## Provider API keys (environment variables)
+
+`req_llm` reads provider API keys from environment variables.
+
+Common keys (as defined by `req_llm`) include:
+
+- `OPENAI_API_KEY` (for `openai:*`)
+- `ANTHROPIC_API_KEY` (for `anthropic:*`)
+- `OPENROUTER_API_KEY` (for `openrouter:*`)
+- `GROQ_API_KEY` (for `groq:*`)
+- `GOOGLE_API_KEY` (for `google:*`)
+
+For the full list (Azure/GCP credentials, etc.), see the `req_llm` provider guides.
+
 ## Default generation parameters (global)
 
 You can set global defaults for common generation parameters via `Dspy.configure/1`.
@@ -112,6 +126,7 @@ This keeps embeddings provider-agnostic, like the chat/generation path.
 
 - Predict + ReqLLM (offline acceptance): `test/acceptance/req_llm_predict_acceptance_test.exs`
 - Predict + ReqLLM (real provider, opt-in): `test/integration/req_llm_predict_integration_test.exs`
+- Embeddings + ReqLLM (real provider, opt-in): `test/integration/req_llm_embeddings_integration_test.exs`
 - Multipart + attachment safety: `test/lm/req_llm_multimodal_test.exs`
 - ReqLLM embeddings adapter (mocked): `test/retrieve/req_llm_embeddings_test.exs`
 - Offline retrieval/RAG examples:

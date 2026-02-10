@@ -29,8 +29,8 @@ North star docs:
   - [x] Contribution UX: add `CONTRIBUTING.md` + GitHub issue templates + minimal repro guidance
   - [x] Curate examples: clearly separate “official deterministic” examples from experimental scripts (reduce onboarding noise)
   - [x] Core scope audit: moved unproven/experimental modules out of core `lib/` into `extras/dspy_extras/unsafe/quarantine/`
-  - [x] Teleprompt parity: COPRO + MIPROv2 proven + promoted back into core (MIPROv2 currently Predict-only)
-  - [ ] Provider parity: add more opt-in `:integration`/`:network` smoke tests + docs updates
+  - [x] Teleprompt parity: COPRO + MIPROv2 proven + promoted back into core (Predict + ChainOfThought)
+  - [x] Provider parity: add more opt-in `:integration`/`:network` smoke tests + docs updates
   - [x] Optional local inference: add `Dspy.LM.Bumblebee` (runtime-gated; no core deps)
   - [x] Add opt-in integration smoke test for Bumblebee + default exclude `:integration`/`:network` in `mix test`
   - [x] R0 acceptance tests: port `simplest/simplest_dspy.py` behavior into `test/acceptance/*`
