@@ -54,7 +54,7 @@ defmodule Dspy do
   - `:max_tokens` - Maximum tokens per generation (default: `nil`, provider/runtime default)
   - `:max_completion_tokens` - Maximum completion tokens per generation (default: `nil`, provider/runtime default)
   - `:temperature` - Sampling temperature (default: `nil`, provider/runtime default)
-  - `:cache` - Enable response caching (default: true)
+  - `:cache` - Enable response caching (default: false)
 
   ## Examples
 

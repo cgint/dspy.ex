@@ -83,7 +83,25 @@ defmodule Dspy.LM do
   """
   def generate(lm, request) do
     request = apply_settings_defaults(request)
-    lm.__struct__.generate(lm, request)
+
+    if cache_enabled?() and cacheable_request?(request) do
+      case Dspy.LM.Cache.fetch(lm, request) do
+        {:hit, cached} ->
+          {:ok, cached}
+
+        :miss ->
+          case lm.__struct__.generate(lm, request) do
+            {:ok, response} ->
+              :ok = Dspy.LM.Cache.put(lm, request, response)
+              {:ok, response}
+
+            {:error, reason} ->
+              {:error, reason}
+          end
+      end
+    else
+      lm.__struct__.generate(lm, request)
+    end
   end
 
   @doc """
@@ -261,6 +279,36 @@ defmodule Dspy.LM do
         {:error, reason}
     end
   end
+
+  defp cache_enabled? do
+    if Process.whereis(Dspy.Settings) do
+      Dspy.Settings.get(:cache) == true
+    else
+      false
+    end
+  end
+
+  # Avoid caching multimodal/attachment requests (can include large binaries).
+  defp cacheable_request?(request) when is_map(request) do
+    case request[:messages] do
+      messages when is_list(messages) ->
+        Enum.all?(messages, fn msg ->
+          content =
+            case msg do
+              %{content: c} -> c
+              %{"content" => c} -> c
+              _ -> nil
+            end
+
+          is_nil(content) or is_binary(content)
+        end)
+
+      _ ->
+        true
+    end
+  end
+
+  defp cacheable_request?(_), do: false
 
   defp apply_settings_defaults(request) when is_map(request) do
     if Process.whereis(Dspy.Settings) do

@@ -13,7 +13,7 @@ defmodule Dspy.Settings do
     max_tokens: nil,
     max_completion_tokens: nil,
     temperature: nil,
-    cache: true,
+    cache: false,
     experimental: [],
     teleprompt_verbose: false
   ]
@@ -62,6 +62,11 @@ defmodule Dspy.Settings do
   @impl true
   def handle_call({:configure, opts}, _from, settings) do
     new_settings = struct(settings, opts)
+
+    if should_clear_cache?(settings, new_settings, opts) do
+      :ok = Dspy.LM.Cache.clear()
+    end
+
     {:reply, :ok, new_settings}
   end
 
@@ -74,5 +79,15 @@ defmodule Dspy.Settings do
   def handle_call({:get, key}, _from, settings) do
     value = Map.get(settings, key)
     {:reply, value, settings}
+  end
+
+  defp should_clear_cache?(old_settings, new_settings, opts) do
+    opts_map = Map.new(opts)
+
+    lm_changed? = Map.has_key?(opts_map, :lm) and new_settings.lm != old_settings.lm
+    cache_changed? = Map.has_key?(opts_map, :cache) and new_settings.cache != old_settings.cache
+    disabling_cache? = Map.get(opts_map, :cache) == false
+
+    lm_changed? or cache_changed? or disabling_cache?
   end
 end
