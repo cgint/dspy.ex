@@ -179,6 +179,9 @@ Notes:
 
 ## Log
 
+- **2026-02-10**: Evaluation ergonomics: added deterministic proof tests for built-in `Dspy.Metrics` and corrected docs examples to match `Example`/`Prediction` access. Proof: `test/metrics_test.exs`. Verification: `mix compile --warnings-as-errors`, `mix test`.
+- **2026-02-10**: Cut tag `v0.3.11` (metrics proven).
+
 - **2026-02-10**: Interface familiarity: `Dspy.Module.forward/2` now accepts keyword-list inputs (kwargs-like) in addition to maps. Proof: `test/predict_test.exs`. Verification: `mix compile --warnings-as-errors`, `mix test`.
 - **2026-02-10**: Cut tag `v0.3.10` (keyword-list inputs).
 

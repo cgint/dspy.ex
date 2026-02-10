@@ -208,6 +208,7 @@ Evidence:
 | Python DSPy | `dspy.ex` | Notes | Evidence |
 |---|---|---|---|
 | `dspy.evaluate(...)` | `Dspy.Evaluate.evaluate/4` | Deterministic/offline default patterns (`num_threads: 1`, `progress: false`) | `test/evaluate_golden_path_test.exs` |
+| built-in metrics | `Dspy.Metrics` | Standard metrics + metric composition helpers | `test/metrics_test.exs` |
 | cross-validation | `Dspy.Evaluate.cross_validate/4` | Quiet-by-default supported | `test/evaluate_detailed_results_test.exs` |
 | dataset split/sample | `Dspy.Trainset.split/2`, `sample/3` | Seeded determinism | `test/trainset_test.exs` |
 
