@@ -233,6 +233,9 @@ Example (offline):
 - `mix run examples/chain_of_thought_mipro_v2_persistence_offline.exs`
 - `mix run examples/chain_of_thought_copro_persistence_offline.exs`
 - `mix run examples/ensemble_offline.exs`
+- `mix run examples/retrieve_rag_offline.exs`
+- `mix run examples/retrieve_rag_genserver_offline.exs`
+- `mix run examples/react_tool_logging_offline.exs`
 
 ## Workflow parity vs `dspy-intro/src` (high-level)
 

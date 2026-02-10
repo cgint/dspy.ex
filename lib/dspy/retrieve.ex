@@ -1,15 +1,16 @@
 defmodule Dspy.Retrieve do
   @moduledoc """
-  Retrieval system with vector search and RAG (Retrieval-Augmented Generation).
-  Compatible with Python DSPy's retrieval architecture.
+  Retrieval + RAG utilities (adoption-first).
 
-  Features:
-  - Vector similarity search
-  - Hybrid search (vector + keyword)
-  - RAG pipeline integration
-  - Multiple retrieval backends
-  - Document chunking and embedding
-  - Relevance scoring and reranking
+  Proven (deterministic tests / offline examples):
+  - `Dspy.Retrieve.DocumentProcessor` (chunking + embedding hook)
+  - `Dspy.Retrieve.Embeddings.ReqLLM` (provider-agnostic embeddings via `req_llm`, mockable)
+  - `Dspy.Retrieve.RAGPipeline` (retrieval-augmented generation over a user-supplied `Retriever`)
+
+  Some retriever backends in this module (e.g. ColBERTv2/ChromaDB stubs) are placeholders and not
+  yet production-ready.
+
+  See `docs/OVERVIEW.md` for the current stable surface + evidence.
   """
 
   defmodule Retriever do
@@ -220,8 +221,12 @@ defmodule Dspy.Retrieve do
 
   defmodule ColBERTv2 do
     @moduledoc """
-    ColBERTv2 retriever implementation.
-    Compatible with Python DSPy's ColBERTv2 integration.
+    (Experimental / placeholder) ColBERTv2-style retriever stub.
+
+    This is not yet a real ColBERT server integration.
+
+    For the proven retrieval workflow, prefer a custom `Dspy.Retrieve.Retriever` paired with
+    `Dspy.Retrieve.RAGPipeline` (see `docs/OVERVIEW.md`).
     """
 
     @behaviour Dspy.Retrieve.Retriever
@@ -296,7 +301,13 @@ defmodule Dspy.Retrieve do
 
   defmodule ChromaDB do
     @moduledoc """
-    ChromaDB retriever implementation.
+    (Experimental / placeholder) ChromaDB retriever stub.
+
+    Core `:dspy` does not ship a ChromaDB client; this module currently returns
+    `{:error, ...}` for all operations.
+
+    For the proven retrieval workflow, prefer a custom `Dspy.Retrieve.Retriever` paired with
+    `Dspy.Retrieve.RAGPipeline` (see `docs/OVERVIEW.md`).
     """
 
     @behaviour Dspy.Retrieve.Retriever

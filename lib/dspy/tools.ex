@@ -1,15 +1,16 @@
 defmodule Dspy.Tools do
   @moduledoc """
-  Tool integration system for function calling and ReAct patterns.
-  Compatible with Python DSPy's tool architecture.
+  Tools + ReAct support (adoption-first).
 
-  Supports:
-  - Function calling with structured arguments
-  - Tool registration and discovery
-  - ReAct (Reasoning + Acting) patterns
-  - Error handling and retry logic
-  - Multi-step tool execution
-  - Tool composition and chaining
+  Proven (deterministic tests):
+  - Tool definition helpers: `new_tool/4` + `execute_tool/3`
+  - ReAct loop: `Dspy.Tools.React` (incl. tool start/end callbacks via `Dspy.Tools.Callback`)
+  - Function-calling helper: `Dspy.Tools.FunctionCalling` (uses request maps)
+
+  Note: the global `ToolRegistry` is a convenience GenServer and is **not required** for the
+  proven ReAct workflow.
+
+  For the current stable surface + evidence, see `docs/OVERVIEW.md`.
   """
 
   defmodule Tool do

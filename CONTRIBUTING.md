@@ -42,6 +42,25 @@ To verify both core + extras:
 scripts/verify_all.sh
 ```
 
+## Troubleshooting
+
+### `Error opening ETS file ~/.hex/cache.ets: :badfile`
+
+This usually indicates a **corrupted local Hex cache**.
+
+It’s safe to delete the cache file and re-fetch dependencies:
+
+```bash
+rm -f ~/.hex/cache.ets
+mix deps.get
+```
+
+If you prefer not to delete files directly, you can also try:
+
+```bash
+mix hex.clean --all
+```
+
 ## Integration / network tests (opt-in)
 
 By default, `mix test` excludes tests tagged `:integration` and `:network`.
