@@ -5,6 +5,7 @@ defmodule Dspy.Retrieve do
   Proven (deterministic tests / offline examples):
   - `Dspy.Retrieve.DocumentProcessor` (chunking + embedding hook)
   - `Dspy.Retrieve.Embeddings.ReqLLM` (provider-agnostic embeddings via `req_llm`, mockable)
+  - `Dspy.Retrieve.InMemoryRetriever` (GenServer-backed cosine retriever; easy adoption)
   - `Dspy.Retrieve.RAGPipeline` (retrieval-augmented generation over a user-supplied `Retriever`)
 
   Some retriever backends in this module (e.g. ColBERTv2/ChromaDB stubs) are placeholders and not
@@ -560,6 +561,10 @@ defmodule Dspy.Retrieve do
     end
 
     defp embed_batch(provider, chunks, provider_opts) do
+      if is_atom(provider) do
+        _ = Code.ensure_loaded?(provider)
+      end
+
       cond do
         is_atom(provider) and function_exported?(provider, :embed_batch, 2) ->
           provider.embed_batch(chunks, provider_opts)

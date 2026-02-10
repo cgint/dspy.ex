@@ -10,6 +10,7 @@ This repo includes a minimal, **provider-agnostic** retrieval/RAG slice in core 
 
 - `Dspy.Retrieve.DocumentProcessor` — chunk documents and generate embeddings
 - `Dspy.Retrieve.Embeddings.ReqLLM` — embedding provider backed by `req_llm` (adapter pattern)
+- `Dspy.Retrieve.InMemoryRetriever` — GenServer-backed cosine retriever (easy adoption)
 - `Dspy.Retrieve.RAGPipeline` — retrieve top-k docs, build a context, and call `Dspy.LM.generate/2`
 
 Everything is designed so you can run it **offline/deterministically** in tests by mocking:
@@ -19,15 +20,35 @@ Everything is designed so you can run it **offline/deterministically** in tests 
 ## Proof artifacts (offline)
 
 - Acceptance (end-to-end, mocked): `test/acceptance/retrieve_rag_with_embeddings_acceptance_test.exs`
+- Acceptance (built-in `InMemoryRetriever`): `test/acceptance/retrieve_rag_in_memory_retriever_acceptance_test.exs`
 - Embeddings adapter (mocked): `test/retrieve/req_llm_embeddings_test.exs`
 
 ## Quick start examples (offline)
 
-Two runnable offline demos are provided:
+Two runnable offline demos are provided (both use `Dspy.Retrieve.InMemoryRetriever`):
 
 ```bash
 mix run examples/retrieve_rag_offline.exs
 mix run examples/retrieve_rag_genserver_offline.exs
+```
+
+## Quick start (code)
+
+```elixir
+# For real providers, pass a real model string (req_llm defines the syntax).
+# For deterministic tests, pass a fake `:req_llm` module.
+embedding_provider = Dspy.Retrieve.Embeddings.ReqLLM
+embedding_opts = [model: "openai:text-embedding-3-small"]
+
+:ok =
+  Dspy.Retrieve.index_documents(docs, Dspy.Retrieve.InMemoryRetriever,
+    embedding_provider: embedding_provider,
+    embedding_provider_opts: embedding_opts,
+    replace: true
+  )
+
+pipeline = Dspy.Retrieve.RAGPipeline.new(Dspy.Retrieve.InMemoryRetriever, lm, k: 3)
+{:ok, result} = Dspy.Retrieve.RAGPipeline.generate(pipeline, query)
 ```
 
 ## How indexing works (core)
@@ -68,6 +89,7 @@ See:
 - A retriever is a **module** implementing `Dspy.Retrieve.Retriever` (`retrieve/2`).
   `Dspy.Retrieve.RAGPipeline` calls `retriever.retrieve(query, k: ...)`. You can set `k:` at pipeline
   construction time, and also override it per call via `RAGPipeline.generate(..., k: ...)`.
+- For a quick, in-process retriever (no external DB), use `Dspy.Retrieve.InMemoryRetriever`.
 
 ## Context templates
 
