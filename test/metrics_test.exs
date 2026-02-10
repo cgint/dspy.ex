@@ -57,7 +57,8 @@ defmodule Dspy.MetricsTest do
     ex = Example.new(answer: "ok")
     pred = Prediction.new(answer: "ok")
 
-    combined = Metrics.combine_metrics([{&Metrics.exact_match/2, 0.25}, {&Metrics.contains/2, 0.75}])
+    combined =
+      Metrics.combine_metrics([{&Metrics.exact_match/2, 0.25}, {&Metrics.contains/2, 0.75}])
 
     assert combined.(ex, pred) == 1.0
   end
