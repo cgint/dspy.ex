@@ -112,6 +112,7 @@ defmodule Dspy.LM do
     request = %{
       messages: [%{role: "user", content: prompt}],
       max_tokens: Keyword.get(opts, :max_tokens),
+      max_completion_tokens: Keyword.get(opts, :max_completion_tokens),
       temperature: Keyword.get(opts, :temperature),
       stop: Keyword.get(opts, :stop),
       tools: Keyword.get(opts, :tools)

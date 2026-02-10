@@ -143,7 +143,10 @@ defmodule Dspy.Acceptance.RetrieveRAGWithEmbeddingsAcceptanceTest do
     pipeline = Retrieve.RAGPipeline.new(InMemoryEmbeddingRetriever, Dspy.Settings.get(:lm), k: 1)
 
     assert {:ok, %{answer: answer, context: context, sources: sources}} =
-             Retrieve.RAGPipeline.generate(pipeline, "Tell me about cats", max_tokens: 10)
+             Retrieve.RAGPipeline.generate(pipeline, "Tell me about cats",
+               max_tokens: 10,
+               max_completion_tokens: 99
+             )
 
     assert answer == "Answer: ok"
 
@@ -154,6 +157,7 @@ defmodule Dspy.Acceptance.RetrieveRAGWithEmbeddingsAcceptanceTest do
 
     assert_receive {:lm_request, request}
     assert request.max_tokens == 10
+    assert request.max_completion_tokens == 99
 
     drain_fake_embed_messages()
   end

@@ -64,4 +64,21 @@ defmodule Dspy.LM.RequestDefaultsTest do
     assert request[:max_tokens] == 3
     assert request[:temperature] == 0.7
   end
+
+  test "generate_text/3 forwards :max_completion_tokens when provided" do
+    lm = %CapturingLM{pid: self()}
+
+    assert {:ok, "ok"} =
+             Dspy.LM.generate_text(lm, "hi",
+               max_tokens: 7,
+               max_completion_tokens: 12,
+               temperature: 0.1
+             )
+
+    assert_receive {:lm_request, request}
+
+    assert request[:max_tokens] == 7
+    assert request[:max_completion_tokens] == 12
+    assert request[:temperature] == 0.1
+  end
 end

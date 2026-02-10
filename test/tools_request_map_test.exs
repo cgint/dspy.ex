@@ -22,11 +22,13 @@ defmodule Dspy.ToolsRequestMapTest do
     assert {:ok, "ok"} =
              Dspy.Tools.FunctionCalling.call_function(lm, tool, %{a: 1},
                max_tokens: 7,
+               max_completion_tokens: 13,
                temperature: 0.2
              )
 
     assert_receive {:lm_request, request}
     assert request.max_tokens == 7
+    assert request.max_completion_tokens == 13
     assert request.temperature == 0.2
     assert is_nil(request.stop)
 

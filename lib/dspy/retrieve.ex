@@ -346,11 +346,29 @@ defmodule Dspy.Retrieve do
     Split text into chunks for embedding.
     """
     def chunk_text(text, opts \\ []) do
-      chunk_size = opts[:chunk_size] || 512
-      overlap = opts[:overlap] || 50
+      chunk_size = Keyword.get(opts, :chunk_size, 512)
+      overlap = Keyword.get(opts, :overlap, 50)
+
+      validate_chunking_opts!(chunk_size, overlap)
 
       words = String.split(text, ~r/\s+/)
       chunk_words(words, chunk_size, overlap, [])
+    end
+
+    defp validate_chunking_opts!(chunk_size, overlap) do
+      unless is_integer(chunk_size) and chunk_size > 0 do
+        raise ArgumentError, ":chunk_size must be a positive integer"
+      end
+
+      unless is_integer(overlap) and overlap >= 0 do
+        raise ArgumentError, ":overlap must be a non-negative integer"
+      end
+
+      unless overlap < chunk_size do
+        raise ArgumentError, ":overlap must be smaller than :chunk_size"
+      end
+
+      :ok
     end
 
     defp chunk_words([], _chunk_size, _overlap, acc), do: Enum.reverse(acc)
@@ -517,8 +535,16 @@ defmodule Dspy.Retrieve do
 
     defp fallback_without_embeddings_from_doc(doc, chunk_size, overlap, extra_meta) do
       {content, doc_id, metadata, source} = doc_parts(doc)
-      chunks = chunk_text(content, chunk_size: chunk_size, overlap: overlap)
+      chunks = safe_chunk_text(content, chunk_size, overlap)
       fallback_without_embeddings(chunks, doc_id, metadata, source, extra_meta)
+    end
+
+    defp safe_chunk_text(text, chunk_size, overlap) do
+      try do
+        chunk_text(text, chunk_size: chunk_size, overlap: overlap)
+      rescue
+        _ -> [text]
+      end
     end
 
     defp fallback_without_embeddings(chunks, doc_id, metadata, source, extra_meta) do
@@ -601,6 +627,7 @@ defmodule Dspy.Retrieve do
           request = %{
             messages: [Dspy.LM.user_message(prompt)],
             max_tokens: Keyword.get(opts, :max_tokens),
+            max_completion_tokens: Keyword.get(opts, :max_completion_tokens),
             temperature: Keyword.get(opts, :temperature),
             stop: Keyword.get(opts, :stop),
             tools: Keyword.get(opts, :tools)
