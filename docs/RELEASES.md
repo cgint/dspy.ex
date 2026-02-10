@@ -12,6 +12,7 @@ The table below is maintained on `main`, but links are **tag-pinned** so they do
 
 | Tag | What you get | Evidence (tag-pinned) |
 |---|---|---|
+| `v0.3.25` | **VectorStore safety**: `Dspy.Retrieve.VectorStore` no longer crashes with `:noproc` when not started; it now returns `{:error, :vector_store_not_started}`; added deterministic tests | VectorStore: https://github.com/cgint/dspy.ex/blob/v0.3.25/lib/dspy/retrieve.ex<br>Proof: https://github.com/cgint/dspy.ex/blob/v0.3.25/test/retrieve/vector_store_safety_test.exs |
 | `v0.3.24` | **README example discoverability**: added the official offline Tools/ReAct example to the README examples list | README: https://github.com/cgint/dspy.ex/blob/v0.3.24/README.md |
 | `v0.3.23` | **ToolRegistry auto-start**: `Dspy.Tools.register_tool/1`, `get_tool/1`, `list_tools/0`, `search_tools/1` now start the ToolRegistry on-demand (avoids `:noproc` crashes) | Tools: https://github.com/cgint/dspy.ex/blob/v0.3.23/lib/dspy/tools.ex<br>Proof: https://github.com/cgint/dspy.ex/blob/v0.3.23/test/tools_registry_autostart_test.exs |
 | `v0.3.22` | **Safer placeholder retriever**: `Dspy.Retrieve.ColBERTv2` no longer crashes when `VectorStore` is not started; it now returns explicit placeholder errors; Retriever callback types allow structured error reasons (`term()`) | Retrieve: https://github.com/cgint/dspy.ex/blob/v0.3.22/lib/dspy/retrieve.ex<br>Proof: https://github.com/cgint/dspy.ex/blob/v0.3.22/test/retrieve/colbert_stub_test.exs |

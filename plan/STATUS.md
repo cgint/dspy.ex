@@ -179,6 +179,9 @@ Notes:
 
 ## Log
 
+- **2026-02-10**: Retrieval safety: `Dspy.Retrieve.VectorStore` now returns `{:error, :vector_store_not_started}` instead of crashing with `:noproc` when used without `start_link`; added deterministic tests. Verification: `mix compile --warnings-as-errors`, `mix test`.
+- **2026-02-10**: Cut tag `v0.3.25` (VectorStore safety).
+
 - **2026-02-10**: Docs: added the official offline Tools/ReAct example to `README.md` for discoverability. Verification: `mix test`.
 - **2026-02-10**: Cut tag `v0.3.24` (README tools example).
 
