@@ -179,6 +179,9 @@ Notes:
 
 ## Log
 
+- **2026-02-10**: Adoption UX: added an offline example demonstrating how `Dspy.configure/1` defaults propagate into request maps; included it in `scripts/verify_examples.sh`. Verification: `scripts/verify_examples.sh`.
+- **2026-02-10**: Cut tag `v0.3.33` (request defaults example).
+
 - **2026-02-10**: Provider docs: documented global `max_completion_tokens` defaults and clarified `max_tokens` vs `max_completion_tokens` guidance with evidence pointers. Verification: `mix test`.
 - **2026-02-10**: Cut tag `v0.3.32` (providers docs).
 
