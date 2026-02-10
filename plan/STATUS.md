@@ -179,6 +179,9 @@ Notes:
 
 ## Log
 
+- **2026-02-10**: Provider docs: documented global `max_completion_tokens` defaults and clarified `max_tokens` vs `max_completion_tokens` guidance with evidence pointers. Verification: `mix test`.
+- **2026-02-10**: Cut tag `v0.3.32` (providers docs).
+
 - **2026-02-10**: Determinism: tightened `Dspy.Trainset` moduledoc to avoid overpromising; added deterministic tests for sampling strategies (`:diverse`, `:hard`, `:uncertainty`, `bootstrap_sample/3`). Verification: `mix compile --warnings-as-errors`, `mix test`.
 - **2026-02-10**: Cut tag `v0.3.31` (Trainset determinism).
 
