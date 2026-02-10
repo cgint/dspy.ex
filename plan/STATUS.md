@@ -179,6 +179,9 @@ Notes:
 
 ## Log
 
+- **2026-02-10**: Retrieval safety: `Dspy.Retrieve.ColBERTv2` is now an explicit placeholder (no `VectorStore` crash if not started); Retriever behaviour callback types allow structured `term()` error reasons. Proof: `test/retrieve/colbert_stub_test.exs`. Verification: `mix compile --warnings-as-errors`, `mix test`.
+- **2026-02-10**: Cut tag `v0.3.22` (safe placeholder retriever).
+
 - **2026-02-10**: Tools: `Dspy.Tools.React.run/3` now forwards `max_tokens`, `max_completion_tokens`, and `temperature` into LM request maps (per-run overrides). Proof: `test/tools_request_map_test.exs`. Verification: `mix compile --warnings-as-errors`, `mix test`.
 - **2026-02-10**: Cut tag `v0.3.21` (ReAct request-map options).
 
