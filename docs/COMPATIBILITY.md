@@ -198,6 +198,7 @@ Evidence:
 | call: `program(**kwargs)` | `Dspy.Module.forward(program, inputs)` | `inputs` may be map, string-key map, or keyword list | `test/predict_test.exs` |
 | output: `pred.answer` | `pred[:answer]` / `pred.attrs.answer` | Predictions store outputs in `pred.attrs` | `test/acceptance/simplest_predict_test.exs` |
 | `dspy.Example(...)` | `Dspy.Example.new(...)` | Implements `Access` (`ex[:question]`) | `test/example_prediction_access_test.exs` |
+| `example.with_inputs(...)` | `Dspy.Example.with_inputs/2` + `Dspy.Example.inputs/1` | Mark which attrs are inputs; `Evaluate`/teleprompts forward only inputs when configured | `test/example_with_inputs_test.exs` |
 | JSONAdapter-style outputs | `Dspy.Signature.parse_outputs/2` | Parses JSON (incl. fenced) and coerces types | `test/acceptance/json_outputs_acceptance_test.exs` |
 | constrained outputs (`one_of`) | `output_field(..., one_of: [...])` | Invalid outputs return tagged errors | `test/acceptance/classifier_credentials_acceptance_test.exs` |
 | multimodal attachments | `%Dspy.Attachments{}` inputs | Attachments become message content parts (request-map) | `test/acceptance/simplest_attachments_acceptance_test.exs` |

@@ -294,7 +294,7 @@ defmodule Dspy.Teleprompt.MIPROv2 do
       candidate_examples
       |> Task.async_stream(
         fn %Example{} = gold ->
-          inputs = gold.attrs
+          inputs = Example.inputs(gold)
 
           case Dspy.Module.forward(program, inputs) do
             {:ok, prediction} ->

@@ -226,7 +226,7 @@ defmodule Dspy.Teleprompt.BootstrapFewShot do
     inputs =
       trainset
       |> Trainset.sample(max_demos * 2, strategy: :random, seed: seed)
-      |> Enum.map(& &1.attrs)
+      |> Enum.map(&Example.inputs/1)
 
     # Generate outputs using teacher program
     chunk_size = max(1, div(length(inputs), num_threads))

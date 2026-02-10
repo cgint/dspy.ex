@@ -289,7 +289,7 @@ defmodule Dspy.Evaluate do
   defp evaluate_chunk(program, examples, metric_fn) do
     Enum.map(examples, fn example ->
       try do
-        case Module.forward(program, example.attrs) do
+        case Module.forward(program, Example.inputs(example)) do
           {:ok, prediction} ->
             case Dspy.Teleprompt.run_metric(metric_fn, example, prediction) do
               score when is_number(score) ->
