@@ -12,6 +12,7 @@ defmodule Dspy.Teleprompt do
 
   - `LabeledFewShot` — sets `predict.examples`
   - `BootstrapFewShot` — bootstraps demos and sets `predict.examples`
+  - `COPRO` — coordinate-ascent optimizer that selects better `predict.instructions`
   - `SIMBA` — updates `predict.instructions`
   - `GEPA` — toy deterministic optimizer (finite candidate instructions)
   - `Ensemble` — trains multiple members and combines predictions (e.g. `:majority_vote`)
@@ -29,7 +30,7 @@ defmodule Dspy.Teleprompt do
   """
 
   alias Dspy.Example
-  alias Dspy.Teleprompt.{LabeledFewShot, BootstrapFewShot, SIMBA, Ensemble, GEPA}
+  alias Dspy.Teleprompt.{LabeledFewShot, BootstrapFewShot, COPRO, SIMBA, Ensemble, GEPA}
 
   @type metric_fun :: (Example.t() -> number()) | (Example.t(), Dspy.Prediction.t() -> number())
 
@@ -68,6 +69,7 @@ defmodule Dspy.Teleprompt do
   def new(type, opts \\ [])
   def new(:labeled_few_shot, opts), do: LabeledFewShot.new(opts)
   def new(:bootstrap_few_shot, opts), do: BootstrapFewShot.new(opts)
+  def new(:copro, opts), do: COPRO.new(opts)
   def new(:simba, opts), do: SIMBA.new(opts)
   def new(:ensemble, opts), do: Ensemble.new(opts)
   def new(:gepa, opts), do: GEPA.new(opts)
@@ -93,6 +95,8 @@ defmodule Dspy.Teleprompt do
 
   def compile(%BootstrapFewShot{} = tp, program, trainset),
     do: BootstrapFewShot.compile(tp, program, trainset)
+
+  def compile(%COPRO{} = tp, program, trainset), do: COPRO.compile(tp, program, trainset)
 
   def compile(%SIMBA{} = tp, program, trainset), do: SIMBA.compile(tp, program, trainset)
   def compile(%Ensemble{} = tp, program, trainset), do: Ensemble.compile(tp, program, trainset)

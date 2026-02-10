@@ -2,7 +2,7 @@ defmodule Dspy.Teleprompt.ErrorShapesTest do
   use ExUnit.Case, async: true
 
   alias Dspy.Example
-  alias Dspy.Teleprompt.{BootstrapFewShot, Ensemble, GEPA, LabeledFewShot, SIMBA}
+  alias Dspy.Teleprompt.{BootstrapFewShot, COPRO, Ensemble, GEPA, LabeledFewShot, SIMBA}
 
   defmodule UnknownTeleprompt do
     defstruct []
@@ -88,6 +88,14 @@ defmodule Dspy.Teleprompt.ErrorShapesTest do
              BootstrapFewShot.compile(tp, program, examples(1))
   end
 
+  test "COPRO.compile/3 returns a structured error for unsupported programs" do
+    tp = COPRO.new(metric: fn _example, _pred -> 0.0 end, seed: 0, num_threads: 1, verbose: false)
+    program = %NoParameterProgram{}
+
+    assert {:error, {:unsupported_program, NoParameterProgram}} =
+             COPRO.compile(tp, program, examples(1))
+  end
+
   test "teleprompters return :empty_trainset (not a string) for empty training data" do
     program = Dspy.Predict.new("q -> a")
 
@@ -98,6 +106,13 @@ defmodule Dspy.Teleprompt.ErrorShapesTest do
     assert {:error, :empty_trainset} =
              BootstrapFewShot.compile(
                BootstrapFewShot.new(metric: metric, seed: 0, num_threads: 1, verbose: false),
+               program,
+               []
+             )
+
+    assert {:error, :empty_trainset} =
+             COPRO.compile(
+               COPRO.new(metric: metric, seed: 0, num_threads: 1, verbose: false),
                program,
                []
              )

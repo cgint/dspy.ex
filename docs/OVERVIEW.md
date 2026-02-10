@@ -193,6 +193,8 @@ These teleprompters optimize **Predict-like programs** by updating optimizable p
   - Proof: `test/teleprompt/simba_improvement_test.exs`, `test/teleprompt/simba_chain_of_thought_improvement_test.exs`
 - `Dspy.Teleprompt.BootstrapFewShot` (bootstraps demos via a teacher program; deterministic toy improvement)
   - Proof: `test/bootstrap_few_shot_smoke_test.exs`, `test/teleprompt/bootstrap_few_shot_chain_of_thought_improvement_test.exs`, `test/teleprompt/bootstrap_few_shot_determinism_test.exs`
+- `Dspy.Teleprompt.COPRO` (coordinate-ascent optimizer; selects improved `predict.instructions`)
+  - Proof: `test/teleprompt/copro_improvement_test.exs`
 - `Dspy.Teleprompt.GEPA` (toy deterministic optimizer)
   - Proof: `test/teleprompt/gepa_test.exs`, `test/teleprompt/gepa_improvement_test.exs`, `test/teleprompt/gepa_chain_of_thought_improvement_test.exs`
 - `Dspy.Teleprompt.Ensemble` (trains multiple members via a base teleprompt and combines predictions; proven for Predict + ChainOfThought, `:majority_vote`)
@@ -278,7 +280,7 @@ These are intentionally phrased as **concrete milestones** with a “proof artif
 
 ### Next workflow-parity milestones
 
-- **Teleprompts beyond the proven set**: COPRO/MIPROv2 are currently quarantined (not part of core). Either prove them deterministically and promote them back into core, or keep them extras-only and document the boundary.
+- **Teleprompts beyond the proven set**: `MIPROv2` is currently quarantined (not part of core). Either prove it deterministically and promote it back into core, or keep it extras-only and document the boundary.
 - **Interface familiarity audit**: for the already-proven workflows, check shapes vs upstream Python DSPy + DSPex-snakepit and document intentional divergences.
 
 ### Next maturity milestones
