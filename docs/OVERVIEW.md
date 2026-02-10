@@ -4,7 +4,7 @@
 
 - Want to know what’s usable today? Read **“What you can do today”** below.
 - Want provider setup? See `docs/PROVIDERS.md` (uses `req_llm`).
-- Want stability? Use **semver tags**; `main` moves quickly. Current recommended stable tag: `v0.2.14` (see `README.md` + `docs/RELEASES.md`).
+- Want stability? Use **semver tags**; `main` moves quickly. Current recommended stable tag: `v0.2.15` (see `README.md` + `docs/RELEASES.md`).
 
 ## Diagram
 
@@ -222,6 +222,7 @@ Proof:
 Example (offline):
 - `mix run examples/parameter_persistence_json_offline.exs`
 - `mix run examples/chain_of_thought_teleprompt_persistence_offline.exs`
+- `mix run examples/chain_of_thought_simba_persistence_offline.exs`
 - `mix run examples/ensemble_offline.exs`
 
 ## Workflow parity vs `dspy-intro/src` (high-level)

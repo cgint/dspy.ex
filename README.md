@@ -18,7 +18,7 @@ For stability, depend on a **semver tag** (recommended):
 ```elixir
 def deps do
   [
-    {:dspy, github: "cgint/dspy.ex", tag: "v0.2.14"}
+    {:dspy, github: "cgint/dspy.ex", tag: "v0.2.15"}
   ]
 end
 ```
@@ -81,6 +81,7 @@ Offline (no network) Retrieval + RAG demos:
 Offline (no network) teleprompt + parameter persistence demos:
 - `mix run examples/parameter_persistence_json_offline.exs`
 - `mix run examples/chain_of_thought_teleprompt_persistence_offline.exs`
+- `mix run examples/chain_of_thought_simba_persistence_offline.exs`
 - `mix run examples/ensemble_offline.exs`
 
 Optional local inference (manual; may download weights):
