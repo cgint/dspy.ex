@@ -7,7 +7,7 @@ defmodule Dspy.Module do
   """
 
   @type t :: struct()
-  @type inputs :: map() | keyword()
+  @type inputs :: map() | keyword() | Dspy.Example.t()
   @type outputs :: Dspy.Prediction.t()
 
   @doc """
@@ -45,7 +45,12 @@ defmodule Dspy.Module do
   Accepts inputs as either:
   - a map (preferred)
   - a keyword list (kwargs-like; converted to a map)
+  - a `%Dspy.Example{}` (converted via `Dspy.Example.inputs/1`)
   """
+  def forward(module, %Dspy.Example{} = example) do
+    forward(module, Dspy.Example.inputs(example))
+  end
+
   def forward(module, inputs) when is_list(inputs) do
     if Keyword.keyword?(inputs) do
       forward(module, Map.new(inputs))
