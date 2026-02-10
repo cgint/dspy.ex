@@ -11,6 +11,7 @@ defmodule Dspy.Settings do
   defstruct [
     :lm,
     max_tokens: nil,
+    max_completion_tokens: nil,
     temperature: nil,
     cache: true,
     experimental: [],
@@ -20,6 +21,7 @@ defmodule Dspy.Settings do
   @type t :: %__MODULE__{
           lm: Dspy.LM.t() | nil,
           max_tokens: pos_integer() | nil,
+          max_completion_tokens: pos_integer() | nil,
           temperature: number() | nil,
           cache: boolean(),
           experimental: [atom()],

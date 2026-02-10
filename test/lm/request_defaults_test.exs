@@ -37,6 +37,33 @@ defmodule Dspy.LM.RequestDefaultsTest do
     assert request[:temperature] == 0.7
   end
 
+  test "generate/1 applies Settings defaults for max_completion_tokens when missing" do
+    Dspy.configure(lm: %CapturingLM{pid: self()}, max_completion_tokens: 17, temperature: 0.7)
+
+    assert {:ok, _resp} =
+             Dspy.LM.generate(%{messages: [%{role: "user", content: "hi"}]})
+
+    assert_receive {:lm_request, request}
+
+    assert request[:max_completion_tokens] == 17
+    assert request[:temperature] == 0.7
+  end
+
+  test "generate/1 respects per-request overrides (override max_completion_tokens, inherit temperature)" do
+    Dspy.configure(lm: %CapturingLM{pid: self()}, max_completion_tokens: 21, temperature: 0.7)
+
+    assert {:ok, _resp} =
+             Dspy.LM.generate(%{
+               messages: [%{role: "user", content: "hi"}],
+               max_completion_tokens: 3
+             })
+
+    assert_receive {:lm_request, request}
+
+    assert request[:max_completion_tokens] == 3
+    assert request[:temperature] == 0.7
+  end
+
   test "generate/1 respects per-request overrides (override temperature, inherit max_tokens)" do
     Dspy.configure(lm: %CapturingLM{pid: self()}, max_tokens: 11, temperature: 0.7)
 

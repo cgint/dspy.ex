@@ -267,6 +267,7 @@ defmodule Dspy.LM do
       request
       |> put_default(:temperature, Dspy.Settings.get(:temperature))
       |> put_default(:max_tokens, Dspy.Settings.get(:max_tokens))
+      |> put_default(:max_completion_tokens, Dspy.Settings.get(:max_completion_tokens))
     else
       request
     end

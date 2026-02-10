@@ -28,6 +28,7 @@ defmodule Dspy.Application do
           Dspy.Settings.configure(
             lm: lm,
             max_tokens: Map.get(config, :max_tokens),
+            max_completion_tokens: Map.get(config, :max_completion_tokens),
             temperature: Map.get(config, :temperature)
           )
 

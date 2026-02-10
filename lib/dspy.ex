@@ -29,15 +29,17 @@ defmodule Dspy do
   alias Dspy.{Settings, Example, Prediction}
 
   @type dspy_config :: [
-          lm: module(),
+          lm: Dspy.LM.t() | nil,
           max_tokens: pos_integer() | nil,
+          max_completion_tokens: pos_integer() | nil,
           temperature: number() | nil,
           cache: boolean()
         ]
 
   @type settings :: %{
-          lm: module(),
+          lm: Dspy.LM.t() | nil,
           max_tokens: pos_integer() | nil,
+          max_completion_tokens: pos_integer() | nil,
           temperature: number() | nil,
           cache: boolean(),
           metadata: map()
@@ -50,6 +52,7 @@ defmodule Dspy do
 
   - `:lm` - Language model client (required)
   - `:max_tokens` - Maximum tokens per generation (default: `nil`, provider/runtime default)
+  - `:max_completion_tokens` - Maximum completion tokens per generation (default: `nil`, provider/runtime default)
   - `:temperature` - Sampling temperature (default: `nil`, provider/runtime default)
   - `:cache` - Enable response caching (default: true)
 
