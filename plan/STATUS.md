@@ -179,6 +179,9 @@ Notes:
 
 ## Log
 
+- **2026-02-10**: Docs: added an evidence-backed Tools/ReAct guide (`docs/TOOLS_REACT.md`) with a D2 diagram; linked it from `docs/COMPATIBILITY.md`. Verification: `mix test`.
+- **2026-02-10**: Cut tag `v0.3.35` (tools doc).
+
 - **2026-02-10**: Docs: refreshed `docs/OVERVIEW.md` retrieval section to point at the built-in `InMemoryRetriever`, included full proof list, and mentioned `scripts/verify_examples.sh` for running all offline examples. Verification: `mix test`.
 - **2026-02-10**: Cut tag `v0.3.34` (overview refresh).
 

@@ -12,6 +12,7 @@ The table below is maintained on `main`, but links are **tag-pinned** so they do
 
 | Tag | What you get | Evidence (tag-pinned) |
 |---|---|---|
+| `v0.3.35` | **Tools/ReAct guide (with diagram)**: added `docs/TOOLS_REACT.md` (evidence-backed) and a D2 diagram for the ReAct loop; linked from `docs/COMPATIBILITY.md` | Guide: https://github.com/cgint/dspy.ex/blob/v0.3.35/docs/TOOLS_REACT.md<br>Diagram: https://github.com/cgint/dspy.ex/blob/v0.3.35/docs/diagrams/tools_react_flow.svg |
 | `v0.3.34` | **Overview retrieval docs refresh**: `docs/OVERVIEW.md` retrieval section now points at the built-in `InMemoryRetriever` and includes full proof list; also mentions `scripts/verify_examples.sh` for running all offline examples | Overview: https://github.com/cgint/dspy.ex/blob/v0.3.34/docs/OVERVIEW.md |
 | `v0.3.33` | **Offline example for request defaults**: added a deterministic script showing how `Dspy.configure/1` defaults propagate into request maps; included it in offline example verification list | Example: https://github.com/cgint/dspy.ex/blob/v0.3.33/examples/request_defaults_offline.exs<br>Verifier: https://github.com/cgint/dspy.ex/blob/v0.3.33/scripts/verify_examples.sh |
 | `v0.3.32` | **Providers docs updated**: documented global `max_completion_tokens` defaults and clarified `max_tokens` vs `max_completion_tokens` guidance with evidence pointers | Providers doc: https://github.com/cgint/dspy.ex/blob/v0.3.32/docs/PROVIDERS.md |
