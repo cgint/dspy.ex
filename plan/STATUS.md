@@ -15,7 +15,7 @@ North star docs:
 - `agent/SOUL.md` (agent operating principles)
 
 ## Releases
-- Current recommended stable tag: `v0.3.4` (see `docs/RELEASES.md`)
+- Current recommended stable tag: `v0.3.5` (see `docs/RELEASES.md`)
 
 ## User-centric OSS posture
 - **Docs are evidence-backed**: `docs/OVERVIEW.md` should only claim what has deterministic proof artifacts.
@@ -180,6 +180,7 @@ Notes:
 ## Log
 
 - **2026-02-10**: MIPROv2 teleprompt proven + promoted back into core (Predict-only), with deterministic improvement proof + error-shape coverage; added offline MIPROv2 + persistence demo; fixed `Trainset.sample(..., strategy: :diverse)` runtime warning for `num_samples <= 1`. Verification: `mix compile --warnings-as-errors`, `mix test`, `scripts/verify_all.sh`, `mix run examples/predict_mipro_v2_persistence_offline.exs`.
+- **2026-02-10**: Cut tag `v0.3.5` (MIPROv2 proven + offline demo).
 - **2026-02-10**: Added offline COPRO + persistence demo example (`mix run examples/chain_of_thought_copro_persistence_offline.exs`). Verification: `mix run examples/chain_of_thought_copro_persistence_offline.exs`.
 - **2026-02-10**: Cut tag `v0.3.4` (offline COPRO + persistence demo).
 - **2026-02-10**: COPRO now supports `%Dspy.ChainOfThought{}` (deterministic improvement proof for both Predict + CoT). Verification: `mix compile --warnings-as-errors`, `mix test`, `scripts/verify_all.sh`.
