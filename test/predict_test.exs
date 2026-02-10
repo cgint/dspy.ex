@@ -112,6 +112,15 @@ defmodule DspyPredictTest do
       assert prediction.attrs.answer == "4"
     end
 
+    test "accepts keyword-list inputs" do
+      predict = Dspy.Predict.new(TestQA)
+
+      assert {:ok, prediction} =
+               Dspy.Module.forward(predict, question: "What is 2+2?")
+
+      assert prediction.attrs.answer == "4"
+    end
+
     test "validates inputs before prediction" do
       predict = Dspy.Predict.new(TestQA)
 
@@ -150,6 +159,18 @@ defmodule DspyPredictTest do
 
       assert {:ok, prediction} =
                Dspy.Module.forward(cot, %{"question" => "What is 2+2?"})
+
+      assert prediction.attrs.answer == "4"
+      assert is_binary(prediction.attrs.reasoning)
+    end
+
+    test "can forward predictions with keyword-list inputs" do
+      Dspy.configure(lm: %CoTMockLM{})
+
+      cot = Dspy.ChainOfThought.new(TestQA)
+
+      assert {:ok, prediction} =
+               Dspy.Module.forward(cot, question: "What is 2+2?")
 
       assert prediction.attrs.answer == "4"
       assert is_binary(prediction.attrs.reasoning)

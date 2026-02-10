@@ -7,7 +7,7 @@ defmodule Dspy.Module do
   """
 
   @type t :: struct()
-  @type inputs :: map()
+  @type inputs :: map() | keyword()
   @type outputs :: Dspy.Prediction.t()
 
   @doc """
@@ -41,7 +41,19 @@ defmodule Dspy.Module do
 
   @doc """
   Execute a module's forward pass.
+
+  Accepts inputs as either:
+  - a map (preferred)
+  - a keyword list (kwargs-like; converted to a map)
   """
+  def forward(module, inputs) when is_list(inputs) do
+    if Keyword.keyword?(inputs) do
+      forward(module, Map.new(inputs))
+    else
+      module.__struct__.forward(module, inputs)
+    end
+  end
+
   def forward(module, inputs) do
     module.__struct__.forward(module, inputs)
   end

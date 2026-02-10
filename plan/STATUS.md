@@ -179,6 +179,9 @@ Notes:
 
 ## Log
 
+- **2026-02-10**: Interface familiarity: `Dspy.Module.forward/2` now accepts keyword-list inputs (kwargs-like) in addition to maps. Proof: `test/predict_test.exs`. Verification: `mix compile --warnings-as-errors`, `mix test`.
+- **2026-02-10**: Cut tag `v0.3.10` (keyword-list inputs).
+
 - **2026-02-10**: Interface familiarity: `Dspy.Example` now implements `Access` (`ex[:question]`) and both `Example`/`Prediction` preserve string-key attrs when updating via atom keys (JSON-friendly). Proof: `test/example_prediction_access_test.exs`. Verification: `mix compile --warnings-as-errors`, `mix test`.
 - **2026-02-10**: Cut tag `v0.3.9` (Example/Prediction Access).
 
