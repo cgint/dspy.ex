@@ -179,6 +179,9 @@ Notes:
 
 ## Log
 
+- **2026-02-10**: Determinism: tightened `Dspy.Trainset` moduledoc to avoid overpromising; added deterministic tests for sampling strategies (`:diverse`, `:hard`, `:uncertainty`, `bootstrap_sample/3`). Verification: `mix compile --warnings-as-errors`, `mix test`.
+- **2026-02-10**: Cut tag `v0.3.31` (Trainset determinism).
+
 - **2026-02-10**: Retrieval reliability: `DocumentProcessor` now ensures embedding provider modules are loaded before checking `embed_batch` (fixes silent nil embeddings in scripts); retrieval docs/examples were updated; deterministic proof added. Verification: `scripts/verify_examples.sh`, `mix compile --warnings-as-errors`, `mix test`.
 - **2026-02-10**: Cut tag `v0.3.30` (RAG indexing reliability).
 
