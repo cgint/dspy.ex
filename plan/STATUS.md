@@ -15,7 +15,7 @@ North star docs:
 - `agent/SOUL.md` (agent operating principles)
 
 ## Releases
-- Current recommended stable tag: `v0.3.6` (see `docs/RELEASES.md`)
+- Current recommended stable tag: `v0.3.7` (see `docs/RELEASES.md`)
 
 ## User-centric OSS posture
 - **Docs are evidence-backed**: `docs/OVERVIEW.md` should only claim what has deterministic proof artifacts.
@@ -178,6 +178,9 @@ Notes:
 - `./precommit.sh` now only flags TODO/FIXME/XXX when they appear in comments (avoids false positives from literal strings).
 
 ## Log
+
+- **2026-02-10**: Provider parity: added opt-in multi-provider ReqLLM network smoke tests (Predict + embeddings) and clarified provider-key docs. Verification: `mix compile --warnings-as-errors`, `mix test`, `scripts/verify_all.sh`.
+- **2026-02-10**: Cut tag `v0.3.7` (ReqLLM provider parity smoke tests).
 
 - **2026-02-10**: MIPROv2 now supports `%Dspy.ChainOfThought{}` (deterministic improvement proof) and an offline CoT + persistence demo was added. Verification: `mix compile --warnings-as-errors`, `mix test`, `scripts/verify_all.sh`, `mix run examples/chain_of_thought_mipro_v2_persistence_offline.exs`.
 - **2026-02-10**: Cut tag `v0.3.6` (MIPROv2 for ChainOfThought).
