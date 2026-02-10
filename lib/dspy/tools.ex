@@ -667,32 +667,66 @@ defmodule Dspy.Tools do
 
   # Public API
 
+  defp ensure_tool_registry_started do
+    case Process.whereis(ToolRegistry) do
+      pid when is_pid(pid) ->
+        :ok
+
+      nil ->
+        case ToolRegistry.start_link([]) do
+          {:ok, _pid} -> :ok
+          {:error, {:already_started, _pid}} -> :ok
+          {:error, reason} -> {:error, reason}
+        end
+    end
+  end
+
   @doc """
   Register a tool in the global registry.
+
+  The ToolRegistry is started on-demand.
   """
   def register_tool(%Tool{} = tool) do
-    ToolRegistry.register_tool(tool)
+    case ensure_tool_registry_started() do
+      :ok -> ToolRegistry.register_tool(tool)
+      {:error, reason} -> {:error, reason}
+    end
   end
 
   @doc """
   Get a tool by name from the registry.
+
+  The ToolRegistry is started on-demand.
   """
   def get_tool(name) do
-    ToolRegistry.get_tool(name)
+    case ensure_tool_registry_started() do
+      :ok -> ToolRegistry.get_tool(name)
+      {:error, _reason} -> nil
+    end
   end
 
   @doc """
   List all registered tools.
+
+  The ToolRegistry is started on-demand.
   """
   def list_tools do
-    ToolRegistry.list_tools()
+    case ensure_tool_registry_started() do
+      :ok -> ToolRegistry.list_tools()
+      {:error, _reason} -> []
+    end
   end
 
   @doc """
   Search for tools by name or description.
+
+  The ToolRegistry is started on-demand.
   """
   def search_tools(query) do
-    ToolRegistry.search_tools(query)
+    case ensure_tool_registry_started() do
+      :ok -> ToolRegistry.search_tools(query)
+      {:error, _reason} -> []
+    end
   end
 
   @doc """
