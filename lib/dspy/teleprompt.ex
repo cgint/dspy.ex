@@ -13,7 +13,7 @@ defmodule Dspy.Teleprompt do
   - `LabeledFewShot` — sets `predict.examples`
   - `BootstrapFewShot` — bootstraps demos and sets `predict.examples`
   - `COPRO` — coordinate-ascent optimizer that selects better `predict.instructions`
-  - `MIPROv2` — joint optimizer for `predict.instructions` + `predict.examples` (Predict-only)
+  - `MIPROv2` — joint optimizer for `predict.instructions` + `predict.examples`
   - `SIMBA` — updates `predict.instructions`
   - `GEPA` — toy deterministic optimizer (finite candidate instructions)
   - `Ensemble` — trains multiple members and combines predictions (e.g. `:majority_vote`)

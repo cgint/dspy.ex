@@ -2,8 +2,9 @@ defmodule Dspy.Teleprompt.MIPROv2 do
   @moduledoc """
   MIPROv2 (Multi-Stage Instruction Prompt Optimization v2) teleprompt.
 
-  Current limitation: only supports optimizing `Dspy.Predict` programs (via
-  `"predict.instructions"` and `"predict.examples"` parameters).
+  Current limitation: only supports optimizing Predict-like programs that expose
+  `"predict.instructions"` and `"predict.examples"` parameters (currently
+  `%Dspy.Predict{}` and `%Dspy.ChainOfThought{}`).
 
   MIPROv2 optimizes both instructions and few-shot examples jointly using:
   1. Bootstrapping few-shot example candidates
@@ -156,7 +157,18 @@ defmodule Dspy.Teleprompt.MIPROv2 do
   @impl Dspy.Teleprompt
   @spec compile(t(), Dspy.Teleprompt.program_t(), list(Example.t())) ::
           Dspy.Teleprompt.compile_result()
-  def compile(%__MODULE__{} = teleprompt, %Dspy.Predict{} = program, trainset) do
+  def compile(%__MODULE__{} = teleprompt, %Dspy.Predict{} = program, trainset),
+    do: do_compile(teleprompt, program, trainset)
+
+  def compile(%__MODULE__{} = teleprompt, %Dspy.ChainOfThought{} = program, trainset),
+    do: do_compile(teleprompt, program, trainset)
+
+  def compile(%__MODULE__{}, program, _trainset) do
+    mod = if is_struct(program), do: program.__struct__, else: program
+    {:error, {:unsupported_program, mod}}
+  end
+
+  defp do_compile(%__MODULE__{} = teleprompt, program, trainset) do
     if teleprompt.verbose do
       Logger.info("Starting MIPROv2 optimization (#{teleprompt.auto} intensity)...")
     end
@@ -182,11 +194,6 @@ defmodule Dspy.Teleprompt.MIPROv2 do
 
       {:ok, optimized_program}
     end
-  end
-
-  def compile(%__MODULE__{}, program, _trainset) do
-    mod = if is_struct(program), do: program.__struct__, else: program
-    {:error, {:unsupported_program, mod}}
   end
 
   # Private functions
