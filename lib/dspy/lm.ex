@@ -53,6 +53,84 @@ defmodule Dspy.LM do
   @type t :: struct()
 
   @doc """
+  Create an LM instance from a model string.
+
+  This is the ergonomic, Python-DSPy-style constructor for configuring real providers.
+  Internally it returns a `Dspy.LM.ReqLLM` adapter.
+
+  Accepts model specs in either form:
+
+  - "provider/model" (DSPy intro + DSPex-snakepit style), e.g. "openai/gpt-4.1-mini"
+  - "provider:model" (`req_llm` style), e.g. "openai:gpt-4.1-mini"
+
+  Options are forwarded as default provider options (e.g. `:temperature`, `:max_tokens`,
+  `:api_key`).
+
+  ## Examples
+
+      {:ok, lm} = Dspy.LM.new("openai/gpt-4.1-mini", api_key: System.get_env("OPENAI_API_KEY"))
+      :ok = Dspy.configure(lm: lm)
+
+      # Snakepit-style arity (second arg is ignored positional args list)
+      {:ok, lm} = Dspy.LM.new("gemini/gemini-flash-lite-latest", [], temperature: 0.7)
+  """
+  @spec new(String.t(), keyword() | list(), keyword()) :: {:ok, t()} | {:error, term()}
+  def new(model, args_or_opts \\ [], opts \\ [])
+
+  def new(model, args_or_opts, opts)
+      when is_binary(model) and is_list(args_or_opts) and is_list(opts) do
+    cond do
+      opts != [] and Keyword.keyword?(opts) ->
+        do_new(model, opts)
+
+      opts == [] and Keyword.keyword?(args_or_opts) ->
+        do_new(model, args_or_opts)
+
+      opts == [] and args_or_opts == [] ->
+        do_new(model, [])
+
+      true ->
+        {:error, {:invalid_lm_new_args, args_or_opts, opts}}
+    end
+  end
+
+  @doc "Bang variant of `new/2` / `new/3`."
+  @spec new!(String.t(), keyword() | list(), keyword()) :: t()
+  def new!(model, args_or_opts \\ [], opts \\ []) do
+    case new(model, args_or_opts, opts) do
+      {:ok, lm} -> lm
+      {:error, reason} -> raise ArgumentError, "failed to create LM: #{inspect(reason)}"
+    end
+  end
+
+  defp do_new(model, opts) when is_binary(model) and is_list(opts) do
+    model = String.trim(model)
+
+    if model == "" do
+      {:error, :invalid_model}
+    else
+      normalized = normalize_model_spec(model)
+      {:ok, Dspy.LM.ReqLLM.new(model: normalized, default_opts: opts)}
+    end
+  end
+
+  defp normalize_model_spec(model) when is_binary(model) do
+    cond do
+      String.contains?(model, ":") ->
+        model
+
+      String.contains?(model, "/") ->
+        case String.split(model, "/", parts: 2) do
+          [provider, rest] when rest != "" -> provider <> ":" <> rest
+          _ -> model
+        end
+
+      true ->
+        model
+    end
+  end
+
+  @doc """
   Generate a completion from the language model.
   """
   @callback generate(lm :: t(), request :: request()) :: {:ok, response()} | {:error, any()}

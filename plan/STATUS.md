@@ -179,6 +179,8 @@ Notes:
 
 ## Log
 
+- **2026-02-10**: Adoption UX: added `Dspy.call/2` + `call!/2` aliases (closer to Python “call the program” mental model) and updated docs to prefer `Dspy.call/2`. Verification: `mix test`.
+- **2026-02-10**: Adoption UX: added a small `Dspy` facade (`forward/2`, `forward!/2`, `configure!/1`) and updated README + compatibility/overview docs to use it. Verification: `mix test`.
 - **2026-02-10**: Docs: `docs/OVERVIEW.md` now links to `docs/TOOLS_REACT.md` from the Tools maturity row (easier discovery). Verification: `mix test`.
 - **2026-02-10**: Cut tag `v0.3.36` (overview tools link).
 

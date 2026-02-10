@@ -122,20 +122,21 @@ end
 Dspy.configure(lm: %DemoLM{})
 
 predict = Dspy.Predict.new("question -> answer")
-{:ok, pred} = Dspy.Module.forward(predict, %{question: "What is 2+2?"})
+{:ok, pred} = Dspy.call(predict, %{question: "What is 2+2?"})
 
 pred.attrs.answer
 ```
 
-## Quick start (real providers via `req_llm`)
+## Quick start (real providers)
 
-Provider specifics are delegated to `req_llm`:
+Provider specifics are delegated to `req_llm` under the hood.
 
 ```elixir
-Dspy.configure(lm: Dspy.LM.ReqLLM.new(model: "openai:gpt-4.1-mini"))
+{:ok, lm} = Dspy.LM.new("openai/gpt-4.1-mini")
+:ok = Dspy.configure(lm: lm)
 
 predict = Dspy.Predict.new("question -> answer")
-{:ok, pred} = Dspy.Module.forward(predict, %{question: "Say hi"})
+{:ok, pred} = Dspy.call(predict, %{question: "Say hi"})
 ```
 
 More: `docs/PROVIDERS.md`.

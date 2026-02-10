@@ -55,7 +55,11 @@ defmodule Dspy.GPT41StreamingIntegrationTest do
     lm = Dspy.LM.ReqLLM.new(model: @model)
 
     # Use ReqLLM directly to avoid coupling this test to any experimental streaming UI.
-    assert {:ok, response} = ReqLLM.stream_text(@model, "Say hello in one short sentence.", temperature: 0.0, max_tokens: 64)
+    assert {:ok, response} =
+             ReqLLM.stream_text(@model, "Say hello in one short sentence.",
+               temperature: 0.0,
+               max_tokens: 64
+             )
 
     stream = ReqLLM.Response.text_stream(response)
 
@@ -69,7 +73,12 @@ defmodule Dspy.GPT41StreamingIntegrationTest do
 
     # Also ensure dspy side can call provider (non-streaming here; streaming is provider-level).
     Dspy.configure(lm: lm, temperature: 0.0, max_tokens: 64, cache: false)
-    assert {:ok, pred} = Dspy.Module.forward(Dspy.Predict.new("question -> answer"), %{question: "What is 2+2? Reply as Answer: 4"})
+
+    assert {:ok, pred} =
+             Dspy.Module.forward(Dspy.Predict.new("question -> answer"), %{
+               question: "What is 2+2? Reply as Answer: 4"
+             })
+
     assert pred.attrs.answer =~ "4"
   end
 end

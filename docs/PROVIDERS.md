@@ -8,6 +8,15 @@ In `dspy.ex`, the main integration point is:
 
 ## Minimal setup
 
+Preferred ergonomic constructor (DSPy intro / DSPex-snakepit style):
+
+```elixir
+{:ok, lm} = Dspy.LM.new("openai/gpt-4.1-mini")
+:ok = Dspy.configure(lm: lm)
+```
+
+Equivalent (explicit adapter):
+
 ```elixir
 # Example (model string syntax is defined by req_llm)
 Dspy.configure(lm: Dspy.LM.ReqLLM.new(model: "openai:gpt-4.1-mini"))

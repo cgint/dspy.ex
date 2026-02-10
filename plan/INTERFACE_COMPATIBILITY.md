@@ -25,7 +25,7 @@ This is a planning artifact (not user-facing docs).
 
 ### Predict
 - Python: `dspy.Predict(Signature)` and also `dspy.Predict("input -> output")`
-- Elixir: `Dspy.Predict.new(Signature)` + `Dspy.Module.forward/2`
+- Elixir: `Dspy.Predict.new(Signature)` + `Dspy.call/2` (or `Dspy.forward/2` / `Dspy.Module.forward/2`)
 - Priority: **P0**
 - Notes:
   - We should support **string signature definitions** (e.g. `"name -> joke"`) as a first-class convenience, to match common DSPy usage.
@@ -56,4 +56,18 @@ This is a planning artifact (not user-facing docs).
 ## DSPex-snakepit alignment
 Reference doc: `docs/DSPex_SNAKEPIT_WRAPPER_REFERENCE.md`
 
-TODO (when choosing milestones): list which interfaces we mirror from snakepit first (especially around provider configuration, adapters, and ergonomic helpers).
+Key UX pattern worth mirroring (even in a native port): **a thin, stable facade** for the happy path.
+
+### Facade pattern (P0)
+DSPex exposes both:
+- a maximal-parity API surface (generated `Dspy.*` tree in DSPex)
+- a thin ergonomic facade (`DSPex.*`) with bang helpers and common entry points
+
+In `dspy.ex` (native), we mirror this idea by keeping the generic/programmatic entry points in `Dspy.*` modules while also offering a small facade in the top-level `Dspy` module:
+- `Dspy.configure!/1` (bang wrapper around `configure/1`)
+- `Dspy.call/2` (alias for `forward/2`; delegates to `Dspy.Module.forward/2`)
+- `Dspy.call!/2` (bang wrapper returning the prediction directly)
+- `Dspy.forward/2` (kept as a more explicit synonym)
+- `Dspy.forward!/2` (kept as a more explicit synonym)
+
+Rationale: this keeps the core behaviour-based design intact, but makes “first contact” usage feel closer to the DSPy/DSPex quick-start experience.

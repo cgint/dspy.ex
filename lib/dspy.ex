@@ -72,6 +72,19 @@ defmodule Dspy do
   end
 
   @doc """
+  Like `configure/1`, but raises on error.
+
+  This is a small convenience wrapper intended for scripts and quick starts.
+  """
+  @spec configure!(dspy_config()) :: :ok
+  def configure!(opts \\ []) do
+    case configure(opts) do
+      :ok -> :ok
+      {:error, reason} -> raise ArgumentError, "failed to configure Dspy: #{inspect(reason)}"
+    end
+  end
+
+  @doc """
   Get current DSPy configuration.
 
   ## Returns
@@ -88,6 +101,48 @@ defmodule Dspy do
   def settings do
     Settings.get()
   end
+
+  @doc """
+  Convenience wrapper around `Dspy.Module.forward/2`.
+
+  This is intended as the common “happy path” invocation entry point.
+  """
+  @spec forward(Dspy.Module.t(), Dspy.Module.inputs()) ::
+          {:ok, Dspy.Module.outputs()} | {:error, term()}
+  def forward(program, inputs) do
+    Dspy.Module.forward(program, inputs)
+  end
+
+  @doc """
+  Like `forward/2`, but raises on error.
+
+  Returns the `Dspy.Prediction` directly.
+  """
+  @spec forward!(Dspy.Module.t(), Dspy.Module.inputs()) :: Dspy.Module.outputs()
+  def forward!(program, inputs) do
+    case forward(program, inputs) do
+      {:ok, prediction} ->
+        prediction
+
+      {:error, reason} ->
+        raise ArgumentError, "failed to forward program: #{inspect(reason)}"
+    end
+  end
+
+  @doc """
+  Alias for `forward/2`.
+
+  This name is slightly closer to Python DSPy usage ("call the program with inputs").
+  """
+  @spec call(Dspy.Module.t(), Dspy.Module.inputs()) ::
+          {:ok, Dspy.Module.outputs()} | {:error, term()}
+  def call(program, inputs), do: forward(program, inputs)
+
+  @doc """
+  Alias for `forward!/2`.
+  """
+  @spec call!(Dspy.Module.t(), Dspy.Module.inputs()) :: Dspy.Module.outputs()
+  def call!(program, inputs), do: forward!(program, inputs)
 
   @doc """
   Create a new Example with the given attributes.

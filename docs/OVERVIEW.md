@@ -46,7 +46,7 @@ end
 Dspy.configure(lm: %DemoLM{})
 
 predict = Dspy.Predict.new("question -> answer")
-{:ok, pred} = Dspy.Module.forward(predict, %{question: "Hello?"})
+{:ok, pred} = Dspy.call(predict, %{question: "Hello?"})
 
 pred.attrs.answer
 ```
@@ -54,10 +54,12 @@ pred.attrs.answer
 ### Quick start (real providers)
 
 ```elixir
-Dspy.configure(lm: Dspy.LM.ReqLLM.new(model: "openai:gpt-4.1-mini"))
+{:ok, lm} = Dspy.LM.new("openai/gpt-4.1-mini")
+:ok = Dspy.configure(lm: lm)
 ```
 
-Provider details + attachment safety: `docs/PROVIDERS.md`.
+Under the hood this uses `req_llm` via `Dspy.LM.ReqLLM`. Provider details + attachment safety:
+`docs/PROVIDERS.md`.
 
 ### 1) Predict with arrow signatures + typed outputs
 
@@ -71,10 +73,10 @@ or you should use a module-based signature (`use Dspy.Signature`).
 Dspy.configure(lm: %MyMockLM{})
 
 joker = Dspy.Predict.new("name -> joke")
-{:ok, joke_pred} = Dspy.Module.forward(joker, %{name: "John"})
+{:ok, joke_pred} = Dspy.call(joker, %{name: "John"})
 
 score = Dspy.Predict.new("joke -> funnyness_0_to_10: int")
-{:ok, score_pred} = Dspy.Module.forward(score, %{joke: joke_pred.attrs.joke})
+{:ok, score_pred} = Dspy.call(score, %{joke: joke_pred.attrs.joke})
 
 score_pred.attrs.funnyness_0_to_10 #=> 7
 ```
@@ -105,7 +107,7 @@ end
 Dspy.configure(lm: %JsonMockLM{})
 
 predict = Dspy.Predict.new(JokeWithRating)
-{:ok, pred} = Dspy.Module.forward(predict, %{name: "John"})
+{:ok, pred} = Dspy.call(predict, %{name: "John"})
 
 pred.attrs.funnyness_0_to_10 #=> 7
 ```
@@ -125,7 +127,7 @@ defmodule Credentials do
 end
 
 classifier = Dspy.Predict.new(Credentials)
-{:ok, pred} = Dspy.Module.forward(classifier, %{text: "my password is 123"})
+{:ok, pred} = Dspy.call(classifier, %{text: "my password is 123"})
 
 pred.attrs.safety #=> "unsafe"
 ```

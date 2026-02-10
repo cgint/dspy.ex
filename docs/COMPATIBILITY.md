@@ -16,10 +16,10 @@ These are deliberate divergences to fit BEAM/Elixir constraints and keep the cor
 
 - **Program invocation:**
   - Python: `pred = program(question="...")`
-  - Elixir: `{:ok, pred} = Dspy.Module.forward(program, inputs)`
+  - Elixir: `{:ok, pred} = Dspy.call(program, inputs)` (alias for `forward/2`, delegates to `Dspy.Module.forward/2`)
 - **Inputs:** maps are preferred, but we also support:
   - string-keyed maps (JSON-friendly)
-  - keyword lists (kwargs-like), e.g. `Dspy.Module.forward(program, question: "...")`
+  - keyword lists (kwargs-like), e.g. `Dspy.call(program, question: "...")`
   - `%Dspy.Example{}` inputs (converted via `Dspy.Example.inputs/1`)
 - **Output access:** use `pred.attrs.answer` or `pred[:answer]` (Access). (We do **not** encourage `pred.answer` as the primary style.)
 - **Atom safety:** signature strings are parsed with `String.to_existing_atom/1` for field names.
@@ -46,10 +46,10 @@ Elixir:
 predict = Dspy.Predict.new("question -> answer")
 
 # map inputs
-{:ok, pred} = Dspy.Module.forward(predict, %{question: "What is 2+2?"})
+{:ok, pred} = Dspy.call(predict, %{question: "What is 2+2?"})
 
 # keyword-list inputs (kwargs-like)
-{:ok, pred2} = Dspy.Module.forward(predict, question: "What is 2+2?")
+{:ok, pred2} = Dspy.call(predict, question: "What is 2+2?")
 
 # output access
 pred[:answer]
@@ -59,7 +59,7 @@ pred.attrs.answer
 JSON-friendly inputs (string keys):
 
 ```elixir
-{:ok, pred} = Dspy.Module.forward(predict, %{"question" => "What is 2+2?"})
+{:ok, pred} = Dspy.call(predict, %{"question" => "What is 2+2?"})
 ```
 
 Evidence:
@@ -81,7 +81,7 @@ Elixir:
 
 ```elixir
 cot = Dspy.ChainOfThought.new("question -> answer")
-{:ok, pred} = Dspy.Module.forward(cot, question: "What is 2+2?")
+{:ok, pred} = Dspy.call(cot, question: "What is 2+2?")
 
 pred[:reasoning]
 pred[:answer]
@@ -199,7 +199,7 @@ Evidence:
 |---|---|---|---|
 | `dspy.Signature` | `Dspy.Signature` + `use Dspy.Signature` | Module-based signatures are the safest default | `test/signature_test.exs` |
 | `dspy.Predict("in -> out")` | `Dspy.Predict.new("in -> out")` | Arrow signatures supported | `test/acceptance/simplest_predict_test.exs` |
-| call: `program(**kwargs)` | `Dspy.Module.forward(program, inputs)` | `inputs` may be map, string-key map, keyword list, or `%Dspy.Example{}` | `test/predict_test.exs`, `test/module_forward_example_test.exs` |
+| call: `program(**kwargs)` | `Dspy.call(program, inputs)` (or `Dspy.forward/2` / `Dspy.Module.forward/2`) | `inputs` may be map, string-key map, keyword list, or `%Dspy.Example{}` | `test/predict_test.exs`, `test/module_forward_example_test.exs` |
 | output: `pred.answer` | `pred[:answer]` / `pred.attrs.answer` | Predictions store outputs in `pred.attrs` | `test/acceptance/simplest_predict_test.exs` |
 | `dspy.Example(...)` | `Dspy.Example.new(...)` | Implements `Access` (`ex[:question]`) | `test/example_prediction_access_test.exs` |
 | `example.with_inputs(...)` | `Dspy.Example.with_inputs/2` + `Dspy.Example.inputs/1` | Mark which attrs are inputs; `Evaluate`/teleprompts forward only inputs when configured | `test/example_with_inputs_test.exs` |
