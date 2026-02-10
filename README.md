@@ -83,6 +83,7 @@ Offline (no network) teleprompt + parameter persistence demos:
 - `mix run examples/parameter_persistence_json_offline.exs`
 - `mix run examples/chain_of_thought_teleprompt_persistence_offline.exs`
 - `mix run examples/chain_of_thought_simba_persistence_offline.exs`
+- `mix run examples/chain_of_thought_copro_persistence_offline.exs`
 - `mix run examples/ensemble_offline.exs`
 
 Optional local inference (manual; may download weights):
