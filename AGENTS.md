@@ -10,9 +10,10 @@ This repository is being developed as an **Elixir-native port** of the upstream 
 5. `plan/STATUS.md` — the current heartbeat (health, decisions, next tasks, verification).
 6. `plan/ITERATION_LOOPS.md` — how we keep iterating safely (outer loop + delegated inner loop).
 7. `plan/QUALITY_BAR.md` — quality bar + testing principles (tests as specification).
-7. `plan/PORTING_CHARTER.md` — scope + operating agreement for how we work.
-8. `agent/MEMORY.md` — compact context window (decisions + “how to resume quickly”).
-9. `agent/SOUL.md` — the assistant’s stable operating principles and learned habits.
+8. `plan/PORTING_CHARTER.md` — scope + operating agreement for how we work.
+9. `agent/WAYOFWORKING.md` — operational playbook (delegation + context hygiene).
+10. `agent/MEMORY.md` — compact context window (decisions + “how to resume quickly”).
+11. `agent/SOUL.md` — the assistant’s stable operating principles and learned habits.
 
 ## Directory intent
 - `docs/`

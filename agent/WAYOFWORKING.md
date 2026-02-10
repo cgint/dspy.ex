@@ -1,0 +1,79 @@
+# WAYOFWORKING.md — How we keep context small and ship reliably
+
+## TL;DR
+
+- **SOUL** (`agent/SOUL.md`) = stable principles (how I behave).
+- **WAY OF WORKING** (this file) = the operational playbook (how we run the loop, delegate, and manage context).
+- **MEMORY** (`agent/MEMORY.md`) = compact “resume quickly” pointers (what exists + where to look).
+- **PLAN** (`plan/*`) = roadmap + decisions + status + verification logs.
+
+## Diagram
+
+![Delegation + context loop](./diagrams/way_of_working_delegation.svg)
+
+## Driver vs delegated work
+
+I (the SOUL/MEMORY agent) am the **driver** for this repo:
+- keep North Star alignment
+- keep scope small and user-valuable
+- enforce determinism/quality gates
+- keep public docs “truth by evidence”
+
+Delegation (automation/sub-agents) is allowed **only** when it reduces total context + risk.
+
+### What to delegate
+
+Delegate only **narrow, mechanical** tasks, e.g.:
+- repo searches / inventories
+- drafting a small doc section
+- generating a patch list
+- repetitive edits with explicit targets
+
+Do **not** delegate:
+- architecture decisions
+- API design tradeoffs
+- anything that can silently change scope
+
+## Context window hygiene
+
+### What goes in chat
+
+- the decision + rationale
+- file paths touched
+- verification commands + results
+
+### What does *not* go in chat
+
+- long logs
+- large search dumps
+- multi-page draft text
+
+Persist those as repo artifacts (usually under `plan/`) and link to them.
+
+## Delegation handback format (required)
+
+Any delegated task must hand back a **compressed summary**:
+
+- **Goal:** (1 line)
+- **Findings:** (≤5 bullets, each with file path + symbol or line refs)
+- **Proposed changes:** (files + what to change)
+- **Risks/unknowns:** (what might break / what’s unclear)
+- **Verification:** (exact commands)
+
+If the handback can’t fit that format, it’s too big and should be split.
+
+## Where to store delegated outputs
+
+- Prefer `plan/research/` for captured stdout/stderr and longer notes.
+- Prefer small, reviewable diffs over giant patches.
+
+`plan/WORKFLOW.md` contains the repo-specific command patterns for delegation (e.g. how we invoke `pi` and where to store logs).
+
+## Review gate (non-negotiable)
+
+Delegated output is **draft input**.
+
+Before merging anything back:
+- I re-check the evidence (tests/code pointers)
+- I run the verification gate (`mix test`, `./precommit.sh` as appropriate)
+- I record any durable learnings/decisions in `plan/STATUS.md` or `agent/MEMORY.md`

@@ -47,7 +47,7 @@ This repository is iterating toward a “DSPy-style Elixir core” with minimal 
 - For non-trivial design decisions, use `asks.sh` (see `docs/ASKS_TOOLING.md`) and record short takeaways in the relevant planning doc (often `plan/QUALITY_BAR.md`).
 - Optional: for longer *mechanical* tasks, delegate implementation to a sub-agent via a shell script calling:
   - `pi --thinking off --models gpt-5.2 -p "<task>"`
-  - capture stdout/stderr to a file under `plan/research/` so we can review later (see `agent/SOUL.md`).
+  - capture stdout/stderr to a file under `plan/research/` so we can review later (see `agent/WAYOFWORKING.md`).
 
 ## Best practices (Elixir)
 - When unsure about idiomatic Elixir/OTP patterns or library design tradeoffs, ask the doc expert agent for Elixir best practices before refactoring.

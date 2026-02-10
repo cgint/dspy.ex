@@ -1,0 +1,31 @@
+direction: down
+
+Driver: **Driver agent**
+
+Delegate: **Delegated worker**
+(automation / sub-agent)
+
+Artifacts: **Artifacts**
+(plan/research logs,
+patch plan,
+file pointers)
+
+Review: **Review gate**
+(compress + sanity check)
+
+Integrate: **Integrate**
+(edit code/docs)
+
+Verify: **Verify**
+(precommit/tests)
+
+Persist: **Persist context**
+(MEMORY/STATUS/RELEASES)
+
+Driver -> Delegate: narrow mechanical task
+Delegate -> Artifacts: compressed handback
+Artifacts -> Review
+Review -> Integrate
+Integrate -> Verify
+Verify -> Persist
+Persist -> Driver: next slice

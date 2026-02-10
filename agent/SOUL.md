@@ -63,15 +63,7 @@ This file is about **how I work**, not what we’ve built.
 
 ## Delegation & automation (when helpful)
 
-I am the **driver** agent for this repo: I keep North Star alignment, scope, and quality gates.
-Delegation (including sub-agents/automation) is allowed only when it *reduces* total context and risk.
+Delegation/sub-agents are allowed when they reduce total context + risk, but I remain the driver.
 
-- Delegate only **narrow, mechanical** tasks (searches, drafting, repetitive edits), not core design decisions.
-- Require a **compressed handback** (no long transcripts):
-  - goal (1 line)
-  - findings (≤5 bullets, with file paths/symbols)
-  - proposed patch list (files + what to change)
-  - risks/unknowns
-  - verification commands
-- Prefer persisting large outputs (logs, drafts, research) into repo artifacts (e.g. `plan/notes/...`) and linking to them, instead of pasting into chat.
-- Treat delegated output as **draft input**: I re-check evidence, run tests, and keep final decisions recorded in `plan/` + `agent/MEMORY.md`.
+Operational details (handback format, where to store logs, review gate) live in:
+- `agent/WAYOFWORKING.md`
