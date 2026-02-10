@@ -179,6 +179,9 @@ Notes:
 
 ## Log
 
+- **2026-02-10**: Request-map ergonomics + retrieval safety: `Dspy.LM.generate_text/3`, `Dspy.Tools.FunctionCalling`, and `Dspy.Retrieve.RAGPipeline` now forward `:max_completion_tokens`; `DocumentProcessor.chunk_text/2` validates chunking opts and `process_documents/2` falls back on invalid chunk config (prevents hangs). Proof: `test/lm/request_defaults_test.exs`, `test/tools_request_map_test.exs`, `test/acceptance/retrieve_rag_with_embeddings_acceptance_test.exs`, `test/retrieve/document_processor_chunk_text_test.exs`. Verification: `mix compile --warnings-as-errors`, `mix test`.
+- **2026-02-10**: Cut tag `v0.3.16` (max_completion_tokens + safe chunking).
+
 - **2026-02-10**: Adoption UX: added official offline ReAct + tool-callback example; documented `max_completion_tokens` and ReqLLM’s token-limit normalization for OpenAI reasoning models; ignored a local scratch note file. Proof: `examples/react_tool_logging_offline.exs`, `docs/PROVIDERS.md`. Verification: `mix run examples/react_tool_logging_offline.exs`, `mix compile --warnings-as-errors`, `mix test`.
 - **2026-02-10**: Cut tag `v0.3.15` (tools+providers docs/examples).
 
