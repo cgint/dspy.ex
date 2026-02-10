@@ -1,0 +1,35 @@
+direction: down
+
+User: "Question"
+
+React: Dspy.Tools.React.run/3 {
+  "build prompt"
+  "call LM (request map)"
+  "parse Action/Answer"
+}
+
+LM: "Dspy.LM.generate/2"
+
+Parse: "parse_react_step"
+
+ToolExec: "tool.function/1" {
+  "Task + timeout"
+  "args map (string keys)"
+}
+
+Callbacks: "Dspy.Tools.Callback" {
+  "on_tool_start"
+  "on_tool_end"
+}
+
+User -> React
+React -> LM: "messages + stop_words\n(max_tokens / max_completion_tokens / temperature)"
+LM -> Parse: "assistant text"
+Parse -> React: "Answer" {
+  style.stroke: "#2b6"
+}
+
+Parse -> ToolExec: "Action: tool(args)"
+ToolExec -> Callbacks: "start/end"
+ToolExec -> React: "Observation"
+React -> LM: "next step"

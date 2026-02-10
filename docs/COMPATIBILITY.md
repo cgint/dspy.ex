@@ -169,6 +169,8 @@ result.answer
 Evidence:
 - Tool call tracking via callbacks: `test/acceptance/simplest_tool_logging_acceptance_test.exs`
 
+Guide: `docs/TOOLS_REACT.md`
+
 ### 6) Retrieval (RAG)
 
 Python (conceptual):
