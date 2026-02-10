@@ -179,6 +179,9 @@ Notes:
 
 ## Log
 
+- **2026-02-10**: Retrieval adoption: added `Dspy.Retrieve.InMemoryRetriever` (GenServer-backed cosine retriever) + deterministic acceptance proof; offline RAG examples were fixed/updated to run. Proof: `test/acceptance/retrieve_rag_in_memory_retriever_acceptance_test.exs`, `examples/retrieve_rag_genserver_offline.exs`. Verification: `mix run examples/retrieve_rag_genserver_offline.exs`, `mix test`.
+- **2026-02-10**: Cut tag `v0.3.26` (InMemoryRetriever).
+
 - **2026-02-10**: Retrieval safety: `Dspy.Retrieve.VectorStore` now returns `{:error, :vector_store_not_started}` instead of crashing with `:noproc` when used without `start_link`; added deterministic tests. Verification: `mix compile --warnings-as-errors`, `mix test`.
 - **2026-02-10**: Cut tag `v0.3.25` (VectorStore safety).
 
