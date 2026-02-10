@@ -51,19 +51,33 @@ A change is publishable when:
 
 ## Release checklist (minimal)
 
+Prereq: the user-facing change slice is already committed (clean working tree).
+
+Optional (recommended): delegate the mechanical bookkeeping to a `pi` handoff, then keep a thin driver gate for tagging/pushing.
+
+```bash
+scripts/pi_handoff.sh --models gpt-5.2 --thinking medium --tools read,bash,edit,write \
+  --goal "Release prep for vX.Y.Z: update VERSION, docs/RELEASES.md, plan/STATUS.md (no commits/tags)" \
+  --context VERSION \
+  --context docs/RELEASES.md \
+  --context plan/STATUS.md
+```
+
 1. Update `VERSION` to `X.Y.Z`.
 2. Run verification:
    - `./precommit.sh`
+   - `scripts/verify_examples.sh`
    - (optionally) `scripts/verify_all.sh`
 3. Prepend a new row to `docs/RELEASES.md` for `vX.Y.Z` with tag-pinned evidence links.
-4. Commit changes.
-5. Create an annotated tag:
+4. Add a short log entry to `plan/STATUS.md` (mention “Cut tag `vX.Y.Z`”).
+5. Commit release bookkeeping changes.
+6. Create an annotated tag:
 
    ```bash
    git tag -a vX.Y.Z -m "vX.Y.Z: <short summary>"
    ```
 
-6. Push `main` and the tag:
+7. Push `main` and the tag:
 
    ```bash
    git push origin main

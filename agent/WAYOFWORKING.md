@@ -83,6 +83,26 @@ scripts/pi_handoff.sh --models gpt-5.2 --goal "<task>" --context <path>
 
 Interactive convenience: project skill `pi-handoff` lives at `.pi/skills/pi-handoff/SKILL.md`.
 
+## Release prep (delegate the bookkeeping)
+
+When cutting a tag, delegate the mechanical bookkeeping to a sub-agent, then keep a thin driver gate for correctness:
+
+1. Driver: finish the code slice and commit it.
+2. Delegate: bump `VERSION`, prepend a row in `docs/RELEASES.md` (tag-pinned links), add a log entry in `plan/STATUS.md`.
+3. Driver: review diff, run `scripts/release_lint.sh`, commit the release commit, tag, push.
+
+Example handoff (enable edit/write tools):
+
+```bash
+scripts/pi_handoff.sh --models gpt-5.2 --thinking medium --tools read,bash,edit,write \
+  --goal "Release prep for vX.Y.Z: update VERSION, docs/RELEASES.md, plan/STATUS.md (no commits/tags)" \
+  --context VERSION \
+  --context docs/RELEASES.md \
+  --context plan/STATUS.md
+```
+
+Tip: also pass the changed files (tests + code) as `--context ...` so the sub-agent can add the right tag-pinned evidence links.
+
 ## Sharpening cadence (avoid drift)
 
 - Do a sharpening pass **once per 5 tags** (or once per 2 weeks, whichever comes later).
