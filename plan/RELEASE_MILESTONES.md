@@ -18,6 +18,16 @@ Each milestone should include:
   - keep core `:dspy` lightweight (minimal deps)
   - move heavy/optional concerns (Phoenix/UI, GenStage-heavy coordination, legacy HTTP) to `extras/dspy_extras`
 
+## Current progress (at a glance)
+
+This is tracked in more detail in `plan/STATUS.md`, but the intent is:
+
+- R0: **DONE** (Predict/CoT + output parsing + provider adapter; proven by acceptance tests)
+- R1: **DONE** (Evaluate determinism + detailed results)
+- R2: **DONE** (multiple parameter-based teleprompters + persistence demos)
+- R3: **NEXT** (interface alignment + prove/demote remaining experimental teleprompts; contribution UX)
+- R4: optional / later
+
 ## R0 — Adoption Baseline (Predict/CoT + JSON output parsing + providers)
 **Goal:** make the *most common* usage reliable.
 
