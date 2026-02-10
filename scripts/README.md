@@ -14,8 +14,11 @@ Loop scripts:
 Ad-hoc delegation:
 - `pi_handoff.sh`: spawn a one-off delegated `pi` run and capture a compact handback under `plan/research/pi_handoffs/*`.
 
-Verification helper:
+Verification helpers:
 - `verify_all.sh`: verifies both core and extras (format check, compile with warnings-as-errors, tests)
+- `ship.sh`: convenience wrapper that runs `./precommit.sh` + `scripts/verify_all.sh`
+- `release_lint.sh`: lightweight check that `VERSION` + `docs/RELEASES.md` are aligned before cutting a tag
+- `sharpen.sh`: appends a timeboxed workflow-improvement template entry to `agent/SHARPENING_LOG.md`
 
 Model policy:
 - Use `--models gpt-5.2 --thinking medium` (provider is linked to model; do not specify provider explicitly).

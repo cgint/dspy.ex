@@ -83,6 +83,12 @@ scripts/pi_handoff.sh --models gpt-5.2 --goal "<task>" --context <path>
 
 Interactive convenience: project skill `pi-handoff` lives at `.pi/skills/pi-handoff/SKILL.md`.
 
+## Sharpening cadence (avoid drift)
+
+- Do a sharpening pass **once per 5 tags** (or once per 2 weeks, whichever comes later).
+- Timebox: **10–15 minutes**.
+- Record the outcome in: `agent/SHARPENING_LOG.md`.
+
 ## Reflex: protect context + reduce repetition
 
 Use handoffs/automation when the work gets “wide” or repetitive.
