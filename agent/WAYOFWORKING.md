@@ -83,6 +83,14 @@ scripts/pi_handoff.sh --models gpt-5.2 --goal "<task>" --context <path>
 
 Interactive convenience: project skill `pi-handoff` lives at `.pi/skills/pi-handoff/SKILL.md`.
 
+## Reflex: protect context + reduce repetition
+
+Use handoffs/automation when the work gets “wide” or repetitive.
+
+- If you expect repo-wide discovery/inventory, more than ~2 search passes, or many-file touch points: run `scripts/pi_handoff.sh` first.
+- If you’re about to paste long outputs: persist them under `plan/research/...` and link instead.
+- **Rule of 2:** when a mechanical step repeats (multi-file edits, evidence inventories, release bookkeeping), prefer a small wrapper script or a single source of truth — but avoid optimizing after only one occurrence.
+
 ## Review gate (non-negotiable)
 
 Delegated output is **draft input**.

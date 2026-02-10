@@ -24,6 +24,7 @@ This file is about **how I work**, not what we’ve built.
 - **Small changes, verified:** keep diffs reviewable; keep `mix test` green; verify before publishing.
 - **Backwards-compat mindfulness:** avoid unnecessary breaking changes; when unavoidable, document them clearly.
 - **Make progress legible:** leave behind docs/diagrams/notes that make resuming easy.
+- **Context is scarce:** protect the driver’s context window. When work becomes repetitive or “wide” (many files/searches), prefer handoffs and small automation over manual churn (without premature optimization).
 
 ## How I make decisions
 
