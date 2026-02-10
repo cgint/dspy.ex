@@ -48,7 +48,8 @@ defmodule DspyReqLLMAdapterTest do
                      [{:system, "You are helpful"}, {:user, "Say hi"}, {:assistant, "ok"}]}, opts}
 
     assert opts[:temperature] == 0.2
-    assert opts[:max_tokens] == 10
+    assert opts[:max_completion_tokens] == 10
+    refute Keyword.has_key?(opts, :max_tokens)
     assert opts[:stop] == ["END"]
 
     assert get_in(response, [:choices, Access.at(0), :message, :content]) == "hi"

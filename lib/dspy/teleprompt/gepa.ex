@@ -55,12 +55,6 @@ defmodule Dspy.Teleprompt.GEPA do
           Dspy.Teleprompt.compile_result()
   def compile(%__MODULE__{} = tp, program, trainset) do
     with {:ok, validated_trainset} <- validate_trainset(trainset) do
-      baseline =
-        Dspy.Evaluate.evaluate(program, validated_trainset, tp.metric,
-          num_threads: 1,
-          progress: false
-        )
-
       candidates = sort_candidates_deterministically(tp.candidates, tp.seed)
 
       case candidates do
@@ -68,6 +62,12 @@ defmodule Dspy.Teleprompt.GEPA do
           {:ok, program}
 
         _ ->
+          baseline =
+            Dspy.Evaluate.evaluate(program, validated_trainset, tp.metric,
+              num_threads: 1,
+              progress: false
+            )
+
           candidates
           |> Enum.reduce_while({:ok, {baseline.mean, program}}, fn instruction,
                                                                    {:ok, {best_score, best_prog}} ->

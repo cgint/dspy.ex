@@ -3,6 +3,8 @@ defmodule DspyTest do
   doctest Dspy
 
   setup do
+    Dspy.TestSupport.restore_settings_on_exit()
+
     # Reset settings for each test
     Dspy.configure(lm: nil, max_tokens: 2048, temperature: 0.0, cache: true)
     :ok

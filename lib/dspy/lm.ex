@@ -18,6 +18,8 @@ defmodule Dspy.LM do
   @type request :: %{
           messages: [message()] | nil,
           max_tokens: pos_integer() | nil,
+          # Some providers (OpenAI reasoning models) use max_completion_tokens instead.
+          max_completion_tokens: pos_integer() | nil,
           temperature: float() | nil,
           stop: [String.t()] | nil,
           tools: [map()] | nil,

@@ -96,10 +96,14 @@ defmodule Dspy.LM.ReqLLM do
         []
         |> maybe_put(:temperature, request[:temperature])
         |> maybe_put(:max_tokens, request[:max_tokens])
+        |> maybe_put(:max_completion_tokens, request[:max_completion_tokens])
         |> maybe_put(:stop, request[:stop])
         |> maybe_put(:tools, request[:tools])
 
-      {:ok, {input, Keyword.merge(lm.default_opts, request_opts)}}
+      opts = Keyword.merge(lm.default_opts, request_opts)
+      opts = normalize_token_limits_for_model(lm.model, opts)
+
+      {:ok, {input, opts}}
     end
   end
 
@@ -357,6 +361,62 @@ defmodule Dspy.LM.ReqLLM do
   end
 
   defp normalize_file_data(_data), do: {:error, :invalid_file_data}
+
+  defp normalize_token_limits_for_model(model_spec, opts)
+       when is_binary(model_spec) and is_list(opts) do
+    if reasoning_model_spec?(model_spec) do
+      max_completion_tokens = Keyword.get(opts, :max_completion_tokens)
+      {max_tokens, opts} = Keyword.pop(opts, :max_tokens)
+
+      cond do
+        is_integer(max_completion_tokens) ->
+          opts
+
+        is_integer(max_tokens) ->
+          Keyword.put(opts, :max_completion_tokens, max_tokens)
+
+        true ->
+          opts
+      end
+    else
+      opts
+    end
+  end
+
+  defp normalize_token_limits_for_model(_model_spec, opts), do: opts
+
+  defp reasoning_model_spec?(model_spec) when is_binary(model_spec) do
+    case split_model_spec(model_spec) do
+      {provider, model_id} when provider in ["openai", "azure"] ->
+        reasoning_model_id?(model_id)
+
+      _ ->
+        false
+    end
+  end
+
+  defp split_model_spec(spec) when is_binary(spec) do
+    case String.split(spec, ":", parts: 2) do
+      [provider, model_id] -> {provider, model_id}
+      _ -> {nil, spec}
+    end
+  end
+
+  # Mirror ReqLLM's OpenAI "reasoning model" detection for the token limit key.
+  # This avoids ReqLLM warning logs for common usage (e.g. GPT-4.1 + max_tokens).
+  defp reasoning_model_id?("gpt-5-chat-latest"), do: false
+  defp reasoning_model_id?(<<"o1", _::binary>>), do: true
+  defp reasoning_model_id?(<<"o3", _::binary>>), do: true
+  defp reasoning_model_id?(<<"o4", _::binary>>), do: true
+  defp reasoning_model_id?(<<"gpt-4.1", _::binary>>), do: true
+  defp reasoning_model_id?(<<"gpt-5", _::binary>>), do: true
+  defp reasoning_model_id?(<<"codex", _::binary>>), do: true
+
+  defp reasoning_model_id?(model_id) when is_binary(model_id) do
+    String.contains?(model_id, "-codex")
+  end
+
+  defp reasoning_model_id?(_), do: false
 
   defp map_usage(nil), do: nil
 
