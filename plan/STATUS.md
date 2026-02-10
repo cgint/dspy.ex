@@ -15,7 +15,7 @@ North star docs:
 - `agent/SOUL.md` (agent operating principles)
 
 ## Releases
-- Current recommended stable tag: `v0.2.15` (see `docs/RELEASES.md`)
+- Current recommended stable tag: `v0.2.16` (see `docs/RELEASES.md`)
 
 ## Loop status
 - Loop state: ACTIVE
@@ -184,6 +184,8 @@ Notes:
 - **2026-02-09**: Added offline Ensemble teleprompt demo script. Verification: `mix run examples/ensemble_offline.exs`.
 - **2026-02-09**: Teleprompt support hardening: GEPA + BootstrapFewShot now fail fast on unsupported programs; extended error-shape tests. Verification: `mix test`.
 - **2026-02-09**: Added offline SIMBA + persistence demo (ChainOfThought optimized via SIMBA; JSON save/restore). Verification: `mix run examples/chain_of_thought_simba_persistence_offline.exs`.
+- **2026-02-09**: BootstrapFewShot error-shape cleanup: internal bootstrapping errors are tagged tuples (no bare strings). Verification: `mix test`.
+- **2026-02-09**: Cut tag `v0.2.16` (BootstrapFewShot error-shape cleanup).
 - **2026-02-09**: Cut tag `v0.2.15` (offline SIMBA + persistence demo).
 - **2026-02-09**: Cut tag `v0.2.14` (teleprompt support hardening: GEPA + BootstrapFewShot).
 - **2026-02-09**: Cut tag `v0.2.13` (offline Ensemble demo).

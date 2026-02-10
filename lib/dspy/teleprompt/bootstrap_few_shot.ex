@@ -266,27 +266,30 @@ defmodule Dspy.Teleprompt.BootstrapFewShot do
 
   defp generate_bootstrap_example(teacher, input, metric) do
     try do
-      # Generate output using teacher
       case Dspy.Module.forward(teacher, input) do
         {:ok, prediction} ->
-          # Create example from input + generated output
           example_attrs = Map.merge(input, prediction.attrs)
           example = Example.new(example_attrs)
 
-          # Score the example (for self-consistency)
           score = Dspy.Teleprompt.run_metric(metric, example, prediction)
 
-          if is_number(score) and score > 0 do
-            {:ok, {example, score}}
-          else
-            {:error, "Invalid score: #{inspect(score)}"}
+          cond do
+            is_number(score) and score > 0 ->
+              {:ok, {example, score}}
+
+            score == :error ->
+              {:error, {:metric_error, :invalid_score}}
+
+            true ->
+              {:error, {:invalid_score, score}}
           end
 
         {:error, reason} ->
-          {:error, "Teacher failed: #{reason}"}
+          {:error, {:teacher_failed, reason}}
       end
     rescue
-      e -> {:error, "Exception: #{Exception.message(e)}"}
+      e ->
+        {:error, {:exception, %{type: e.__struct__, message: Exception.message(e)}}}
     end
   end
 

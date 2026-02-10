@@ -12,6 +12,7 @@ The table below is maintained on `main`, but links are **tag-pinned** so they do
 
 | Tag | What you get | Evidence (tag-pinned) |
 |---|---|---|
+| `v0.2.16` | **BootstrapFewShot error-shape cleanup**: internal bootstrapping errors are tagged tuples (no bare strings) | BootstrapFewShot: https://github.com/cgint/dspy.ex/blob/v0.2.16/lib/dspy/teleprompt/bootstrap_few_shot.ex |
 | `v0.2.15` | **Offline SIMBA + persistence demo**: ChainOfThought optimized via SIMBA + JSON parameter save/restore | Example: https://github.com/cgint/dspy.ex/blob/v0.2.15/examples/chain_of_thought_simba_persistence_offline.exs |
 | `v0.2.14` | **Teleprompt support hardening**: GEPA + BootstrapFewShot now fail fast on unsupported programs (parameter contract) | GEPA: https://github.com/cgint/dspy.ex/blob/v0.2.14/lib/dspy/teleprompt/gepa.ex<br>BootstrapFewShot: https://github.com/cgint/dspy.ex/blob/v0.2.14/lib/dspy/teleprompt/bootstrap_few_shot.ex<br>Error shape proof: https://github.com/cgint/dspy.ex/blob/v0.2.14/test/teleprompt/error_shapes_test.exs |
 | `v0.2.13` | **Offline Ensemble demo**: deterministic `Ensemble.compile/3` example script | Example: https://github.com/cgint/dspy.ex/blob/v0.2.13/examples/ensemble_offline.exs |
