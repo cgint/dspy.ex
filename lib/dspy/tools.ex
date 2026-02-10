@@ -211,8 +211,14 @@ defmodule Dspy.Tools do
     @type callback_entry :: {module(), term()}
 
     @moduledoc """
-    Implementation of ReAct (Reasoning + Acting) pattern.
-    Allows models to interleave reasoning and tool use.
+    Implementation of a small ReAct (Reasoning + Acting) loop.
+
+    Notes:
+    - Tool functions are executed in a separate `Task` and are subject to each tool's `timeout`.
+      Do not rely on `self()` inside a tool being the ReAct process.
+    - Tool start/end callbacks (`Dspy.Tools.Callback`) are invoked around tool execution.
+
+    For the current stable surface + evidence, see `docs/OVERVIEW.md`.
     """
 
     defstruct [
@@ -468,21 +474,37 @@ defmodule Dspy.Tools do
 
     defp call_tool(%Tool{} = tool, args, callbacks) do
       call_id = System.unique_integer([:positive, :monotonic])
+      timeout = tool.timeout || 30_000
 
       notify_tool_start(callbacks, call_id, tool, args)
 
-      try do
-        result = tool.function.(args)
-        notify_tool_end(callbacks, call_id, tool, result, nil)
-        {:ok, result}
-      rescue
-        e ->
-          notify_tool_end(callbacks, call_id, tool, nil, %{
-            kind: :exception,
-            message: Exception.message(e)
-          })
+      task =
+        Task.async(fn ->
+          try do
+            {:ok, tool.function.(args)}
+          rescue
+            e ->
+              {:error,
+               %{
+                 kind: :exception,
+                 message: Exception.message(e)
+               }}
+          end
+        end)
 
-          {:error, "Tool execution failed: #{Exception.message(e)}"}
+      case Task.yield(task, timeout) || Task.shutdown(task) do
+        {:ok, {:ok, result}} ->
+          notify_tool_end(callbacks, call_id, tool, result, nil)
+          {:ok, result}
+
+        {:ok, {:error, error}} ->
+          notify_tool_end(callbacks, call_id, tool, nil, error)
+          {:error, "Tool execution failed: #{error.message}"}
+
+        nil ->
+          error = %{kind: :timeout, message: "Tool execution timed out"}
+          notify_tool_end(callbacks, call_id, tool, nil, error)
+          {:error, error.message}
       end
     end
 
