@@ -179,6 +179,9 @@ Notes:
 
 ## Log
 
+- **2026-02-10**: Adoption UX: added official offline ReAct + tool-callback example; documented `max_completion_tokens` and ReqLLM’s token-limit normalization for OpenAI reasoning models; ignored a local scratch note file. Proof: `examples/react_tool_logging_offline.exs`, `docs/PROVIDERS.md`. Verification: `mix run examples/react_tool_logging_offline.exs`, `mix compile --warnings-as-errors`, `mix test`.
+- **2026-02-10**: Cut tag `v0.3.15` (tools+providers docs/examples).
+
 - **2026-02-10**: Interface familiarity: `Dspy.Module.forward/2` now accepts `%Dspy.Example{}` inputs (converted via `Dspy.Example.inputs/1`), pairing naturally with `Example.with_inputs/2`. Proof: `test/module_forward_example_test.exs`. Verification: `mix compile --warnings-as-errors`, `mix test`.
 - **2026-02-10**: Cut tag `v0.3.14` (forward accepts Example).
 
