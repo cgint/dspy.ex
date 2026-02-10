@@ -1,24 +1,22 @@
 defmodule Dspy.Trainset do
   @moduledoc """
-  Training set management and utilities for DSPy teleprompts.
+  Trainset utilities used by evaluation and teleprompters.
 
-  Provides functionality for:
-  - Training set validation and preprocessing
-  - Data splitting (train/validation/test)
-  - Example sampling and selection
-  - Data augmentation and transformation
-  - Bootstrap sampling for few-shot learning
+  Proven (deterministic tests):
+  - `validate/2` (basic structure + optional signature compatibility + normalization)
+  - `split/2` (seeded shuffling)
+  - `sample/3` (seeded sampling strategies)
+  - `bootstrap_sample/3` (seeded sampling with replacement)
+
+  Notes:
+  - Sampling strategies are intentionally simple heuristics to keep the core deterministic.
+  - For the stable surface + evidence, see `docs/OVERVIEW.md`.
 
   ## Usage
 
-      # Validate training set
       {:ok, validated} = Dspy.Trainset.validate(trainset)
-      
-      # Split data
-      {train, val, test} = Dspy.Trainset.split(dataset, train: 0.7, val: 0.15, test: 0.15)
-      
-      # Sample examples
-      samples = Dspy.Trainset.sample(trainset, 5, strategy: :diverse)
+      {train, val, test} = Dspy.Trainset.split(dataset, train: 0.7, val: 0.15, test: 0.15, seed: 123)
+      samples = Dspy.Trainset.sample(trainset, 5, strategy: :diverse, seed: 456)
 
   """
 

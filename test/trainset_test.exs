@@ -96,4 +96,49 @@ defmodule DspyTrainsetTest do
     assert counts["B"] == 1
     assert counts["C"] == 1
   end
+
+  test "sample/3 with :diverse is deterministic with a seed" do
+    data = dataset(10)
+
+    sample1 = Trainset.sample(data, 4, strategy: :diverse, seed: 999)
+    sample2 = Trainset.sample(data, 4, strategy: :diverse, seed: 999)
+
+    assert sample1 == sample2
+    assert length(sample1) == 4
+  end
+
+  test "sample/3 with :hard selects highest difficulty" do
+    data = [
+      Example.new(%{id: 1, question: "q1", answer: "a1", difficulty: 0.1}),
+      Example.new(%{id: 2, question: "q2", answer: "a2", difficulty: 0.9}),
+      Example.new(%{id: 3, question: "q3", answer: "a3", difficulty: 0.5})
+    ]
+
+    sample = Trainset.sample(data, 2, strategy: :hard, seed: 123, difficulty_field: :difficulty)
+
+    assert Enum.map(sample, & &1.attrs.id) == [2, 3]
+  end
+
+  test "sample/3 with :uncertainty selects highest uncertainty" do
+    data = [
+      Example.new(%{id: 1, question: "q1", answer: "a1", uncertainty: 0.1}),
+      Example.new(%{id: 2, question: "q2", answer: "a2", uncertainty: 0.9}),
+      Example.new(%{id: 3, question: "q3", answer: "a3", uncertainty: 0.5})
+    ]
+
+    sample =
+      Trainset.sample(data, 2, strategy: :uncertainty, seed: 123, uncertainty_field: :uncertainty)
+
+    assert Enum.map(sample, & &1.attrs.id) == [2, 3]
+  end
+
+  test "bootstrap_sample/3 is deterministic with a seed" do
+    data = dataset(5)
+
+    sample1 = Trainset.bootstrap_sample(data, 6, seed: 42)
+    sample2 = Trainset.bootstrap_sample(data, 6, seed: 42)
+
+    assert sample1 == sample2
+    assert length(sample1) == 6
+  end
 end
