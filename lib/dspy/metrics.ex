@@ -19,7 +19,7 @@ defmodule Dspy.Metrics do
       # Create custom metrics
       custom_metric = Dspy.Metrics.create_metric(fn example, pred ->
         # Custom scoring logic
-        if String.contains?(pred.answer, example.answer), do: 1.0, else: 0.0
+        if String.contains?(pred[:answer], example[:answer]), do: 1.0, else: 0.0
       end)
 
   """
@@ -209,7 +209,7 @@ defmodule Dspy.Metrics do
 
       custom_metric = Dspy.Metrics.create_metric(fn example, pred ->
         # Custom logic here
-        similarity_score(example.answer, pred.answer)
+        similarity_score(example[:answer], pred[:answer])
       end, normalize: true)
 
   """
