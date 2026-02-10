@@ -1,12 +1,188 @@
+defmodule Dspy.Teleprompt.Ensemble.Program do
+  @moduledoc false
+
+  use Dspy.Module
+
+  defstruct [:members, :weights, :strategy, :num_threads, :timeout_ms]
+
+  @type t :: %__MODULE__{
+          members: [Dspy.Module.t()],
+          weights: [number()],
+          strategy: atom(),
+          num_threads: pos_integer(),
+          timeout_ms: timeout()
+        }
+
+  @impl true
+  def forward(%__MODULE__{} = ensemble, inputs) when is_map(inputs) do
+    members = ensemble.members || []
+
+    if members == [] do
+      {:error, :no_ensemble_members}
+    else
+      weights = normalize_weights(ensemble.weights, length(members))
+
+      max_concurrency =
+        ensemble.num_threads
+        |> default_num_threads()
+        |> min(length(members))
+        |> max(1)
+
+      member_predictions =
+        members
+        |> Task.async_stream(
+          fn member -> Dspy.Module.forward(member, inputs) end,
+          max_concurrency: max_concurrency,
+          timeout: ensemble.timeout_ms || 30_000
+        )
+        |> Enum.flat_map(fn
+          {:ok, {:ok, prediction}} -> [prediction]
+          _ -> []
+        end)
+
+      if member_predictions == [] do
+        {:error, :all_ensemble_members_failed}
+      else
+        {:ok, combine_predictions(member_predictions, weights, ensemble.strategy)}
+      end
+    end
+  end
+
+  defp default_num_threads(nil), do: System.schedulers_online()
+  defp default_num_threads(n) when is_integer(n) and n > 0, do: n
+  defp default_num_threads(_), do: System.schedulers_online()
+
+  defp normalize_weights(nil, n), do: List.duplicate(1.0, n)
+
+  defp normalize_weights(weights, n) when is_list(weights) do
+    padded = weights ++ List.duplicate(1.0, n)
+    Enum.take(padded, n)
+  end
+
+  defp normalize_weights(_other, n), do: List.duplicate(1.0, n)
+
+  defp combine_predictions(predictions, weights, strategy) do
+    case strategy do
+      :majority_vote ->
+        majority_vote_combination(predictions)
+
+      :weighted_average ->
+        weighted_average_combination(predictions, weights)
+
+      :confidence_based ->
+        confidence_based_combination(predictions)
+
+      :stacking ->
+        weighted_average_combination(predictions, weights)
+
+      _ ->
+        majority_vote_combination(predictions)
+    end
+  end
+
+  defp all_attr_keys(predictions) do
+    predictions
+    |> Enum.flat_map(&Map.keys(&1.attrs || %{}))
+    |> Enum.uniq()
+  end
+
+  defp majority_vote_combination(predictions) do
+    keys = all_attr_keys(predictions)
+
+    voted_attrs =
+      Enum.reduce(keys, %{}, fn field, acc ->
+        values =
+          predictions
+          |> Enum.map(&Map.get(&1.attrs, field))
+          |> Enum.reject(&is_nil/1)
+
+        case values do
+          [] ->
+            acc
+
+          _ ->
+            {most_common, _count} = values |> Enum.frequencies() |> Enum.max_by(&elem(&1, 1))
+            Map.put(acc, field, most_common)
+        end
+      end)
+
+    Dspy.Prediction.new(voted_attrs)
+  end
+
+  defp weighted_average_combination(predictions, weights) do
+    keys = all_attr_keys(predictions)
+
+    combined_attrs =
+      Enum.reduce(keys, %{}, fn field, acc ->
+        values =
+          predictions
+          |> Enum.zip(weights)
+          |> Enum.map(fn {pred, weight} -> {Map.get(pred.attrs, field), weight} end)
+          |> Enum.reject(fn {val, _weight} -> is_nil(val) end)
+
+        case values do
+          [] ->
+            acc
+
+          _ ->
+            first_val = values |> hd() |> elem(0)
+
+            combined_value =
+              cond do
+                is_number(first_val) and Enum.all?(values, fn {v, _w} -> is_number(v) end) ->
+                  weighted_sum = values |> Enum.map(fn {v, w} -> v * w end) |> Enum.sum()
+                  total_weight = values |> Enum.map(&elem(&1, 1)) |> Enum.sum()
+
+                  if total_weight > 0 do
+                    weighted_sum / total_weight
+                  else
+                    first_val
+                  end
+
+                true ->
+                  values
+                  |> Enum.reduce(%{}, fn {v, w}, freq ->
+                    Map.update(freq, v, w, &(&1 + w))
+                  end)
+                  |> Enum.max_by(&elem(&1, 1))
+                  |> elem(0)
+              end
+
+            Map.put(acc, field, combined_value)
+        end
+      end)
+
+    Dspy.Prediction.new(combined_attrs)
+  end
+
+  defp confidence_based_combination(predictions) do
+    predictions
+    |> Enum.max_by(fn pred ->
+      Map.get(pred.attrs, :confidence, 0.5)
+    end)
+  end
+end
+
 defmodule Dspy.Teleprompt.Ensemble do
   @moduledoc """
   Ensemble teleprompt - Combines multiple programs for improved performance.
 
-  Creates an ensemble of programs that can be combined using various strategies:
-  - Majority voting for classification
-  - Weighted averaging for regression
-  - Confidence-based selection
-  - Stacking with meta-learner
+  This teleprompt trains multiple optimized variants of a base program ("members")
+  and returns an ensemble program that combines their predictions.
+
+  Important notes:
+  - This implementation is **struct-based** and does **not** generate runtime
+    modules (no `defmodule` at runtime).
+  - The returned program is `%Dspy.Teleprompt.Ensemble.Program{}`.
+
+  The optimizer supports a few combination strategies:
+  - `:majority_vote` (classification-style)
+  - `:weighted_average` (numeric regression-style; falls back to weighted vote)
+  - `:confidence_based` (selects the prediction with highest `:confidence` attr)
+  - `:stacking` (currently aliases to `:weighted_average`)
+
+  This module is still conservative/alpha; treat it as a deterministic, offline-
+  proven building block rather than a full DSPy-parity ensemble implementation.
 
   ## Usage
 
@@ -15,12 +191,9 @@ defmodule Dspy.Teleprompt.Ensemble do
         combination_strategy: :majority_vote,
         base_teleprompt: :bootstrap_few_shot
       )
-      
-      {:ok, ensemble_program} = Dspy.Teleprompt.Ensemble.compile(
-        teleprompt, 
-        program, 
-        trainset
-      )
+
+      {:ok, ensemble_program} =
+        Dspy.Teleprompt.Ensemble.compile(teleprompt, program, trainset)
 
   """
 
@@ -28,6 +201,8 @@ defmodule Dspy.Teleprompt.Ensemble do
 
   alias Dspy.{Example, Evaluate, Trainset}
   alias Dspy.Teleprompt.{BootstrapFewShot, LabeledFewShot, COPRO}
+
+  alias __MODULE__.Program
 
   defstruct [
     # Number of ensemble members
@@ -46,7 +221,7 @@ defmodule Dspy.Teleprompt.Ensemble do
     :num_threads,
     # Random seed
     :seed,
-    # Whether to print progress
+    # Whether to emit progress logs
     :verbose
   ]
 
@@ -65,22 +240,6 @@ defmodule Dspy.Teleprompt.Ensemble do
           verbose: boolean()
         }
 
-  @doc """
-  Create a new Ensemble teleprompt.
-
-  ## Options
-
-  - `:size` - Number of ensemble members (default: 5)
-  - `:combination_strategy` - How to combine predictions (default: :majority_vote)
-  - `:base_teleprompt` - Base teleprompt type (default: :bootstrap_few_shot)
-  - `:base_teleprompt_config` - Config for base teleprompt (default: [])
-  - `:diversity_strategy` - How to ensure diversity (default: :random_samples)
-  - `:validation_split` - Validation data fraction (default: 0.2)
-  - `:num_threads` - Parallel threads (default: auto)
-  - `:seed` - Random seed for reproducibility
-  - `:verbose` - Print progress (default: true)
-
-  """
   @impl Dspy.Teleprompt
   @spec new(keyword()) :: t()
   def new(opts \\ []) do
@@ -97,17 +256,6 @@ defmodule Dspy.Teleprompt.Ensemble do
     }
   end
 
-  @doc """
-  Compile an ensemble of programs.
-
-  ## Process
-
-  1. Split training data into ensemble training sets
-  2. Train multiple programs using base teleprompt
-  3. Validate ensemble members
-  4. Create ensemble program with combination strategy
-
-  """
   @impl Dspy.Teleprompt
   @spec compile(t(), Dspy.Teleprompt.program_t(), list(Example.t())) ::
           Dspy.Teleprompt.compile_result()
@@ -180,11 +328,9 @@ defmodule Dspy.Teleprompt.Ensemble do
 
     Dspy.Teleprompt.Util.log(teleprompt, "Training #{size} ensemble members...")
 
-    # Generate diverse training configurations
     training_configs =
       generate_diverse_configurations(diversity_strategy, size, train_data, base_config, seed)
 
-    # Train ensemble members in parallel
     members =
       training_configs
       |> Enum.with_index(1)
@@ -216,21 +362,18 @@ defmodule Dspy.Teleprompt.Ensemble do
 
     case strategy do
       :random_samples ->
-        # Each member gets a different random sample of training data
         for i <- 1..size do
           sampled_data = Trainset.bootstrap_sample(train_data, length(train_data), seed: seed + i)
           {sampled_data, Keyword.put(base_config, :seed, seed + i)}
         end
 
       :different_configs ->
-        # Each member gets different hyperparameters
         for i <- 1..size do
           varied_config = vary_config(base_config, i, seed)
           {train_data, varied_config}
         end
 
       :bootstrap_aggregating ->
-        # Bootstrap aggregating (bagging)
         for i <- 1..size do
           bootstrap_size = round(length(train_data) * (0.8 + :rand.uniform() * 0.4))
           sampled_data = Trainset.bootstrap_sample(train_data, bootstrap_size, seed: seed + i)
@@ -242,7 +385,6 @@ defmodule Dspy.Teleprompt.Ensemble do
   defp vary_config(base_config, member_idx, seed) do
     :rand.seed(:exsss, {seed + member_idx, seed + member_idx + 1, seed + member_idx + 2})
 
-    # Vary configuration parameters
     base_config
     |> Keyword.put(:seed, seed + member_idx)
     |> vary_parameter(:max_bootstrapped_demos, [2, 3, 4, 5, 6])
@@ -262,23 +404,21 @@ defmodule Dspy.Teleprompt.Ensemble do
 
   defp train_single_member(base_type, program, {training_data, config}) do
     try do
-      # Create base teleprompt instance
       base_teleprompt =
         case base_type do
           :bootstrap_few_shot -> BootstrapFewShot.new(config)
           :labeled_few_shot -> LabeledFewShot.new(config)
           :copro -> COPRO.new(config)
-          # fallback
           _ -> BootstrapFewShot.new(config)
         end
 
-      # Train the member
       case Dspy.Teleprompt.compile(base_teleprompt, program, training_data) do
         {:ok, trained_program} -> {:ok, trained_program}
         {:error, reason} -> {:error, reason}
       end
     rescue
-      e -> {:error, Exception.message(e)}
+      e ->
+        {:error, {:exception, %{type: e.__struct__, message: Exception.message(e)}}}
     end
   end
 
@@ -289,21 +429,17 @@ defmodule Dspy.Teleprompt.Ensemble do
        ) do
     case strategy do
       :majority_vote ->
-        # Equal weights for majority voting
         weights = members |> Enum.map(fn _ -> 1.0 end)
         {:ok, weights}
 
       :weighted_average ->
-        # Weights based on validation performance
         calculate_performance_weights(teleprompt, members, val_data)
 
       :confidence_based ->
-        # Weights will be calculated dynamically based on confidence
         weights = members |> Enum.map(fn _ -> 1.0 end)
         {:ok, weights}
 
       :stacking ->
-        # Train meta-learner (simplified implementation)
         calculate_stacking_weights(teleprompt, members, val_data)
     end
   end
@@ -313,10 +449,8 @@ defmodule Dspy.Teleprompt.Ensemble do
          members,
          val_data
        ) do
-    # Get metric from base config or use default
     metric = Keyword.get(config, :metric, &Dspy.Metrics.exact_match/2)
 
-    # Evaluate each member on validation data
     performances =
       members
       |> Task.async_stream(
@@ -328,168 +462,31 @@ defmodule Dspy.Teleprompt.Ensemble do
       )
       |> Enum.map(fn {:ok, perf} -> perf end)
 
-    # Convert to weights (softmax)
     total_exp = performances |> Enum.map(&:math.exp/1) |> Enum.sum()
-    weights = performances |> Enum.map(fn perf -> :math.exp(perf) / total_exp end)
+
+    weights =
+      if total_exp > 0 do
+        performances |> Enum.map(fn perf -> :math.exp(perf) / total_exp end)
+      else
+        members |> Enum.map(fn _ -> 1.0 end)
+      end
 
     {:ok, weights}
   end
 
   defp calculate_stacking_weights(_teleprompt, members, _val_data) do
-    # Simplified stacking - equal weights for now
-    # In practice, would train a meta-learner
     weights = members |> Enum.map(fn _ -> 1.0 / length(members) end)
     {:ok, weights}
   end
 
   defp create_ensemble_program(%__MODULE__{} = teleprompt, members, weights) do
-    {:module, ensemble_program, _binary, _exports} =
-      defmodule EnsembleProgram do
-        @behaviour Dspy.Module
-
-        @members members
-        @weights weights
-        @strategy teleprompt.combination_strategy
-        @size length(members)
-
-        def __members__, do: @members
-        def __weights__, do: @weights
-        def __strategy__, do: @strategy
-        def __size__, do: @size
-
-        @impl Dspy.Module
-        def forward(input) do
-          members = __members__()
-          weights = __weights__()
-          strategy = __strategy__()
-
-          # Get predictions from all members
-          member_predictions =
-            members
-            |> Task.async_stream(
-              fn member ->
-                Dspy.Module.forward(member, input)
-              end,
-              timeout: 30_000
-            )
-            |> Enum.map(fn
-              {:ok, {:ok, prediction}} -> prediction
-              _ -> nil
-            end)
-            |> Enum.filter(&(&1 != nil))
-
-          if length(member_predictions) == 0 do
-            {:error, :all_ensemble_members_failed}
-          else
-            # Combine predictions using strategy
-            combined_prediction = combine_predictions(member_predictions, weights, strategy)
-            {:ok, combined_prediction}
-          end
-        end
-
-        @impl Dspy.Module
-        def parameters do
-          %{
-            ensemble_size: __size__(),
-            combination_strategy: __strategy__(),
-            member_weights: __weights__(),
-            ensemble_type: "Ensemble"
-          }
-        end
-
-        defp combine_predictions(predictions, weights, strategy) do
-          case strategy do
-            :majority_vote ->
-              majority_vote_combination(predictions)
-
-            :weighted_average ->
-              weighted_average_combination(predictions, weights)
-
-            :confidence_based ->
-              confidence_based_combination(predictions)
-
-            :stacking ->
-              stacking_combination(predictions, weights)
-          end
-        end
-
-        defp majority_vote_combination(predictions) do
-          # Simple majority vote for each output field
-          all_attrs = predictions |> Enum.map(& &1.attrs) |> Enum.reduce(%{}, &Map.merge/2)
-
-          voted_attrs =
-            all_attrs
-            |> Enum.map(fn {field, _} ->
-              values =
-                predictions |> Enum.map(&Map.get(&1.attrs, field)) |> Enum.filter(&(&1 != nil))
-
-              most_common = values |> Enum.frequencies() |> Enum.max_by(&elem(&1, 1)) |> elem(0)
-              {field, most_common}
-            end)
-            |> Map.new()
-
-          Dspy.Prediction.new(voted_attrs)
-        end
-
-        defp weighted_average_combination(predictions, weights) do
-          # Weighted combination for numeric values, majority vote for others
-          all_attrs = predictions |> Enum.map(& &1.attrs) |> Enum.reduce(%{}, &Map.merge/2)
-
-          combined_attrs =
-            all_attrs
-            |> Enum.map(fn {field, _} ->
-              values =
-                predictions
-                |> Enum.zip(weights)
-                |> Enum.map(fn {pred, weight} -> {Map.get(pred.attrs, field), weight} end)
-                |> Enum.filter(fn {val, _} -> val != nil end)
-
-              combined_value =
-                if length(values) > 0 do
-                  case hd(values) |> elem(0) do
-                    val when is_number(val) ->
-                      # Weighted average for numbers
-                      weighted_sum = values |> Enum.map(fn {v, w} -> v * w end) |> Enum.sum()
-                      total_weight = values |> Enum.map(&elem(&1, 1)) |> Enum.sum()
-                      if total_weight > 0, do: weighted_sum / total_weight, else: val
-
-                    _ ->
-                      # Majority vote for non-numeric
-                      values
-                      |> Enum.map(&elem(&1, 0))
-                      |> Enum.frequencies()
-                      |> Enum.max_by(&elem(&1, 1))
-                      |> elem(0)
-                  end
-                else
-                  nil
-                end
-
-              {field, combined_value}
-            end)
-            |> Enum.filter(fn {_, val} -> val != nil end)
-            |> Map.new()
-
-          Dspy.Prediction.new(combined_attrs)
-        end
-
-        defp confidence_based_combination(predictions) do
-          # Select prediction with highest confidence
-          best_prediction =
-            predictions
-            |> Enum.max_by(fn pred ->
-              Map.get(pred.attrs, :confidence, 0.5)
-            end)
-
-          best_prediction
-        end
-
-        defp stacking_combination(predictions, weights) do
-          # Simplified stacking - weighted combination
-          weighted_average_combination(predictions, weights)
-        end
-      end
-
-    {:ok, ensemble_program}
+    {:ok,
+     %Program{
+       members: members,
+       weights: weights,
+       strategy: teleprompt.combination_strategy,
+       num_threads: teleprompt.num_threads,
+       timeout_ms: 30_000
+     }}
   end
 end

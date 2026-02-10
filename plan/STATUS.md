@@ -15,7 +15,7 @@ North star docs:
 - `agent/SOUL.md` (agent operating principles)
 
 ## Releases
-- Current recommended stable tag: `v0.2.10` (see `docs/RELEASES.md`)
+- Current recommended stable tag: `v0.2.11` (see `docs/RELEASES.md`)
 
 ## Loop status
 - Loop state: ACTIVE
@@ -36,6 +36,7 @@ North star docs:
   - [x] ChainOfThought parity: arrow signatures + attachments request parts + teleprompt parameters
   - [x] LabeledFewShot supports `%Dspy.ChainOfThought{}` (via `predict.examples` parameter)
   - [x] SIMBA supports `%Dspy.ChainOfThought{}` (via `predict.instructions` parameter)
+  - [x] Ensemble teleprompt returns a struct program (no runtime modules) + deterministic improvement proof
   - [x] Add unit tests for `Dspy.Teleprompt.Util.set_parameter/4`
   - [x] Provider-layer acceptance tests (ReqLLM default wiring + “real provider” smoke behind tags)
   - [x] Clean up top-level `Dspy` moduledoc to avoid overpromising
@@ -73,6 +74,9 @@ North star docs:
   - Evidence file: `lib/dspy/teleprompt/labeled_few_shot.ex` (no dynamic module creation)
   - Evidence file: `lib/dspy/teleprompt/copro.ex` (no dynamic module creation)
   - Evidence file: `lib/dspy/teleprompt/mipro_v2.ex` (no dynamic module creation)
+  - Evidence file: `lib/dspy/teleprompt/ensemble.ex` (struct-based; no runtime modules)
+  - Evidence file: `test/teleprompt/ensemble_program_test.exs`
+  - Evidence file: `test/teleprompt/ensemble_compile_improvement_test.exs`
   - Evidence file: `test/bootstrap_few_shot_smoke_test.exs`
   - Evidence file: `test/teleprompt/bootstrap_few_shot_chain_of_thought_improvement_test.exs`
   - Evidence file: `test/teleprompt/bootstrap_few_shot_determinism_test.exs`
@@ -171,6 +175,8 @@ Notes:
 - **2026-02-09**: SIMBA proven for `%Dspy.ChainOfThought{}` (seeded improvement via `predict.instructions`); documented BootstrapFewShot in overview. Verification: `mix test`.
 - **2026-02-09**: BootstrapFewShot + GEPA proven for `%Dspy.ChainOfThought{}` (seeded improvements via `predict.examples` / `predict.instructions`); updated docs and SIMBA moduledoc. Verification: `mix test`.
 - **2026-02-09**: Added offline demo: ChainOfThought + LabeledFewShot + JSON parameter persistence. Verification: `mix run examples/chain_of_thought_teleprompt_persistence_offline.exs`, `mix test`.
+- **2026-02-09**: Fixed Ensemble teleprompt: returns a struct program (no runtime modules) + deterministic tests. Verification: `mix test`.
+- **2026-02-09**: Cut tag `v0.2.11` (Ensemble teleprompt fixed; no runtime modules).
 - **2026-02-09**: Cut tag `v0.2.10` (offline workflow demo: CoT teleprompt + persistence).
 - **2026-02-09**: Cut tag `v0.2.9` (BootstrapFewShot + GEPA proven for ChainOfThought).
 - **2026-02-09**: Cut tag `v0.2.8` (SIMBA proven for ChainOfThought).
