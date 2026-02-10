@@ -179,6 +179,9 @@ Notes:
 
 ## Log
 
+- **2026-02-10**: Examples reliability: added `scripts/verify_examples.sh` to run the official deterministic (offline) examples and catch drift early. Verification: `scripts/verify_examples.sh`.
+- **2026-02-10**: Cut tag `v0.3.27` (verify offline examples).
+
 - **2026-02-10**: Retrieval adoption: added `Dspy.Retrieve.InMemoryRetriever` (GenServer-backed cosine retriever) + deterministic acceptance proof; offline RAG examples were fixed/updated to run. Proof: `test/acceptance/retrieve_rag_in_memory_retriever_acceptance_test.exs`, `examples/retrieve_rag_genserver_offline.exs`. Verification: `mix run examples/retrieve_rag_genserver_offline.exs`, `mix test`.
 - **2026-02-10**: Cut tag `v0.3.26` (InMemoryRetriever).
 

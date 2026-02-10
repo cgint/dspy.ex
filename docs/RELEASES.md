@@ -12,6 +12,7 @@ The table below is maintained on `main`, but links are **tag-pinned** so they do
 
 | Tag | What you get | Evidence (tag-pinned) |
 |---|---|---|
+| `v0.3.27` | **Verify offline examples**: added `scripts/verify_examples.sh` to run the official deterministic examples (helps keep examples trustworthy) | Script: https://github.com/cgint/dspy.ex/blob/v0.3.27/scripts/verify_examples.sh<br>Docs: https://github.com/cgint/dspy.ex/blob/v0.3.27/scripts/README.md |
 | `v0.3.26` | **Built-in in-memory retriever (RAG)**: added `Dspy.Retrieve.InMemoryRetriever` (GenServer-backed cosine retriever) + deterministic acceptance proof; offline RAG examples fixed/updated to run | Retriever: https://github.com/cgint/dspy.ex/blob/v0.3.26/lib/dspy/retrieve/in_memory_retriever.ex<br>Proof: https://github.com/cgint/dspy.ex/blob/v0.3.26/test/acceptance/retrieve_rag_in_memory_retriever_acceptance_test.exs<br>Example: https://github.com/cgint/dspy.ex/blob/v0.3.26/examples/retrieve_rag_genserver_offline.exs |
 | `v0.3.25` | **VectorStore safety**: `Dspy.Retrieve.VectorStore` no longer crashes with `:noproc` when not started; it now returns `{:error, :vector_store_not_started}`; added deterministic tests | VectorStore: https://github.com/cgint/dspy.ex/blob/v0.3.25/lib/dspy/retrieve.ex<br>Proof: https://github.com/cgint/dspy.ex/blob/v0.3.25/test/retrieve/vector_store_safety_test.exs |
 | `v0.3.24` | **README example discoverability**: added the official offline Tools/ReAct example to the README examples list | README: https://github.com/cgint/dspy.ex/blob/v0.3.24/README.md |
