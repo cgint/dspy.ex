@@ -33,10 +33,18 @@ You can set global defaults for common generation parameters via `Dspy.configure
 These are applied to request maps **only when the request does not specify them**.
 
 ```elixir
+# Most models
 Dspy.configure(
-  lm: Dspy.LM.ReqLLM.new(model: "openai:gpt-4.1-mini"),
+  lm: Dspy.LM.ReqLLM.new(model: "openai:gpt-4o-mini"),
   temperature: 0.0,
   max_tokens: 128
+)
+
+# OpenAI reasoning models (o-series, gpt-5, etc.) may prefer max_completion_tokens
+Dspy.configure(
+  lm: Dspy.LM.ReqLLM.new(model: "openai:o3-mini"),
+  temperature: 0.0,
+  max_completion_tokens: 256
 )
 ```
 
@@ -53,9 +61,11 @@ To keep logs quiet and behavior predictable, `Dspy.LM.ReqLLM` will normalize tok
 - if you pass `max_tokens`, it will be forwarded as `max_completion_tokens`
 - `max_tokens` will not be forwarded in that case
 
-If you want to be explicit, pass `max_completion_tokens` directly in the request map.
+If you want to be explicit, pass `max_completion_tokens` directly in the request map (or set it as a global default via `Dspy.configure(max_completion_tokens: ...)`).
 
-Evidence: `test/lm/req_llm_token_limits_test.exs`.
+Evidence:
+- ReqLLM token-limit normalization: `test/lm/req_llm_token_limits_test.exs`
+- Settings defaults applied to request maps: `test/lm/request_defaults_test.exs`
 
 ## Request-map contract
 
