@@ -179,6 +179,9 @@ Notes:
 
 ## Log
 
+- **2026-02-10**: Tools: `Dspy.Tools.React` now executes tool functions in a `Task` and enforces each tool’s `timeout` (callbacks receive a `:timeout` error shape); added deterministic tests. Verification: `mix compile --warnings-as-errors`, `mix test`.
+- **2026-02-10**: Cut tag `v0.3.20` (ReAct tool timeouts).
+
 - **2026-02-10**: Retrieval ergonomics: `Dspy.Retrieve.RAGPipeline` now accepts retriever documents as maps (atom or string keys) for `content`/`source`/`score`; added proof test. Verification: `mix compile --warnings-as-errors`, `mix test`.
 - **2026-02-10**: Cut tag `v0.3.19` (RAG doc shapes).
 
