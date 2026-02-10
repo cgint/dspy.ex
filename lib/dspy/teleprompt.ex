@@ -55,7 +55,7 @@ defmodule Dspy.Teleprompt do
 
   ## Parameters
 
-  - `type` - Teleprompt type (:bootstrap_few_shot, :mipro_v2, :simba, etc.)
+  - `type` - Teleprompt type (`:bootstrap_few_shot`, `:simba`, `:gepa`, etc.)
   - `opts` - Configuration options
 
   ## Examples

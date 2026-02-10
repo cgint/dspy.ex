@@ -278,13 +278,11 @@ These are intentionally phrased as **concrete milestones** with a “proof artif
 
 ### Next workflow-parity milestones
 
-- **Teleprompt parity beyond the “proven set”**: either prove `COPRO`/`MIPROv2` with deterministic tests, or explicitly mark/move them as experimental.
+- **Teleprompts beyond the proven set**: COPRO/MIPROv2 are currently quarantined (not part of core). Either prove them deterministically and promote them back into core, or keep them extras-only and document the boundary.
 - **Interface familiarity audit**: for the already-proven workflows, check shapes vs upstream Python DSPy + DSPex-snakepit and document intentional divergences.
 
 ### Next maturity milestones
 
-- **Contribution UX**: add `CONTRIBUTING.md`, issue templates, and a minimal-repro pattern (e.g. single `.exs`, `Mix.install/2`-friendly).
-- **Examples curation**: clearly separate “official deterministic” examples from experimental scripts.
-- **Core scope audit**: keep `:dspy` focused; move unrelated/experimental modules into `extras/` or a separate namespace.
-- (Optional) Expand JSON parameter persistence to more structs (beyond `%Dspy.Example{}`)
-- (Optional) Add more provider smoke tests (Anthropic, etc.) behind `:integration`/`:network` tags
+- **Provider parity**: add more opt-in `:integration`/`:network` smoke tests + docs (Anthropic, etc.).
+- (Optional) Expand JSON parameter persistence to more structs (beyond `%Dspy.Example{}`).
+- (Optional) Add more evaluation/reporting utilities (keeping deterministic tests).
