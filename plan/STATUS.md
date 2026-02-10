@@ -179,6 +179,9 @@ Notes:
 
 ## Log
 
+- **2026-02-10**: Determinism: `Dspy.Trainset.stratified_sample/3` now iterates groups in stable order, making `Trainset.sample(..., strategy: :balanced, seed: ...)` deterministic; added proof test. Verification: `mix compile --warnings-as-errors`, `mix test`.
+- **2026-02-10**: Cut tag `v0.3.18` (balanced sampling determinism).
+
 - **2026-02-10**: Docs/truth-by-evidence polish: clarified Tools/Retrieve moduledocs (stable vs placeholder); added Tools+Retrieve offline example commands to `docs/OVERVIEW.md`; added contributor troubleshooting for the Hex cache ETS warning. Verification: `mix compile --warnings-as-errors`, `mix test`.
 - **2026-02-10**: Cut tag `v0.3.17` (docs polish).
 
