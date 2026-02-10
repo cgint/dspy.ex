@@ -16,11 +16,17 @@ defmodule Dspy.Retrieve do
   defmodule Retriever do
     @moduledoc """
     Base retriever behavior.
+
+    Error shapes are intentionally `term()` so retrievers can return structured
+    reasons (e.g. `:not_started`, `{:http_error, ...}`) while call sites can still
+    present user-friendly messages.
     """
 
-    @callback retrieve(String.t(), keyword()) :: {:ok, list()} | {:error, String.t()}
-    @callback index_documents(list(), keyword()) :: {:ok, any()} | {:error, String.t()}
-    @callback clear_index(keyword()) :: :ok | {:error, String.t()}
+    @type error_reason :: term()
+
+    @callback retrieve(String.t(), keyword()) :: {:ok, list()} | {:error, error_reason()}
+    @callback index_documents(list(), keyword()) :: {:ok, any()} | {:error, error_reason()}
+    @callback clear_index(keyword()) :: :ok | {:error, error_reason()}
   end
 
   defmodule Document do
@@ -250,52 +256,21 @@ defmodule Dspy.Retrieve do
     end
 
     @impl true
-    def retrieve(query, opts \\ []) do
-      # Mock ColBERTv2 implementation - would integrate with actual ColBERT server
-      k = opts[:k] || 10
-
-      # For now, use simple embedding-based retrieval
-      case VectorStore.search(query, k: k) do
-        {:ok, results} ->
-          formatted_results =
-            Enum.map(results, fn doc ->
-              %{
-                content: doc.content,
-                score: doc.score || 0.0,
-                metadata: doc.metadata || %{}
-              }
-            end)
-
-          {:ok, formatted_results}
-
-        {:error, reason} ->
-          {:error, reason}
-      end
+    def retrieve(_query, _opts \\ []) do
+      {:error,
+       "ColBERTv2 is a placeholder in core :dspy (use a custom Retriever + RAGPipeline; see docs/OVERVIEW.md)"}
     end
 
     @impl true
-    def index_documents(documents, _opts \\ []) do
-      # Convert to Document structs and add to vector store
-      doc_structs =
-        Enum.map(documents, fn doc ->
-          %Document{
-            id: doc[:id] || generate_id(),
-            content: doc[:content] || doc["content"],
-            metadata: doc[:metadata] || doc["metadata"] || %{},
-            source: doc[:source] || doc["source"]
-          }
-        end)
-
-      VectorStore.add_documents(doc_structs)
+    def index_documents(_documents, _opts \\ []) do
+      {:error,
+       "ColBERTv2 is a placeholder in core :dspy (indexing not implemented; see docs/OVERVIEW.md)"}
     end
 
     @impl true
     def clear_index(_opts \\ []) do
-      VectorStore.clear()
-    end
-
-    defp generate_id do
-      :crypto.strong_rand_bytes(16) |> Base.encode16(case: :lower)
+      {:error,
+       "ColBERTv2 is a placeholder in core :dspy (clear_index not implemented; see docs/OVERVIEW.md)"}
     end
   end
 
