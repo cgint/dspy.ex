@@ -84,6 +84,9 @@ Offline (no network) Retrieval + RAG demos:
 - `mix run examples/retrieve_rag_offline.exs`
 - `mix run examples/retrieve_rag_genserver_offline.exs`
 
+Offline (no network) Tools + ReAct demo:
+- `mix run examples/react_tool_logging_offline.exs`
+
 Offline (no network) teleprompt + parameter persistence demos:
 - `mix run examples/parameter_persistence_json_offline.exs`
 - `mix run examples/predict_mipro_v2_persistence_offline.exs`
