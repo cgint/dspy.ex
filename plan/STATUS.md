@@ -15,7 +15,7 @@ North star docs:
 - `agent/SOUL.md` (agent operating principles)
 
 ## Releases
-- Current recommended stable tag: `v0.3.2` (see `docs/RELEASES.md`)
+- Current recommended stable tag: `v0.3.3` (see `docs/RELEASES.md`)
 
 ## User-centric OSS posture
 - **Docs are evidence-backed**: `docs/OVERVIEW.md` should only claim what has deterministic proof artifacts.
@@ -179,6 +179,8 @@ Notes:
 
 ## Log
 
+- **2026-02-10**: COPRO now supports `%Dspy.ChainOfThought{}` (deterministic improvement proof for both Predict + CoT). Verification: `mix compile --warnings-as-errors`, `mix test`, `scripts/verify_all.sh`.
+- **2026-02-10**: Cut tag `v0.3.3` (COPRO for ChainOfThought).
 - **2026-02-10**: COPRO teleprompt proven + promoted back into core (deterministic improvement proof + error-shape coverage). Verification: `mix compile --warnings-as-errors`, `mix test`, `scripts/verify_all.sh`.
 - **2026-02-10**: Cut tag `v0.3.2` (COPRO proven + promoted).
 - **2026-02-10**: Core scope audit quarantine: moved unproven/experimental modules out of core `lib/` into `extras/dspy_extras/unsafe/quarantine/`; removed COPRO/MIPROv2 from core teleprompt factory; curated examples into `examples/experimental/`; updated `dspy_extras` to compile quarantine modules. Verification: `mix compile --warnings-as-errors`, `mix test`, `scripts/verify_all.sh`.
