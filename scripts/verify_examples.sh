@@ -19,6 +19,7 @@ examples=(
   examples/retrieve_rag_offline.exs
   examples/retrieve_rag_genserver_offline.exs
   examples/react_tool_logging_offline.exs
+  examples/request_defaults_offline.exs
 )
 
 echo "== Verifying offline examples =="

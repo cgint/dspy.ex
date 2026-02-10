@@ -236,6 +236,7 @@ Example (offline):
 - `mix run examples/retrieve_rag_offline.exs`
 - `mix run examples/retrieve_rag_genserver_offline.exs`
 - `mix run examples/react_tool_logging_offline.exs`
+- `mix run examples/request_defaults_offline.exs`
 
 ## Workflow parity vs `dspy-intro/src` (high-level)
 
