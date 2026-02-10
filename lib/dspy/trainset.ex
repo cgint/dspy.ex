@@ -208,13 +208,14 @@ defmodule Dspy.Trainset do
       |> Enum.group_by(fn example ->
         Map.get(example.attrs, field, Map.get(example.attrs, to_string(field), nil))
       end)
+      |> Enum.sort_by(fn {label, _examples} -> label end)
 
     # Calculate samples per group
-    total_groups = map_size(groups)
+    total_groups = length(groups)
     samples_per_group = div(num_samples, total_groups)
     remaining_samples = rem(num_samples, total_groups)
 
-    # Sample from each group
+    # Sample from each group (stable group order for determinism)
     {samples, _} =
       groups
       |> Enum.reduce({[], remaining_samples}, fn {_label, group_examples}, {acc, remaining} ->

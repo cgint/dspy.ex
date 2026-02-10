@@ -68,4 +68,32 @@ defmodule DspyTrainsetTest do
     data_set = MapSet.new(data)
     assert Enum.all?(sample1, &MapSet.member?(data_set, &1))
   end
+
+  defp labeled_dataset do
+    [
+      Example.new(%{id: 1, question: "q1", answer: "A"}),
+      Example.new(%{id: 2, question: "q2", answer: "A"}),
+      Example.new(%{id: 3, question: "q3", answer: "B"}),
+      Example.new(%{id: 4, question: "q4", answer: "B"}),
+      Example.new(%{id: 5, question: "q5", answer: "C"})
+    ]
+  end
+
+  test "sample/3 with :balanced is deterministic with a seed" do
+    data = labeled_dataset()
+
+    sample1 = Trainset.sample(data, 4, strategy: :balanced, seed: 123, balance_field: :answer)
+    sample2 = Trainset.sample(data, 4, strategy: :balanced, seed: 123, balance_field: :answer)
+
+    assert sample1 == sample2
+
+    counts =
+      sample1
+      |> Enum.map(& &1.attrs.answer)
+      |> Enum.frequencies()
+
+    assert counts["A"] == 2
+    assert counts["B"] == 1
+    assert counts["C"] == 1
+  end
 end
