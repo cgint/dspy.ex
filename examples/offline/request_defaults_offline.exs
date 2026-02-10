@@ -1,4 +1,13 @@
-# Offline, deterministic demo of Settings defaults applied to request maps.
+# Offline, deterministic *debug* demo of Settings defaults applied to request maps.
+#
+# This example exists to make it easy to *see* what Dspy forwards into the LM request map
+# after applying `Dspy.configure/1` defaults.
+#
+# IMPORTANT:
+# - The small token limits used below are chosen to make the inspected request maps easy
+#   to read. They are *not* recommended defaults for real usage.
+# - For real programs (Predict/ChainOfThought/ReAct/tools), prefer leaving token limits
+#   unset (provider defaults) or using a generous limit to avoid truncation.
 #
 # Run:
 #   mix run examples/request_defaults_offline.exs

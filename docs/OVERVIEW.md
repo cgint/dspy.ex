@@ -229,17 +229,17 @@ Proof:
 
 Example (offline):
 - `scripts/verify_examples.sh` (runs all official offline examples)
-- `mix run examples/parameter_persistence_json_offline.exs`
-- `mix run examples/predict_mipro_v2_persistence_offline.exs`
-- `mix run examples/chain_of_thought_teleprompt_persistence_offline.exs`
-- `mix run examples/chain_of_thought_simba_persistence_offline.exs`
-- `mix run examples/chain_of_thought_mipro_v2_persistence_offline.exs`
-- `mix run examples/chain_of_thought_copro_persistence_offline.exs`
-- `mix run examples/ensemble_offline.exs`
-- `mix run examples/retrieve_rag_offline.exs`
-- `mix run examples/retrieve_rag_genserver_offline.exs`
-- `mix run examples/react_tool_logging_offline.exs`
-- `mix run examples/request_defaults_offline.exs`
+- `mix run examples/offline/parameter_persistence_json_offline.exs`
+- `mix run examples/offline/predict_mipro_v2_persistence_offline.exs`
+- `mix run examples/offline/chain_of_thought_teleprompt_persistence_offline.exs`
+- `mix run examples/offline/chain_of_thought_simba_persistence_offline.exs`
+- `mix run examples/offline/chain_of_thought_mipro_v2_persistence_offline.exs`
+- `mix run examples/offline/chain_of_thought_copro_persistence_offline.exs`
+- `mix run examples/offline/ensemble_offline.exs`
+- `mix run examples/offline/retrieve_rag_offline.exs`
+- `mix run examples/offline/retrieve_rag_genserver_offline.exs`
+- `mix run examples/offline/react_tool_logging_offline.exs`
+- `mix run examples/offline/request_defaults_offline.exs` (debugging/introspection; not a recommended config template)
 
 ## Workflow parity vs `dspy-intro/src` (high-level)
 
@@ -284,7 +284,7 @@ Guide: `docs/BUMBLEBEE.md`
 
 Proof artifact (manual/opt-in): `test/integration/bumblebee_predict_integration_test.exs`
 
-Repo example (manual; may download weights): `mix run examples/bumblebee_predict_local.exs`
+Repo example (manual; may download weights): `mix run examples/providers/bumblebee_predict_local.exs`
 
 ## Ways ahead (what we would add next)
 

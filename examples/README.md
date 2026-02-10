@@ -1,54 +1,54 @@
 # Examples
 
-This folder contains a mix of:
+This repo keeps runnable code under `examples/`, but with **clear intent buckets**.
 
-1) **Official deterministic examples** (offline, no API keys)
-2) **Manual/opt-in examples** (may download weights or require API keys)
-3) **Experimental / exploratory scripts**
+If you’re new here, start with **offline/**.
 
-If you’re new here, start with the **official deterministic** ones.
-
-## Official deterministic (offline)
+## `examples/offline/` — official deterministic (no API keys)
 
 These should run without network calls:
 
 - Parameter persistence (JSON + files):
-  - `mix run examples/parameter_persistence_json_offline.exs`
+  - `mix run examples/offline/parameter_persistence_json_offline.exs`
 - Predict + MIPROv2 + persistence:
-  - `mix run examples/predict_mipro_v2_persistence_offline.exs`
+  - `mix run examples/offline/predict_mipro_v2_persistence_offline.exs`
 - ChainOfThought + LabeledFewShot + persistence:
-  - `mix run examples/chain_of_thought_teleprompt_persistence_offline.exs`
+  - `mix run examples/offline/chain_of_thought_teleprompt_persistence_offline.exs`
 - ChainOfThought + SIMBA + persistence:
-  - `mix run examples/chain_of_thought_simba_persistence_offline.exs`
+  - `mix run examples/offline/chain_of_thought_simba_persistence_offline.exs`
 - ChainOfThought + MIPROv2 + persistence:
-  - `mix run examples/chain_of_thought_mipro_v2_persistence_offline.exs`
+  - `mix run examples/offline/chain_of_thought_mipro_v2_persistence_offline.exs`
 - ChainOfThought + COPRO + persistence:
-  - `mix run examples/chain_of_thought_copro_persistence_offline.exs`
+  - `mix run examples/offline/chain_of_thought_copro_persistence_offline.exs`
 - Ensemble teleprompt demo (offline):
-  - `mix run examples/ensemble_offline.exs`
+  - `mix run examples/offline/ensemble_offline.exs`
 - Retrieval + RAG (offline):
-  - `mix run examples/retrieve_rag_offline.exs`
-  - `mix run examples/retrieve_rag_genserver_offline.exs`
+  - `mix run examples/offline/retrieve_rag_offline.exs`
+  - `mix run examples/offline/retrieve_rag_genserver_offline.exs`
 - Tools + ReAct + callbacks (offline):
-  - `mix run examples/react_tool_logging_offline.exs`
-- Settings defaults applied to request maps (offline):
-  - `mix run examples/request_defaults_offline.exs`
+  - `mix run examples/offline/react_tool_logging_offline.exs`
+- Debug: settings defaults applied to request maps (offline):
+  - `mix run examples/offline/request_defaults_offline.exs` (debugging/introspection; not a recommended config template)
 
-## Manual / opt-in (may be heavy)
+## `examples/providers/` — real providers / opt-in
+
+These may download weights, require API keys, and incur cost:
 
 - Local inference (may download weights):
-  - `mix run examples/bumblebee_predict_local.exs`
+  - `mix run examples/providers/bumblebee_predict_local.exs`
 
-## Experimental / exploratory scripts
+- Gemini (ReqLLM, requires `GOOGLE_API_KEY` or `GEMINI_API_KEY` fallback):
+  - `mix run examples/providers/gemini_chain_of_thought.exs`
+  - `mix run examples/providers/gemini_react_tools.exs`
 
-Experimental scripts live in:
+## `examples/harnesses/` — long-running runners / comparisons / verification
 
-- `examples/experimental/`
+These are runnable harnesses (often networked, long-running, or interactive). They are **not**
+intended as onboarding examples.
 
-They may:
-- require API keys/network
-- depend on non-core/quarantined modules
-- change or be removed without notice
+## `examples/playground/` — scratch space
+
+Free-form exploration; may change or be removed.
 
 For “what’s stable”, rely on:
 - `docs/OVERVIEW.md`
