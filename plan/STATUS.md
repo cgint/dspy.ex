@@ -179,6 +179,9 @@ Notes:
 
 ## Log
 
+- **2026-02-10**: Provider ergonomics: global settings now support `:max_completion_tokens` (via `Dspy.configure/1` + `Dspy.Settings`) and `Dspy.LM.generate/1` applies it to request maps when missing; added deterministic tests. Verification: `mix compile --warnings-as-errors`, `mix test`.
+- **2026-02-10**: Cut tag `v0.3.28` (max_completion_tokens defaults).
+
 - **2026-02-10**: Examples reliability: added `scripts/verify_examples.sh` to run the official deterministic (offline) examples and catch drift early. Verification: `scripts/verify_examples.sh`.
 - **2026-02-10**: Cut tag `v0.3.27` (verify offline examples).
 
