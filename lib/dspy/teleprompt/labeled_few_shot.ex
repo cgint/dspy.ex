@@ -85,17 +85,8 @@ defmodule Dspy.Teleprompt.LabeledFewShot do
   @impl Dspy.Teleprompt
   @spec compile(t(), Dspy.Teleprompt.program_t(), list(Example.t())) ::
           Dspy.Teleprompt.compile_result()
-  def compile(%__MODULE__{} = teleprompt, %Dspy.Predict{} = program, trainset) do
+  def compile(%__MODULE__{} = teleprompt, program, trainset) do
     do_compile(teleprompt, program, trainset)
-  end
-
-  def compile(%__MODULE__{} = teleprompt, %Dspy.ChainOfThought{} = program, trainset) do
-    do_compile(teleprompt, program, trainset)
-  end
-
-  def compile(%__MODULE__{}, program, _trainset) do
-    mod = if is_struct(program), do: program.__struct__, else: program
-    {:error, {:unsupported_program, mod}}
   end
 
   defp do_compile(%__MODULE__{} = teleprompt, program, trainset) do

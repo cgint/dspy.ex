@@ -15,7 +15,7 @@ North star docs:
 - `agent/SOUL.md` (agent operating principles)
 
 ## Releases
-- Current recommended stable tag: `v0.2.17` (see `docs/RELEASES.md`)
+- Current recommended stable tag: `v0.2.18` (see `docs/RELEASES.md`)
 
 ## Loop status
 - Loop state: ACTIVE
@@ -68,6 +68,7 @@ North star docs:
   - Evidence file: `test/teleprompt/util_test.exs`
   - Evidence file: `test/teleprompt/labeled_few_shot_improvement_test.exs`
   - Evidence file: `test/teleprompt/labeled_few_shot_chain_of_thought_improvement_test.exs`
+  - Evidence file: `test/teleprompt/labeled_few_shot_generic_program_test.exs`
   - Evidence file: `test/teleprompt/simba_improvement_test.exs`
   - Evidence file: `test/teleprompt/simba_chain_of_thought_improvement_test.exs`
   - Evidence file: `test/teleprompt/error_shapes_test.exs`
@@ -187,6 +188,8 @@ Notes:
 - **2026-02-09**: Added offline SIMBA + persistence demo (ChainOfThought optimized via SIMBA; JSON save/restore). Verification: `mix run examples/chain_of_thought_simba_persistence_offline.exs`.
 - **2026-02-09**: BootstrapFewShot error-shape cleanup: internal bootstrapping errors are tagged tuples (no bare strings). Verification: `mix test`.
 - **2026-02-09**: CoT parameter JSON persistence proven (SIMBA improvement preserved through encode/decode/apply). Verification: `mix test`.
+- **2026-02-09**: LabeledFewShot generalized: supports any program exposing `predict.examples` (not only Predict/CoT structs). Verification: `mix test`.
+- **2026-02-09**: Cut tag `v0.2.18` (LabeledFewShot generalization).
 - **2026-02-09**: Cut tag `v0.2.17` (CoT parameter persistence proven).
 - **2026-02-09**: Cut tag `v0.2.16` (BootstrapFewShot error-shape cleanup).
 - **2026-02-09**: Cut tag `v0.2.15` (offline SIMBA + persistence demo).

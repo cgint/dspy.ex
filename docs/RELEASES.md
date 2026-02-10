@@ -12,6 +12,7 @@ The table below is maintained on `main`, but links are **tag-pinned** so they do
 
 | Tag | What you get | Evidence (tag-pinned) |
 |---|---|---|
+| `v0.2.18` | **LabeledFewShot generalization**: supports any program exposing `predict.examples` (not just Predict/CoT structs) | LabeledFewShot: https://github.com/cgint/dspy.ex/blob/v0.2.18/lib/dspy/teleprompt/labeled_few_shot.ex<br>Proof: https://github.com/cgint/dspy.ex/blob/v0.2.18/test/teleprompt/labeled_few_shot_generic_program_test.exs |
 | `v0.2.17` | **CoT parameter persistence proven**: JSON roundtrip preserves SIMBA improvement for ChainOfThought | Proof: https://github.com/cgint/dspy.ex/blob/v0.2.17/test/module_parameter_json_persistence_chain_of_thought_test.exs |
 | `v0.2.16` | **BootstrapFewShot error-shape cleanup**: internal bootstrapping errors are tagged tuples (no bare strings) | BootstrapFewShot: https://github.com/cgint/dspy.ex/blob/v0.2.16/lib/dspy/teleprompt/bootstrap_few_shot.ex |
 | `v0.2.15` | **Offline SIMBA + persistence demo**: ChainOfThought optimized via SIMBA + JSON parameter save/restore | Example: https://github.com/cgint/dspy.ex/blob/v0.2.15/examples/chain_of_thought_simba_persistence_offline.exs |
