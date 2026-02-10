@@ -69,6 +69,20 @@ If the handback can’t fit that format, it’s too big and should be split.
 
 `plan/WORKFLOW.md` contains the repo-specific command patterns for delegation (e.g. how we invoke `pi` and where to store logs).
 
+## Ad-hoc handoffs (dynamic `pi` sub-agent)
+
+When an investigation would bloat the driver context (big searches, inventories, multi-file scanning), spawn a sub-agent run and capture a **compressed handback**:
+
+```bash
+scripts/pi_handoff.sh --models gpt-5.2 --goal "<task>" --context <path>
+```
+
+- Output is stored under `plan/research/pi_handoffs/...` (gitignored).
+- The script prints a single path to `handback.md` (safe to paste into the driver context).
+- Defaults to `--tools read,bash` (investigation-only). Override `--tools` explicitly if needed.
+
+Interactive convenience: project skill `pi-handoff` lives at `.pi/skills/pi-handoff/SKILL.md`.
+
 ## Review gate (non-negotiable)
 
 Delegated output is **draft input**.

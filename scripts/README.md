@@ -11,6 +11,9 @@ Loop scripts:
 - `loop_worker.sh`: execute backlog items iteratively via delegated `pi` runs; capture logs locally; optionally verify + commit.
 - `loop_review.sh`: run an LLM-based code review of the current git diff; logs go to `plan/research/loop_resume/*`.
 
+Ad-hoc delegation:
+- `pi_handoff.sh`: spawn a one-off delegated `pi` run and capture a compact handback under `plan/research/pi_handoffs/*`.
+
 Verification helper:
 - `verify_all.sh`: verifies both core and extras (format check, compile with warnings-as-errors, tests)
 
