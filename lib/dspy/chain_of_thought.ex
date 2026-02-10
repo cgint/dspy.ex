@@ -103,6 +103,13 @@ defmodule Dspy.ChainOfThought do
 
   defp get_signature(signature), do: signature
 
+  defp fetch_input(inputs, name) when is_map(inputs) and is_atom(name) do
+    case Map.fetch(inputs, name) do
+      {:ok, value} -> {:ok, value}
+      :error -> Map.fetch(inputs, Atom.to_string(name))
+    end
+  end
+
   defp add_reasoning_field(signature, reasoning_field) do
     reasoning_field_def = %{
       name: reasoning_field,
@@ -126,7 +133,7 @@ defmodule Dspy.ChainOfThought do
 
     filled_prompt =
       Enum.reduce(enhanced_signature.input_fields, prompt_template, fn %{name: name}, acc ->
-        case Map.fetch(inputs, name) do
+        case fetch_input(inputs, name) do
           :error ->
             acc
 
@@ -223,8 +230,8 @@ defmodule Dspy.ChainOfThought do
 
   defp extract_attachments(%Dspy.Signature{} = signature, inputs) when is_map(inputs) do
     Enum.flat_map(signature.input_fields, fn %{name: name} ->
-      case Map.get(inputs, name) do
-        %Dspy.Attachments{} = a -> Dspy.Attachments.to_message_parts(a)
+      case fetch_input(inputs, name) do
+        {:ok, %Dspy.Attachments{} = a} -> Dspy.Attachments.to_message_parts(a)
         _ -> []
       end
     end)

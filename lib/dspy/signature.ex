@@ -99,19 +99,25 @@ defmodule Dspy.Signature do
   @doc """
   Validate inputs against the signature.
   """
-  def validate_inputs(signature, inputs) do
+  def validate_inputs(signature, inputs) when is_map(inputs) do
     required_fields =
       signature.input_fields
       |> Enum.filter(& &1.required)
       |> Enum.map(& &1.name)
 
-    missing_fields = required_fields -- Map.keys(inputs)
+    missing_fields =
+      required_fields
+      |> Enum.reject(fn name ->
+        Map.has_key?(inputs, name) or Map.has_key?(inputs, Atom.to_string(name))
+      end)
 
     case missing_fields do
       [] -> :ok
       missing -> {:error, {:missing_fields, missing}}
     end
   end
+
+  def validate_inputs(_signature, _inputs), do: {:error, :invalid_inputs}
 
   @doc """
   Parse outputs according to the signature.

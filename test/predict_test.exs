@@ -32,6 +32,28 @@ defmodule DspyPredictTest do
     def supports?(_lm, _feature), do: true
   end
 
+  defmodule CoTMockLM do
+    @behaviour Dspy.LM
+    defstruct []
+
+    @impl true
+    def generate(_lm, _request) do
+      {:ok,
+       %{
+         choices: [
+           %{
+             message: %{role: "assistant", content: "Reasoning: ok\nAnswer: 4"},
+             finish_reason: "stop"
+           }
+         ],
+         usage: nil
+       }}
+    end
+
+    @impl true
+    def supports?(_lm, _feature), do: true
+  end
+
   defmodule TestQA do
     use Dspy.Signature
 
@@ -82,6 +104,14 @@ defmodule DspyPredictTest do
       assert prediction.attrs.answer == "4"
     end
 
+    test "accepts string-key inputs" do
+      predict = Dspy.Predict.new(TestQA)
+      inputs = %{"question" => "What is 2+2?"}
+
+      assert {:ok, prediction} = Dspy.Module.forward(predict, inputs)
+      assert prediction.attrs.answer == "4"
+    end
+
     test "validates inputs before prediction" do
       predict = Dspy.Predict.new(TestQA)
 
@@ -111,6 +141,18 @@ defmodule DspyPredictTest do
       field_names = Enum.map(cot.signature.output_fields, & &1.name)
       assert :reasoning in field_names
       assert :answer in field_names
+    end
+
+    test "can forward predictions with string-key inputs" do
+      Dspy.configure(lm: %CoTMockLM{})
+
+      cot = Dspy.ChainOfThought.new(TestQA)
+
+      assert {:ok, prediction} =
+               Dspy.Module.forward(cot, %{"question" => "What is 2+2?"})
+
+      assert prediction.attrs.answer == "4"
+      assert is_binary(prediction.attrs.reasoning)
     end
   end
 
