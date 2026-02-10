@@ -8,6 +8,16 @@ defmodule Dspy.Teleprompt.ErrorShapesTest do
     defstruct []
   end
 
+  defmodule NoParameterProgram do
+    @behaviour Dspy.Module
+    defstruct []
+
+    @impl true
+    def forward(_program, _inputs) do
+      {:ok, Dspy.Prediction.new(%{})}
+    end
+  end
+
   defp examples(n) do
     for i <- 1..n do
       Example.new(%{q: "q#{i}", a: "a#{i}"})
@@ -53,6 +63,29 @@ defmodule Dspy.Teleprompt.ErrorShapesTest do
 
     assert {:error, {:insufficient_trainset, min: 10, got: 9}} =
              Ensemble.compile(tp, program, examples(9))
+  end
+
+  test "GEPA.compile/3 returns a structured error for unsupported programs" do
+    tp = GEPA.new(metric: fn _example, _pred -> 0.0 end, seed: 0, candidates: ["x"])
+    program = %NoParameterProgram{}
+
+    assert {:error, {:unsupported_program, NoParameterProgram}} =
+             GEPA.compile(tp, program, examples(1))
+  end
+
+  test "BootstrapFewShot.compile/3 returns a structured error for unsupported programs" do
+    tp =
+      BootstrapFewShot.new(
+        metric: fn _example, _pred -> 0.0 end,
+        seed: 0,
+        num_threads: 1,
+        verbose: false
+      )
+
+    program = %NoParameterProgram{}
+
+    assert {:error, {:unsupported_program, NoParameterProgram}} =
+             BootstrapFewShot.compile(tp, program, examples(1))
   end
 
   test "teleprompters return :empty_trainset (not a string) for empty training data" do

@@ -11,6 +11,7 @@ defmodule Dspy.Teleprompt.GEPA do
   @behaviour Dspy.Teleprompt
 
   alias Dspy.{Example, Trainset}
+  alias Dspy.Teleprompt.Util, as: TpUtil
 
   defstruct [:metric, :seed, :candidates]
 
@@ -62,25 +63,39 @@ defmodule Dspy.Teleprompt.GEPA do
 
       candidates = sort_candidates_deterministically(tp.candidates, tp.seed)
 
-      {_best_score, best_program} =
-        Enum.reduce(candidates, {baseline.mean, program}, fn instruction,
-                                                             {best_score, best_prog} ->
-          candidate_prog = update_predict_instructions(program, instruction)
+      case candidates do
+        [] ->
+          {:ok, program}
 
-          score =
-            Dspy.Evaluate.evaluate(candidate_prog, validated_trainset, tp.metric,
-              num_threads: 1,
-              progress: false
-            ).mean
+        _ ->
+          candidates
+          |> Enum.reduce_while({:ok, {baseline.mean, program}}, fn instruction,
+                                                                   {:ok, {best_score, best_prog}} ->
+            with {:ok, candidate_prog} <- update_predict_instructions(program, instruction) do
+              score =
+                Dspy.Evaluate.evaluate(candidate_prog, validated_trainset, tp.metric,
+                  num_threads: 1,
+                  progress: false
+                ).mean
 
-          if score > best_score do
-            {score, candidate_prog}
-          else
-            {best_score, best_prog}
+              if score > best_score do
+                {:cont, {:ok, {score, candidate_prog}}}
+              else
+                {:cont, {:ok, {best_score, best_prog}}}
+              end
+            else
+              {:error, reason} ->
+                {:halt, {:error, reason}}
+            end
+          end)
+          |> case do
+            {:ok, {_best_score, best_program}} ->
+              {:ok, best_program}
+
+            {:error, reason} ->
+              {:error, reason}
           end
-        end)
-
-      {:ok, best_program}
+      end
     end
   end
 
@@ -103,24 +118,6 @@ defmodule Dspy.Teleprompt.GEPA do
   end
 
   defp update_predict_instructions(program, instruction) when is_binary(instruction) do
-    params = Dspy.Module.parameters(program)
-
-    {updated_params, found?} =
-      Enum.map_reduce(params, false, fn
-        %Dspy.Parameter{name: "predict.instructions"} = p, _found? ->
-          {Dspy.Parameter.update(p, instruction), true}
-
-        other, found? ->
-          {other, found?}
-      end)
-
-    updated_params =
-      if found? do
-        updated_params
-      else
-        updated_params ++ [Dspy.Parameter.new("predict.instructions", :prompt, instruction)]
-      end
-
-    Dspy.Module.update_parameters(program, updated_params)
+    TpUtil.set_predict_instructions(program, instruction)
   end
 end

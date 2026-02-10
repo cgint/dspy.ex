@@ -26,6 +26,7 @@ defmodule Dspy.Teleprompt.BootstrapFewShot do
   @behaviour Dspy.Teleprompt
 
   alias Dspy.{Example, Evaluate, Trainset}
+  alias Dspy.Teleprompt.Util, as: TpUtil
 
   defstruct [
     # Evaluation metric function
@@ -124,6 +125,7 @@ defmodule Dspy.Teleprompt.BootstrapFewShot do
     Dspy.Teleprompt.Util.log(teleprompt, "Starting BootstrapFewShot compilation...")
 
     with {:ok, validated_trainset} <- validate_trainset(trainset),
+         :ok <- ensure_predict_examples_supported(student),
          {:ok, teacher} <- get_teacher_program(teleprompt, student),
          {:ok, bootstrapped_examples} <-
            bootstrap_examples(teleprompt, teacher, validated_trainset),
@@ -155,6 +157,16 @@ defmodule Dspy.Teleprompt.BootstrapFewShot do
 
   defp get_teacher_program(%__MODULE__{teacher: nil}, student), do: {:ok, student}
   defp get_teacher_program(%__MODULE__{teacher: teacher}, _student), do: {:ok, teacher}
+
+  defp ensure_predict_examples_supported(student) do
+    case TpUtil.set_predict_examples(student, []) do
+      {:ok, _updated} ->
+        :ok
+
+      {:error, reason} ->
+        {:error, reason}
+    end
+  end
 
   defp bootstrap_examples(%__MODULE__{} = teleprompt, teacher, trainset) do
     Dspy.Teleprompt.Util.log(
@@ -302,34 +314,43 @@ defmodule Dspy.Teleprompt.BootstrapFewShot do
       (bootstrapped ++ labeled)
       |> Enum.uniq_by(& &1.attrs)
 
-    candidates =
-      if num_candidates <= 1 do
-        [create_candidate_program(student, full_examples, 1)]
-      else
-        [create_candidate_program(student, full_examples, 1)] ++
-          for i <- 2..num_candidates do
-            # Randomly combine bootstrapped and labeled examples
-            num_bootstrap = :rand.uniform(length(bootstrapped) + 1) - 1
-            num_labeled = :rand.uniform(length(labeled) + 1) - 1
+    num_candidates = max(num_candidates, 1)
 
-            selected_bootstrap = take_random_subset(bootstrapped, num_bootstrap)
-            selected_labeled = take_random_subset(labeled, num_labeled)
+    1..num_candidates
+    |> Enum.reduce_while({:ok, []}, fn i, {:ok, acc} ->
+      examples =
+        if i == 1 do
+          full_examples
+        else
+          # Randomly combine bootstrapped and labeled examples
+          num_bootstrap = :rand.uniform(length(bootstrapped) + 1) - 1
+          num_labeled = :rand.uniform(length(labeled) + 1) - 1
 
-            all_examples = selected_bootstrap ++ selected_labeled
+          selected_bootstrap = take_random_subset(bootstrapped, num_bootstrap)
+          selected_labeled = take_random_subset(labeled, num_labeled)
 
-            create_candidate_program(student, all_examples, i)
-          end
+          selected_bootstrap ++ selected_labeled
+        end
+
+      case create_candidate_program(student, examples, i) do
+        {:ok, candidate} ->
+          {:cont, {:ok, [candidate | acc]}}
+
+        {:error, reason} ->
+          {:halt, {:error, reason}}
       end
+    end)
+    |> case do
+      {:ok, candidates} ->
+        {:ok, Enum.reverse(candidates)}
 
-    {:ok, candidates}
+      {:error, reason} ->
+        {:error, reason}
+    end
   end
 
-  defp create_candidate_program(student, examples, candidate_id) do
-    _candidate_id = candidate_id
-
-    Dspy.Module.update_parameters(student, [
-      Dspy.Parameter.new("predict.examples", :examples, examples)
-    ])
+  defp create_candidate_program(student, examples, _candidate_id) do
+    TpUtil.set_predict_examples(student, examples)
   end
 
   # Deterministic sampling: `generate_candidate_programs/4` seeds `:rand` first.
