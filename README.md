@@ -18,7 +18,7 @@ For stability, depend on a **semver tag** (recommended):
 ```elixir
 def deps do
   [
-    {:dspy, github: "cgint/dspy.ex", tag: "v0.3.1"}
+    {:dspy, github: "cgint/dspy.ex", tag: "v0.3.2"}
   ]
 end
 ```
@@ -65,6 +65,7 @@ Optional/experimental modules (Phoenix LiveView UI, “godmode” coordinator, G
 - Teleprompters (parameter-based; no dynamic modules; Predict-like programs):
   - `LabeledFewShot` (sets `predict.examples`; proven for `Dspy.Predict` + `Dspy.ChainOfThought`)
   - `SIMBA` (updates `predict.instructions`; seeded improvement; proven for `Dspy.Predict` + `Dspy.ChainOfThought`)
+  - `COPRO` (coordinate-ascent optimizer; selects `predict.instructions`; proven for `Dspy.Predict`)
   - `BootstrapFewShot` (sets `predict.examples`; proven for `Dspy.Predict` + `Dspy.ChainOfThought`)
   - `GEPA` (toy deterministic optimizer; selects `predict.instructions`; proven for `Dspy.Predict` + `Dspy.ChainOfThought`)
   - `Ensemble` (trains multiple members + majority vote; proven for `Dspy.Predict` + `Dspy.ChainOfThought`; returns `%Dspy.Teleprompt.Ensemble.Program{}`)
