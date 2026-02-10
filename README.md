@@ -5,6 +5,7 @@ An **Elixir-native** port of the Python **DSPy** library.
 Status: **alpha**. We ship in small, usable slices.
 
 - If you want the fastest overview: start at **`docs/OVERVIEW.md`**.
+- If you want Python DSPy mapping: **`docs/COMPATIBILITY.md`**.
 - If you want provider setup: **`docs/PROVIDERS.md`** (via `req_llm`).
 - If you want local inference (optional): **`docs/BUMBLEBEE.md`**.
 - If you want to pick a tag intentionally: **`docs/RELEASES.md`**.
@@ -13,12 +14,15 @@ Status: **alpha**. We ship in small, usable slices.
 
 `main` moves quickly.
 
-For stability, depend on a **semver tag** (recommended):
+For stability, depend on a **semver tag** (recommended).
+
+The recommended stable tag is `v` + the repo-root `VERSION`.
 
 ```elixir
 def deps do
   [
-    {:dspy, github: "cgint/dspy.ex", tag: "v0.3.9"}
+    # replace X.Y.Z with the contents of VERSION
+    {:dspy, github: "cgint/dspy.ex", tag: "vX.Y.Z"}
   ]
 end
 ```

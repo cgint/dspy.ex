@@ -15,7 +15,7 @@ North star docs:
 - `agent/SOUL.md` (agent operating principles)
 
 ## Releases
-- Current recommended stable tag: `v0.3.9` (see `docs/RELEASES.md`)
+- Current recommended stable tag: `v` + repo-root `VERSION` (see `docs/RELEASES.md`)
 
 ## User-centric OSS posture
 - **Docs are evidence-backed**: `docs/OVERVIEW.md` should only claim what has deterministic proof artifacts.

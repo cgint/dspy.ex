@@ -4,7 +4,7 @@
 
 - Want to know what’s usable today? Read **“What you can do today”** below.
 - Want provider setup? See `docs/PROVIDERS.md` (uses `req_llm`).
-- Want stability? Use **semver tags**; `main` moves quickly. Current recommended stable tag: `v0.3.9` (see `README.md` + `docs/RELEASES.md`).
+- Want stability? Use **semver tags**; `main` moves quickly. Current recommended stable tag is `v` + the repo-root `VERSION` (see `docs/RELEASES.md`).
 
 ## Diagram
 

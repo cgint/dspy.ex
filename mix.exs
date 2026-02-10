@@ -1,10 +1,15 @@
 defmodule Dspy.MixProject do
   use Mix.Project
 
+  @version __DIR__
+           |> Path.join("VERSION")
+           |> File.read!()
+           |> String.trim()
+
   def project do
     [
       app: :dspy,
-      version: "0.3.9",
+      version: @version,
       elixir: "~> 1.18",
       start_permanent: Mix.env() == :prod,
       deps: deps()
