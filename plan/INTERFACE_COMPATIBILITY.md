@@ -8,6 +8,10 @@ Track which **interfaces and concepts** we are intentionally aligning with so th
 For the concrete, adoption-first list of “what must feel familiar”, see:
 - `plan/IMPORTANT_INTERFACES.md`
 
+For DSPex-snakepit alignment and analysis:
+- `plan/SNAKEPIT_INTERFACE_COVERAGE.md`
+- `plan/SNAKEPIT_VS_PYTHON_DSPY_DISTANCE.md`
+
 This is a planning artifact (not user-facing docs).
 
 ## Compatibility levels (explicit)
