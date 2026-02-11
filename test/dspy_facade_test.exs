@@ -23,6 +23,31 @@ defmodule DspyFacadeTest do
     def supports?(_lm, _feature), do: true
   end
 
+  defmodule MockCoTLM do
+    @behaviour Dspy.LM
+    defstruct []
+
+    @impl true
+    def generate(_lm, _request) do
+      {:ok,
+       %{
+         choices: [
+           %{
+             message: %{
+               role: "assistant",
+               content: "Reasoning: 2+2 is 4.\nAnswer: 4"
+             },
+             finish_reason: "stop"
+           }
+         ],
+         usage: nil
+       }}
+    end
+
+    @impl true
+    def supports?(_lm, _feature), do: true
+  end
+
   defmodule TestQA do
     use Dspy.Signature
 
@@ -70,6 +95,49 @@ defmodule DspyFacadeTest do
 
     prediction = Dspy.call!(program, question: "What is 2+2?")
     assert prediction.attrs.answer == "4"
+  end
+
+  test "Dspy.predict/2 constructs a Predict program" do
+    program = Dspy.predict(TestQA)
+
+    assert %Dspy.Predict{} = program
+
+    assert {:ok, pred} = Dspy.call(program, question: "What is 2+2?")
+    assert pred.attrs.answer == "4"
+  end
+
+  test "Dspy.chain_of_thought/2 constructs a ChainOfThought program" do
+    Dspy.configure(lm: %MockCoTLM{})
+
+    program = Dspy.chain_of_thought("question -> answer")
+
+    assert %Dspy.ChainOfThought{} = program
+
+    assert {:ok, pred} = Dspy.call(program, question: "What is 2+2?")
+    assert pred[:answer] == "4"
+    assert is_binary(pred[:reasoning])
+  end
+
+  test "Dspy.evaluate/4 delegates to Dspy.Evaluate.evaluate/4" do
+    program = Dspy.predict(TestQA)
+
+    testset = [
+      Dspy.example(%{question: "What is 2+2?", answer: "4"}),
+      Dspy.example(%{question: "What is 2+2?", answer: "4"})
+    ]
+
+    metric_fn = fn example, prediction ->
+      if example[:answer] == prediction[:answer], do: 1.0, else: 0.0
+    end
+
+    opts = [num_threads: 1, progress: false]
+
+    assert Dspy.evaluate(program, testset, metric_fn, opts) ==
+             Dspy.Evaluate.evaluate(program, testset, metric_fn, opts)
+
+    result = Dspy.evaluate(program, testset, metric_fn, opts)
+    assert result.mean == 1.0
+    assert result.failures == 0
   end
 
   test "Dspy.configure!/1 raises if configuration returns an error" do

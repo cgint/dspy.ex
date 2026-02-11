@@ -43,7 +43,11 @@ print(pred.answer)
 Elixir:
 
 ```elixir
+# either call the constructor module directly...
 predict = Dspy.Predict.new("question -> answer")
+
+# ...or use the top-level convenience constructor (Python-ish namespace style)
+predict2 = Dspy.predict("question -> answer")
 
 # map inputs
 {:ok, pred} = Dspy.call(predict, %{question: "What is 2+2?"})
@@ -65,6 +69,7 @@ JSON-friendly inputs (string keys):
 Evidence:
 - Predict end-to-end + arrow signatures + typed int parsing: `test/acceptance/simplest_predict_test.exs`
 - String-key + keyword-list inputs: `test/predict_test.exs`
+- Dspy facade helpers (incl. `predict/2`): `test/dspy_facade_test.exs`
 
 ### 2) ChainOfThought
 
@@ -80,7 +85,12 @@ print(pred.answer)
 Elixir:
 
 ```elixir
+# either call the constructor module directly...
 cot = Dspy.ChainOfThought.new("question -> answer")
+
+# ...or use the top-level convenience constructor
+cot2 = Dspy.chain_of_thought("question -> answer")
+
 {:ok, pred} = Dspy.call(cot, question: "What is 2+2?")
 
 pred[:reasoning]
@@ -90,6 +100,7 @@ pred[:answer]
 Evidence:
 - CoT acceptance: `test/acceptance/chain_of_thought_acceptance_test.exs`
 - Keyword-list inputs: `test/predict_test.exs`
+- Dspy facade helpers (incl. `chain_of_thought/2`): `test/dspy_facade_test.exs`
 
 ### 3) Evaluate
 
@@ -102,13 +113,19 @@ score = dspy.evaluate(program, testset=..., metric=...)
 Elixir:
 
 ```elixir
+# either call the module directly...
 result = Dspy.Evaluate.evaluate(program, testset, metric_fn, num_threads: 1, progress: false)
+
+# ...or use the top-level convenience wrapper
+result2 = Dspy.evaluate(program, testset, metric_fn, num_threads: 1, progress: false)
+
 result.mean
 ```
 
 Evidence:
 - `evaluate/4`: `test/evaluate_golden_path_test.exs`
 - detailed `return_all: true`: `test/evaluate_detailed_results_test.exs`
+- Dspy facade helpers (incl. `evaluate/4`): `test/dspy_facade_test.exs`
 
 ### 4) Optimize (teleprompt) + persist parameters
 
@@ -212,7 +229,7 @@ Evidence:
 
 | Python DSPy | `dspy.ex` | Notes | Evidence |
 |---|---|---|---|
-| `dspy.evaluate(...)` | `Dspy.Evaluate.evaluate/4` | Deterministic/offline default patterns (`num_threads: 1`, `progress: false`) | `test/evaluate_golden_path_test.exs` |
+| `dspy.evaluate(...)` | `Dspy.evaluate/4` (or `Dspy.Evaluate.evaluate/4`) | Deterministic/offline default patterns (`num_threads: 1`, `progress: false`) | `test/evaluate_golden_path_test.exs`, `test/dspy_facade_test.exs` |
 | built-in metrics | `Dspy.Metrics` | Standard metrics + metric composition helpers | `test/metrics_test.exs` |
 | cross-validation | `Dspy.Evaluate.cross_validate/4` | Quiet-by-default supported | `test/evaluate_detailed_results_test.exs` |
 | dataset split/sample | `Dspy.Trainset.split/2`, `sample/3` | Seeded determinism | `test/trainset_test.exs` |

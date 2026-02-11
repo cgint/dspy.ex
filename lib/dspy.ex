@@ -26,7 +26,7 @@ defmodule Dspy do
   acceptance-tested; prefer relying on what’s documented in `docs/OVERVIEW.md`.
   """
 
-  alias Dspy.{Settings, Example, Prediction}
+  alias Dspy.{Settings, Example, Prediction, Predict, ChainOfThought, Evaluate}
 
   @type dspy_config :: [
           lm: Dspy.LM.t() | nil,
@@ -143,6 +143,35 @@ defmodule Dspy do
   """
   @spec call!(Dspy.Module.t(), Dspy.Module.inputs()) :: Dspy.Module.outputs()
   def call!(program, inputs), do: forward!(program, inputs)
+
+  @doc """
+  Convenience constructor for `Dspy.Predict`.
+
+  This mirrors the “use it from the `Dspy` namespace” style of Python DSPy.
+  """
+  @spec predict(Dspy.Signature.t() | module() | binary(), keyword()) :: Predict.t()
+  def predict(signature, opts \\ []) do
+    Predict.new(signature, opts)
+  end
+
+  @doc """
+  Convenience constructor for `Dspy.ChainOfThought`.
+  """
+  @spec chain_of_thought(Dspy.Signature.t() | module() | binary(), keyword()) ::
+          ChainOfThought.t()
+  def chain_of_thought(signature, opts \\ []) do
+    ChainOfThought.new(signature, opts)
+  end
+
+  @doc """
+  Convenience wrapper around `Dspy.Evaluate.evaluate/4`.
+
+  This mirrors the top-level `dspy.evaluate(...)` usage pattern from Python.
+  """
+  @spec evaluate(Dspy.Module.t(), list(Example.t()), function(), keyword()) :: map()
+  def evaluate(program, testset, metric_fn, opts \\ []) do
+    Evaluate.evaluate(program, testset, metric_fn, opts)
+  end
 
   @doc """
   Create a new Example with the given attributes.
