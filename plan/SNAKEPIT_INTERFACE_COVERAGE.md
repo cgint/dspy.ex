@@ -33,7 +33,9 @@ Legend:
 | `DSPex.configure/1` / `configure!/1` | configure global DSPy settings | `Dspy.configure/1`, `Dspy.configure!/1`, `Dspy.settings/0` | ✅ | Native settings stored in `Dspy.Settings` |
 | `DSPex.predict/2` | construct Predict | `Dspy.predict/2` or `Dspy.Predict.new/2` | ✅ | We intentionally support arrow strings |
 | `DSPex.chain_of_thought/2` | construct ChainOfThought | `Dspy.chain_of_thought/2` or `Dspy.ChainOfThought.new/2` | ✅ | Native CoT adds `:reasoning` output field |
-| `DSPex.method!/4` + `DSPex.attr!/3` | call `forward` on Python ref + read output attributes | `Dspy.call/2`, output access via `pred[:field]` / `pred.attrs.field` | 🟡 | Different mechanics: Python refs + attr lookup vs Elixir structs + `Access` |
+| `DSPex.call/4` / `call!/4` | universal “call any Python module/function/class” | (no universal equivalent) | 🟡 | Native is explicit modules/functions; we generally avoid “stringly-typed reflection” in core |
+| `DSPex.method/4` / `method!/4` | call a method on a Python ref | `Dspy.call/2` / `Dspy.Module.forward/2` (for programs) | 🟡 | Python refs vs Elixir structs/behaviours; conceptually similar for `forward` |
+| `DSPex.attr/3` / `attr!/3` | read an attribute from a Python ref | `pred[:field]` / `pred.attrs.field` | 🟡 | Python attr lookup vs Elixir struct + `Access` |
 | `DSPex.with_timeout/2`, `timeout_profile/1` | SnakeBridge runtime timeouts | per-call opts in request-map / OTP timeouts | 🟡 | Native timeouts are per-adapter concerns (e.g. ReqLLM) and OTP-level timeouts |
 
 ## Coverage map (selected generated `Dspy.*` bindings → `dspy.ex` native)
