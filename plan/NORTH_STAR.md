@@ -35,6 +35,7 @@ The north star is **adoption + reliability**: users should be able to pick up th
 
 2. **Stable slices over full breadth**
    - We ship in release milestones where each milestone is something users can depend on.
+   - We prioritize the **most commonly used end-user-facing interfaces/workflows first**; less common/advanced surface area comes later.
 
 3. **Thorough testing as a feature**
    - Every advertised capability should have deterministic tests.

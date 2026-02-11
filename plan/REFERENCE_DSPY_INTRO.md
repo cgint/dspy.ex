@@ -6,6 +6,8 @@
 ## Summary
 A local checkout of `dspy-intro/src` (path varies) contains important, real-world **Python DSPy usage examples** that we will treat as a *behavior reference suite*.
 
+Important: we do **not** need to mimic every DSPy surface area immediately. We use `dspy-intro` to identify the **most common end-user-facing workflows** and make those stable first (adoption-first), then expand.
+
 We will use these scripts to:
 - decide what needs to work **early** (adoption-first)
 - derive **deterministic ExUnit tests** that mimic the workflows (using a mock LM)
