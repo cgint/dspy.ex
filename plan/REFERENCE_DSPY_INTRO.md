@@ -65,6 +65,10 @@ These are the *high-leverage* scripts to turn into tests first.
 | `classifier_credentials_passwords.py` | constrained output strings | R0 | `test/acceptance/classifier_acceptance_test.exs` |
 | `extract_prompt_parts_101_guide.py` | LabeledFewShot + structured extraction | R2/R3 | `test/acceptance/labeled_few_shot_acceptance_test.exs` |
 
+## Coverage tracking
+- Coverage map (which `dspy-intro` scripts are mirrored by deterministic acceptance tests):
+  - `plan/DSPY_INTRO_COVERAGE.md`
+
 ## Notes / next steps
 - This doc is a planning artifact; implementation will happen via an OpenSpec change dedicated to “Acceptance tests from dspy-intro examples”.
 - We should keep a short list of “must not break” workflows and grow it over time.
