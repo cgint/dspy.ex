@@ -30,6 +30,9 @@ defmodule Dspy.MixProject do
     [
       {:jason, "~> 1.4"},
 
+      # JSON Schema validation/casting for typed structured outputs.
+      {:jsv, "~> 0.16"},
+
       # LLM provider access (unified client; no provider maintenance in `dspy.ex`)
       {:req_llm, "~> 1.3"}
 
