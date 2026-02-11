@@ -11,6 +11,7 @@
 - How we work (delegation + context hygiene): `agent/WAYOFWORKING.md`
 - Agent/contributor entry point: `AGENTS.md`
 - Planning backlog / next tasks: `plan/STATUS.md`
+- OpenSpec change packages (proposal/design/tasks; delegation-friendly): `openspec/changes/*` (archived under `openspec/changes/archive/*`, stable specs under `openspec/specs/*`)
 - Roadmap: `plan/RELEASE_MILESTONES.md`
 
 ## User-centric OSS posture (how we keep adoption easy)

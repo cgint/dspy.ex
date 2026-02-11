@@ -5,7 +5,8 @@
 - **SOUL** (`agent/SOUL.md`) = stable principles (how I behave).
 - **WAY OF WORKING** (this file) = the operational playbook (how we run the loop, delegate, and manage context).
 - **MEMORY** (`agent/MEMORY.md`) = compact “resume quickly” pointers (what exists + where to look).
-- **PLAN** (`plan/*`) = roadmap + decisions + status + verification logs.
+- **OpenSpec changes** (`openspec/changes/*`) = spec-persistent “change packages” (proposal/design/tasks) that are easy to delegate and review.
+- **PLAN** (`plan/*`) = roadmap + decisions + status + verification logs (long-lived).
 
 ## Diagram
 
@@ -49,6 +50,25 @@ Do **not** delegate:
 - multi-page draft text
 
 Persist those as repo artifacts (usually under `plan/`) and link to them.
+
+## OpenSpec workflow (pilot; user-preferred for delegation)
+
+Decision: **pilot OpenSpec** for the upcoming “typed structured outputs + retry” slice, and then re-evaluate whether to adopt it more broadly.
+
+User proposal/preference: use OpenSpec **even for smaller changes** when it helps delegation to sub-agents, while keeping oversight at the level of **proposal → design → tasks**.
+
+Working rule (to avoid duplicate tracking):
+- If an OpenSpec change is active, treat its `tasks.md` as the **single source of truth** for the checklist.
+- Keep `plan/STATUS.md` as a **heartbeat + pointer** (link the active change, record decisions, record verification), not a second checklist.
+
+Default flow (matches the user’s preferred OpenSpec skill usage):
+1. **Fast-forward artifact creation**: use **`openspec-ff-change`** to scaffold the change and generate all apply-ready artifacts (proposal/design/tasks) in one go (often delegated to a sub-agent).
+2. **Implementation**: use **`openspec-apply-change`** to work through `tasks.md` sequentially; tick each task immediately when done; if implementation reveals ambiguity, update the artifacts (don’t guess).
+3. **Verification**: use **`openspec-verify-change`** before archiving to ensure tasks/specs/design match the code and test coverage.
+4. **Finish (user-controlled)**: keep “human review” tasks at the end; once those are ticked, the user runs their **`done-archived-commit-exact`** flow (or explicitly asks me to archive/commit).
+
+Guardrail:
+- I will **not** archive or commit automatically unless the user explicitly asks.
 
 ## Delegation handback format (required)
 

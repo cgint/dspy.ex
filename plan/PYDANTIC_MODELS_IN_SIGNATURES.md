@@ -15,6 +15,77 @@ This document is the **conceptual design + ecosystem evidence** that should guid
 ## Diagram
 ![Typed structured output flow](./pydantic_models_in_signatures_flow.svg)
 
+## Execution plan (TDD; red-path first; 3 steps)
+Principle: **prove the failure modes first** (invalid JSON / missing required keys / enum mismatch) with deterministic tests, then implement the minimum to make them pass, and only then add repair + retries.
+
+This plan prefers **JSV** (JSON Schema + casting) as the validation engine because it’s a good fit for LLM-JSON outputs and **does not require Ecto**. We can mirror `InstructorLite`-style semantics (bounded “re-ask” loop) without pulling in Ecto changesets.
+
+### Step 1 — Red-path-initial: pure typed-output pipeline (no retry, no repair)
+Goal: isolate the hardest slice as a pure, unit-testable pipeline:
+**completion text → JSON extraction → decode → validate/cast → typed value OR structured error**.
+
+Plan:
+- **Handshake (deps):** add `:jsv` as the validation/casting engine.
+- Add a small internal module (candidate: `Dspy.TypedOutputs`) that exposes:
+  - `extract_json/1` (at minimum: ```json fences + bracketed object extraction)
+  - `decode/1` (Jason)
+  - `validate_and_cast/2` (JSV)
+- Start with a single “model-like” schema (e.g. `Answer` with nested list + numeric bounds) to prove nested casting + constraints.
+
+Red-path tests (write first; they should fail initially):
+- invalid JSON → returns `{:error, {:output_decode_failed, ...}}` (**never raises**)
+- valid JSON but missing required keys → `{:error, {:output_validation_failed, ...}}`
+- enum/Literal mismatch (e.g. `component_type` not in allowed set) → `{:error, {:output_validation_failed, ...}}`
+- green path: valid nested JSON → returns validated Elixir value (map/struct) with correct types
+
+Exit criteria:
+- New unit tests are green (`mix test`).
+- No changes to `Predict`/`ChainOfThought` yet (keep integration risk low).
+
+### Step 2 — Green-path integration: signatures declare typed outputs; parsing returns typed values
+Goal: module-based signatures can say “this output is typed” and `Predict`/`ChainOfThought` return typed results deterministically.
+
+Plan:
+- Extend `Dspy.Signature.DSL.output_field/4` to accept a typed schema spec.
+  - Recommended minimal shape: keep `type: :json` and add `schema: MySchema` (or accept `type: MySchema` if `MySchema` clearly identifies itself as a schema module).
+- Update `Dspy.Signature.to_prompt/2` to embed schema hints for typed fields (DSPy-ish: “output must adhere to JSON schema …”).
+- Update `Dspy.Signature.parse_outputs/2` to:
+  - decode the completion JSON
+  - validate/cast typed fields via the Step-1 pipeline
+  - preserve existing behavior for scalar fields / untyped `:json`
+
+Tests:
+- prompt-generation test: schema hint is present for typed fields
+- parse_outputs test: returns typed nested output for a mocked LM completion (including ```json fences)
+- acceptance proof: update/add a variant of `test/acceptance/text_component_extract_acceptance_test.exs` that uses a typed schema for `components`
+
+Exit criteria:
+- `mix test` is green and existing acceptance tests remain green (no regressions).
+
+### Step 3 — Red-path: bounded retry-on-parse/validation failure + minimal repair (still deterministic)
+Goal: implement DSPy-like “re-ask until output matches schema” without introducing Ecto.
+
+Plan:
+- Add **bounded output retries** to `Predict` and `ChainOfThought`.
+  - Recommendation: add a new knob like `:max_output_retries` (default `0` for backward-compat); typed-output acceptance tests opt-in.
+- On parse/validation failure, build a retry prompt that includes:
+  - the JSON schema
+  - a compact validation error summary (paths + expected vs got)
+  - an explicit “return JSON only” instruction
+- Add minimal repairs only when driven by tests:
+  - strip ```json fences (already covered by Step 1 extraction)
+  - optionally reuse the existing `Dspy.Adapters.JSONAdapter` “lenient” fixups
+  - **Handshake (optional later):** add `:json_remedy` if we need robust repair beyond deterministic fixups
+
+Red-path tests:
+- LM returns invalid output on first call, valid on second → succeeds and makes exactly 2 LM calls
+- LM returns invalid output repeatedly → stops after N retries and returns the last structured error (no infinite loops)
+- Port 1–2 upstream edge cases as regressions *when they become relevant* (e.g. quoted `Literal[...]` wrappers; float underscores)
+
+Exit criteria:
+- deterministic retry tests green
+- acceptance test proves “invalid → retry → valid typed output” end-to-end
+
 ## Evidence: why this feature is required
 
 ### `dspy-intro` scripts rely on nested Pydantic models
