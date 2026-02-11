@@ -12,6 +12,9 @@ For DSPex-snakepit alignment and analysis:
 - `plan/SNAKEPIT_INTERFACE_COVERAGE.md`
 - `plan/SNAKEPIT_VS_PYTHON_DSPY_DISTANCE.md`
 
+For an at-a-glance cross-reference across Python DSPy / `dspy-intro` / DSPex-snakepit / native:
+- `plan/INTERFACE_COMPARISON_MATRIX.md`
+
 This is a planning artifact (not user-facing docs).
 
 ## Compatibility levels (explicit)
