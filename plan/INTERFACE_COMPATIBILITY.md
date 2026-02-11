@@ -12,6 +12,10 @@ This is a planning artifact (not user-facing docs).
 - **P1 (Same concept, idiomatic Elixir):** concept parity, Elixir-idiomatic API.
 - **P2 (Divergent / optional):** supported later or via integration layer.
 
+## Guiding principle (important)
+- Preserve **end-user-facing behavior** (inputs/outputs, prompt semantics, optimizer/evaluator semantics) as close as practical to Python DSPy.
+- Do **not** treat Python’s internal implementation approach as a constraint: we should use Elixir/BEAM idioms where they improve correctness, safety, and maintainability.
+
 ## Python DSPy → Elixir mapping (initial)
 ### Signatures
 - Python: `dspy.Signature`

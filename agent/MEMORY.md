@@ -28,6 +28,7 @@
 - Favor interface familiarity with:
   - upstream Python DSPy (primary)
   - `../DSPex-snakepit` where it helps adoption
+- Preserve **functional/behavioral parity** with Python DSPy where users can observe it (prompt semantics, input/output contracts, optimizer/evaluator behavior), but do **not** force internal implementation parity — prefer Elixir/BEAM idioms when they improve safety/correctness.
 - Prefer shipping **stable slices** over feature completeness.
 - Deterministic tests are the spec where possible.
 - Core is curated for adoption: unproven/experimental modules are quarantined under `extras/dspy_extras/unsafe/quarantine/`.

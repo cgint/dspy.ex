@@ -23,8 +23,9 @@ Within the constraints of this agent harness (I can’t change your env vars, ca
    - Keep changes PR-sized and easy to review.
 
 3. **Compatibility discipline (explicitly scoped)**
-   - We aim for **behavioral parity** with upstream where it matters (prompt formats, optimizer semantics), but **not** for 1:1 API parity when Elixir ergonomics differ.
-   - Any intentional divergence becomes a documented decision.
+   - We optimize for **end-user-facing interface familiarity** and **functional/behavioral parity** with upstream Python DSPy.
+   - We are **not** trying to mirror Python’s internal implementation details; we should use Elixir/BEAM strengths (data/immutability, concurrency, OTP) as long as the *observable behavior* remains close.
+   - Any intentional divergence becomes a documented decision (what differs + why).
 
 4. **Always-on verification**
    - Every change package includes reproducible verification steps (`mix test`, `./precommit.sh`, and at least one deterministic “golden path” test).
