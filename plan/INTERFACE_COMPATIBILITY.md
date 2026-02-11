@@ -5,6 +5,9 @@ Track which **interfaces and concepts** we are intentionally aligning with so th
 - Python DSPy users recognize patterns immediately
 - existing Elixir users coming from `../DSPex-snakepit` don’t feel like they’re learning an alien API
 
+For the concrete, adoption-first list of “what must feel familiar”, see:
+- `plan/IMPORTANT_INTERFACES.md`
+
 This is a planning artifact (not user-facing docs).
 
 ## Compatibility levels (explicit)
