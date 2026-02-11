@@ -105,6 +105,10 @@ Implication:
 - If we choose to add a dependency for JSON repair, `json_remedy` is an evidence-backed option.
 - Today we already have a small, deterministic “fix common JSON issues” implementation in `lib/dspy/adapters.ex` (JSONAdapter), but it’s not wired into `Dspy.Signature.parse_outputs/2`.
 
+## How this relates to adapters in `dspy.ex`
+For a deeper adapter-boundary discussion (upstream vs native, and where typed outputs should hook), see:
+- `plan/ADAPTERS_AND_TYPED_OUTPUTS.md`
+
 ## Design space for `dspy.ex`
 
 ### What we must support (minimum contract)

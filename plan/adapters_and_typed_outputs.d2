@@ -1,0 +1,40 @@
+direction: down
+
+Title: {
+  label: "**Adapters + typed outputs — where the boundary is**"
+}
+
+Title -> Current
+Title -> Target
+
+Current: {
+  label: "**Current `dspy.ex`**\n(implicit adapter)"
+
+  Signature: "Dspy.Signature\n- to_prompt/2\n- parse_outputs/2"
+  Programs: "Predict / ChainOfThought\n- build prompt\n- call LM\n- parse"
+  LM: "Dspy.LM.*\n(provider adapters)"
+  FormatUtils: "Dspy.Adapters\n(JSON/XML/chat utils)\n(used in Tools)"
+
+  Programs -> Signature
+  Programs -> LM
+  FormatUtils -> LM: "(separate)"
+}
+
+Target: {
+  label: "**Target shape**\n(explicit signature adapter boundary)"
+
+  Programs2: "Predict / ChainOfThought"
+  SigAdapter: "SignatureAdapter behaviour\nformat + parse + repair"
+  LabelAdapter: "LabelAdapter\n(current behavior)"
+  TypedJSONAdapter: "TypedJSONAdapter\n(JSON schema prompt +\nvalidate/cast + retry)"
+  Validator: "Validation engine\n(custom / JSV / Ecto)"
+  JsonRepair: "JSON repair\n(built-in / json_remedy)"
+  LM2: "Dspy.LM.*\n(provider adapters)"
+
+  Programs2 -> SigAdapter
+  SigAdapter -> LabelAdapter: "select"
+  SigAdapter -> TypedJSONAdapter: "select"
+  TypedJSONAdapter -> JsonRepair
+  TypedJSONAdapter -> Validator
+  Programs2 -> LM2
+}
