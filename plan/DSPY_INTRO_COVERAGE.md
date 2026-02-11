@@ -29,7 +29,7 @@ Legend:
 | `simplest/simplest_dspy_with_attachments.py` | ✅ | `test/acceptance/simplest_attachments_acceptance_test.exs` | Multimodal request parts |
 | `simplest/simplest_dspy_with_contracts.py` | ✅ | `test/acceptance/simplest_contracts_acceptance_test.exs` | PDF attachment → JSON extraction → Q&A |
 | `simplest/simplest_dspy_with_transcription.py` | ✅ | `test/acceptance/simplest_transcription_acceptance_test.exs` | Image attachment → transcription → postprocess |
-| `simplest/simplest_dspy_rlm.py` | ❓ | (none yet) | Uses `dspy.RLM` (sandboxed Python execution). We currently have Tools/ReAct, but no equivalent “code-in-sandbox” runner. Likely P2 feature (needs strong safety story). |
+| `simplest/simplest_dspy_rlm.py` | ❓ | (none yet) | Uses `dspy.RLM` (sandboxed Python execution). We currently have Tools/ReAct, but no equivalent “code-in-sandbox” runner. Explicitly low priority for now (deferred; needs strong safety story). |
 | `simplest/simplest_functai.py` | ⛔ | (none) | Not DSPy; uses `functai`. Treat as external/adjacent experimentation. |
 
 ### `classifier_credentials/`
@@ -54,19 +54,19 @@ Legend:
 | `dspy-intro` script | Status | `dspy.ex` proof artifact | Notes |
 |---|---|---|---|
 | `text_component_extract/extract_prompt_parts_101_guide.py` | ✅ | `test/acceptance/text_component_extract_acceptance_test.exs` | Structured extraction + LabeledFewShot improvement |
-| `text_component_extract/extract_sentence_parts_grammatical.py` | ❓ | (none yet) | Uses Pydantic-typed nested outputs (list of typed components). We can likely port this via JSON outputs + type coercion, but it’s a larger surface decision (how to represent nested structured types idiomatically in Elixir). |
+| `text_component_extract/extract_sentence_parts_grammatical.py` | ❓ | (none yet) | Uses Pydantic-typed nested outputs (list of typed components). This is a **high-priority next slice**; see `plan/PYDANTIC_MODELS_IN_SIGNATURES.md`. |
 
 ## What to prioritize next (recommended)
 
-1) **Decide scope for `RLM`-style workflows** (`simplest_dspy_rlm.py`):
-   - Either explicitly defer (P2) with a short note explaining why (sandbox safety / out of core scope),
-   - or define an Elixir-idiomatic equivalent (likely based on Tools/ReAct + a safe “executor” abstraction).
+1) **Typed nested outputs story** (Pydantic-like)
+   - This is a key adoption feature for “rely on structure + types”.
+   - Plan/proposal: `plan/PYDANTIC_MODELS_IN_SIGNATURES.md`.
 
-2) **Typed nested outputs story** (Pydantic-like):
-   - Start by supporting this use-case via existing JSON parsing + stable field constraints,
-   - then consider an explicit “schema” layer if needed (but keep core minimal).
+2) **Decide scope for `RLM`-style workflows** (`simplest_dspy_rlm.py`)
+   - Explicitly **low priority for now** (deferred).
+   - If/when we pick it up: we need a strong safety story for sandboxed execution.
 
-3) **Multi-dimension KG coverage**:
+3) **Multi-dimension KG coverage**
    - If users rely on it, add one acceptance assertion that the multi-dimension shape is preserved.
 
 ## Notes

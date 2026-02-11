@@ -1,0 +1,67 @@
+direction: down
+
+TypedStructuredOutputs: {
+  label: "**Typed structured outputs (Pydantic-like) — flow**"
+}
+
+TypedStructuredOutputs -> Program
+
+Program: {
+  label: "**Program**\nPredict / ChainOfThought\n(signature + max_retries)"
+}
+
+Program -> Prompt
+
+Prompt: {
+  label: "**Build prompt**\n- signature instructions\n- output schema (JSON-schema-like)\n- examples (JSON-serialized)"
+}
+
+Prompt -> LM
+
+LM: {
+  label: "**LM call**\nDspy.LM.generate(request)"
+}
+
+LM -> ResponseText
+
+ResponseText: {
+  label: "**Response text**\n(raw completion)"
+}
+
+ResponseText -> ExtractJSON
+
+ExtractJSON: {
+  label: "**Extract JSON**\n- fenced JSON / bracketed object\n- optional JSON repair"
+}
+
+ExtractJSON -> Decode
+
+Decode: {
+  label: "**Decode JSON**\nJason.decode/1"
+}
+
+Decode -> CastValidate
+
+CastValidate: {
+  label: "**Cast + validate**\n- scalar coercions\n- nested schema modules\n- enum/Literal (one_of)\n- forbid extra keys"
+}
+
+CastValidate -> Prediction: "ok"
+
+Prediction: {
+  label: "**Prediction**\nattrs contain typed values\n(structs/maps)"
+}
+
+CastValidate -> ValidationError: "error"
+
+ValidationError: {
+  label: "**Validation error**\n- error paths\n- messages"
+}
+
+ValidationError -> RepairPrompt
+
+RepairPrompt: {
+  label: "**Repair prompt**\n- summarize errors\n- restate schema\n- include prior output (optional)"
+}
+
+RepairPrompt -> LM: "retry (until max_retries)"
