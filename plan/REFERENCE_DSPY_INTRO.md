@@ -6,6 +6,10 @@
 ## Summary
 A local checkout of `dspy-intro/src` (path varies) contains important, real-world **Python DSPy usage examples** that we will treat as a *behavior reference suite*.
 
+## Local checkout location (this dev environment)
+- `dspy-intro` is currently located at: `../../dev/dspy-intro` (relative to this repo root).
+- This path is **not** a contract (contributors may keep it elsewhere); the contract is: “there exists some local checkout we can reference when creating/refreshing acceptance tests.”
+
 Important: we do **not** need to mimic every DSPy surface area immediately. We use `dspy-intro` to identify the **most common end-user-facing workflows** and make those stable first (adoption-first), then expand.
 
 We will use these scripts to:
