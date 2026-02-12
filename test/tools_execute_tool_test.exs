@@ -21,7 +21,9 @@ defmodule Dspy.Tools.ExecuteToolTest do
         fn _args ->
           Process.sleep(50)
           :ok
-        end, timeout: 10)
+        end,
+        timeout: 10
+      )
 
     assert {:error, "Tool execution timed out"} = Dspy.Tools.execute_tool(tool, %{})
   end
