@@ -60,6 +60,102 @@ defmodule Dspy.TypedOutputs do
     end
   end
 
+  @doc """
+  Validate/cast an already-decoded Elixir term according to `schema_spec`.
+
+  This is used at the Signature boundary (Step 2) where we already decoded the
+  outer JSON object and want to validate/cast a single field value.
+
+  Returns tagged errors (never raises).
+  """
+  @spec validate_term(term(), schema_spec()) :: {:ok, any()} | {:error, any()}
+  def validate_term(term, schema_spec) do
+    with {:ok, build_input} <- normalize_schema(schema_spec),
+         {:ok, root} <- build_root(build_input),
+         {:ok, casted} <- validate_and_cast(term, root) do
+      {:ok, casted}
+    else
+      {:error, {:output_validation_failed, _errors}} = err ->
+        err
+
+      {:error, _other} = err ->
+        err
+
+      other ->
+        {:error, {:typed_output_failed, other}}
+    end
+  end
+
+  @doc """
+  Parse a completion into a decoded JSON **object** map.
+
+  This is intended for typed Signatures, where we want deterministic decode
+  errors (no silent label fallback) but do not want to validate/cast the whole
+  outer object in one go.
+
+  Returns tagged errors (never raises).
+  """
+  @spec parse_json_object(String.t()) :: {:ok, map()} | {:error, {:output_decode_failed, any()}}
+  def parse_json_object(completion_text) when is_binary(completion_text) do
+    with {:ok, json_string} <- extract_json_object(completion_text),
+         {:ok, decoded} <- decode_json(json_string),
+         true <- is_map(decoded) do
+      {:ok, decoded}
+    else
+      {:error, :no_json_object_found} ->
+        {:error, {:output_decode_failed, :no_json_object_found}}
+
+      {:error, {:invalid_json, reason}} ->
+        {:error, {:output_decode_failed, reason}}
+
+      false ->
+        {:error, {:output_decode_failed, :not_a_json_object}}
+
+      other ->
+        {:error, {:output_decode_failed, other}}
+    end
+  end
+
+  @doc """
+  Return a compact JSON string representing a self-contained JSON Schema for `schema_spec`.
+
+  This is intended for embedding in prompts.
+
+  Implementation details:
+  - uses `JSV.Schema.normalize_collect/2` (`as_root: true`) to inline nested module-based
+    schemas under `$defs`
+  - strips internal JSV keys (at least `"jsv-cast"`) recursively
+  """
+  @spec prompt_schema_json(schema_spec()) :: {:ok, String.t()} | {:error, any()}
+  def prompt_schema_json(schema_spec) do
+    with {:ok, build_input} <- normalize_schema(schema_spec) do
+      schema = JSV.Schema.normalize_collect(build_input, as_root: true)
+
+      schema = strip_jsv_internal_keys(schema)
+
+      case Jason.encode(schema) do
+        {:ok, json} -> {:ok, json}
+        {:error, reason} -> {:error, {:schema_encode_failed, reason}}
+      end
+    end
+  rescue
+    e -> {:error, {:schema_encode_failed, e}}
+  end
+
+  @internal_schema_keys_to_strip ["jsv-cast", :"jsv-cast"]
+
+  defp strip_jsv_internal_keys(term) when is_map(term) do
+    term
+    |> Enum.reject(fn {k, _v} -> k in @internal_schema_keys_to_strip end)
+    |> Map.new(fn {k, v} -> {k, strip_jsv_internal_keys(v)} end)
+  end
+
+  defp strip_jsv_internal_keys(term) when is_list(term) do
+    Enum.map(term, &strip_jsv_internal_keys/1)
+  end
+
+  defp strip_jsv_internal_keys(term), do: term
+
   defp normalize_schema(schema) when is_map(schema), do: {:ok, schema}
 
   defp normalize_schema(schema) when is_atom(schema) do
