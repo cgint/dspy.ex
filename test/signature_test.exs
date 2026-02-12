@@ -5,7 +5,6 @@ defmodule DspySignatureTest do
     defmodule TestQA do
       use Dspy.Signature
 
-      signature_description("Answer questions accurately")
       signature_instructions("Provide clear and concise answers")
 
       input_field(:question, :string, "Question to answer")
@@ -16,7 +15,6 @@ defmodule DspySignatureTest do
       signature = TestQA.signature()
 
       assert signature.name == "Elixir.DspySignatureTest.TestQA"
-      assert signature.description == "Answer questions accurately"
       assert signature.instructions == "Provide clear and concise answers"
 
       assert length(signature.input_fields) == 1

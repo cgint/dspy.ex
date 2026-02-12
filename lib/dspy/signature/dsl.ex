@@ -57,6 +57,7 @@ defmodule Dspy.Signature.DSL do
   defmacro output_field(name, type, description \\ "", opts \\ []) do
     quote do
       one_of = Keyword.get(unquote(opts), :one_of) || Keyword.get(unquote(opts), :choices)
+      schema = Keyword.get(unquote(opts), :schema)
 
       field = %{
         name: unquote(name),
@@ -67,17 +68,9 @@ defmodule Dspy.Signature.DSL do
       }
 
       field = if is_nil(one_of), do: field, else: Map.put(field, :one_of, one_of)
+      field = if is_nil(schema), do: field, else: Map.put(field, :schema, schema)
 
       @output_fields field
-    end
-  end
-
-  @doc """
-  Set the signature description.
-  """
-  defmacro signature_description(desc) do
-    quote do
-      @signature_description unquote(desc)
     end
   end
 
@@ -93,14 +86,12 @@ defmodule Dspy.Signature.DSL do
   defmacro __before_compile__(env) do
     input_fields = Module.get_attribute(env.module, :input_fields) |> Enum.reverse()
     output_fields = Module.get_attribute(env.module, :output_fields) |> Enum.reverse()
-    description = Module.get_attribute(env.module, :signature_description)
     instructions = Module.get_attribute(env.module, :signature_instructions)
 
     quote do
       def signature do
         Dspy.Signature.new(
           Atom.to_string(__MODULE__),
-          description: unquote(description),
           input_fields: unquote(Macro.escape(input_fields)),
           output_fields: unquote(Macro.escape(output_fields)),
           instructions: unquote(instructions)

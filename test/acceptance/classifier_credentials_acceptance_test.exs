@@ -4,8 +4,6 @@ defmodule Dspy.Acceptance.ClassifierCredentialsAcceptanceTest do
   defmodule CredentialsSignature do
     use Dspy.Signature
 
-    signature_description("Classify whether a message contains credentials")
-
     signature_instructions(
       "Classify the input as safe or unsafe. Output must be exactly one of: safe, unsafe."
     )

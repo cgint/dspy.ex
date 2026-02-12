@@ -28,7 +28,6 @@ Code.require_file("../lib/dspy/consciousness_emergence_detector.ex")
 defmodule MathematicalReasoningSignature do
   use Dspy.Signature
 
-  signature_description("Advanced mathematical reasoning with multiple solution strategies")
 
   input_field(:problem_statement, :string, "Mathematical problem to solve")
   input_field(:difficulty_level, :string, "Problem difficulty: easy, medium, hard, expert")
@@ -48,7 +47,6 @@ end
 defmodule ScientificResearchSignature do
   use Dspy.Signature
 
-  signature_description("Scientific research problem analysis and hypothesis generation")
 
   input_field(:research_question, :string, "Scientific research question to investigate")
   input_field(:existing_knowledge, :string, "Current state of knowledge in the field")

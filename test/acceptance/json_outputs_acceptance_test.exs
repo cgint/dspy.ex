@@ -4,8 +4,6 @@ defmodule Dspy.Acceptance.JsonOutputsAcceptanceTest do
   defmodule JokeWithRatingSignature do
     use Dspy.Signature
 
-    signature_description("Write a short joke about the provided name and rate its funnyness.")
-
     signature_instructions(
       "Return your final outputs as a JSON object with keys: joke, funnyness_0_to_10."
     )

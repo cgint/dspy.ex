@@ -6,7 +6,7 @@ defmodule Dspy.Signature do
   including field types, descriptions, and validation rules.
   """
 
-  defstruct [:name, :description, :input_fields, :output_fields, :instructions]
+  defstruct [:name, :input_fields, :output_fields, :instructions]
 
   defmacro __using__(_opts) do
     quote do
@@ -15,7 +15,6 @@ defmodule Dspy.Signature do
 
       Module.register_attribute(__MODULE__, :input_fields, accumulate: true)
       Module.register_attribute(__MODULE__, :output_fields, accumulate: true)
-      Module.register_attribute(__MODULE__, :signature_description, accumulate: false)
       Module.register_attribute(__MODULE__, :signature_instructions, accumulate: false)
     end
   end
@@ -31,7 +30,6 @@ defmodule Dspy.Signature do
 
   @type t :: %__MODULE__{
           name: String.t(),
-          description: String.t() | nil,
           input_fields: [field()],
           output_fields: [field()],
           instructions: String.t() | nil
@@ -43,7 +41,6 @@ defmodule Dspy.Signature do
   def new(name, opts \\ []) do
     %__MODULE__{
       name: name,
-      description: Keyword.get(opts, :description),
       input_fields: Keyword.get(opts, :input_fields, []),
       output_fields: Keyword.get(opts, :output_fields, []),
       instructions: Keyword.get(opts, :instructions)
@@ -86,6 +83,7 @@ defmodule Dspy.Signature do
     sections = [
       instruction_section(signature),
       format_instruction_section(signature),
+      typed_schema_hint_section(signature),
       field_descriptions_section(signature),
       examples_section(examples, signature),
       input_section(signature)
@@ -123,6 +121,35 @@ defmodule Dspy.Signature do
   Parse outputs according to the signature.
   """
   def parse_outputs(signature, text) do
+    if signature_has_typed_outputs?(signature) do
+      parse_outputs_typed(signature, text)
+    else
+      parse_outputs_untyped(signature, text)
+    end
+  end
+
+  defp signature_has_typed_outputs?(signature) do
+    Enum.any?(signature.output_fields, &Map.has_key?(&1, :schema))
+  end
+
+  defp parse_outputs_typed(signature, text) do
+    with {:ok, decoded_map} <- Dspy.TypedOutputs.parse_json_object(text),
+         {:ok, outputs} <- map_json_to_outputs(signature, decoded_map),
+         :ok <- validate_output_structure(outputs, signature) do
+      outputs
+    else
+      {:error, {:output_decode_failed, _reason}} = error ->
+        error
+
+      {:error, _reason} = error ->
+        error
+
+      other ->
+        {:error, {:invalid_outputs, other}}
+    end
+  end
+
+  defp parse_outputs_untyped(signature, text) do
     json_outputs =
       case try_parse_json_outputs(signature, text) do
         {:ok, outputs} -> outputs
@@ -229,19 +256,44 @@ defmodule Dspy.Signature do
       key = Atom.to_string(field.name)
 
       if Map.has_key?(decoded_map, key) do
-        decoded_map
-        |> Map.fetch!(key)
-        |> normalize_json_value_for_field(field)
-        |> validate_field_value(field)
-        |> case do
-          {:ok, validated_value} ->
-            {:cont, {:ok, Map.put(acc, field.name, validated_value)}}
+        value = Map.fetch!(decoded_map, key)
 
-          {:error, reason} ->
-            if field.required do
-              {:halt, {:error, {:invalid_output_value, field.name, reason}}}
-            else
-              {:cont, {:ok, acc}}
+        case Map.get(field, :schema) do
+          nil ->
+            value
+            |> normalize_json_value_for_field(field)
+            |> validate_field_value(field)
+            |> case do
+              {:ok, validated_value} ->
+                {:cont, {:ok, Map.put(acc, field.name, validated_value)}}
+
+              {:error, reason} ->
+                if field.required do
+                  {:halt, {:error, {:invalid_output_value, field.name, reason}}}
+                else
+                  {:cont, {:ok, acc}}
+                end
+            end
+
+          schema_spec ->
+            case Dspy.TypedOutputs.validate_term(value, schema_spec) do
+              {:ok, typed_value} ->
+                {:cont, {:ok, Map.put(acc, field.name, typed_value)}}
+
+              {:error, {:output_validation_failed, errors}} ->
+                if field.required do
+                  {:halt,
+                   {:error, {:output_validation_failed, %{field: field.name, errors: errors}}}}
+                else
+                  {:cont, {:ok, acc}}
+                end
+
+              {:error, reason} ->
+                if field.required do
+                  {:halt, {:error, {:invalid_output_value, field.name, reason}}}
+                else
+                  {:cont, {:ok, acc}}
+                end
             end
         end
       else
@@ -294,6 +346,39 @@ defmodule Dspy.Signature do
       |> Enum.join("\n")
 
     "Follow this exact format for your response:\n#{output_format}"
+  end
+
+  defp typed_schema_hint_section(signature) do
+    typed_fields =
+      signature.output_fields
+      |> Enum.filter(&Map.has_key?(&1, :schema))
+
+    case typed_fields do
+      [] ->
+        nil
+
+      fields ->
+        hints =
+          fields
+          |> Enum.map(fn field ->
+            schema = Map.fetch!(field, :schema)
+
+            schema_json =
+              case Dspy.TypedOutputs.prompt_schema_json(schema) do
+                {:ok, json} ->
+                  json
+
+                {:error, reason} ->
+                  raise ArgumentError,
+                        "failed to encode prompt schema for output field #{inspect(field.name)}: #{inspect(reason)}"
+              end
+
+            "JSON Schema for #{Atom.to_string(field.name)}:\n#{schema_json}"
+          end)
+          |> Enum.join("\n\n")
+
+        "Return a JSON object that matches the following schema(s):\n\n" <> hints
+    end
   end
 
   defp field_descriptions_section(signature) do
@@ -362,6 +447,22 @@ defmodule Dspy.Signature do
   defp format_field_value(value) when is_atom(value), do: Atom.to_string(value)
   defp format_field_value(value) when is_boolean(value), do: if(value, do: "true", else: "false")
   defp format_field_value(value) when is_number(value), do: to_string(value)
+
+  defp format_field_value(%_{} = value) do
+    case Jason.encode(value) do
+      {:ok, json} ->
+        json
+
+      {:error, _reason} ->
+        # Many structs (including `JSV.defschema/1` structs) do not derive
+        # `Jason.Encoder` by default, but can still be represented as JSON by
+        # encoding their plain map form.
+        case Jason.encode(Map.from_struct(value)) do
+          {:ok, json} -> json
+          {:error, _reason2} -> inspect(value, pretty: false, limit: 100, sort_maps: true)
+        end
+    end
+  end
 
   defp format_field_value(value) when is_list(value) or is_map(value) do
     # Keep this deterministic + single-line to avoid surprising prompt formatting.

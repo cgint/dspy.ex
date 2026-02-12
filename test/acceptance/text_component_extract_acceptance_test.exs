@@ -3,18 +3,51 @@ defmodule Dspy.Acceptance.TextComponentExtractAcceptanceTest do
 
   alias Dspy.Teleprompt.LabeledFewShot
 
+  defmodule GrammaticalComponent do
+    @moduledoc false
+
+    use JSV.Schema
+
+    defschema(%{
+      type: :object,
+      properties: %{
+        component_type: string(enum: ["subject", "verb", "object", "modifier"]),
+        extracted_text: string()
+      },
+      required: [:component_type, :extracted_text],
+      additionalProperties: false
+    })
+  end
+
+  defmodule GrammaticalComponentsResult do
+    @moduledoc false
+
+    use JSV.Schema
+
+    defschema(%{
+      type: :object,
+      properties: %{
+        components: array_of(GrammaticalComponent)
+      },
+      required: [:components],
+      additionalProperties: false
+    })
+  end
+
   defmodule GrammaticalComponentsSignature do
     use Dspy.Signature
 
-    signature_description("Extract grammatical components from a sentence")
-
     signature_instructions(
-      "Return outputs as JSON with key components: a list of objects with keys " <>
+      "Return outputs as JSON with key extracted_components: an object with key components: a list of objects with keys " <>
         "component_type and extracted_text. extracted_text must be an exact substring of the input text."
     )
 
     input_field(:text, :string, "Sentence to analyze")
-    output_field(:components, :json, "List of grammatical components")
+
+    # Mirrors python dspy-intro: `extracted_components: GrammaticalComponentsResult = OutputField()`
+    output_field(:extracted_components, :json, "Typed grammatical components",
+      schema: GrammaticalComponentsResult
+    )
   end
 
   defmodule ComponentsMockLM do
@@ -70,7 +103,9 @@ defmodule Dspy.Acceptance.TextComponentExtractAcceptanceTest do
           end
         end
 
-      content = "```json\n" <> Jason.encode!(%{"components" => components}) <> "\n```"
+      payload = %{"extracted_components" => %{"components" => components}}
+
+      content = "```json\n" <> Jason.encode!(payload) <> "\n```"
 
       {:ok,
        %{
@@ -99,7 +134,10 @@ defmodule Dspy.Acceptance.TextComponentExtractAcceptanceTest do
 
   defp component_set(components) when is_list(components) do
     components
-    |> Enum.map(fn c -> {c["component_type"], c["extracted_text"]} end)
+    |> Enum.map(fn
+      %{"component_type" => t, "extracted_text" => txt} -> {t, txt}
+      %{component_type: t, extracted_text: txt} -> {t, txt}
+    end)
     |> MapSet.new()
   end
 
@@ -109,22 +147,26 @@ defmodule Dspy.Acceptance.TextComponentExtractAcceptanceTest do
     trainset = [
       Dspy.Example.new(%{
         text: "My grandmother baked delicious cookies yesterday.",
-        components: [
-          %{"component_type" => "subject", "extracted_text" => "My grandmother"},
-          %{"component_type" => "verb", "extracted_text" => "baked"},
-          %{"component_type" => "object", "extracted_text" => "delicious cookies"},
-          %{"component_type" => "modifier", "extracted_text" => "yesterday"}
-        ]
+        extracted_components: %GrammaticalComponentsResult{
+          components: [
+            %GrammaticalComponent{component_type: "subject", extracted_text: "My grandmother"},
+            %GrammaticalComponent{component_type: "verb", extracted_text: "baked"},
+            %GrammaticalComponent{component_type: "object", extracted_text: "delicious cookies"},
+            %GrammaticalComponent{component_type: "modifier", extracted_text: "yesterday"}
+          ]
+        }
       }),
       Dspy.Example.new(%{
         text: "The curious cat quietly watched the birds from the window.",
-        components: [
-          %{"component_type" => "subject", "extracted_text" => "The curious cat"},
-          %{"component_type" => "verb", "extracted_text" => "watched"},
-          %{"component_type" => "object", "extracted_text" => "the birds"},
-          %{"component_type" => "modifier", "extracted_text" => "quietly"},
-          %{"component_type" => "modifier", "extracted_text" => "from the window"}
-        ]
+        extracted_components: %GrammaticalComponentsResult{
+          components: [
+            %GrammaticalComponent{component_type: "subject", extracted_text: "The curious cat"},
+            %GrammaticalComponent{component_type: "verb", extracted_text: "watched"},
+            %GrammaticalComponent{component_type: "object", extracted_text: "the birds"},
+            %GrammaticalComponent{component_type: "modifier", extracted_text: "quietly"},
+            %GrammaticalComponent{component_type: "modifier", extracted_text: "from the window"}
+          ]
+        }
       })
     ]
 
@@ -144,7 +186,11 @@ defmodule Dspy.Acceptance.TextComponentExtractAcceptanceTest do
 
     metric = fn example, prediction ->
       expected = example.attrs.expected_components_json |> Jason.decode!() |> component_set()
-      got = prediction.attrs.components |> component_set()
+
+      %GrammaticalComponentsResult{components: got_components} =
+        prediction.attrs.extracted_components
+
+      got = component_set(got_components)
       if expected == got, do: 1.0, else: 0.0
     end
 
@@ -170,20 +216,20 @@ defmodule Dspy.Acceptance.TextComponentExtractAcceptanceTest do
     # Sanity-check: the compiled program runs and produces the correct structured output.
     sentence = "The curious cat quietly watched the birds from the window."
 
-    expected_components =
-      sentence
-      |> then(fn _ ->
-        [
-          %{"component_type" => "subject", "extracted_text" => "The curious cat"},
-          %{"component_type" => "verb", "extracted_text" => "watched"},
-          %{"component_type" => "object", "extracted_text" => "the birds"},
-          %{"component_type" => "modifier", "extracted_text" => "quietly"},
-          %{"component_type" => "modifier", "extracted_text" => "from the window"}
-        ]
-      end)
+    expected_components = [
+      %{"component_type" => "subject", "extracted_text" => "The curious cat"},
+      %{"component_type" => "verb", "extracted_text" => "watched"},
+      %{"component_type" => "object", "extracted_text" => "the birds"},
+      %{"component_type" => "modifier", "extracted_text" => "quietly"},
+      %{"component_type" => "modifier", "extracted_text" => "from the window"}
+    ]
 
     assert {:ok, pred} = Dspy.Module.forward(optimized, %{text: sentence})
-    assert component_set(pred.attrs.components) == component_set(expected_components)
+
+    assert %GrammaticalComponentsResult{components: pred_components} =
+             pred.attrs.extracted_components
+
+    assert component_set(pred_components) == component_set(expected_components)
 
     _ = drain_lm_seen()
 

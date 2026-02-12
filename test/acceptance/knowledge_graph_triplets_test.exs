@@ -4,8 +4,6 @@ defmodule Dspy.Acceptance.KnowledgeGraphTripletsTest do
   defmodule TripletExtractionSignature do
     use Dspy.Signature
 
-    signature_description("Extract knowledge-graph triplets from text")
-
     signature_instructions(
       "Return JSON with key triplets: a list of {subject, predicate, object} maps. " <>
         "Use existing_triplets as context to avoid duplicates and relate new facts."
