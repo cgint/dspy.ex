@@ -26,6 +26,6 @@ rules:
   tasks:
     - Break tasks into chunks that are small enough to be simply manageable and self contained.
     - Always check for existing tests at the beginning of the implementation - this MUST be a task to remind about doing TDD - the word "TDD" MUST be in the task description.
-    - Always include specific "Verification" tasks that specify what should be verified before getting back to the user..
-    - Always include specific "Final user verification" tasks that specify what the user should check finally to know the change is complete.
+    - Always include specific "Verification" tasks that specify what should be verified before getting back to the user.
+    - Always include specific "Final verification by the user" tasks that specify what the user should check finally to know the change is complete.
     - Do not put CLI commands like 'openspec validate' in the tasks list.
