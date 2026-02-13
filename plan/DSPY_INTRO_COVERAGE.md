@@ -54,7 +54,7 @@ Legend:
 | `dspy-intro` script | Status | `dspy.ex` proof artifact | Notes |
 |---|---|---|---|
 | `text_component_extract/extract_prompt_parts_101_guide.py` | ✅ | `test/acceptance/text_component_extract_acceptance_test.exs` | Structured extraction + LabeledFewShot improvement |
-| `text_component_extract/extract_sentence_parts_grammatical.py` | ❓ | (none yet) | Uses Pydantic-typed nested outputs (list of typed components). This is a **high-priority next slice**; see `plan/PYDANTIC_MODELS_IN_SIGNATURES.md`. |
+| `text_component_extract/extract_sentence_parts_grammatical.py` | ✅ | `test/acceptance/text_component_extract_acceptance_test.exs` | Uses Pydantic-typed nested outputs (list of typed components) via `schema:` + JSV. Bounded retry-on-parse/validation failure is also supported via `max_output_retries` (proof: `test/typed_output_retry_test.exs`). |
 
 ## What to prioritize next (recommended)
 

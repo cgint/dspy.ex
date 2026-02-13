@@ -114,6 +114,48 @@ pred.attrs.funnyness_0_to_10 #=> 7
 
 Proof: `test/acceptance/json_outputs_acceptance_test.exs`
 
+### 2b) Typed structured outputs (JSON Schema + validation/casting + opt-in retries)
+
+For nested structured outputs (Pydantic-like), you can attach a JSON Schema (via `JSV.defschema/1`)
+to an output field using `schema:`. On success, `dspy.ex` returns a **typed struct** (the schema module)
+not just a map.
+
+You can also opt in to bounded retries when the model output isn't valid JSON or doesn't validate.
+On retries, the prompt includes the schema + validation errors (path-oriented) so the model can self-correct.
+
+- `max_output_retries: N` (default `0`) — retries on output decode/validation failures
+- `max_retries: N` still only retries LM transport failures
+
+```elixir
+defmodule AnswerSchema do
+  use JSV.Schema
+
+  defschema(%{
+    type: :object,
+    properties: %{answer: string()},
+    required: [:answer],
+    additionalProperties: false
+  })
+end
+
+defmodule TypedAnswer do
+  use Dspy.Signature
+
+  input_field(:question, :string, "Question")
+  output_field(:result, :json, "Typed result", schema: AnswerSchema)
+end
+
+predict = Dspy.Predict.new(TypedAnswer, max_output_retries: 1)
+{:ok, pred} = Dspy.call(predict, %{question: "What is 2+2?"})
+
+pred.attrs.result #=> %AnswerSchema{answer: "4"}
+```
+
+Proof:
+- Typed schema prompt + parsing/casting: `test/signature_typed_schema_integration_test.exs`
+- Bounded retry on invalid outputs: `test/typed_output_retry_test.exs`
+- Nested typed outputs end-to-end (list of structs): `test/acceptance/text_component_extract_acceptance_test.exs`
+
 ### 3) Constrained outputs (enum/Literal-style via `one_of`)
 
 Signatures can constrain a field to a fixed set of allowed values using `one_of:`.

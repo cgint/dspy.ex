@@ -20,12 +20,13 @@ defmodule Dspy.ChainOfThought do
 
   alias Dspy.Parameter
 
-  defstruct [:signature, :examples, :max_retries, :reasoning_field]
+  defstruct [:signature, :examples, :max_retries, :max_output_retries, :reasoning_field]
 
   @type t :: %__MODULE__{
           signature: Dspy.Signature.t(),
           examples: [Dspy.Example.t()],
           max_retries: non_neg_integer(),
+          max_output_retries: non_neg_integer(),
           reasoning_field: atom()
         }
 
@@ -47,6 +48,8 @@ defmodule Dspy.ChainOfThought do
       signature: augmented_signature,
       examples: Keyword.get(opts, :examples, []),
       max_retries: Keyword.get(opts, :max_retries, 3),
+      # Opt-in: retry when typed structured outputs fail to parse/validate.
+      max_output_retries: Keyword.get(opts, :max_output_retries, 0),
       reasoning_field: reasoning_field
     }
   end
@@ -83,14 +86,122 @@ defmodule Dspy.ChainOfThought do
   def forward(%__MODULE__{} = cot, inputs) do
     with :ok <- Dspy.Signature.validate_inputs(cot.signature, inputs),
          {:ok, prompt} <- build_prompt(cot, inputs),
-         {:ok, response_text} <-
-           generate_with_retries(prompt, cot.signature, inputs, cot.max_retries),
-         {:ok, outputs} <- parse_response(cot, response_text) do
+         {:ok, outputs} <- generate_and_parse_with_output_retries(cot, prompt, inputs) do
       prediction = Dspy.Prediction.new(outputs)
       {:ok, prediction}
     else
       {:error, reason} -> {:error, reason}
     end
+  end
+
+  defp generate_and_parse_with_output_retries(%__MODULE__{} = cot, base_prompt, inputs)
+       when is_binary(base_prompt) do
+    do_generate_and_parse_with_output_retries(
+      cot,
+      base_prompt,
+      base_prompt,
+      inputs,
+      cot.max_output_retries
+    )
+  end
+
+  defp do_generate_and_parse_with_output_retries(
+         %__MODULE__{} = cot,
+         base_prompt,
+         prompt,
+         inputs,
+         output_retries_left
+       )
+       when is_binary(base_prompt) and is_binary(prompt) and is_integer(output_retries_left) do
+    with {:ok, response_text} <-
+           generate_with_retries(prompt, cot.signature, inputs, cot.max_retries) do
+      case parse_response(cot, response_text) do
+        {:ok, outputs} ->
+          {:ok, outputs}
+
+        {:error, reason} ->
+          if output_retries_left > 0 and typed_output_retry_enabled?(cot) and
+               output_retryable_reason?(reason) do
+            retry_prompt = build_output_retry_prompt(base_prompt, cot.signature, reason)
+
+            do_generate_and_parse_with_output_retries(
+              cot,
+              base_prompt,
+              retry_prompt,
+              inputs,
+              output_retries_left - 1
+            )
+          else
+            {:error, reason}
+          end
+      end
+    end
+  end
+
+  defp typed_output_retry_enabled?(%__MODULE__{} = cot) do
+    cot.max_output_retries > 0 and signature_has_typed_outputs?(cot.signature)
+  end
+
+  defp signature_has_typed_outputs?(%Dspy.Signature{} = signature) do
+    Enum.any?(signature.output_fields, &Map.has_key?(&1, :schema))
+  end
+
+  defp output_retryable_reason?({:output_decode_failed, _reason}), do: true
+  defp output_retryable_reason?({:output_validation_failed, _details}), do: true
+  defp output_retryable_reason?({:missing_required_outputs, _missing}), do: true
+  defp output_retryable_reason?({:invalid_output_value, _field, _reason}), do: true
+  defp output_retryable_reason?({:invalid_outputs, _other}), do: true
+  defp output_retryable_reason?(_other), do: false
+
+  defp build_output_retry_prompt(base_prompt, %Dspy.Signature{} = signature, reason)
+       when is_binary(base_prompt) do
+    keys = signature.output_fields |> Enum.map(&Atom.to_string(&1.name)) |> Enum.join(", ")
+
+    base_prompt <>
+      "\n\n" <>
+      "Your previous output did not match the required JSON schema.\n" <>
+      "Errors:\n" <>
+      format_output_retry_errors(reason) <>
+      "\n\n" <>
+      "Return JSON only (no markdown fences, no labels, no extra text).\n" <>
+      "The top-level JSON object must contain the following keys: #{keys}.\n" <>
+      "Use the JSON Schema shown above."
+  end
+
+  defp format_output_retry_errors({:output_decode_failed, decode_reason}) do
+    "- output_decode_failed: #{inspect(decode_reason)}"
+  end
+
+  defp format_output_retry_errors({:missing_required_outputs, missing}) when is_list(missing) do
+    "- missing required output keys: #{Enum.map_join(missing, ", ", &inspect/1)}"
+  end
+
+  defp format_output_retry_errors({:invalid_output_value, field, reason}) do
+    "- #{inspect(field)}: #{inspect(reason)}"
+  end
+
+  defp format_output_retry_errors({:invalid_outputs, other}) do
+    "- invalid outputs: #{inspect(other)}"
+  end
+
+  defp format_output_retry_errors({:output_validation_failed, %{field: field, errors: errors}})
+       when is_list(errors) do
+    errors
+    |> Enum.take(10)
+    |> Enum.map(fn err ->
+      path = Map.get(err, :path, "#")
+      msg = Map.get(err, :message, inspect(err))
+      "- #{field} #{path}: #{msg}"
+    end)
+    |> Enum.join("\n")
+  end
+
+  defp format_output_retry_errors({:output_validation_failed, other}) do
+    "- output_validation_failed: #{inspect(other)}"
+  end
+
+  defp format_output_retry_errors(other) do
+    "- #{inspect(other)}"
   end
 
   defp get_signature(signature) when is_atom(signature) do

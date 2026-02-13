@@ -12,6 +12,12 @@ Constraints / guardrails:
 
 This document is the **conceptual design + ecosystem evidence** that should guide the next implementation slice.
 
+Status (2026-02-13): implemented in core with deterministic proof artifacts:
+- Pipeline + validation/casting: `lib/dspy/typed_outputs.ex`, `test/typed_outputs_pipeline_test.exs`
+- Signature integration (`schema:`) + prompt schema hints: `test/signature_typed_schema_integration_test.exs`
+- Bounded retry-on-parse/validation failure (`max_output_retries`): `test/typed_output_retry_test.exs`
+- Nested typed outputs end-to-end: `test/acceptance/text_component_extract_acceptance_test.exs`
+
 ## Diagram
 ![Typed structured output flow](./pydantic_models_in_signatures_flow.svg)
 

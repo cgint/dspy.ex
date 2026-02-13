@@ -179,6 +179,7 @@ Notes:
 
 ## Log
 
+- **2026-02-13**: Typed structured outputs reliability: added bounded retry-on-output-parse/validation failure (`max_output_retries`) for `Predict` + `ChainOfThought`; added deterministic tests; documented usage in `docs/OVERVIEW.md` + `docs/COMPATIBILITY.md`. Verification: `./precommit.sh`.
 - **2026-02-11**: Planning: added proposal doc for Pydantic-like typed structured outputs in signatures (`plan/PYDANTIC_MODELS_IN_SIGNATURES.md`) + reprioritized `dspy-intro` coverage accordingly. Verification: `mix test`.
 - **2026-02-10**: Adoption UX: added `Dspy.call/2` + `call!/2` aliases (closer to Python “call the program” mental model) and updated docs to prefer `Dspy.call/2`. Verification: `mix test`.
 - **2026-02-10**: Adoption UX: added a small `Dspy` facade (`forward/2`, `forward!/2`, `configure!/1`) and updated README + compatibility/overview docs to use it. Verification: `mix test`.

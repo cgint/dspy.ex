@@ -48,7 +48,7 @@ Proof anchors:
   - JSON (including fenced JSON) object outputs (“JSONAdapter-style” behavior)
   - type coercion (`int`/`:integer`)
   - constraints via `one_of:`
-  - nested typed outputs (Pydantic-like) for structured return types + validation + retry (planned; see `plan/PYDANTIC_MODELS_IN_SIGNATURES.md`)
+  - nested typed outputs (Pydantic-like) for structured return types + validation + bounded retry (supported via `schema:` + `max_output_retries`; proof: `test/typed_output_retry_test.exs`; design notes: `plan/PYDANTIC_MODELS_IN_SIGNATURES.md`)
 
 Proof anchors:
 - `test/acceptance/simplest_predict_test.exs`

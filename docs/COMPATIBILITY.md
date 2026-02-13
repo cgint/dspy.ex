@@ -221,6 +221,7 @@ Evidence:
 | `dspy.Example(...)` | `Dspy.Example.new(...)` | Implements `Access` (`ex[:question]`) | `test/example_prediction_access_test.exs` |
 | `example.with_inputs(...)` | `Dspy.Example.with_inputs/2` + `Dspy.Example.inputs/1` | Mark which attrs are inputs; `Evaluate`/teleprompts forward only inputs when configured | `test/example_with_inputs_test.exs` |
 | JSONAdapter-style outputs | `Dspy.Signature.parse_outputs/2` | Parses JSON (incl. fenced) and coerces types | `test/acceptance/json_outputs_acceptance_test.exs` |
+| Pydantic models in signatures (typed structured outputs) | `output_field(..., schema: MySchema)` + `max_output_retries:` | Validates/casts nested JSON outputs via JSON Schema (JSV). Returns typed structs. Retries on parse/validation failure are opt-in. | `test/signature_typed_schema_integration_test.exs`, `test/typed_output_retry_test.exs`, `test/acceptance/text_component_extract_acceptance_test.exs` |
 | constrained outputs (`one_of`) | `output_field(..., one_of: [...])` | Invalid outputs return tagged errors | `test/acceptance/classifier_credentials_acceptance_test.exs` |
 | multimodal attachments | `%Dspy.Attachments{}` inputs | Attachments become message content parts (request-map) | `test/acceptance/simplest_attachments_acceptance_test.exs` |
 | refine loop | `Dspy.Refine.new/2` | Retries until reward threshold met | `test/acceptance/simplest_refine_acceptance_test.exs` |

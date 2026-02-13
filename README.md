@@ -62,6 +62,7 @@ Optional/experimental modules (Phoenix LiveView UI, “godmode” coordinator, G
   - labeled outputs
   - JSON-in-markdown-fences parsing
   - type coercion + `one_of` constraints
+  - typed structured outputs via `schema:` (JSON Schema/JSV; returns typed structs; opt-in `max_output_retries`)
 - `Dspy.Refine` loop (retry until a metric threshold is met)
 - Attachments request shape via `%Dspy.Attachments{}` (multimodal `messages[].content` parts)
 - Tools: ReAct loop + tool logging callbacks
