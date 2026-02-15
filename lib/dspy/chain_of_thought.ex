@@ -20,14 +20,15 @@ defmodule Dspy.ChainOfThought do
 
   alias Dspy.Parameter
 
-  defstruct [:signature, :examples, :max_retries, :max_output_retries, :reasoning_field]
+  defstruct [:signature, :examples, :max_retries, :max_output_retries, :reasoning_field, :adapter]
 
   @type t :: %__MODULE__{
           signature: Dspy.Signature.t(),
           examples: [Dspy.Example.t()],
           max_retries: non_neg_integer(),
           max_output_retries: non_neg_integer(),
-          reasoning_field: atom()
+          reasoning_field: atom(),
+          adapter: module() | nil
         }
 
   @doc """
@@ -50,7 +51,8 @@ defmodule Dspy.ChainOfThought do
       max_retries: Keyword.get(opts, :max_retries, 3),
       # Opt-in: retry when typed structured outputs fail to parse/validate.
       max_output_retries: Keyword.get(opts, :max_output_retries, 0),
-      reasoning_field: reasoning_field
+      reasoning_field: reasoning_field,
+      adapter: Keyword.get(opts, :adapter)
     }
   end
 
@@ -240,7 +242,8 @@ defmodule Dspy.ChainOfThought do
     # Add chain-of-thought instructions
     enhanced_signature = add_cot_instructions(cot.signature)
 
-    prompt_template = Dspy.Signature.to_prompt(enhanced_signature, cot.examples)
+    adapter = output_adapter(cot)
+    prompt_template = Dspy.Signature.to_prompt(enhanced_signature, cot.examples, adapter: adapter)
 
     filled_prompt =
       Enum.reduce(enhanced_signature.input_fields, prompt_template, fn %{name: name}, acc ->
@@ -349,9 +352,16 @@ defmodule Dspy.ChainOfThought do
   end
 
   defp parse_response(%__MODULE__{} = cot, response_text) do
-    case Dspy.Signature.parse_outputs(cot.signature, response_text) do
+    adapter = output_adapter(cot)
+
+    case adapter.parse_outputs(cot.signature, response_text, []) do
       {:error, _reason} = error -> error
       outputs when is_map(outputs) -> {:ok, outputs}
+      other -> {:error, {:parse_failed, other}}
     end
+  end
+
+  defp output_adapter(%__MODULE__{} = cot) do
+    cot.adapter || Dspy.Settings.get(:adapter) || Dspy.Signature.Adapters.Default
   end
 end

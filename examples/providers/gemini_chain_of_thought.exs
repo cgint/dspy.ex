@@ -1,8 +1,12 @@
-# Real-provider example (Gemini 2.5 Flash via ReqLLM)
+# Real-provider example (Gemini 2.5 Flash)
 #
 # Requires an API key.
-# This repo uses ReqLLM's provider syntax `google:*` which expects GOOGLE_API_KEY.
+# Under the hood this uses ReqLLM's Google provider which expects GOOGLE_API_KEY.
 # If you only have GEMINI_API_KEY, this script will use it as a fallback.
+#
+# Demonstrates Python-DSPy-style ergonomics:
+# - model prefix: gemini/<model>
+# - thinking_budget: <int>
 #
 # Run:
 #   mix run examples/providers/gemini_chain_of_thought.exs
@@ -22,8 +26,15 @@ if System.get_env("GOOGLE_API_KEY") in [nil, ""] do
   System.put_env("GOOGLE_API_KEY", api_key)
 end
 
+{:ok, lm} =
+  Dspy.LM.new("gemini/gemini-2.5-flash",
+    # Gemini 2.5 thinking tokens budget.
+    # 0 disables thinking, omit to let the provider allocate dynamically.
+    thinking_budget: 4096
+  )
+
 Dspy.configure(
-  lm: Dspy.LM.ReqLLM.new(model: "google:gemini-2.5-flash"),
+  lm: lm,
   temperature: 0.0,
   # Keep this generous: ChainOfThought requires both Reasoning + Answer labels.
   max_tokens: 1024,
@@ -39,7 +50,7 @@ end
 
 program = Dspy.ChainOfThought.new(CoTSig)
 
-IO.puts("Running ChainOfThought with google:gemini-2.5-flash ...")
+IO.puts("Running ChainOfThought with gemini/gemini-2.5-flash (thinking_budget=4096) ...")
 
 case Dspy.Module.forward(program, %{question: "What is 17*19?"}) do
   {:ok, pred} ->

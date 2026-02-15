@@ -30,7 +30,7 @@ If you just want to sanity-check the API surface without any provider keys:
 ```elixir
 # in iex -S mix
 
-defmodule DemoLM do
+defmodule DemoLMLabels do
   @behaviour Dspy.LM
 
   @impl true
@@ -43,12 +43,34 @@ defmodule DemoLM do
   def supports?(_lm, _feature), do: true
 end
 
-Dspy.configure(lm: %DemoLM{})
+defmodule DemoLMJson do
+  @behaviour Dspy.LM
+
+  @impl true
+  def generate(_lm, _request) do
+    {:ok,
+     %{choices: [%{message: %{role: "assistant", content: ~s({"answer":"ok"})}, finish_reason: "stop"}], usage: nil}}
+  end
+
+  @impl true
+  def supports?(_lm, _feature), do: true
+end
+
+# Default adapter: tries JSON, then falls back to label parsing.
+Dspy.configure(lm: %DemoLMLabels{}, adapter: Dspy.Signature.Adapters.Default)
 
 predict = Dspy.Predict.new("question -> answer")
 {:ok, pred} = Dspy.call(predict, %{question: "Hello?"})
 
 pred.attrs.answer
+
+# JSON-only adapter (strict): no label fallback.
+Dspy.configure(lm: %DemoLMJson{}, adapter: Dspy.Signature.Adapters.JSONAdapter)
+
+predict2 = Dspy.Predict.new("question -> answer")
+{:ok, pred2} = Dspy.call(predict2, %{question: "Hello?"})
+
+pred2.attrs.answer
 ```
 
 ### Quick start (real providers)
@@ -113,6 +135,35 @@ pred.attrs.funnyness_0_to_10 #=> 7
 ```
 
 Proof: `test/acceptance/json_outputs_acceptance_test.exs`
+
+#### Adapter selection (default vs JSON-only)
+
+By default, output parsing is lenient:
+- tries to parse a JSON object
+- otherwise falls back to label parsing (e.g. `Answer: ...`)
+
+If you want stricter "JSON only" semantics, configure the JSON-only signature adapter:
+
+```elixir
+Dspy.configure(
+  lm: %MyLM{},
+  adapter: Dspy.Signature.Adapters.JSONAdapter
+)
+```
+
+You can also override per predictor:
+
+```elixir
+predict_default = Dspy.Predict.new("q -> answer")
+# ...uses global adapter
+
+predict_labels_ok = Dspy.Predict.new("q -> answer", adapter: Dspy.Signature.Adapters.Default)
+# ...forces default behavior for this predictor
+```
+
+Proof: `test/adapter_selection_test.exs`
+
+Executable demo: `mix run examples/offline/adapter_selection_offline.exs`
 
 ### 2b) Typed structured outputs (JSON Schema + validation/casting + opt-in retries)
 

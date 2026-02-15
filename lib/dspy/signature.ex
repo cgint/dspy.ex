@@ -78,11 +78,25 @@ defmodule Dspy.Signature do
 
   @doc """
   Generate a prompt template from the signature.
+
+  ## Options
+
+  - `:adapter` - a `Dspy.Signature.Adapter` module used to generate output-format instructions.
+
+  Note: if `examples` is omitted, you may pass options as the second argument.
   """
-  def to_prompt(signature, examples \\ []) do
+  def to_prompt(signature, examples \\ [], opts \\ []) do
+    {examples, opts} =
+      cond do
+        is_list(examples) and Keyword.keyword?(examples) and opts == [] -> {[], examples}
+        true -> {examples, opts}
+      end
+
+    adapter = Keyword.get(opts, :adapter, Dspy.Signature.Adapters.Default)
+
     sections = [
       instruction_section(signature),
-      format_instruction_section(signature),
+      adapter.format_instructions(signature, opts),
       typed_schema_hint_section(signature),
       field_descriptions_section(signature),
       examples_section(examples, signature),
@@ -335,17 +349,6 @@ defmodule Dspy.Signature do
 
   defp instruction_section(%{instructions: instructions}) do
     "Instructions: #{instructions}"
-  end
-
-  defp format_instruction_section(signature) do
-    output_format =
-      signature.output_fields
-      |> Enum.map(fn field ->
-        "#{String.capitalize(Atom.to_string(field.name))}: [your #{field.description}]"
-      end)
-      |> Enum.join("\n")
-
-    "Follow this exact format for your response:\n#{output_format}"
   end
 
   defp typed_schema_hint_section(signature) do

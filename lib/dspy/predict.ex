@@ -8,13 +8,14 @@ defmodule Dspy.Predict do
 
   use Dspy.Module
 
-  defstruct [:signature, :examples, :max_retries, :max_output_retries]
+  defstruct [:signature, :examples, :max_retries, :max_output_retries, :adapter]
 
   @type t :: %__MODULE__{
           signature: Dspy.Signature.t(),
           examples: [Dspy.Example.t()],
           max_retries: non_neg_integer(),
-          max_output_retries: non_neg_integer()
+          max_output_retries: non_neg_integer(),
+          adapter: module() | nil
         }
 
   @doc """
@@ -26,7 +27,8 @@ defmodule Dspy.Predict do
       examples: Keyword.get(opts, :examples, []),
       max_retries: Keyword.get(opts, :max_retries, 3),
       # Opt-in: retry when typed structured outputs fail to parse/validate.
-      max_output_retries: Keyword.get(opts, :max_output_retries, 0)
+      max_output_retries: Keyword.get(opts, :max_output_retries, 0),
+      adapter: Keyword.get(opts, :adapter)
     }
   end
 
@@ -200,7 +202,10 @@ defmodule Dspy.Predict do
   end
 
   defp build_prompt(predict, inputs) do
-    prompt_template = Dspy.Signature.to_prompt(predict.signature, predict.examples)
+    adapter = output_adapter(predict)
+
+    prompt_template =
+      Dspy.Signature.to_prompt(predict.signature, predict.examples, adapter: adapter)
 
     filled_prompt =
       Enum.reduce(predict.signature.input_fields, prompt_template, fn %{name: name}, acc ->
@@ -282,11 +287,17 @@ defmodule Dspy.Predict do
     end)
   end
 
-  defp parse_response(predict, response_text) do
-    case Dspy.Signature.parse_outputs(predict.signature, response_text) do
+  defp parse_response(%__MODULE__{} = predict, response_text) do
+    adapter = output_adapter(predict)
+
+    case adapter.parse_outputs(predict.signature, response_text, []) do
       {:error, reason} -> {:error, reason}
       outputs when is_map(outputs) -> {:ok, outputs}
       other -> {:error, {:parse_failed, other}}
     end
+  end
+
+  defp output_adapter(%__MODULE__{} = predict) do
+    predict.adapter || Dspy.Settings.get(:adapter) || Dspy.Signature.Adapters.Default
   end
 end

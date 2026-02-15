@@ -1,0 +1,29 @@
+direction: down
+
+ReAct (Python DSPy style) in dspy.ex: {
+  style.fill: "#f7f7f7"
+
+  "**User**" -> "**Dspy.ReAct**\n(Module)" : call/2
+
+  "**Dspy.ReAct**\n(Module)" -> "Build internal *react step* signature" : init
+  "**Dspy.ReAct**\n(Module)" -> "Build internal *extract* signature" : init
+
+  "Build internal *react step* signature" -> "**Dspy.Predict**\n(step selector)" : uses
+  "Build internal *extract* signature" -> "**Dspy.ChainOfThought**\n(or Predict)" : uses
+
+  loop: "Repeat up to max_steps" {
+    "**Dspy.Predict**\n(step selector)" -> "Signature Adapter\n(format_instructions + parse_outputs)" : selected adapter
+    "Signature Adapter\n(format_instructions + parse_outputs)" -> "LM" : prompt/messages
+    "LM" -> "Step outputs" : completion
+
+    "Step outputs" -> "Tool execution" : next_tool_name + next_tool_args
+    "Tool execution" -> "Trajectory" : append thought/tool/args/observation
+    "Trajectory" -> "**Dspy.Predict**\n(step selector)" : fed back as input
+
+    "Step outputs" -> "finish?" : if next_tool_name == finish
+  }
+
+  "Trajectory" -> "**Dspy.ChainOfThought**\n(or Predict)" : final extract
+  "**Dspy.ChainOfThought**\n(or Predict)" -> "Signature Adapter\n(parse_outputs)" : parse final outputs
+  "Signature Adapter\n(parse_outputs)" -> "Prediction" : signature outputs
+}

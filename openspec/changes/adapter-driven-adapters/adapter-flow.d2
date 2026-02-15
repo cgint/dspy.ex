@@ -1,0 +1,27 @@
+direction: down
+
+User: {
+  label: "**User code**\nconfigures adapter"
+}
+
+Settings: {
+  label: "**Dspy.Settings**\nstores global adapter"
+}
+
+Predict: {
+  label: "**Dspy.Predict**\ngets adapter (override or global)"
+}
+
+Adapter: {
+  label: "**Signature adapter**\nparse_outputs(signature, completion)"
+}
+
+Signature: {
+  label: "**Signature output map**\nvalidated keys / tagged errors"
+}
+
+User -> Settings: "Dspy.configure(adapter: ...)"
+Predict -> Settings: "lookup default"
+User -> Predict: "Predict.new(..., adapter: override)"
+Predict -> Adapter: "completion_text"
+Adapter -> Signature: "map or {:error, reason}"

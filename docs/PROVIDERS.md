@@ -36,6 +36,38 @@ Common keys (as defined by `req_llm`) include:
 
 For the full list (Azure/GCP credentials, etc.), see the `req_llm` provider guides.
 
+## Google Gemini (thinking budget)
+
+For Python-DSPy-style ergonomics, `dspy.ex` accepts the following model prefixes:
+
+- `gemini/<model>` (Gemini API) — normalized internally to `google:<model>`
+- `vertex_ai/<model>` (Vertex AI Gemini) — normalized internally to `google_vertex:<model>`
+
+You can configure Gemini 2.5 “thinking budget” via a Python-aligned option name `thinking_budget`:
+
+```elixir
+{:ok, lm} =
+  Dspy.LM.new("gemini/gemini-2.5-flash",
+    temperature: 0.0,
+    thinking_budget: 4096
+  )
+
+:ok = Dspy.configure(lm: lm)
+```
+
+Notes:
+- `thinking_budget: 0` disables thinking.
+- `thinking_budget` must be a non-negative integer.
+
+Advanced escape hatch (raw `req_llm` option):
+
+```elixir
+{:ok, lm} =
+  Dspy.LM.new("google/gemini-2.5-flash",
+    provider_options: [google_thinking_budget: 4096]
+  )
+```
+
 ## Default generation parameters (global)
 
 You can set global defaults for common generation parameters via `Dspy.configure/1`.

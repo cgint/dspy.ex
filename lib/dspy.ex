@@ -30,6 +30,7 @@ defmodule Dspy do
 
   @type dspy_config :: [
           lm: Dspy.LM.t() | nil,
+          adapter: module() | nil,
           max_tokens: pos_integer() | nil,
           max_completion_tokens: pos_integer() | nil,
           temperature: number() | nil,
@@ -38,6 +39,7 @@ defmodule Dspy do
 
   @type settings :: %{
           lm: Dspy.LM.t() | nil,
+          adapter: module(),
           max_tokens: pos_integer() | nil,
           max_completion_tokens: pos_integer() | nil,
           temperature: number() | nil,
@@ -51,6 +53,7 @@ defmodule Dspy do
   ## Options
 
   - `:lm` - Language model client (required)
+  - `:adapter` - Signature output adapter module (default: `Dspy.Signature.Adapters.Default`)
   - `:max_tokens` - Maximum tokens per generation (default: `nil`, provider/runtime default)
   - `:max_completion_tokens` - Maximum completion tokens per generation (default: `nil`, provider/runtime default)
   - `:temperature` - Sampling temperature (default: `nil`, provider/runtime default)

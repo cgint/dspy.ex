@@ -110,23 +110,80 @@ defmodule Dspy.LM do
       {:error, :invalid_model}
     else
       normalized = normalize_model_spec(model)
-      {:ok, Dspy.LM.ReqLLM.new(model: normalized, default_opts: opts)}
+
+      with {:ok, normalized_opts} <- normalize_lm_new_opts(normalized, opts) do
+        {:ok, Dspy.LM.ReqLLM.new(model: normalized, default_opts: normalized_opts)}
+      end
     end
   end
 
+  # Normalize model strings into ReqLLM's `provider:model` format.
+  #
+  # Onboarding-first compatibility:
+  # - Accept Python-DSPy-style `gemini/<model>` and `vertex_ai/<model>` prefixes.
   defp normalize_model_spec(model) when is_binary(model) do
     cond do
       String.contains?(model, ":") ->
-        model
+        case String.split(model, ":", parts: 2) do
+          [provider, rest] when rest != "" -> map_provider_alias(provider) <> ":" <> rest
+          _ -> model
+        end
 
       String.contains?(model, "/") ->
         case String.split(model, "/", parts: 2) do
-          [provider, rest] when rest != "" -> provider <> ":" <> rest
+          [provider, rest] when rest != "" -> map_provider_alias(provider) <> ":" <> rest
           _ -> model
         end
 
       true ->
         model
+    end
+  end
+
+  defp map_provider_alias("gemini"), do: "google"
+  defp map_provider_alias("vertex_ai"), do: "google_vertex"
+  defp map_provider_alias(other), do: other
+
+  # Translate curated Python-DSPy-style constructor options into ReqLLM options.
+  #
+  # Currently supported:
+  # - `thinking_budget: <non-negative integer>` → `provider_options: [google_thinking_budget: <int>]`
+  #
+  # Precedence: explicit `provider_options[:google_thinking_budget]` wins.
+  defp normalize_lm_new_opts(normalized_model, opts)
+       when is_binary(normalized_model) and is_list(opts) do
+    thinking_budget = Keyword.get(opts, :thinking_budget)
+
+    cond do
+      is_nil(thinking_budget) ->
+        {:ok, opts}
+
+      not is_integer(thinking_budget) ->
+        {:error, {:invalid_thinking_budget, thinking_budget}}
+
+      thinking_budget < 0 ->
+        {:error, {:invalid_thinking_budget, thinking_budget}}
+
+      true ->
+        # Drop the ergonomic alias and encode into provider_options.
+        opts = Keyword.delete(opts, :thinking_budget)
+
+        provider_opts = Keyword.get(opts, :provider_options, [])
+
+        # If the user provided the raw provider option, keep it.
+        provider_opts =
+          if Keyword.has_key?(provider_opts, :google_thinking_budget) do
+            provider_opts
+          else
+            Keyword.put(provider_opts, :google_thinking_budget, thinking_budget)
+          end
+
+        opts = Keyword.put(opts, :provider_options, provider_opts)
+
+        # Keep normalized_model in the signature to make it easy to extend later.
+        _ = normalized_model
+
+        {:ok, opts}
     end
   end
 
@@ -332,8 +389,16 @@ defmodule Dspy.LM do
   Generate structured output from a signature and inputs.
   """
   def generate_structured_output(signature, inputs) do
-    # Build the prompt from the signature
-    prompt = Dspy.Signature.to_prompt(signature)
+    # Build the prompt from the signature.
+    # Respect the configured signature adapter for output-format instructions.
+    adapter =
+      if Process.whereis(Dspy.Settings) do
+        Dspy.Settings.get(:adapter) || Dspy.Signature.Adapters.Default
+      else
+        Dspy.Signature.Adapters.Default
+      end
+
+    prompt = Dspy.Signature.to_prompt(signature, adapter: adapter)
 
     # Add the input values to the prompt
     input_text =
