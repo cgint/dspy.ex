@@ -28,8 +28,10 @@ if System.get_env("GOOGLE_API_KEY") in [nil, ""] do
   System.put_env("GOOGLE_API_KEY", api_key)
 end
 
+{:ok, lm} = Dspy.LM.new("gemini/gemini-2.5-flash", thinking_budget: 0)
+
 Dspy.configure(
-  lm: Dspy.LM.ReqLLM.new(model: "google:gemini-2.5-flash"),
+  lm: lm,
   temperature: 0.0,
   max_tokens: 1024,
   cache: false
@@ -71,7 +73,7 @@ react =
     max_steps: 5
   )
 
-IO.puts("Running ReAct/tools with google:gemini-2.5-flash ...")
+IO.puts("Running ReAct/tools with gemini/gemini-2.5-flash (thinking_budget=0) ...")
 
 result =
   Dspy.Tools.React.run(

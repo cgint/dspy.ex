@@ -27,11 +27,7 @@ if System.get_env("GOOGLE_API_KEY") in [nil, ""] do
 end
 
 {:ok, lm} =
-  Dspy.LM.new("gemini/gemini-2.5-flash",
-    # Gemini 2.5 thinking tokens budget.
-    # 0 disables thinking, omit to let the provider allocate dynamically.
-    thinking_budget: 4096
-  )
+  Dspy.LM.new("gemini/gemini-2.5-flash", thinking_budget: 0)
 
 Dspy.configure(
   lm: lm,
@@ -50,7 +46,7 @@ end
 
 program = Dspy.ChainOfThought.new(CoTSig)
 
-IO.puts("Running ChainOfThought with gemini/gemini-2.5-flash (thinking_budget=4096) ...")
+IO.puts("Running ChainOfThought with gemini/gemini-2.5-flash (thinking_budget=0) ...")
 
 case Dspy.Module.forward(program, %{question: "What is 17*19?"}) do
   {:ok, pred} ->

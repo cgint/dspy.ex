@@ -25,7 +25,7 @@ if System.get_env("GOOGLE_API_KEY") in [nil, ""] do
   System.put_env("GOOGLE_API_KEY", api_key)
 end
 
-lm = Dspy.LM.ReqLLM.new(model: "google:gemini-2.5-flash")
+{:ok, lm} = Dspy.LM.new("gemini/gemini-2.5-flash")
 
 defmodule AnswerSignature do
   use Dspy.Signature
