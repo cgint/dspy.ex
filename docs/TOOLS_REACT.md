@@ -15,6 +15,22 @@ ReAct loop:
 
 It’s designed so you can prove your integrations **offline** by using a fake LM.
 
+## Also available: `Dspy.ReAct` (signature-driven, adapter-aware)
+
+This repo also provides `Dspy.ReAct`, a **signature-driven** ReAct module implemented in terms of
+internal `Dspy.Predict` + `Dspy.ChainOfThought`.
+
+Key difference vs `Dspy.Tools.React`:
+- `Dspy.Tools.React` is a standalone text-protocol runner ("Action:/Observation:")
+- `Dspy.ReAct` uses `Dspy.Signature` outputs for step selection + extraction and therefore participates
+  in **adapter-driven** output-format instructions and parsing
+
+Deterministic offline example:
+
+```bash
+mix run examples/offline/react_module_offline.exs
+```
+
 ## Quick start (offline)
 
 Run the official deterministic example:

@@ -334,6 +334,7 @@ Example (offline):
 - `mix run examples/offline/retrieve_rag_offline.exs`
 - `mix run examples/offline/retrieve_rag_genserver_offline.exs`
 - `mix run examples/offline/react_tool_logging_offline.exs`
+- `mix run examples/offline/react_module_offline.exs` (signature-driven `Dspy.ReAct`)
 - `mix run examples/offline/request_defaults_offline.exs` (debugging/introspection; not a recommended config template)
 
 ## Workflow parity vs `dspy-intro/src` (high-level)
@@ -362,7 +363,7 @@ Legend:
 | Evaluate | 2 | Deterministic golden path proven (incl. per-example return data via `return_all: true`) | `test/evaluate_golden_path_test.exs`, `test/evaluate_detailed_results_test.exs` |
 | Retrieve/RAG | 2 | Deterministic RAG pipeline with mocked embeddings provider (`req_llm`); built-in GenServer retriever `Dspy.Retrieve.InMemoryRetriever` | `test/acceptance/retrieve_rag_with_embeddings_acceptance_test.exs`, `test/acceptance/retrieve_rag_in_memory_retriever_acceptance_test.exs`, `test/retrieve/req_llm_embeddings_test.exs` |
 | Teleprompters | 2 | Parameter-based (no dynamic modules); proven for Predict-like programs (`Dspy.Predict` + `Dspy.ChainOfThought`) | `test/teleprompt/*` |
-| Tools/request map integration | 2 | ReAct runs with request maps; tool start/end callbacks supported (tool logging). Guide: `docs/TOOLS_REACT.md` | `test/tools_request_map_test.exs`, `test/acceptance/simplest_tool_logging_acceptance_test.exs` |
+| Tools/request map integration | 2 | Tool execution + ReAct are proven via `Dspy.Tools.React` (request maps; tool start/end callbacks supported). Guide: `docs/TOOLS_REACT.md`. Also available: signature-driven `Dspy.ReAct` (adapter-aware; deterministic offline example + unit tests). | `test/tools_request_map_test.exs`, `test/acceptance/simplest_tool_logging_acceptance_test.exs`, `test/react_module_characterization_test.exs`, `examples/offline/react_module_offline.exs` |
 | Provider support (real providers) | 2 | `Dspy.LM.ReqLLM` adapter proven (offline) incl. multipart/attachments request shape + safety gates; embeddings adapter via `req_llm` proven (offline); real network providers still considered prototype (opt-in smoke tests exist) | `test/lm/req_llm_multimodal_test.exs`, `lib/dspy/lm/req_llm.ex`, `test/retrieve/req_llm_embeddings_test.exs`, `test/integration/req_llm_predict_integration_test.exs`, `test/integration/req_llm_embeddings_integration_test.exs` |
 
 ## Optional integrations (manual / non-deterministic)

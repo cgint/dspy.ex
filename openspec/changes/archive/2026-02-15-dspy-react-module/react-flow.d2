@@ -1,0 +1,27 @@
+direction: down
+
+Dspy.ReAct (signature-driven): {
+  style.fill: "#f7f7f7"
+
+  "**User**" -> "**Dspy.ReAct**" : Dspy.call/2
+
+  "**Dspy.ReAct**" -> "Build step signature\n(react_signature)" : init
+  "**Dspy.ReAct**" -> "Build extraction signature\n(fallback_signature)" : init
+
+  "Build step signature\n(react_signature)" -> "**Dspy.Predict**\n(step selector)" : uses
+  "Build extraction signature\n(fallback_signature)" -> "**Dspy.ChainOfThought**\n(extractor)" : uses
+
+  loop: "Loop (<= max_steps)" {
+    "Trajectory" -> "**Dspy.Predict**\n(step selector)" : input field
+    "**Dspy.Predict**\n(step selector)" -> "LM" : adapter formats prompt
+    "LM" -> "Step outputs" : adapter parses outputs
+
+    "Step outputs" -> "Tool execution" : next_tool_name + next_tool_args
+    "Tool execution" -> "Trajectory" : append thought/tool/args/observation
+
+    "Step outputs" -> "Stop?" : tool_name == finish
+  }
+
+  "Trajectory" -> "**Dspy.ChainOfThought**\n(extractor)" : extract final outputs
+  "**Dspy.ChainOfThought**\n(extractor)" -> "Prediction" : outputs + trajectory
+}
