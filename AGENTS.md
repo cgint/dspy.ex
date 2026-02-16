@@ -39,4 +39,9 @@ This repository is being developed as an **Elixir-native port** of the upstream 
   - The user can say **“Hold/Stop”** to pause.
   - I will still proactively flag/ask on “handshake” items (deps changes, broad refactors, system-wide/heavy commands, or anything that might risk leaking secrets).
 
+### Credentials + networked examples
+- I *can* run tools/programs/examples that require credentials (e.g. real provider scripts under `examples/providers/*`) **if the required env vars are already set in the current shell/session** and you explicitly ask me to run them.
+- I will **not** edit `.env` files or add secrets to the repo.
+- If credentials are missing, I’ll explain what’s needed and stop rather than guessing.
+
 (See `plan/WORKFLOW.md` for the detailed guardrails.)
