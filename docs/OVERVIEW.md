@@ -83,6 +83,29 @@ pred2.attrs.answer
 Under the hood this uses `req_llm` via `Dspy.LM.ReqLLM`. Provider details + attachment safety:
 `docs/PROVIDERS.md`.
 
+### LM token usage tracking + invocation history
+
+If your provider returns usage metadata (tokens), you can enable tracking and then retrieve aggregated usage **after** a program run:
+
+```elixir
+Dspy.configure(lm: %MyMockLM{}, track_usage: true)
+
+program = Dspy.Predict.new(MySignature)
+{:ok, pred} = Dspy.call(program, %{question: "..."})
+
+Dspy.Prediction.get_lm_usage(pred)
+# => %{prompt_tokens: ..., completion_tokens: ..., total_tokens: ...} | nil
+
+# Debug recent LM calls (most recent first)
+Dspy.inspect_history(n: 50)
+Dspy.history(n: 50)
+```
+
+Notes:
+- Tracking is **disabled by default**.
+- History is bounded (default `history_max_entries: 200`; configurable via `Dspy.configure/1`).
+- Prompts are not stored by default (history stores metadata + usage, not full content).
+
 ### 1) Predict with arrow signatures + typed outputs
 
 Arrow signatures are supported, including `int`/`integer` normalization.
