@@ -94,7 +94,17 @@ program = Dspy.Predict.new(MySignature)
 {:ok, pred} = Dspy.call(program, %{question: "..."})
 
 Dspy.Prediction.get_lm_usage(pred)
-# => %{prompt_tokens: ..., completion_tokens: ..., total_tokens: ...} | nil
+# => %{
+#   "google:gemini-2.5-flash" => %{
+#     prompt_tokens: ...,
+#     completion_tokens: ...,
+#     total_tokens: ...,
+#     cached_tokens: ...,
+#     reasoning_tokens: ...
+#   }
+# } | nil
+
+# If you want a single total, sum across models yourself.
 
 # Debug recent LM calls (most recent first)
 Dspy.inspect_history(n: 50)

@@ -15,6 +15,8 @@ defmodule Dspy.Settings do
     max_completion_tokens: nil,
     temperature: nil,
     cache: false,
+    track_usage: false,
+    history_max_entries: 200,
     experimental: [],
     teleprompt_verbose: false
   ]
@@ -26,6 +28,8 @@ defmodule Dspy.Settings do
           max_completion_tokens: pos_integer() | nil,
           temperature: number() | nil,
           cache: boolean(),
+          track_usage: boolean(),
+          history_max_entries: pos_integer(),
           experimental: [atom()],
           teleprompt_verbose: boolean()
         }

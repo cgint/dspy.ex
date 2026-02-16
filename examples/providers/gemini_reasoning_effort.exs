@@ -66,7 +66,8 @@ Enum.each(efforts, fn effort ->
     temperature: 0.0,
     # Keep this generous: ChainOfThought requires both Reasoning + Answer labels.
     max_tokens: 1024,
-    cache: false
+    cache: true,
+    track_usage: true
   )
 
   IO.puts("\n---")
@@ -81,6 +82,28 @@ Enum.each(efforts, fn effort ->
       IO.puts(String.slice(reasoning, 0, 200))
 
       IO.puts("\nAnswer: #{pred.attrs.answer}")
+
+      IO.puts("\nLM usage (by model) for this run:")
+      IO.inspect(Dspy.Prediction.get_lm_usage(pred))
+
+
+      # Run it a second time with the same settings so the global cache can hit.
+      IO.puts("\n(Re-running the same request to demonstrate cache + history)")
+
+      case Dspy.Module.forward(program, %{question: question}) do
+        {:ok, pred2} ->
+          IO.puts("\nLM usage (by model) for second run:")
+          IO.inspect(Dspy.Prediction.get_lm_usage(pred2))
+
+
+          IO.puts("\nRecent LM invocations:")
+          :ok = Dspy.inspect_history(n: 4)
+
+        {:error, reason} ->
+          IO.puts("Error on second run:")
+          IO.inspect(reason)
+          System.halt(2)
+      end
 
     {:error, reason} ->
       IO.puts("Error:")

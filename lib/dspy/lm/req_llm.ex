@@ -420,16 +420,55 @@ defmodule Dspy.LM.ReqLLM do
 
   defp map_usage(nil), do: nil
 
+  # Preserve ReqLLM's full usage map (provider-dependent), while adding
+  # Python/DSPy-style aliases when possible.
   defp map_usage(usage) when is_map(usage) do
-    prompt_tokens = usage[:input_tokens] || usage["input_tokens"]
-    completion_tokens = usage[:output_tokens] || usage["output_tokens"]
+    input_tokens = usage[:input_tokens] || usage["input_tokens"]
+    output_tokens = usage[:output_tokens] || usage["output_tokens"]
+
+    prompt_tokens = usage[:prompt_tokens] || usage["prompt_tokens"] || input_tokens
+    completion_tokens = usage[:completion_tokens] || usage["completion_tokens"] || output_tokens
     total_tokens = usage[:total_tokens] || usage["total_tokens"]
 
-    %{
-      prompt_tokens: prompt_tokens,
-      completion_tokens: completion_tokens,
-      total_tokens: total_tokens
-    }
+    cached_tokens = usage[:cached_tokens] || usage["cached_tokens"]
+    reasoning_tokens = usage[:reasoning_tokens] || usage["reasoning_tokens"]
+
+    usage =
+      usage
+      |> maybe_put_map(:prompt_tokens, prompt_tokens)
+      |> maybe_put_map(:completion_tokens, completion_tokens)
+      |> maybe_put_map(:total_tokens, total_tokens)
+
+    usage =
+      if is_integer(cached_tokens) do
+        details = usage[:prompt_tokens_details] || usage["prompt_tokens_details"]
+        details = if is_map(details), do: details, else: %{}
+        Map.put(usage, :prompt_tokens_details, Map.put(details, :cached_tokens, cached_tokens))
+      else
+        usage
+      end
+
+    usage =
+      if is_integer(reasoning_tokens) do
+        details = usage[:completion_tokens_details] || usage["completion_tokens_details"]
+        details = if is_map(details), do: details, else: %{}
+
+        Map.put(
+          usage,
+          :completion_tokens_details,
+          Map.put(details, :reasoning_tokens, reasoning_tokens)
+        )
+      else
+        usage
+      end
+
+    usage
+  end
+
+  defp maybe_put_map(map, _key, nil), do: map
+
+  defp maybe_put_map(map, key, value) when is_map(map) do
+    Map.put(map, key, value)
   end
 
   defp maybe_put(opts, _key, nil), do: opts

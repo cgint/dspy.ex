@@ -41,13 +41,7 @@ defmodule Dspy.LM do
               finish_reason: String.t() | nil
             }
           ],
-          usage:
-            %{
-              prompt_tokens: pos_integer(),
-              completion_tokens: pos_integer(),
-              total_tokens: pos_integer()
-            }
-            | nil
+          usage: map() | nil
         }
 
   @type t :: struct()
@@ -270,15 +264,25 @@ defmodule Dspy.LM do
   """
   def generate(lm, request) do
     request = apply_settings_defaults(request)
+    started_at_ms = System.monotonic_time(:millisecond)
 
     if cache_enabled?() and cacheable_request?(request) do
       case Dspy.LM.Cache.fetch(lm, request) do
         {:hit, cached} ->
+          duration_ms = System.monotonic_time(:millisecond) - started_at_ms
+          maybe_track_usage(lm, request, cached, cache_hit?: true, duration_ms: duration_ms)
           {:ok, cached}
 
         :miss ->
           case lm.__struct__.generate(lm, request) do
             {:ok, response} ->
+              duration_ms = System.monotonic_time(:millisecond) - started_at_ms
+
+              maybe_track_usage(lm, request, response,
+                cache_hit?: false,
+                duration_ms: duration_ms
+              )
+
               :ok = Dspy.LM.Cache.put(lm, request, response)
               {:ok, response}
 
@@ -287,7 +291,15 @@ defmodule Dspy.LM do
           end
       end
     else
-      lm.__struct__.generate(lm, request)
+      case lm.__struct__.generate(lm, request) do
+        {:ok, response} = ok ->
+          duration_ms = System.monotonic_time(:millisecond) - started_at_ms
+          maybe_track_usage(lm, request, response, cache_hit?: false, duration_ms: duration_ms)
+          ok
+
+        other ->
+          other
+      end
     end
   end
 
@@ -504,6 +516,85 @@ defmodule Dspy.LM do
   end
 
   defp cacheable_request?(_), do: false
+
+  defp lm_model_key(%{model: model}) when is_binary(model) and model != "", do: model
+  defp lm_model_key(%{__struct__: mod}) when is_atom(mod), do: Atom.to_string(mod)
+  defp lm_model_key(_), do: "unknown"
+
+  defp maybe_track_usage(lm, request, response, opts) when is_list(opts) do
+    if not is_nil(Process.whereis(Dspy.Settings)) and Dspy.Settings.get(:track_usage) == true do
+      usage_raw =
+        case response do
+          %{usage: u} -> u
+          %{"usage" => u} -> u
+          _ -> nil
+        end
+
+      model_key = lm_model_key(lm)
+
+      Dspy.LM.UsageAcc.add(model_key, usage_raw)
+
+      record = %{
+        at: DateTime.utc_now(),
+        model: model_key,
+        cache_hit?: Keyword.get(opts, :cache_hit?, false),
+        duration_ms: Keyword.get(opts, :duration_ms),
+        usage: normalize_usage_for_history(usage_raw),
+        request: summarize_request(request)
+      }
+
+      _ = Dspy.LM.History.record(record)
+    end
+
+    :ok
+  end
+
+  defp normalize_usage_for_history(%{} = usage) do
+    # Prefer Python/DSPy-style keys if present.
+    prompt_tokens = usage[:prompt_tokens] || usage["prompt_tokens"]
+    completion_tokens = usage[:completion_tokens] || usage["completion_tokens"]
+    total_tokens = usage[:total_tokens] || usage["total_tokens"]
+
+    # Fallback to ReqLLM-style keys.
+    prompt_tokens = prompt_tokens || usage[:input_tokens] || usage["input_tokens"]
+    completion_tokens = completion_tokens || usage[:output_tokens] || usage["output_tokens"]
+    total_tokens = total_tokens || usage[:total_tokens] || usage["total_tokens"]
+
+    cached_tokens = usage[:cached_tokens] || usage["cached_tokens"]
+    reasoning_tokens = usage[:reasoning_tokens] || usage["reasoning_tokens"]
+
+    if is_integer(prompt_tokens) and is_integer(completion_tokens) and is_integer(total_tokens) do
+      base = %{
+        prompt_tokens: prompt_tokens,
+        completion_tokens: completion_tokens,
+        total_tokens: total_tokens
+      }
+
+      base =
+        if is_integer(cached_tokens), do: Map.put(base, :cached_tokens, cached_tokens), else: base
+
+      base =
+        if is_integer(reasoning_tokens),
+          do: Map.put(base, :reasoning_tokens, reasoning_tokens),
+          else: base
+
+      base
+    else
+      nil
+    end
+  end
+
+  defp normalize_usage_for_history(_other), do: nil
+
+  defp summarize_request(%{messages: msgs}) when is_list(msgs) do
+    %{message_count: length(msgs)}
+  end
+
+  defp summarize_request(%{"messages" => msgs}) when is_list(msgs) do
+    %{message_count: length(msgs)}
+  end
+
+  defp summarize_request(_other), do: %{}
 
   defp apply_settings_defaults(request) when is_map(request) do
     if Process.whereis(Dspy.Settings) do

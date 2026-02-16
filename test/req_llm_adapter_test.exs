@@ -54,7 +54,14 @@ defmodule DspyReqLLMAdapterTest do
 
     assert get_in(response, [:choices, Access.at(0), :message, :content]) == "hi"
     assert get_in(response, [:choices, Access.at(0), :finish_reason]) == "stop"
-    assert response.usage == %{prompt_tokens: 1, completion_tokens: 2, total_tokens: 3}
+
+    assert %{
+             prompt_tokens: 1,
+             completion_tokens: 2,
+             total_tokens: 3,
+             input_tokens: 1,
+             output_tokens: 2
+           } = response.usage
   end
 
   test "ReqLLM adapter falls back to prompt string when no messages are provided" do

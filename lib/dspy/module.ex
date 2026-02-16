@@ -47,21 +47,55 @@ defmodule Dspy.Module do
   - a keyword list (kwargs-like; converted to a map)
   - a `%Dspy.Example{}` (converted via `Dspy.Example.inputs/1`)
   """
-  def forward(module, %Dspy.Example{} = example) do
-    forward(module, Dspy.Example.inputs(example))
+  def forward(module, inputs) do
+    if track_usage_enabled?() do
+      outer? = Dspy.LM.UsageAcc.enter()
+
+      result = forward_untracked(module, inputs)
+
+      usage = Dspy.LM.UsageAcc.exit()
+
+      if outer? do
+        attach_usage_to_result(result, usage)
+      else
+        result
+      end
+    else
+      forward_untracked(module, inputs)
+    end
   end
 
-  def forward(module, inputs) when is_list(inputs) do
+  defp forward_untracked(module, %Dspy.Example{} = example) do
+    forward_untracked(module, Dspy.Example.inputs(example))
+  end
+
+  defp forward_untracked(module, inputs) when is_list(inputs) do
     if Keyword.keyword?(inputs) do
-      forward(module, Map.new(inputs))
+      forward_untracked(module, Map.new(inputs))
     else
       module.__struct__.forward(module, inputs)
     end
   end
 
-  def forward(module, inputs) do
+  defp forward_untracked(module, inputs) do
     module.__struct__.forward(module, inputs)
   end
+
+  defp track_usage_enabled? do
+    # Default: disabled.
+    Dspy.Settings.get(:track_usage) == true
+  end
+
+  defp attach_usage_to_result({:ok, %Dspy.Prediction{} = pred}, usage) do
+    if is_map(usage) do
+      metadata = Map.put(pred.metadata || %{}, :lm_usage, usage)
+      {:ok, %{pred | metadata: metadata}}
+    else
+      {:ok, pred}
+    end
+  end
+
+  defp attach_usage_to_result(other, _usage), do: other
 
   @doc """
   Get a module's parameters if it implements the callback.

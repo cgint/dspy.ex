@@ -34,7 +34,9 @@ defmodule Dspy do
           max_tokens: pos_integer() | nil,
           max_completion_tokens: pos_integer() | nil,
           temperature: number() | nil,
-          cache: boolean()
+          cache: boolean(),
+          track_usage: boolean(),
+          history_max_entries: pos_integer()
         ]
 
   @type settings :: %{
@@ -44,6 +46,8 @@ defmodule Dspy do
           max_completion_tokens: pos_integer() | nil,
           temperature: number() | nil,
           cache: boolean(),
+          track_usage: boolean(),
+          history_max_entries: pos_integer(),
           metadata: map()
         }
 
@@ -58,6 +62,8 @@ defmodule Dspy do
   - `:max_completion_tokens` - Maximum completion tokens per generation (default: `nil`, provider/runtime default)
   - `:temperature` - Sampling temperature (default: `nil`, provider/runtime default)
   - `:cache` - Enable response caching (default: false)
+  - `:track_usage` - Enable LM usage tracking and invocation history (default: false)
+  - `:history_max_entries` - Bound the number of stored LM invocation history entries (default: 200)
 
   ## Examples
 
@@ -104,6 +110,80 @@ defmodule Dspy do
   def settings do
     Settings.get()
   end
+
+  @doc """
+  Get recent LM invocation history.
+
+  Returns most-recent-first records.
+
+  ## Options
+
+  - `:n` - maximum number of records to return (default: 50)
+  """
+  @spec history(keyword()) :: [map()]
+  def history(opts \\ []) do
+    Dspy.LM.History.list(opts)
+  end
+
+  @doc """
+  Print a human-readable summary of recent LM invocation history.
+
+  ## Options
+
+  - `:n` - maximum number of records to print (default: 50)
+  """
+  @spec inspect_history(keyword()) :: :ok
+  def inspect_history(opts \\ []) do
+    records = history(opts)
+
+    records
+    |> Enum.with_index(1)
+    |> Enum.each(fn {rec, idx} ->
+      IO.puts(format_history_record(rec, idx))
+    end)
+
+    :ok
+  end
+
+  defp format_history_record(rec, idx) when is_map(rec) do
+    usage = Map.get(rec, :usage)
+
+    usage_str =
+      case usage do
+        %{prompt_tokens: p, completion_tokens: c, total_tokens: t} = u ->
+          parts = ["prompt=#{p}", "completion=#{c}", "total=#{t}"]
+
+          parts =
+            if is_integer(Map.get(u, :cached_tokens)) do
+              parts ++ ["cached=#{u.cached_tokens}"]
+            else
+              parts
+            end
+
+          parts =
+            if is_integer(Map.get(u, :reasoning_tokens)) do
+              parts ++ ["reasoning=#{u.reasoning_tokens}"]
+            else
+              parts
+            end
+
+          Enum.join(parts, " ")
+
+        _ ->
+          "usage=nil"
+      end
+
+    model = Map.get(rec, :model) || "?"
+    dur = Map.get(rec, :duration_ms)
+    dur_str = if is_integer(dur), do: "#{dur}ms", else: "?ms"
+
+    cache_hit = Map.get(rec, :cache_hit?)
+    cache_str = if cache_hit == true, do: " cache=hit", else: ""
+
+    "#{idx}. model=#{model} duration=#{dur_str} #{usage_str}#{cache_str}"
+  end
+
+  defp format_history_record(_rec, idx), do: "#{idx}. <invalid history record>"
 
   @doc """
   Convenience wrapper around `Dspy.Module.forward/2`.

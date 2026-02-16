@@ -105,6 +105,42 @@ defmodule Dspy.Prediction do
   end
 
   @doc """
+  Get aggregated LM usage attached to this prediction.
+
+  This aims to be as close as possible to Python DSPy's `prediction.get_lm_usage()`:
+  a map keyed by model, where each value is a provider-dependent usage map.
+
+  Example:
+
+      %{
+        "google:gemini-2.5-flash" => %{
+          prompt_tokens: 123,
+          completion_tokens: 456,
+          total_tokens: 579,
+          cached_tokens: 0,
+          reasoning_tokens: 318
+        }
+      }
+
+  Returns `nil` when usage tracking is disabled or usage is unavailable.
+  """
+  @spec get_lm_usage(t()) :: map() | nil
+  def get_lm_usage(%__MODULE__{} = prediction) do
+    metadata = prediction.metadata || %{}
+
+    cond do
+      is_map(metadata) and Map.has_key?(metadata, :lm_usage) ->
+        metadata[:lm_usage]
+
+      is_map(metadata) and Map.has_key?(metadata, "lm_usage") ->
+        metadata["lm_usage"]
+
+      true ->
+        nil
+    end
+  end
+
+  @doc """
   Add completion metadata to the prediction.
   """
   def add_completion(prediction, completion) do
