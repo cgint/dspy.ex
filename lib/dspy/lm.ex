@@ -148,10 +148,21 @@ defmodule Dspy.LM do
   #
   # Currently supported:
   # - `thinking_budget: <non-negative integer>` → `provider_options: [google_thinking_budget: <int>]`
+  # - `reasoning_effort: <atom|string>` → `reasoning_effort: <atom>`
   #
-  # Precedence: explicit `provider_options[:google_thinking_budget]` wins.
+  # Precedence:
+  # - explicit `provider_options[:google_thinking_budget]` wins over `thinking_budget`
   defp normalize_lm_new_opts(normalized_model, opts)
        when is_binary(normalized_model) and is_list(opts) do
+    with {:ok, opts} <- normalize_thinking_budget_opt(opts),
+         {:ok, opts} <- normalize_reasoning_effort_opt(opts) do
+      # Keep normalized_model in the signature to make it easy to extend later.
+      _ = normalized_model
+      {:ok, opts}
+    end
+  end
+
+  defp normalize_thinking_budget_opt(opts) when is_list(opts) do
     thinking_budget = Keyword.get(opts, :thinking_budget)
 
     cond do
@@ -179,11 +190,52 @@ defmodule Dspy.LM do
           end
 
         opts = Keyword.put(opts, :provider_options, provider_opts)
-
-        # Keep normalized_model in the signature to make it easy to extend later.
-        _ = normalized_model
-
         {:ok, opts}
+    end
+  end
+
+  @allowed_reasoning_effort_atoms [:none, :minimal, :low, :medium, :high, :xhigh]
+
+  defp normalize_reasoning_effort_opt(opts) when is_list(opts) do
+    case Keyword.fetch(opts, :reasoning_effort) do
+      :error ->
+        {:ok, opts}
+
+      {:ok, nil} ->
+        {:ok, opts}
+
+      {:ok, :disable} ->
+        {:ok, Keyword.put(opts, :reasoning_effort, :none)}
+
+      {:ok, effort} when is_atom(effort) ->
+        if effort in @allowed_reasoning_effort_atoms do
+          {:ok, opts}
+        else
+          {:error, {:invalid_reasoning_effort, effort}}
+        end
+
+      {:ok, effort} when is_binary(effort) ->
+        normalized = effort |> String.trim() |> String.downcase()
+
+        atom_effort =
+          case normalized do
+            "disable" -> :none
+            "none" -> :none
+            "minimal" -> :minimal
+            "low" -> :low
+            "medium" -> :medium
+            "high" -> :high
+            "xhigh" -> :xhigh
+            other -> {:error, {:invalid_reasoning_effort, other}}
+          end
+
+        case atom_effort do
+          {:error, _} = err -> err
+          atom -> {:ok, Keyword.put(opts, :reasoning_effort, atom)}
+        end
+
+      {:ok, other} ->
+        {:error, {:invalid_reasoning_effort, other}}
     end
   end
 

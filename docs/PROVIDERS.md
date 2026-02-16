@@ -68,6 +68,29 @@ Advanced escape hatch (raw `req_llm` option):
   )
 ```
 
+## OpenAI / reasoning models (reasoning effort)
+
+Some models/providers support a "native reasoning" control knob often called `reasoning_effort`.
+
+`dspy.ex` exposes this as a Python-DSPy-aligned constructor option on `Dspy.LM.new/2` and forwards it to `req_llm`:
+
+```elixir
+{:ok, lm} =
+  Dspy.LM.new("openai/gpt-5-mini",
+    reasoning_effort: "medium" # also accepts :medium
+  )
+
+:ok = Dspy.configure(lm: lm)
+```
+
+Allowed values (atoms or strings):
+- `none | minimal | low | medium | high | xhigh`
+
+Aliases:
+- `"disable"` / `:disable` is normalized to `:none`
+
+Note: provider support varies; `req_llm` will translate (or ignore) this option depending on provider/model.
+
 ## Default generation parameters (global)
 
 You can set global defaults for common generation parameters via `Dspy.configure/1`.

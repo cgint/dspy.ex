@@ -76,4 +76,30 @@ defmodule Dspy.LMNewTest do
       LM.new!("   ")
     end
   end
+
+  test "new/2 normalizes reasoning_effort string to atom" do
+    {:ok, lm} = LM.new("openai/gpt-4.1-mini", reasoning_effort: "medium")
+
+    assert %Dspy.LM.ReqLLM{default_opts: default_opts} = lm
+    assert Keyword.get(default_opts, :reasoning_effort) == :medium
+  end
+
+  test "new/2 normalizes reasoning_effort disable alias" do
+    {:ok, lm} = LM.new("openai/gpt-4.1-mini", reasoning_effort: "disable")
+
+    assert %Dspy.LM.ReqLLM{default_opts: default_opts} = lm
+    assert Keyword.get(default_opts, :reasoning_effort) == :none
+  end
+
+  test "new/2 normalizes reasoning_effort :disable to :none" do
+    {:ok, lm} = LM.new("openai/gpt-4.1-mini", reasoning_effort: :disable)
+
+    assert %Dspy.LM.ReqLLM{default_opts: default_opts} = lm
+    assert Keyword.get(default_opts, :reasoning_effort) == :none
+  end
+
+  test "new/2 rejects invalid reasoning_effort" do
+    assert {:error, {:invalid_reasoning_effort, "banana"}} =
+             LM.new("openai/gpt-4.1-mini", reasoning_effort: "banana")
+  end
 end

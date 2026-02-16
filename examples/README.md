@@ -39,6 +39,7 @@ These may download weights, require API keys, and incur cost:
 
 - Gemini (ReqLLM, requires `GOOGLE_API_KEY` or `GEMINI_API_KEY` fallback):
   - `mix run examples/providers/gemini_chain_of_thought.exs`
+  - `mix run examples/providers/gemini_reasoning_effort.exs`
   - `mix run examples/providers/gemini_react_tools.exs`
 
 ## `examples/harnesses/` — long-running runners / comparisons / verification
