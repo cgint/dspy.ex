@@ -34,7 +34,8 @@ defmodule Dspy.MixProject do
       {:jsv, "~> 0.16"},
 
       # LLM provider access (unified client; no provider maintenance in `dspy.ex`)
-      {:req_llm, "~> 1.3"}
+      # Using main for google_thinking_budget / reasoning_effort fix (PR #418)
+      {:req_llm, github: "agentjido/req_llm"}
 
       # NOTE: Local inference deps (Bumblebee/Nx/EXLA) are intentionally NOT
       # dependencies of core `:dspy`. See `docs/BUMBLEBEE.md`.
