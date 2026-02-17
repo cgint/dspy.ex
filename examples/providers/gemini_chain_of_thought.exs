@@ -34,7 +34,8 @@ Dspy.configure(
   temperature: 0.0,
   # Keep this generous: ChainOfThought requires both Reasoning + Answer labels.
   max_tokens: 1024,
-  cache: false
+  cache: false,
+  track_usage: true
 )
 
 defmodule CoTSig do
@@ -55,6 +56,9 @@ case Dspy.Module.forward(program, %{question: "What is 17*19?"}) do
     IO.puts(String.slice(reasoning, 0, 400))
 
     IO.puts("\nAnswer: #{pred.attrs.answer}")
+
+    IO.puts("\nLM usage (by model) for this run:")
+    IO.inspect(Dspy.Prediction.get_lm_usage(pred))
 
   {:error, reason} ->
     IO.puts("Error:")
