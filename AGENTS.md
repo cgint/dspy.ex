@@ -39,6 +39,23 @@ This repository is being developed as an **Elixir-native port** of the upstream 
   - The user can say **“Hold/Stop”** to pause.
   - I will still proactively flag/ask on “handshake” items (deps changes, broad refactors, system-wide/heavy commands, or anything that might risk leaking secrets).
 
+## Sub-agent handoffs (Pi): when to use them
+
+Persisted learnings from experimenting in this repo:
+
+- Prefer **simple delegated runs** using `pi-profile minimal -p @file ... "goal"` for scouting, inventories, and bounded edits.
+- Use handoffs when the task would otherwise bloat/taint the driver context window: multi-file scans, evidence collection, repetitive changes across many files, or independent verification.
+- Avoid handoffs for tiny edits (single-line/single-file obvious changes).
+- If you run handoffs concurrently (batch scripts), expect possible provider/rate-limit failures; be ready to rerun only the failed handoffs.
+- Post-handoff rule of thumb: **review first**. If follow-up edits are needed, prefer a second handoff; if the driver makes fixups anyway, explicitly record what was changed and why.
+
+### Continuity rule: persist handoff learnings
+
+When we experiment with handoffs in this repo, the assistant is expected to:
+- persist what worked/failed and why (esp. when provider/model/tool defaults matter)
+- record heuristics for when a handoff is beneficial vs when it’s unnecessary overhead
+- update the relevant guidance docs (this `AGENTS.md` and/or the global `sub-agent-handoff` skill) so future runs start with the simplest correct approach
+
 ### Credentials + networked examples
 - I *can* run tools/programs/examples that require credentials (e.g. real provider scripts under `examples/providers/*`) **if the required env vars are already set in the current shell/session** and you explicitly ask me to run them.
 - I will **not** edit `.env` files or add secrets to the repo.
