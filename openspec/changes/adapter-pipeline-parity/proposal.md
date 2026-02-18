@@ -1,37 +1,42 @@
-# Enable adapter-owned signature message formatting while preserving existing adapter behavior
+# Adapter pipeline parity (foundation): adapter-owned request formatting
+
+## Summary
+
+Introduce an adapter-owned request formatting hook so signature adapters can produce the LM **request map** (at minimum `messages: [...]`). This aligns `dspy.ex` with the upstream Python DSPy adapter boundary (format → call → parse) while keeping current Default/JSONAdapter behavior stable.
 
 ## Why
 
-### Summary
-`dspy.ex` currently mixes message construction across modules (`Predict`/`ChainOfThought`), while signature adapters are only used for instruction text and parsing. This leaves a mismatch with Python DSPy’s adapter contract (format → LM call → parse), and limits future adapter types (multi-message layouts, tool-call formats, and richer demo strategies).
+Today `Predict`/`ChainOfThought` always:
+- build prompt text internally
+- send a single `user` message
 
-This change aligns the adapter boundary so output formatting is consistently adapter-owned, without changing the default JSON/label behavior users rely on.
+Adapters only influence instructions and parsing, which blocks parity features (multi-message chat formatting, history, native tool calling, callbacks, TwoStep).
 
-### Original user request (verbatim)
+## What changes
 
-Propose OpenSpec change: unify adapter pipeline to better match Python DSPy Adapter (format→call→parse), while preserving current Default/JSONAdapter behavior. Focus on message formatting ownership and demo handling.
+- Extend `Dspy.Signature.Adapter` with an **optional** `format_request/4` callback.
+- Refactor `Predict`/`ChainOfThought` to use adapter-produced requests (with deterministic attachment merging).
+- Keep built-in adapters prompt-text equivalent (no behavior changes).
 
-## What Changes
+## Dependencies / Order
 
-- Move signature-level request message formatting from `Predict`/`ChainOfThought` into the active signature adapter.
-- Keep parse/validation ownership in adapters, preserving current `Default` fallback and `JSONAdapter` strict behavior.
-- Preserve existing deterministic semantics for:
-  - global vs predictor-local adapter selection,
-  - demo ordering and insertion,
-  - one-message text prompt behavior for both built-in adapters by default.
-- Add acceptance tests for message payload shape and demo rendering under adapter variants.
+This change should be implemented **before**:
+- `signature-chat-adapter`
+- `adapter-history-type`
+- `adapter-native-tool-calling`
+- `adapter-callbacks`
+- `adapter-two-step`
 
-## Capabilities
+## Impact (expected touched areas)
 
-### New Capabilities
-- `signature-adapter-message-pipeline`: adapter-level request-message formatting for signatures (including demos and input substitution) so prompt shaping is handled consistently across prediction-style modules.
+- `lib/dspy/signature/adapter.ex`
+- `lib/dspy/signature/adapters/default.ex`
+- `lib/dspy/signature/adapters/json.ex`
+- `lib/dspy/predict.ex`
+- `lib/dspy/chain_of_thought.ex`
+- tests under `test/` (adapter selection/request shape)
 
-### Modified Capabilities
-- `adapter-selection`: extend from output-format responsibility to full signature-stage formatting responsibility (request message ownership), while preserving existing adapter switching and parse semantics.
+## Backward compatibility
 
-## Impact
-
-- **Code paths:** `lib/dspy/signature/adapter.ex`, `lib/dspy/signature/adapters/default.ex`, `lib/dspy/signature/adapters/json.ex`, `lib/dspy/predict.ex`, `lib/dspy/chain_of_thought.ex`.
-- **Behavioral contracts:** global/per-predictor adapter selection, demo injection order, and default/JSON adapter prompt wording.
-- **Tests:** primarily `test/adapter_selection_test.exs` (with likely extension or new focused tests) and existing adapter-driven signature tests used as regression points.
-- **Backwards compatibility:** no required changes to public API for existing adapter callers.
+- Adapters that only implement the existing callbacks continue to work via fallback.
+- Default adapter remains the default.

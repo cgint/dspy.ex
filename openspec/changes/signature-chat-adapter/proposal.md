@@ -1,37 +1,20 @@
-# Add a Python-style ChatAdapter for marker-based signature prompting (opt-in)
+# signature-chat-adapter — marker-based ChatAdapter (opt-in)
 
-## Why
+## Summary
 
-### Summary
-`dspy.ex` currently relies on a mostly single-string prompt format with label-ish sections. Upstream Python DSPy’s `ChatAdapter` uses explicit marker sections (e.g. `[[ ## field ## ]]`) and a chat-message framing that makes parsing more deterministic and reduces prompt/parse ambiguity.
+Add `Dspy.Signature.Adapters.ChatAdapter` (opt-in) that formats requests using `[[ ## field ## ]]` markers and parses responses from those markers, with a bounded JSON fallback.
 
-This change adds a **new, opt-in** signature adapter that implements Python-style ChatAdapter semantics (marker formatting + strict parsing + JSON fallback) **without changing the existing Default adapter behavior**.
+## Dependencies / Order
 
-### Original user request (verbatim)
-Propose OpenSpec change: implement Python-style ChatAdapter semantics (marker sections like [[ ## field ## ]], multi-message formatting, parse, and JSON fallback).
+- **Requires:** `adapter-pipeline-parity`.
+- Recommended to implement before: `adapter-history-type`, `adapter-native-tool-calling`, `adapter-two-step`.
 
-## What Changes
+## Key parity notes (Python DSPy)
 
-- Introduce `Dspy.Signature.Adapters.ChatAdapter` implementing marker-based formatting and parsing similar to Python DSPy `ChatAdapter`.
-- Keep `Dspy.Signature.Adapters.Default` unchanged (no breaking change to the default prompt/parse contract).
-- Define a minimal, testable message payload contract for ChatAdapter request formatting (`messages: [...]`).
-- Implement strict marker-based output parsing for required outputs, with a clearly-scoped fallback to JSON parsing when (and only when) marker parsing fails.
-- Add regression tests for adapter selection (global vs predictor-local override) and for the fallback trigger boundary.
+- Marker headers match upstream.
+- Duplicate marker rule in this spec is **first occurrence wins** (upstream parity).
+- JSON fallback boundary is intentionally narrower than upstream (fallback only when marker parsing fails structurally).
 
-## Capabilities
+## Backward compatibility
 
-### New Capabilities
-- `signature-chat-adapter`: opt-in ChatAdapter for marker-based prompt formatting + parsing + JSON fallback.
-
-### Modified Capabilities
-- `adapter-selection`: allow selecting ChatAdapter as the active adapter for signature predictors (global config or per-predictor override).
-
-## Impact
-
-- **Code paths:** new module under `lib/dspy/signature/adapters/chat.ex` (or similar), plus updates to adapter selection plumbing if needed.
-- **Tests:** new characterization/acceptance tests for:
-  - message payload shape produced by ChatAdapter,
-  - marker parsing success/failure cases,
-  - JSON fallback trigger boundary,
-  - adapter override precedence.
-- **Backwards compatibility:** Default adapter remains the default; existing prompt-string-golden tests should not need rewriting.
+Default adapter remains default; ChatAdapter is opt-in.

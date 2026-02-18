@@ -1,90 +1,90 @@
-# Add native function-calling support at the signature-adapter boundary
+# Native tool calling at the signature adapter boundary
+
+## Status / Summary
+
+**Status:** Planning artifact.
+
+This change adds *request shaping* (`request.tools`) and *structured tool call parsing* (`tool_calls`) to the signature adapter pipeline, aligning with upstream Python DSPy adapter behavior.
+
+**Dependencies:** requires `adapter-pipeline-parity` (adapters must be able to return request maps, not just instructions) and strongly benefits from `adapter-callbacks` (observability).
+
+---
 
 ## Context
 
-`Predict` and `ChainOfThought` currently build one user prompt string, pass it to `Dspy.LM.generate/1`, and parse only response text through the active signature adapter (`parse_outputs/3`).
+Today in `dspy.ex`:
+- The LM request map supports `tools: [...]` (`Dspy.LM.request` type includes it).
+- Predict/CoT never set `tools` and only parse assistant text via `text_from_response/1`.
+- Tools exist as a separate system (`Dspy.Tools`, `Dspy.Tools.React`) and are not integrated into the signature adapter pipeline.
 
-Tools are available in this repo through `Dspy.Tools` and `Dspy.Tools.React`, but that path is separate from the adapter pipeline. In `lib/dspy/signature/adapter.ex`, adapters today own output instructions and output parsing, but they do not own:
-- request-level tool metadata (`request.tools`),
-- completion formats where tool calls are returned in structured message fields, or
-- explicit Tool/ToolCalls field semantics.
+Upstream Python DSPy:
+- Injects tools into request when configured (`use_native_function_calling`).
+- Extracts structured tool calls from LM outputs and returns them in a typed field (`ToolCalls`).
 
-Python DSPy models this inside `dspy.adapters.base.Adapter`, and this change closes that gap by moving function-calling concerns into the signature adapter layer.
-
-### Proposed adapter boundary contract (make parsing deterministic)
-
-To keep provider variance manageable, this change defines an internal contract between signature adapters and `Dspy.LM`:
-
-- **Adapter formatting output:** a request map containing (at minimum) `messages: [...]`, and optionally `tools: [...]`.
-  - The `tools` list uses a **canonical internal tool schema** (OpenAI-like `{"type": "function", "function": %{name, description, parameters}}`). Provider adapters may translate this as needed.
-- **Adapter parsing input:** in addition to completion text, adapters must be able to access a normalized, provider-agnostic view of structured tool calls.
-  - The LM response handed to adapter parsing MUST expose `tool_calls` as a list of entries that include `name` and `arguments` (JSON string), regardless of provider-specific nesting.
+Reference:
+- `../dspy/dspy/adapters/base.py` (`_call_preprocess` / `_call_postprocess`)
 
 ## Goals / Non-Goals
 
-**Goals:**
-- Allow signature execution to carry tool capabilities through existing adapter selection (`Dspy.Settings.adapter` and predictor/module override).
-- Add a deterministic contract where signature input fields declared as tool-capable types produce provider-native `request.tools` payloads.
-- Add parsing contracts for structured `tool_calls` completions (including argument JSON recovery and error tagging).
-- Keep non-native/legacy text parsing behavior unchanged when Tool/ToolCalls types are not used.
+### Goals
+- Allow signature adapters to emit `tools: [...]` in the request map when the signature declares tool fields.
+- Normalize LM responses so adapter parsing can access structured `tool_calls` metadata.
+- Add signature field types for:
+  - tool declarations (input)
+  - tool call results (output)
+- Preserve existing text-only behavior when no tool fields are present.
 
-**Non-Goals:**
-- Executing tool calls inside adapters (this change only covers request shaping and response parsing).
-- Introducing a new generic tool execution DSL outside existing `Dspy.Tools`.
-- Full parity for provider-native argument rejections/logits/streaming callback behavior.
+### Non-Goals
+- Executing tools automatically as a side effect of parsing.
+- Replacing `Dspy.Tools.React`.
+
+## Dependencies
+
+- **Requires:** `adapter-pipeline-parity`.
+- **Recommended before this:** `adapter-callbacks` (for debugging tool request/response shaping).
 
 ## Decisions
 
-### Decision 1: Extend adapter protocol with request shaping semantics rather than keeping this in `Predict`
-**Chosen:** Add adapter-level request formatting support (new helper/entry point) that can return the existing prompt map plus optional metadata fields like `tools`, while keeping `format_instructions/2` backwards-compatible.
+### Decision 1 — Canonical internal tool schema
 
-**Alternative considered:** Continue building requests in `Predict`/`ChainOfThought` and only inject `tools` when a tool-like field is detected.
-- Rejected because it keeps tool semantics out of adapter ownership and fragments the protocol.
+Adapters will emit tools in an OpenAI-like canonical internal schema:
 
-### Decision 2: Introduce explicit tool-signature types for adapter detection
-**Chosen:** Add dedicated signature field types (e.g., `:tool`/`:tools` and `:tool_calls`) and have adapters inspect those fields to drive request/response behavior.
+```json
+{"type":"function","function":{"name":"...","description":"...","parameters":{...}}}
+```
 
-**Alternative considered:** Add a custom `ToolSpec` option on non-tool fields and infer behavior from metadata.
-- Rejected because it complicates detection and is harder for users to compose with standard DSL signatures.
+Provider adapters may translate this.
 
-### Decision 3: Parse tool-call outputs from provider completion metadata, not from label/JSON text
-**Chosen:** When response messages include structured tool-call entries, adapter parsing for ToolCalls output fields SHALL prioritize this structured source and normalize each entry into map form with callable metadata (`name`, `args`).
+### Decision 2 — Response normalization contract
 
-**Alternative considered:** Instruct models to emit tool calls as JSON in content and continue text parsing only.
-- Rejected because it misses native behavior and provider-specific structured tool-calling contracts.
+Add an internal, provider-agnostic representation of tool calls that the adapter pipeline can read.
 
-### Decision 4: Keep execution responsibility in `Dspy.ReAct`/`Dspy.Tools`, not adapter parse
-**Chosen:** Adapter returns tool-call result structures only; callers or higher-level modules decide whether/how to execute tools.
+Proposed approach:
+- Extend LM response normalization utilities so we can extract either:
+  - assistant text, and
+  - `tool_calls` (if present)
 
-**Alternative considered:** Execute tool calls automatically during parse.
-- Rejected to avoid surprising side effects and preserve the deterministic, pure parsing contract of adapters.
+This likely requires a new helper (instead of `text_from_response/1`), e.g.:
+- `Dspy.LM.choice_from_response/1 :: {:ok, %{text: String.t() | nil, tool_calls: list() | nil, raw: map()}}`
+
+### Decision 3 — ToolCalls output is explicit and opt-in
+
+Only signatures with a dedicated output field (e.g. type `:tool_calls`) will receive tool call data.
+
+### Decision 4 — Adapter does not execute tools
+
+Adapter returns normalized tool call structures only. Execution remains in callers (`ReAct` / user code).
 
 ## Risks / Trade-offs
 
-- **[Risk]** Tool conversion can produce invalid provider schemas when users supply incomplete `Dspy.Tools.Tool` metadata.
-  - **Mitigation:** surface normalized adapter errors with field-scoped tags (`:invalid_tool_spec`, `:invalid_tool_fields`) and fail before LM call when possible.
-- **[Risk]** Tool-call parsing and output retries could get out-of-sync if adapter contract allows `tool_calls` output as an additional result channel.
-  - **Mitigation:** make ToolCalls an explicit output field type so parsing is deterministic and scoped.
-- **[Risk]** Existing custom adapters that only implement old `format_instructions/2` + `parse_outputs/3` may need adaptation.
-  - **Mitigation:** preserve old callbacks as default behavior; new protocol pieces are additive with fallback to current string-based request framing.
-- **[Risk]** Provider differences (`tool_calls` schema + finish reasons) may vary.
-  - **Mitigation:** normalize only a minimal, provider-agnostic subset (`name`, `arguments`) and keep unknown fields passthrough in adapter metadata where useful.
+- Provider variance in tool call schemas → mitigate by normalizing minimal fields (`name`, `arguments` JSON).
+- Introducing new signature types requires careful validation + docs.
 
-## Migration Plan
+## Verification plan
 
-1. Add/extend adapter contract and helper utilities for request shaping + structured tool-call parsing.
-2. Update default and JSON adapters (or a small dedicated utility-backed adapter module) to understand:
-   - tool input field conversion to `request.tools`,
-   - tool-call output extraction from completion messages.
-3. Update `Predict` and `ChainOfThought` request generation to pass the adapter-produced request map and full response payload into parse where ToolCalls fields are involved.
-4. Add deterministic tests for:
-   - tool list to `request.tools` mapping,
-   - tool-call list parsing (success and malformed arguments),
-   - requirement that existing text-only flows remain unchanged.
-5. Update compatibility docs once applied and link to requirements-driven specs.
-
-## Open Questions
-
-- Should `:tool` and `:tools` be two distinct types, or a single `:tool_list`/`:tool` convention, to balance ergonomics and explicitness?
-- Should ToolCalls output emit strict `%{name: ..., args: ...}` maps or list of lightweight structs for easier typed handling?
-- Should tool-call retry be tied to the same `max_output_retries` mechanism as typed decode/validation failures, or be a separate retry channel?
+- Deterministic tests:
+  - tool inputs add `request.tools`
+  - structured tool calls in LM response populate `:tool_calls` output field
+  - malformed tool call arguments produce tagged errors
+  - non-tool signatures unchanged
+- Run `mix test`.

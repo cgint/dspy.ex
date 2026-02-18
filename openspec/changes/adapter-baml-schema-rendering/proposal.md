@@ -1,36 +1,18 @@
-# Improve typed-output prompt schema rendering for nested models (BAML-style)
+# adapter-baml-schema-rendering — BAML-style typed schema hints (prompt shaping only)
 
-## Why
+## Summary
 
-### Summary
-`dspy.ex` currently embeds **raw JSON Schema** into prompts when typed structured outputs (`schema:` on output fields) are used. For deeply nested schemas this is verbose and can be hard for smaller/cheaper LMs to follow, increasing invalid-JSON / validation-failure rates and driving up retries.
+Add an opt-in adapter that renders typed output schemas into a compact, BAML-inspired snippet to improve adherence for nested structured outputs.
 
-Upstream Python DSPy includes a `BAMLAdapter` that renders nested Pydantic models into a compact, human-readable, comment-annotated schema (inspired by BoundaryML BAML), specifically to improve adherence for structured outputs.
+## Notes
 
-### Original user request (verbatim)
-Propose OpenSpec change: implement BAML-like schema rendering adapter for nested/typed outputs (prompt shaping only) analogous to Python BAMLAdapter.
+- Prompt shaping only; parsing/validation/casting remain unchanged.
+- This change should also make typed-output retry prompts schema-hint neutral (not hard-coded to “JSON Schema”).
 
-## What Changes
+## Dependencies / Order
 
-- Add a **new Signature adapter option** that renders typed output schemas in a **BAML-like simplified format** (prompt shaping only).
-- Keep existing behavior as default: typed outputs continue to work with JSON Schema prompts unless explicitly configured.
-- Provide deterministic tests that prove:
-  - the prompt contains BAML-style schema rendering when the adapter is selected
-  - typed structured outputs still parse/validate/cast as before (no parsing behavior changes in this change)
+Recommended after `adapter-pipeline-parity`.
 
-## Capabilities
+## Backward compatibility
 
-### New Capabilities
-- `adapter-baml-schema-rendering`: When configured, typed output fields are rendered into a compact, BAML-inspired schema snippet (with comments/field descriptions) instead of raw JSON Schema in the prompt.
-
-### Modified Capabilities
-- (none)
-
-## Impact
-
-- Likely touched modules/files:
-  - `lib/dspy/signature.ex` (prompt building / schema hint generation)
-  - `lib/dspy/signature/adapter.ex` and `lib/dspy/signature/adapters/*` (introduce a new adapter or adapter option)
-  - tests under `test/` that assert prompt content and ensure no regression
-- No provider changes; no new runtime dependencies required for the first version.
-- API surface: configuration via existing adapter selection mechanisms (`Dspy.configure(adapter: ...)` and per-program override) if implemented as a signature adapter module.
+Opt-in adapter; default prompt/schema embedding unchanged.

@@ -1,63 +1,100 @@
-# Reliable JSONAdapter parsing with schema-integrated recovery in `dspy.ex`
+# JSONAdapter parity hardening — repairable JSON + keyset rules + typed casting
 
-## Context
+## Status / Summary
 
-`Dspy.Signature.Adapters.JSONAdapter` is currently a strict parser layered directly on the completion text: it expects clean `decode_json`-compatible payloads and then validates only a subset of output fields. This creates friction in practice because production models often return JSON in noisy formats (markdown fences, leading commentary, dangling commas, trailing text) and adapter-level typed fields can diverge from the typed-output validation pipeline (`JSV`).
+**Status:** Planning artifact.
 
-The change aligns parsing behavior with Python DSPy parity goals by making JSONAdapter more deterministic and schema-aware while preserving its JSON-only contract.
+`Dspy.Signature.Adapters.JSONAdapter` already exists and already:
+- enforces JSON-only parsing (no label fallback)
+- validates required outputs
+- integrates typed casting for `schema:` outputs via `Dspy.TypedOutputs.validate_term/2`
+
+This change hardens it toward upstream Python DSPy parity by adding deterministic “json_repair-like” preprocessing and by making the output keyset contract explicit and test-pinned.
+
+---
+
+## Context (facts)
+
+### Current Elixir implementation (today)
+
+- JSON decoding is strict (`Jason`) after extracting a top-level `{...}` substring.
+- Typed schema casting for `schema:` output fields is already integrated.
+- Missing required outputs yields `{:error, {:missing_required_outputs, missing}}`.
+- Extra keys in the returned JSON object are currently **ignored** (because mapping only reads expected keys).
+
+### Upstream Python DSPy behavior
+
+- Uses `json_repair.loads` for robustness.
+- Filters parsed JSON down to expected keys, then enforces **presence of all expected output fields**.
+  - Extra keys do not cause failure after filtering.
+
+References:
+- `../dspy/dspy/adapters/json_adapter.py`
 
 ## Goals / Non-Goals
 
-**Goals:**
-- Accept and repair common JSON formats before decode (without introducing permissive behavior outside typed boundaries).
-- Enforce output-key contract strictly against signature output fields, including required-field coverage and rejection of unknown required mismatches.
-- Route schema-attached outputs through existing typed validation/casting (`Dspy.TypedOutputs.validate_term/2`).
-- Standardize error tags so callers can reliably distinguish malformed JSON vs missing keys vs typed validation failures.
+### Goals
+- Add deterministic preprocessing/repair so common model “JSON noise” is recoverable:
+  - fenced ```json blocks
+  - leading/trailing commentary
+  - trailing commas (if feasible without new deps)
+  - (optionally) single quotes/backticks if deterministically repairable
+- Make keyset semantics explicit and parity-aligned:
+  - require **all signature output fields** to be present in JSONAdapter mode (not just required=true)
+  - ignore extra keys (upstream parity)
+- Keep schema casting behavior consistent and test-pinned.
+- Standardize error tags so retries/diagnostics can branch reliably.
 
-**Non-Goals:**
-- Changing module-level adapter selection APIs (`Dspy.configure/1`, per-predictor `adapter:`).
-- Implementing JSON schema negotiation with provider-native response-format capabilities (tool/function calling remains separate future work).
-- Altering `ChainOfThought`, teleprompters, or retriever paths beyond their existing adapter hook behavior.
+### Non-Goals
+- Provider structured output negotiation (`response_format`) — separate future work.
+- Tool calling integration — separate change.
+
+## Dependencies
+
+- Independent of adapter pipeline parity (this is purely parsing).
+- Benefits from having `signature-chat-adapter` implemented later (so ChatAdapter fallback uses this hardened parser).
 
 ## Decisions
 
-### Decision 1: Use a two-pass parse strategy in `JSONAdapter.parse_outputs/3`
-**Chosen:** attempt a repair pass on raw completion text before strict JSON decode.
+### Decision 1 — Two-pass decode: strict → repair → strict
 
-**Alternatives considered:**
-1. Keep current decoder-only path (rejected: too brittle in real LM output formats).
-2. Replace with full JSON5 parser dependency (rejected: extra dependency and weaker control on exact output shape contracts).
+1) Attempt strict decode of extracted JSON object.
+2) If decode fails, apply deterministic repair steps, then strict decode again.
 
-### Decision 2: Keep keyset validation in adapter, before field-by-field casting
-**Chosen:** validate extracted object keys against declared output field set (required field presence plus no unknown key acceptance by default).
+We will not add a new dependency unless tests demonstrate it is required.
 
-**Alternatives considered:**
-1. Permit extra keys and ignore them silently (rejected: hides output drift and makes retries harder to reason about).
-2. Rely on downstream `parse_outputs/2` for keyset checks (rejected: duplicates contract and weakens adapter boundary responsibility).
+### Decision 2 — Output keyset contract (match upstream)
 
-### Decision 3: Delegate schema casting to `Dspy.TypedOutputs`
-**Chosen:** invoke typed validation/casting per schema-attached output field inside `JSONAdapter`, preserving existing typed retry/error semantics.
+In JSONAdapter mode:
+- **Required presence:** the JSON object must contain keys for **all signature output fields**.
+- **Extra keys:** are ignored (parity with Python which filters them out).
 
-**Alternatives considered:**
-1. Re-parse typed values with hand-rolled cast logic (rejected: duplicates error behavior already covered by typed outputs pipeline).
-2. Move typed casting entirely to `Dspy.Signature.parse_outputs/2` (rejected: then JSONAdapter could return plain maps even where JSONAdapter-specific key checks are strict).
+Rationale:
+- Gives JSONAdapter a clear “structured outputs” contract.
+- Keeps Default adapter as the lenient option.
+
+### Decision 3 — Typed casting stays adapter-owned
+
+`schema:` fields continue to be cast/validated via `Dspy.TypedOutputs.validate_term/2`.
+
+### Decision 4 — Error tagging
+
+Pin explicit error tags in tests (exact shapes):
+- `{:output_decode_failed, _}` for JSON extraction/decode failures
+- `{:missing_required_outputs, missing}` for missing output keys (after filtering)
+- `{:invalid_output_value, field, reason}` for primitive coercion / one_of failures
+- `{:output_validation_failed, %{field: field, errors: errors}}` for typed schema failures
 
 ## Risks / Trade-offs
 
-- **[Risk] Repair behavior may over-correct malformed but semantically invalid payloads** → **Mitigation:** repair utility is only preprocessing; strict decode and typed/required-key validation still gate success.
-- **[Risk] Strict keyset rejection breaks previously lenient consumers of JSONAdapter** → **Mitigation:** explicitly scoped to JSON-only adapter and covered by changelog + tests; default adapter remains unchanged.
-- **[Risk] New error tags alter retry heuristics** → **Mitigation:** specify tags in spec and update any consumer tests to branch on canonical tagged errors.
+- Tightening “all outputs must be present” may break some prior JSONAdapter usage that relied on optional outputs being omitted.
+  - Mitigation: JSONAdapter is opt-in; Default remains lenient.
 
-## Migration Plan
+## Verification plan
 
-1. Introduce parser utility functions for repair + extraction in `JSONAdapter` and update `parse_outputs/3` flow in a backward-compatible module-only manner.
-2. Add/adjust unit + acceptance tests in deterministic suites for malformed JSON, keyset mismatch, schema casting failures/success.
-3. Keep existing parse paths for `Default` adapter untouched.
-4. Document behavioral change in `docs` through existing compatibility docs if needed (or via existing test-linked evidence).
-5. Rollback strategy: if strict behavior causes regression, temporarily switch callers to `Default` adapter (or keep JSONAdapter off by default) while adjusting prompt discipline.
-
-## Resolved notes
-
-- **Repair strategy:** use a deterministic two-pass approach (strict decode, then bounded repair + strict decode) without adding new dependencies. Details: `specs/signature-jsonadapter-parity/repair-strategy.md`.
-- **Keyset policy:** in JSONAdapter mode, unknown/extra output keys are always an error; missing keys are an error for required outputs.
-- **Telemetry:** out of scope for this change; callers may log raw completions via existing history/callback mechanisms.
+- Add unit tests covering:
+  - fence stripping + extraction
+  - trailing text/commentary
+  - keyset requirement (all output fields present)
+  - typed casting success + typed validation failure tags
+- Run `mix test`.

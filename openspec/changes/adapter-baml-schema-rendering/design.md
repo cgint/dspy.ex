@@ -1,109 +1,87 @@
-# Make typed-output prompts more reliable for nested schemas (BAML-style rendering)
+# BAML-style typed schema rendering (prompt shaping only)
+
+## Status / Summary
+
+**Status:** Planning artifact.
+
+Add an opt-in signature adapter that renders typed output schemas (`schema:` output fields) into a compact, BAML-inspired snippet to improve model adherence.
+
+This is **prompt shaping only**: parsing/validation/casting stay unchanged.
+
+---
 
 ## Context
 
-- Today, typed structured outputs in `dspy.ex` are driven by `schema:` on signature output fields (JSV schemas). Prompt shaping for these typed outputs is done in `Dspy.Signature.to_prompt/3` via a JSON-Schema embedding section (see `typed_schema_hint_section/1` in `lib/dspy/signature.ex`).
-- Upstream Python DSPy provides a `BAMLAdapter` that renders nested model structure in a compact, human-friendly format to improve structured-output adherence, especially for smaller LMs.
-- This change is intentionally **prompt-shaping only**: parsing/validation/casting and retry behavior remain unchanged.
+Today in `dspy.ex`:
+- Typed structured outputs use `schema:` on output fields.
+- Prompt shaping embeds a (potentially large) JSON Schema section via `Dspy.Signature.to_prompt/3`.
+- `max_output_retries` is already implemented and the retry prompt currently references “JSON Schema shown above”.
 
-Constraints:
-- Deterministic, offline test coverage is required.
-- Avoid new external dependencies for the first iteration.
-- Must be opt-in (no regression to default prompt output).
+Upstream Python DSPy:
+- provides `BAMLAdapter` (subclass of JSONAdapter) that renders nested Pydantic types in a compact, comment-annotated format.
+
+Reference:
+- `../dspy/dspy/adapters/baml_adapter.py`
 
 ## Goals / Non-Goals
 
-**Goals:**
-- Provide an opt-in way to render typed output schemas using a **BAML-like simplified schema** in prompts.
-- Ensure the prompt contains *either* the existing JSON Schema *or* the BAML-like schema, depending on adapter selection (no duplicated/conflicting schema instructions).
-- Keep output parsing/validation semantics exactly as they are today.
+### Goals
+- Provide an opt-in adapter (e.g. `Dspy.Signature.Adapters.BAMLAdapter`) that:
+  - preserves JSON parsing/validation semantics
+  - changes only the schema-hint rendering in the prompt
+- Avoid duplicating conflicting schema hints in the prompt.
+- Define explicit supported schema subset and fallback strategy.
+- Ensure typed-output retry prompts remain accurate when BAML hints are used.
 
-**Non-Goals:**
-- Implement json-repair or other parsing robustness improvements.
-- Change typed-output validation/casting (JSV) or retry behavior.
-- Add provider-level structured-output negotiation.
-- Achieve perfect parity with Python `BAMLAdapter` (we don’t have Pydantic models; we render from JSV/JSON Schema data).
+### Non-Goals
+- Changing the typed validation/casting engine (JSV).
+- Adding json-repair dependencies.
+
+## Dependencies
+
+- Can be implemented before or after `adapter-pipeline-parity`.
+  - **Recommended after** `adapter-pipeline-parity` so adapter-owned prompt shaping is the clear responsibility boundary.
 
 ## Decisions
 
-### 1) Put schema rendering under the Signature Adapter boundary
+### Decision 1 — Adapter-owned schema hint rendering (minimal contract)
 
-**Decision:** Extend the Signature Adapter contract to optionally own typed-schema prompt rendering.
+Introduce an optional adapter callback (exact name can follow whatever pipeline parity introduces) to allow adapters to override the typed schema hint section used in the prompt.
 
-Rationale:
-- The request is explicitly “adapter” functionality (parity with Python’s adapter responsibilities).
-- Today schema prompt shaping lives in `Dspy.Signature.to_prompt/3`, making it hard to swap rendering strategies.
+If we keep `Signature.to_prompt/3` as the canonical renderer, the minimal mechanism is:
+- adapter may provide a replacement string for the typed-schema hint section
+- otherwise fall back to existing JSON Schema embedding
 
-Proposed approach:
-- Add an **optional callback** to `Dspy.Signature.Adapter`, e.g.:
-  - `format_typed_schema_hints(signature, opts) :: String.t() | nil`
-  - Mark it optional via `@optional_callbacks` so existing adapters do not break.
-  - **Return contract:**
-    - `nil` → use the existing JSON Schema section as-is
-    - non-empty string → replace the JSON Schema section with the returned string
-    - empty string should be treated as `nil` to avoid accidental suppression
-- Update `Dspy.Signature.to_prompt/3` to call the adapter’s schema-hint formatter if present; otherwise fall back to the existing JSON Schema hint section.
+### Decision 2 — Retry prompt wording must become schema-hint neutral
 
-Alternatives considered:
-- **Option A:** Add a `schema_renderer: :baml` option to `Signature.to_prompt/3` (simplest) but this leaks adapter concerns into signature prompting and doesn’t match upstream adapter ownership.
-- **Option B:** Encode BAML-like schema into `format_instructions/2` (no new callback) but then we still need to suppress the existing JSON Schema section, requiring ad-hoc conditional logic.
+Because BAML hints are not “JSON Schema”, the existing retry prompt text should be updated (in this change) to say:
+- “Use the schema hints shown above.”
 
-### 2) Introduce a new Signature adapter module for BAML rendering (prompt only)
+This keeps retries correct regardless of whether the hints are JSON Schema or BAML.
 
-**Decision:** Add `Dspy.Signature.Adapters.BAMLAdapter` (name TBD) that:
-- reuses the existing JSON parsing/validation behavior (likely by delegating to `Dspy.Signature.parse_outputs/2` or `Dspy.Signature.Adapters.JSONAdapter.parse_outputs/3`)
-- overrides only schema-hint formatting to render a simplified schema snippet
+### Decision 3 — Supported schema subset (v1)
 
-Rationale:
-- Keeps behavior opt-in and discoverable via the existing adapter selection story.
-- Mirrors the upstream conceptual model (BAMLAdapter is an adapter).
+Render from JSON-Schema-like maps (from JSV normalization), supporting:
+- primitives (string/integer/number/boolean)
+- objects with properties
+- arrays
+- enums
+- nullability (`type: [..., "null"]` and simple `anyOf` null unions)
+- descriptions as `#` comments when present
 
-Alternatives considered:
-- Add a `baml_schema?: true` option to the existing `JSONAdapter`. Rejected because it mixes two distinct prompt strategies under one adapter and makes testing/selection less explicit.
-
-### 3) Render from JSON Schema maps produced by existing typed-output tooling
-
-**Decision:** Build a small internal renderer that consumes a JSON-schema-like map (as produced by the current JSV integration) and renders:
-- primitive types: `string`, `int`, `float`, `boolean`
-- enums: `"a" or "b"`
-- arrays: `T[]` (and a multi-line bracket format when `T` is an object)
-- optionals: append `or null` when schema indicates nullable (`type: [.., "null"]` or `anyOf` including null)
-- nested objects: indented `{ ... }` blocks
-- descriptions (if present in the schema) as `# comment` lines above fields
-
-Rationale:
-- Keeps the change dependency-free.
-- Works with today’s schema representation (JSV/JSON Schema), even though it will not match Python’s Pydantic-specific introspection exactly.
-
-Trade-offs:
-- Supported subset should be explicit and deterministic. v1 supports:
-  - primitives: string/integer/number/boolean
-  - object properties
-  - arrays
-  - enums
-  - nullability via `type: [.., "null"]` or `anyOf` including null
-- v1 explicitly does **not** support (fallback required): `$ref`, `allOf`, `patternProperties`, multi-branch `oneOf`/`anyOf` beyond nullability.
+Unsupported constructs (`$ref`, `allOf`, complex `oneOf/anyOf`) trigger fallback to raw JSON Schema for that field (or for the whole hint section; choose and test).
 
 ## Risks / Trade-offs
 
-- **Risk:** Some JSV-produced schemas may not include nested field descriptions, reducing the usefulness of BAML comments.
-  → Mitigation: render comments only when descriptions exist; keep rendering useful even without them.
+- Complex schema constructs may be hard to render; fallback must be deterministic.
+- Must avoid misleading retries; hence the retry prompt wording change.
 
-- **Risk:** Complex schema constructs (`$ref`, `oneOf` beyond nullability) may be hard to render correctly.
-  → Mitigation: define explicit supported subset in specs; in unsupported cases, fall back to the existing JSON Schema hint to preserve correctness.
+## Verification plan
 
-- **Risk:** Adapter boundary changes (new optional callback) could be confusing.
-  → Mitigation: keep callback optional; document in module docs and in the spec as an opt-in capability.
-
-## Migration Plan
-
-- No migration required.
-- Default adapter behavior remains unchanged.
-- Users can opt-in per run via `Dspy.configure(adapter: Dspy.Signature.Adapters.BAMLAdapter)` (exact name TBD) or per-program adapter override.
-- Rollback is simply switching back to the default adapter.
-
-## Open Questions
-
-- Should the adapter be named `BAMLAdapter` (parity) or `BAMLPromptAdapter` (clarity that parsing is unchanged)?
-- What is the best fallback behavior when encountering unsupported schema constructs: hard error vs. fallback to JSON Schema embedding?
-- Do we want to support rendering **input** schemas as well (Python adapter formats input values differently), or keep scope strictly to typed **output** schema hints?
+- Deterministic tests:
+  - selecting BAML adapter changes the prompt schema section
+  - default adapter remains unchanged
+  - unsupported schema constructs fall back deterministically
+  - typed structured outputs still validate/cast as before
+  - retry prompt uses neutral wording (“schema hints”) not “JSON Schema”
+- Run `mix test`.

@@ -1,106 +1,130 @@
+## Status / Summary (read this first)
+
+**Status:** Planning artifact (no implementation in this change directory yet).
+
+This change is the **foundation** for the adapter parity workstream: move request message construction (and eventually other request-shaping concerns) behind the active `Dspy.Signature.Adapter`.
+
+**Recommended order:** this should be implemented **before** `signature-chat-adapter`, `adapter-history-type`, `adapter-native-tool-calling`, `adapter-callbacks`, and `adapter-two-step`.
+
+---
+
 ## Context
 
-Python DSPy treats signature adapters as the boundary that **formats the call context**, invokes the LM, and parses outputs. In `dspy.ex`, only parse behavior is adapter-driven today:
+Today in `dspy.ex`:
+- `Predict` and `ChainOfThought` build a single prompt string via `Dspy.Signature.to_prompt/3` and then always send a single `user` message.
+- Signature adapters (`Dspy.Signature.Adapter`) currently only affect:
+  - `format_instructions/2` (prompt text injected into `to_prompt/3`)
+  - `parse_outputs/3`
 
-- `Predict` and `ChainOfThought` build a single prompt string internally via `Dspy.Signature.to_prompt/3`.
-- The same module then sends a single `user` message with that prompt.
-- Demo examples are effectively embedded by `to_prompt`, not by adapters.
+Upstream Python DSPy adapters own the end-to-end pipeline (`format → LM call → parse`) and therefore own:
+- multi-message formatting (system + demos + history + current input)
+- (optional) request shaping (tools / response_format)
+- parsing and postprocessing
 
-This causes adapter overrides to control instructions/parsing while not controlling the full request payload, limiting parity with DSPy adapters and making future adapter types (e.g. multi-message, tool-call-first, structured-message adapters) harder to introduce.
-
-Known constraints:
-- Must preserve current behavior of `Dspy.Signature.Adapters.Default` and `Dspy.Signature.Adapters.JSONAdapter`.
-- Existing tests already lock prompt strings for both adapters.
-- The change should be non-breaking by default and limited to signature-based pipelines (`Predict`, `ChainOfThought`, and adapter-aware internals like `ReAct` extraction paths that reuse these contracts).
+We need a compatible boundary in Elixir to unlock parity changes incrementally.
 
 ## Goals / Non-Goals
 
-**Goals:**
-- Move signature-call message formatting into adapter ownership (including demo handling and input substitution).
-- Preserve default/JSON parsing semantics and adapter override precedence.
-- Enable multi-message or non-traditional request-message shaping for future adapter strategies without breaking current default call shape.
+### Goals
+- Move signature-level **request message formatting** into adapter ownership.
+- Keep parsing responsibility in adapters (as today).
+- Preserve *existing behavior* for built-in adapters:
+  - Default adapter prompt text and parsing remain deterministic.
+  - JSONAdapter remains strict JSON-only parsing.
+  - Adapter selection precedence stays the same (predictor override wins over global).
+- Preserve current few-shot rendering semantics for built-ins (still produced via `Signature.to_prompt/3` initially).
 
-**Non-Goals:**
-- Full JSON repair/refinement work (already addressed separately via typed-output retry/repair changes).
-- Tool-calls/Function-calling adapter ownership beyond message payload support.
-- New external provider/SDK dependencies.
+### Non-Goals
+- Introducing new provider dependencies.
+- Adding tool calling / history / system-message splitting as a default behavior change.
+  - Those are handled in follow-up changes once the request-format boundary exists.
+
+## Dependencies
+
+- None (this is the foundational change).
 
 ## Decisions
 
-### Decision 1: Extend `Dspy.Signature.Adapter` with explicit message-formatting callback
-Current behaviour uses `format_instructions/2` only. We will add a message-formatting step to the adapter contract (e.g. `format_messages/4`) that returns the request payload slice needed by `Dspy.LM.generate/2`.
+### Decision 1 — Add a request-formatting hook to `Dspy.Signature.Adapter`
 
-**Concrete contract (to reduce ambiguity):**
-- The new hook MUST be **optional** for adapters (use `@optional_callbacks` and/or a default fallback function), so existing/custom adapters continue to compile and behave as today.
-- Proposed shape (exact name/arity may vary, but the responsibility boundary should not):
-  - **Inputs:** `(signature, inputs, demos, opts)` where:
-    - `signature` is the `Dspy.Signature` being executed
-    - `inputs` is a map of input fields → values (already normalized)
-    - `demos` is the list of demo/example structs used for few-shot (if any)
-    - `opts` includes any predictor-level options needed for formatting (but not transport/provider concerns)
-  - **Output (minimum):** a map containing at least:
-    - `messages`: a list of chat messages to pass to the LM (default remains one `user` text message)
+Add an **optional** callback to the signature adapter behaviour so existing/custom adapters remain compatible.
 
-**Transport boundary:**
-- Callers (`Predict`/`ChainOfThought`) must not rebuild prompt text once an adapter provides `messages`.
-- Callers remain responsible for provider/transport wiring (e.g. merging attachments/multimodal parts into the request) while preserving the adapter-generated text content.
+**Proposed callback (name may vary, responsibility must not):**
 
-**Alternatives considered:**
-1. **Keep adapters instruction-only and continue assembling request maps in `Predict`/`CoT`.**
-   - Rejected because it keeps the existing mismatch and blocks parity-focused refactors.
-2. **Introduce a separate new formatter module not part of adapter behaviour.**
-   - Rejected because it creates two competing concepts and weakens override consistency.
+- `format_request(signature, inputs, demos, opts) :: map()`
 
-### Decision 2: Keep legacy request shape as explicit default
-Built-ins will continue to return a single `user` message with text content for now, preserving deterministic prompt contracts in tests.
+**Minimum return contract:**
+- must return a map with at least:
+  - `messages: [%{role: String.t(), content: String.t() | list()}]`
 
-**Alternatives considered:**
-1. **Switch to multi-message/system+user in default adapter immediately.**
-   - Deferred; this is a behavior change with broad surface area and unnecessary for parity-at-the-boundary.
-2. **Return raw request maps directly from adapters now.**
-   - Rejected for this phase; simpler to return just message list/shape and let `Predict`/`CoT` pass through unchanged fields.
+**Why `format_request` instead of `format_messages`:**
+- follow-up changes (native tool-calling, history, response-format negotiation) need adapters to optionally return additional request keys such as `tools` or `response_format`.
+- by returning a request map, we avoid growing many parallel callbacks.
 
-### Decision 3: Preserve `Dspy.Signature.to_prompt/3` as shared formatting helper
-To avoid rewrites, built-in adapters can reuse `to_prompt/3` as the **canonical renderer** for the existing single-message prompt text.
+**Backward compatibility rule:**
+- If the adapter does not implement `format_request/4`, the system falls back to the current behavior:
+  - build prompt with `Signature.to_prompt/3`
+  - send it as a single `user` message
 
-**Clarification (avoid double demo insertion):**
-- Today, `to_prompt/3` already embeds demo/example blocks and performs input substitution.
-- In this change, built-in adapters may call `to_prompt/3` and wrap the result into the adapter-owned `messages` output (e.g. `[%{role: "user", content: prompt_text}]`).
-- Adapters MUST NOT add demos a second time if they reuse `to_prompt/3`.
+### Decision 2 — Built-in adapters must be prompt-text equivalent in v1
 
-This keeps prompt wording/sections identical while shifting *ownership* of message formatting into the adapter boundary.
+For `Default` and `JSONAdapter`, v1 `format_request/4` should wrap the existing prompt text into:
 
-**Alternatives considered:**
-1. **Force all adapters to rebuild prompt content manually.**
-   - Rejected due to duplication and immediate regression risk for prompt wording.
-2. **Remove `to_prompt/3` and move everything into adapters only.**
-   - Rejected because many current tests and examples assert prompt sections that should remain stable.
+```elixir
+%{messages: [%{role: "user", content: prompt_text_or_parts}]}
+```
 
-### Decision 4: Keep adapter selection precedence unchanged
-Global `Dspy.Settings.adapter` remains fallback; per-program adapter still wins.
+This keeps current prompt wording and existing tests stable, while moving *ownership*.
+
+### Decision 3 — Attachments remain a caller (transport) concern, but must compose deterministically
+
+Today `Predict`/`ChainOfThought` merge attachments into the first user message as content parts.
+
+In v1:
+- adapters produce message **text** content
+- callers remain responsible for merging `%Dspy.Attachments{}` into the adapter-generated request
+
+**Contract:**
+- built-in adapters must keep returning a request whose *final user message* is the “main prompt”, so attachments can be appended there without changing semantics.
+
+(History + tool calling follow-ups will refine this contract.)
+
+### Decision 4 — Typed-output retry prompt composition must keep working
+
+`max_output_retries` is already implemented and relies on being able to build a retry prompt string.
+
+In v1 pipeline parity:
+- for built-in adapters, request formatting still yields a single main user prompt string → retry continues to work as today.
+- for future multi-message adapters (e.g. ChatAdapter), retry semantics will be defined by those changes.
 
 ## Risks / Trade-offs
 
-- **[Risk]** Request shape changes could accidentally alter prompts generated by existing demos/few-shot flows.
-  - **Mitigation:** Keep default adapter output text-equivalent and add golden-path tests asserting existing sections and examples ordering.
-- **[Risk]** Existing custom adapters implementing the old behaviour contract may compile-break after callback expansion.
-  - **Mitigation:** Introduce new callback with backward-compatible default implementation in adapter adapter wrappers where possible, or allow optional callback with default behaviour in helper code.
-- **[Risk]** Demo formatting and input substitution may duplicate previous placeholder replacement logic.
-  - **Mitigation:** Move replacement into shared utility functions and assert parity with current generated prompt fixtures in tests.
+- **Risk:** accidental prompt diffs in built-ins (breaks deterministic tests)
+  - Mitigation: golden tests around prompt content remain unchanged; add request-shape assertions.
 
-## Migration Plan
+- **Risk:** custom adapters compile-break on new behaviour callback
+  - Mitigation: make callback optional + provide fallback path.
 
-1. Add adapter-formatting callback and helper fallback in adapter behaviour so existing adapters remain loadable.
-2. Update adapter modules (`Default`, `JSONAdapter`) to produce request-message output via the new callback while preserving old output text content.
-3. Update `Predict`/`ChainOfThought` to delegate message formatting to the active adapter and only keep transport concerns (content parts for attachments/multimodal).
-4. Add/adjust tests that prove:
-   - adapter message payload is chosen by active adapter,
-   - demos remain ordered and present under default and JSON modes,
-   - existing parse behaviour remains unchanged.
-5. Keep rollout opt-in via built-in defaults; no API breaks.
-6. Rollback path: revert callers to previous in-module prompt assembly or gate new callback behind adapter behaviour default fallback.
+## Implementation plan (high level)
 
-## Open Questions
+1. Extend `Dspy.Signature.Adapter` with optional `format_request/4`.
+2. Implement `format_request/4` in built-in adapters (`Default`, `JSONAdapter`) by wrapping existing `Signature.to_prompt/3` output.
+3. Update `Predict` + `ChainOfThought` to request-format via adapter and pass through adapter-produced request (after deterministic attachment merge).
+4. Ensure `ReAct` internal signature-based calls reuse the same path.
+5. Add request-shape tests + run full suite.
 
-- Should a future phase reserve a `system` message role for adapter metadata (e.g. tool schemas), or keep single-user prompts only for now?
-- Do we want adapters to receive fully typed/normalized example structs directly or only rendered examples (likely both could be part of a richer `format_messages` signature).
+## Verification plan
+
+- Update/add tests to prove:
+  - adapter selection influences request formatting (`messages`) not only parsing
+  - request prompt text is unchanged for Default/JSONAdapter
+  - attachments still become content parts in the final user message
+- Run `mix test`.
+
+## Follow-ups enabled by this change
+
+- `signature-chat-adapter`
+- `adapter-history-type`
+- `adapter-native-tool-calling`
+- `adapter-callbacks`
+- `adapter-two-step`
