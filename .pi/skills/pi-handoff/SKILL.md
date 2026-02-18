@@ -13,32 +13,38 @@ Use this when you want to keep the **driver** agent focused on North Star + deci
 - A compact summary in `handback.md` (safe to paste into the driver context)
 - A local `sessions/` directory (for deeper inspection in pi if needed)
 
-## Usage (recommended)
+## Usage (recommended: simplest)
 
-Run an ad-hoc handoff via the repo script:
+If you want the simplest working sub-agent call (no model/tool flags), use the minimal profile in print mode:
 
 ```bash
-scripts/pi_handoff.sh --models gpt-5.2 --goal "Inventory signature parsing + where atoms are created" \
+pi-profile minimal -p \
+  @plan/research/adapter_parity/CONTEXT.md \
+  @lib/dspy/signature.ex \
+  "Goal: inventory signature parsing + where atoms are created. Return paths + line ranges and a short plan."
+```
+
+This prints the sub-agent’s response directly.
+
+## Usage (structured: repo handoff directory)
+
+If you want a **gitignored handoff directory** + `handback.md`, use the repo helper script:
+
+```bash
+scripts/pi_handoff.sh --models <model-id> --goal "Inventory signature parsing + where atoms are created" \
   --context lib/dspy/signature.ex \
   --context test/signature_test.exs
 ```
 
-This prints a single path like:
+It prints the path to the generated:
 
 ```text
-plan/research/pi_handoffs/20260210_235959_inventory-signature-parsing/handback.md
+plan/research/pi_handoffs/<timestamp>_<slug>/handback.md
 ```
 
-Open that file and use it as the “handoff result”.
-
-## Tooling defaults (safety)
-
-- By default, `scripts/pi_handoff.sh` uses `--tools read,bash` (investigation-only).
-- If you explicitly want the sub-agent to write notes/artifacts, override tools:
-
-```bash
-scripts/pi_handoff.sh --models gpt-5.2 --tools read,bash,write --goal "Draft a patch plan" --context plan/STATUS.md
-```
+Notes:
+- The repo helper is stricter (it currently requires `--models` and may trigger provider credential requirements).
+- If you want read-only runs, set `PI_TOOLS=read,bash` in the environment; otherwise rely on defaults.
 
 ## Output contract
 
