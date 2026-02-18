@@ -2,7 +2,7 @@
 
 ## MODIFIED Requirements
 
-### Requirement: Active adapter controls output-format contract and request message framing
+### Requirement: Active adapter controls signature request-message formatting and parsing
 The system SHALL allow the active adapter (global or per-predictor override) to control both:
 - the output-format contract (markers vs JSON-only vs legacy), and
 - the request message payload shape (`messages: [...]`).
@@ -21,7 +21,7 @@ The system SHALL allow the active adapter (global or per-predictor override) to 
 - **WHEN** the active adapter is `Dspy.Signature.Adapters.Default`
 - **THEN** the output-format contract and prompt/message framing SHALL remain as it was before introducing ChatAdapter.
 
-### Requirement: Predictor-local override takes precedence
+### Requirement: Predictor can override the global adapter
 The system SHALL ensure predictor-local adapter overrides take precedence over global configuration for both formatting and parsing.
 
 #### Scenario: Predictor-local adapter override wins

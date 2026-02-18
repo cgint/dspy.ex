@@ -151,4 +151,63 @@ defmodule Dspy.AdapterSelectionTest do
     assert prompt =~ "Follow this exact format"
     assert prompt =~ "Answer:"
   end
+
+  test "global ChatAdapter uses marker-based instructions and multi-message request framing" do
+    lm = %CapturingLM{pid: self(), content: "[[ ## answer ## ]]\nhi\n"}
+
+    Dspy.configure(lm: lm, adapter: Dspy.Signature.Adapters.ChatAdapter)
+
+    predictor = Dspy.Predict.new(SimpleSig)
+    assert {:ok, _pred} = Dspy.Module.forward(predictor, %{question: "q"})
+
+    assert_receive {:lm_request, request}, 1_000
+
+    assert is_list(request.messages)
+
+    roles = Enum.map(request.messages, & &1.role)
+    assert "system" in roles
+    assert "user" in roles
+
+    system_msg = Enum.find(request.messages, &(&1.role == "system"))
+    assert is_binary(system_msg.content)
+
+    assert system_msg.content =~ "[[ ## answer ## ]]"
+  end
+
+  test "predictor override takes precedence over global ChatAdapter" do
+    lm = %CapturingLM{pid: self(), content: "Answer: hi\n"}
+
+    Dspy.configure(lm: lm, adapter: Dspy.Signature.Adapters.ChatAdapter)
+
+    predictor = Dspy.Predict.new(SimpleSig, adapter: Dspy.Signature.Adapters.Default)
+    assert {:ok, _pred} = Dspy.Module.forward(predictor, %{question: "q"})
+
+    assert_receive {:lm_request, request}, 1_000
+
+    # Default adapter emits a single user message and label-format instructions.
+    assert is_list(request.messages)
+    assert Enum.map(request.messages, & &1.role) == ["user"]
+
+    prompt = get_in(request, [:messages, Access.at(0), :content])
+    assert prompt =~ "Follow this exact format"
+    refute prompt =~ "[[ ##"
+  end
+
+  test "predictor override can opt into ChatAdapter" do
+    lm = %CapturingLM{pid: self(), content: "[[ ## answer ## ]]\nhi\n"}
+
+    Dspy.configure(lm: lm, adapter: Dspy.Signature.Adapters.Default)
+
+    predictor = Dspy.Predict.new(SimpleSig, adapter: Dspy.Signature.Adapters.ChatAdapter)
+    assert {:ok, _pred} = Dspy.Module.forward(predictor, %{question: "q"})
+
+    assert_receive {:lm_request, request}, 1_000
+
+    roles = Enum.map(request.messages, & &1.role)
+    assert "system" in roles
+    assert "user" in roles
+
+    system_msg = Enum.find(request.messages, &(&1.role == "system"))
+    assert system_msg.content =~ "[[ ## answer ## ]]"
+  end
 end

@@ -28,12 +28,12 @@ The system SHALL use the active adapter to generate the output-format instructio
 - **AND** it SHALL NOT include the label-based format section
 
 ### Requirement: Predictor can override the global adapter
-The system SHALL allow a predictor (or module invocation) to override the global adapter configuration.
+The system SHALL ensure predictor-local adapter overrides take precedence over global configuration for both formatting and parsing.
 
-#### Scenario: Predictor-level override takes precedence
-- **WHEN** the global adapter is configured to `AdapterA`
-- **AND WHEN** a predictor is constructed/configured with `adapter: AdapterB`
-- **THEN** that predictor execution SHALL use `AdapterB` for output parsing
+#### Scenario: Predictor-local adapter override wins
+- **WHEN** a global adapter is configured
+- **AND** a predictor-local adapter override is provided
+- **THEN** the predictor-local adapter MUST be used for both formatting and parsing.
 
 ### Requirement: Default adapter preserves existing parsing semantics
 The built-in default adapter SHALL preserve existing behavior for both typed and untyped signatures.
@@ -63,24 +63,23 @@ The system SHALL provide a built-in adapter that parses outputs exclusively from
 - **THEN** the parser SHALL return a tagged decode error (or missing required outputs) rather than attempting label parsing
 
 ### Requirement: Active adapter controls signature request-message formatting and parsing
-The system SHALL use the active signature adapter for both request-message formatting and completion parsing for signature-aware prediction modules.
+The system SHALL allow the active adapter (global or per-predictor override) to control both:
+- the output-format contract (markers vs JSON-only vs legacy), and
+- the request message payload shape (`messages: [...]`).
 
-#### Scenario: Default adapter owns message formatting with label-style output contract
-- **WHEN** active adapter is `Dspy.Signature.Adapters.Default`
-- **AND** a predictor is configured with examples and inputs
-- **THEN** the request payload passed to the LM SHALL reflect the default adapter’s message-formatting output
-- **AND** it SHALL include prompt-format sections currently defined by signature formatting behavior (instructions, output format hints, field examples, and demo block) in the same semantic structure as before.
+#### Scenario: ChatAdapter controls marker-based instructions and message framing
+- **WHEN** the active adapter is `Dspy.Signature.Adapters.ChatAdapter`
+- **THEN** generated instructions SHALL use marker-based field sections (`[[ ## field ## ]]`)
+- **AND** the request payload SHALL be message-oriented with at least `system` + `user` messages.
 
-#### Scenario: JSON-only adapter controls message formatting while preserving override precedence
-- **WHEN** global adapter is `Dspy.Signature.Adapters.Default`
-- **AND** predictor-local adapter is `Dspy.Signature.Adapters.JSONAdapter`
-- **THEN** JSON-only formatting behavior SHALL be used for the request payload (i.e. message-format output and parsing semantics are both sourced from the predictor-local adapter)
-- **AND** predictor-local adapter selection SHALL continue to take precedence.
-- **AND** JSON-only output parsing shall remain strict to top-level JSON objects.
+#### Scenario: JSON-only adapter enforces strict JSON semantics
+- **WHEN** the active adapter is the built-in JSON adapter
+- **THEN** generated guidance SHALL require a single top-level JSON object response
+- **AND** it MUST NOT include marker-based guidance (e.g. it MUST NOT contain the substring `[[ ##`).
 
-#### Scenario: Predictors without adapter override continue to use global adapter for message formatting
-- **WHEN** global adapter is configured and no predictor-level override is provided
-- **THEN** predictor execution SHALL use the global adapter for request-message formatting and parsing semantics.
+#### Scenario: Default adapter remains unchanged
+- **WHEN** the active adapter is `Dspy.Signature.Adapters.Default`
+- **THEN** the output-format contract and prompt/message framing SHALL remain as it was before introducing ChatAdapter.
 
 ### Requirement: Demo formatting changes are adapter-owned without changing behavior
 For existing built-in adapters, message formatting MUST remain backward-compatible for demos and input placeholders.

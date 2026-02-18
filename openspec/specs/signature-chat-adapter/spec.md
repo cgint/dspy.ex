@@ -1,7 +1,8 @@
-# ChatAdapter-style signature adapter behavior
+# signature-chat-adapter Specification
 
-## ADDED Requirements
-
+## Purpose
+TBD - created by archiving change signature-chat-adapter. Update Purpose after archive.
+## Requirements
 ### Requirement: ChatAdapter SHALL format prompts using marker-based sections
 The system SHALL support an opt-in signature adapter (`Dspy.Signature.Adapters.ChatAdapter`) that emits field-delimited sections using the `[[ ## field_name ## ]]` marker syntax.
 
@@ -30,7 +31,7 @@ ChatAdapter parsing SHALL extract each required output field by marker name.
 
 #### Scenario: Duplicate markers for an output field
 - **WHEN** completion text contains the same output marker more than once
-- **THEN** the parser SHALL use the content from the last occurrence.
+- **THEN** the parser SHALL use the content from the first occurrence.
 
 #### Scenario: Unknown markers are ignored
 - **WHEN** completion text contains markers for fields not present in the signature
@@ -55,3 +56,4 @@ ChatAdapter SHALL use strict JSON object parsing as a fallback path **only when 
 #### Scenario: Marker parse fails and JSON decoding fails
 - **WHEN** both marker parsing and JSON parsing fail
 - **THEN** the parser SHALL return a tagged parse/decode error rather than silently succeeding with partial results.
+

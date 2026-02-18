@@ -54,7 +54,7 @@ defmodule Dspy.Signature.AdapterPipeline do
     adapter = active_adapter(adapter: Keyword.get(opts, :adapter))
 
     request =
-      if function_exported?(adapter, :format_request, 4) do
+      if Code.ensure_loaded?(adapter) and function_exported?(adapter, :format_request, 4) do
         adapter.format_request(signature, inputs, demos, opts)
       else
         prompt = legacy_prompt(signature, inputs, demos, adapter, opts)
