@@ -64,9 +64,20 @@ defmodule Dspy.Predict do
 
   @impl true
   def forward(%__MODULE__{} = predict, inputs) do
+    adapter = Dspy.Signature.AdapterPipeline.active_adapter(adapter: predict.adapter)
+
     with :ok <- Dspy.Signature.validate_inputs(predict.signature, inputs),
-         {:ok, prompt} <- build_prompt(predict, inputs),
-         {:ok, outputs} <- generate_and_parse_with_output_retries(predict, prompt, inputs) do
+         {:ok, request0} <-
+           Dspy.Signature.AdapterPipeline.format_request(
+             predict.signature,
+             inputs,
+             predict.examples,
+             adapter: adapter
+           ),
+         {:ok, request} <- merge_attachments(predict.signature, inputs, request0),
+         {:ok, base_prompt} <- Dspy.Signature.AdapterPipeline.primary_prompt_text(request),
+         {:ok, outputs} <-
+           generate_and_parse_with_output_retries(predict, adapter, request, base_prompt) do
       prediction = Dspy.Prediction.new(outputs)
       {:ok, prediction}
     else
@@ -74,28 +85,35 @@ defmodule Dspy.Predict do
     end
   end
 
-  defp generate_and_parse_with_output_retries(%__MODULE__{} = predict, base_prompt, inputs)
-       when is_binary(base_prompt) do
+  defp generate_and_parse_with_output_retries(
+         %__MODULE__{} = predict,
+         adapter,
+         base_request,
+         base_prompt
+       )
+       when is_map(base_request) and is_binary(base_prompt) do
     do_generate_and_parse_with_output_retries(
       predict,
+      adapter,
+      base_request,
+      base_request,
       base_prompt,
-      base_prompt,
-      inputs,
       predict.max_output_retries
     )
   end
 
   defp do_generate_and_parse_with_output_retries(
          %__MODULE__{} = predict,
+         adapter,
+         base_request,
+         request,
          base_prompt,
-         prompt,
-         inputs,
          output_retries_left
        )
-       when is_binary(base_prompt) and is_binary(prompt) and is_integer(output_retries_left) do
-    with {:ok, response_text} <-
-           generate_with_retries(prompt, predict.signature, inputs, predict.max_retries) do
-      case parse_response(predict, response_text) do
+       when is_map(base_request) and is_map(request) and is_binary(base_prompt) and
+              is_integer(output_retries_left) do
+    with {:ok, response_text} <- generate_with_retries(request, predict.max_retries) do
+      case parse_response(predict, adapter, response_text) do
         {:ok, outputs} ->
           {:ok, outputs}
 
@@ -104,13 +122,20 @@ defmodule Dspy.Predict do
                output_retryable_reason?(reason) do
             retry_prompt = build_output_retry_prompt(base_prompt, predict.signature, reason)
 
-            do_generate_and_parse_with_output_retries(
-              predict,
-              base_prompt,
-              retry_prompt,
-              inputs,
-              output_retries_left - 1
-            )
+            with {:ok, retry_request} <-
+                   Dspy.Signature.AdapterPipeline.replace_primary_prompt_text(
+                     base_request,
+                     retry_prompt
+                   ) do
+              do_generate_and_parse_with_output_retries(
+                predict,
+                adapter,
+                base_request,
+                retry_request,
+                base_prompt,
+                output_retries_left - 1
+              )
+            end
           else
             {:error, reason}
           end
@@ -201,48 +226,20 @@ defmodule Dspy.Predict do
     end
   end
 
-  defp build_prompt(predict, inputs) do
-    adapter = output_adapter(predict)
-
-    prompt_template =
-      Dspy.Signature.to_prompt(predict.signature, predict.examples, adapter: adapter)
-
-    filled_prompt =
-      Enum.reduce(predict.signature.input_fields, prompt_template, fn %{name: name}, acc ->
-        case fetch_input(inputs, name) do
-          :error ->
-            acc
-
-          {:ok, %Dspy.Attachments{}} ->
-            placeholder = "[input]"
-            field_name = String.capitalize(Atom.to_string(name))
-            String.replace(acc, "#{field_name}: #{placeholder}", "#{field_name}: <attachments>")
-
-          {:ok, value} ->
-            placeholder = "[input]"
-            field_name = String.capitalize(Atom.to_string(name))
-            formatted = format_input_value(value)
-            String.replace(acc, "#{field_name}: #{placeholder}", "#{field_name}: #{formatted}")
-        end
-      end)
-
-    {:ok, filled_prompt}
+  defp merge_attachments(%Dspy.Signature{} = signature, inputs, request)
+       when is_map(inputs) and is_map(request) do
+    attachments = extract_attachments(signature, inputs)
+    Dspy.Signature.AdapterPipeline.merge_attachments(request, attachments)
   end
 
-  defp format_input_value(value) when is_binary(value), do: value
-
-  defp format_input_value(value) do
-    inspect(value, pretty: false, limit: 100, sort_maps: true)
-  end
-
-  defp generate_with_retries(prompt, signature, inputs, retries) do
-    case generate_once(prompt, signature, inputs) do
+  defp generate_with_retries(request, retries) when is_map(request) and is_integer(retries) do
+    case generate_once(request) do
       {:ok, response} ->
         {:ok, response}
 
       {:error, _reason} when retries > 0 ->
         Process.sleep(retry_sleep_ms())
-        generate_with_retries(prompt, signature, inputs, retries - 1)
+        generate_with_retries(request, retries - 1)
 
       {:error, reason} ->
         {:error, reason}
@@ -253,25 +250,7 @@ defmodule Dspy.Predict do
     Application.get_env(:dspy, :predict_retry_sleep_ms, 1000)
   end
 
-  defp generate_once(prompt, signature, inputs) do
-    attachments = extract_attachments(signature, inputs)
-
-    content =
-      if attachments == [] do
-        prompt
-      else
-        [%{"type" => "text", "text" => prompt}] ++ attachments
-      end
-
-    request = %{
-      messages: [
-        %{
-          role: "user",
-          content: content
-        }
-      ]
-    }
-
+  defp generate_once(request) when is_map(request) do
     with {:ok, response} <- Dspy.LM.generate(request),
          {:ok, text} <- Dspy.LM.text_from_response(response) do
       {:ok, text}
@@ -287,17 +266,12 @@ defmodule Dspy.Predict do
     end)
   end
 
-  defp parse_response(%__MODULE__{} = predict, response_text) do
-    adapter = output_adapter(predict)
-
+  defp parse_response(%__MODULE__{} = predict, adapter, response_text)
+       when is_atom(adapter) and is_binary(response_text) do
     case adapter.parse_outputs(predict.signature, response_text, []) do
       {:error, reason} -> {:error, reason}
       outputs when is_map(outputs) -> {:ok, outputs}
       other -> {:error, {:parse_failed, other}}
     end
-  end
-
-  defp output_adapter(%__MODULE__{} = predict) do
-    predict.adapter || Dspy.Settings.get(:adapter) || Dspy.Signature.Adapters.Default
   end
 end

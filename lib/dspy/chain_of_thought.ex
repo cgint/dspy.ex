@@ -86,9 +86,27 @@ defmodule Dspy.ChainOfThought do
 
   @impl true
   def forward(%__MODULE__{} = cot, inputs) do
-    with :ok <- Dspy.Signature.validate_inputs(cot.signature, inputs),
-         {:ok, prompt} <- build_prompt(cot, inputs),
-         {:ok, outputs} <- generate_and_parse_with_output_retries(cot, prompt, inputs) do
+    signature_for_call = add_cot_instructions(cot.signature)
+    adapter = Dspy.Signature.AdapterPipeline.active_adapter(adapter: cot.adapter)
+
+    with :ok <- Dspy.Signature.validate_inputs(signature_for_call, inputs),
+         {:ok, request0} <-
+           Dspy.Signature.AdapterPipeline.format_request(
+             signature_for_call,
+             inputs,
+             cot.examples,
+             adapter: adapter
+           ),
+         {:ok, request} <- merge_attachments(signature_for_call, inputs, request0),
+         {:ok, base_prompt} <- Dspy.Signature.AdapterPipeline.primary_prompt_text(request),
+         {:ok, outputs} <-
+           generate_and_parse_with_output_retries(
+             cot,
+             adapter,
+             signature_for_call,
+             request,
+             base_prompt
+           ) do
       prediction = Dspy.Prediction.new(outputs)
       {:ok, prediction}
     else
@@ -96,43 +114,61 @@ defmodule Dspy.ChainOfThought do
     end
   end
 
-  defp generate_and_parse_with_output_retries(%__MODULE__{} = cot, base_prompt, inputs)
-       when is_binary(base_prompt) do
+  defp generate_and_parse_with_output_retries(
+         %__MODULE__{} = cot,
+         adapter,
+         %Dspy.Signature{} = signature,
+         base_request,
+         base_prompt
+       )
+       when is_map(base_request) and is_binary(base_prompt) do
     do_generate_and_parse_with_output_retries(
       cot,
+      adapter,
+      signature,
+      base_request,
+      base_request,
       base_prompt,
-      base_prompt,
-      inputs,
       cot.max_output_retries
     )
   end
 
   defp do_generate_and_parse_with_output_retries(
          %__MODULE__{} = cot,
+         adapter,
+         %Dspy.Signature{} = signature,
+         base_request,
+         request,
          base_prompt,
-         prompt,
-         inputs,
          output_retries_left
        )
-       when is_binary(base_prompt) and is_binary(prompt) and is_integer(output_retries_left) do
-    with {:ok, response_text} <-
-           generate_with_retries(prompt, cot.signature, inputs, cot.max_retries) do
-      case parse_response(cot, response_text) do
+       when is_map(base_request) and is_map(request) and is_binary(base_prompt) and
+              is_integer(output_retries_left) do
+    with {:ok, response_text} <- generate_with_retries(request, cot.max_retries) do
+      case parse_response(cot, adapter, signature, response_text) do
         {:ok, outputs} ->
           {:ok, outputs}
 
         {:error, reason} ->
           if output_retries_left > 0 and typed_output_retry_enabled?(cot) and
                output_retryable_reason?(reason) do
-            retry_prompt = build_output_retry_prompt(base_prompt, cot.signature, reason)
+            retry_prompt = build_output_retry_prompt(base_prompt, signature, reason)
 
-            do_generate_and_parse_with_output_retries(
-              cot,
-              base_prompt,
-              retry_prompt,
-              inputs,
-              output_retries_left - 1
-            )
+            with {:ok, retry_request} <-
+                   Dspy.Signature.AdapterPipeline.replace_primary_prompt_text(
+                     base_request,
+                     retry_prompt
+                   ) do
+              do_generate_and_parse_with_output_retries(
+                cot,
+                adapter,
+                signature,
+                base_request,
+                retry_request,
+                base_prompt,
+                output_retries_left - 1
+              )
+            end
           else
             {:error, reason}
           end
@@ -238,51 +274,6 @@ defmodule Dspy.ChainOfThought do
     %{signature | output_fields: new_output_fields}
   end
 
-  defp build_prompt(%__MODULE__{} = cot, inputs) do
-    # Add chain-of-thought instructions
-    enhanced_signature = add_cot_instructions(cot.signature)
-
-    adapter = output_adapter(cot)
-    prompt_template = Dspy.Signature.to_prompt(enhanced_signature, cot.examples, adapter: adapter)
-
-    filled_prompt =
-      Enum.reduce(enhanced_signature.input_fields, prompt_template, fn %{name: name}, acc ->
-        case fetch_input(inputs, name) do
-          :error ->
-            acc
-
-          {:ok, %Dspy.Attachments{}} ->
-            placeholder = "[input]"
-            field_name = String.capitalize(Atom.to_string(name))
-
-            String.replace(
-              acc,
-              "#{field_name}: #{placeholder}",
-              "#{field_name}: <attachments>"
-            )
-
-          {:ok, value} ->
-            placeholder = "[input]"
-            field_name = String.capitalize(Atom.to_string(name))
-            formatted = format_input_value(value)
-
-            String.replace(
-              acc,
-              "#{field_name}: #{placeholder}",
-              "#{field_name}: #{formatted}"
-            )
-        end
-      end)
-
-    {:ok, filled_prompt}
-  end
-
-  defp format_input_value(value) when is_binary(value), do: value
-
-  defp format_input_value(value) do
-    inspect(value, pretty: false, limit: 100, sort_maps: true)
-  end
-
   defp add_cot_instructions(signature) do
     cot_instructions = """
     Think step by step and show your reasoning before providing the final answer.
@@ -299,14 +290,20 @@ defmodule Dspy.ChainOfThought do
     %{signature | instructions: combined_instructions}
   end
 
-  defp generate_with_retries(prompt, signature, inputs, retries) do
-    case generate_once(prompt, signature, inputs) do
+  defp merge_attachments(%Dspy.Signature{} = signature, inputs, request)
+       when is_map(inputs) and is_map(request) do
+    attachments = extract_attachments(signature, inputs)
+    Dspy.Signature.AdapterPipeline.merge_attachments(request, attachments)
+  end
+
+  defp generate_with_retries(request, retries) when is_map(request) and is_integer(retries) do
+    case generate_once(request) do
       {:ok, response_text} ->
         {:ok, response_text}
 
       {:error, _reason} when retries > 0 ->
         Process.sleep(retry_sleep_ms())
-        generate_with_retries(prompt, signature, inputs, retries - 1)
+        generate_with_retries(request, retries - 1)
 
       {:error, reason} ->
         {:error, reason}
@@ -317,25 +314,7 @@ defmodule Dspy.ChainOfThought do
     Application.get_env(:dspy, :predict_retry_sleep_ms, 1000)
   end
 
-  defp generate_once(prompt, signature, inputs) do
-    attachments = extract_attachments(signature, inputs)
-
-    content =
-      if attachments == [] do
-        prompt
-      else
-        [%{"type" => "text", "text" => prompt}] ++ attachments
-      end
-
-    request = %{
-      messages: [
-        %{
-          role: "user",
-          content: content
-        }
-      ]
-    }
-
+  defp generate_once(request) when is_map(request) do
     with {:ok, response} <- Dspy.LM.generate(request),
          {:ok, text} <- Dspy.LM.text_from_response(response) do
       {:ok, text}
@@ -351,17 +330,12 @@ defmodule Dspy.ChainOfThought do
     end)
   end
 
-  defp parse_response(%__MODULE__{} = cot, response_text) do
-    adapter = output_adapter(cot)
-
-    case adapter.parse_outputs(cot.signature, response_text, []) do
+  defp parse_response(%__MODULE__{} = _cot, adapter, %Dspy.Signature{} = signature, response_text)
+       when is_atom(adapter) and is_binary(response_text) do
+    case adapter.parse_outputs(signature, response_text, []) do
       {:error, _reason} = error -> error
       outputs when is_map(outputs) -> {:ok, outputs}
       other -> {:error, {:parse_failed, other}}
     end
-  end
-
-  defp output_adapter(%__MODULE__{} = cot) do
-    cot.adapter || Dspy.Settings.get(:adapter) || Dspy.Signature.Adapters.Default
   end
 end

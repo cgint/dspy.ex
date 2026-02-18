@@ -1,4 +1,4 @@
-## MODIFIED Requirements
+## ADDED Requirements
 
 ### Requirement: Active adapter controls signature request-message formatting and parsing
 The system SHALL use the active signature adapter for both request-message formatting and completion parsing for signature-aware prediction modules.
