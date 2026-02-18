@@ -31,6 +31,7 @@ defmodule Dspy.Signature.Adapters.JSONAdapter do
   @impl true
   def parse_outputs(%Dspy.Signature{} = signature, text, _opts \\ []) when is_binary(text) do
     with {:ok, decoded_map} <- Dspy.TypedOutputs.parse_json_object(text),
+         {:ok, decoded_map} <- enforce_output_keyset(signature, decoded_map),
          {:ok, outputs} <- map_json_to_outputs(signature, decoded_map),
          :ok <- validate_output_structure(outputs, signature) do
       outputs
@@ -46,51 +47,52 @@ defmodule Dspy.Signature.Adapters.JSONAdapter do
     end
   end
 
+  # JSONAdapter keyset contract: require all declared output keys; ignore extras.
+  defp enforce_output_keyset(%Dspy.Signature{} = signature, decoded_map)
+       when is_map(decoded_map) do
+    expected_fields = Enum.map(signature.output_fields, & &1.name)
+    expected_keys = Enum.map(expected_fields, &Atom.to_string/1)
+
+    missing =
+      expected_fields
+      |> Enum.reject(fn field -> Map.has_key?(decoded_map, Atom.to_string(field)) end)
+
+    case missing do
+      [] ->
+        {:ok, Map.take(decoded_map, expected_keys)}
+
+      missing ->
+        {:error, {:missing_required_outputs, missing}}
+    end
+  end
+
   defp map_json_to_outputs(signature, decoded_map) do
     signature.output_fields
     |> Enum.reduce_while({:ok, %{}}, fn field, {:ok, acc} ->
       key = Atom.to_string(field.name)
+      value = Map.fetch!(decoded_map, key)
 
-      if Map.has_key?(decoded_map, key) do
-        value = Map.fetch!(decoded_map, key)
+      case Map.get(field, :schema) do
+        nil ->
+          case validate_field_value(value, field) do
+            {:ok, validated_value} ->
+              {:cont, {:ok, Map.put(acc, field.name, validated_value)}}
 
-        case Map.get(field, :schema) do
-          nil ->
-            case validate_field_value(value, field) do
-              {:ok, validated_value} ->
-                {:cont, {:ok, Map.put(acc, field.name, validated_value)}}
+            {:error, reason} ->
+              {:halt, {:error, {:invalid_output_value, field.name, reason}}}
+          end
 
-              {:error, reason} ->
-                if field.required do
-                  {:halt, {:error, {:invalid_output_value, field.name, reason}}}
-                else
-                  {:cont, {:ok, acc}}
-                end
-            end
+        schema_spec ->
+          case Dspy.TypedOutputs.validate_term(value, schema_spec) do
+            {:ok, typed_value} ->
+              {:cont, {:ok, Map.put(acc, field.name, typed_value)}}
 
-          schema_spec ->
-            case Dspy.TypedOutputs.validate_term(value, schema_spec) do
-              {:ok, typed_value} ->
-                {:cont, {:ok, Map.put(acc, field.name, typed_value)}}
+            {:error, {:output_validation_failed, errors}} ->
+              {:halt, {:error, {:output_validation_failed, %{field: field.name, errors: errors}}}}
 
-              {:error, {:output_validation_failed, errors}} ->
-                if field.required do
-                  {:halt,
-                   {:error, {:output_validation_failed, %{field: field.name, errors: errors}}}}
-                else
-                  {:cont, {:ok, acc}}
-                end
-
-              {:error, reason} ->
-                if field.required do
-                  {:halt, {:error, {:invalid_output_value, field.name, reason}}}
-                else
-                  {:cont, {:ok, acc}}
-                end
-            end
-        end
-      else
-        {:cont, {:ok, acc}}
+            {:error, reason} ->
+              {:halt, {:error, {:invalid_output_value, field.name, reason}}}
+          end
       end
     end)
     |> case do
@@ -257,12 +259,11 @@ defmodule Dspy.Signature.Adapters.JSONAdapter do
   end
 
   defp validate_output_structure(outputs, signature) do
-    required_fields =
+    expected_fields =
       signature.output_fields
-      |> Enum.filter(& &1.required)
       |> Enum.map(& &1.name)
 
-    missing_fields = required_fields -- Map.keys(outputs)
+    missing_fields = expected_fields -- Map.keys(outputs)
 
     case missing_fields do
       [] -> :ok

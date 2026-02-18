@@ -1,7 +1,8 @@
-# Robust JSONAdapter parsing and typed-cast contract
+# signature-jsonadapter-parity Specification
 
-## ADDED Requirements
-
+## Purpose
+TBD - created by archiving change signature-json-adapter-parity. Update Purpose after archive.
+## Requirements
 ### Requirement: JSONAdapter repairs common malformed JSON response text before decode
 The JSONAdapter SHALL attempt a deterministic repair pass on non-empty completion text before JSON decoding when direct decoding fails.
 
@@ -14,8 +15,8 @@ The JSONAdapter SHALL attempt a deterministic repair pass on non-empty completio
 - **WHEN** the completion includes minor defects commonly produced by LMs (e.g. trailing commas or single-quoted strings)
 - **THEN** the parser SHALL attempt a repair pass and continue to validation instead of failing immediately with a JSON decode error
 
-### Requirement: JSONAdapter enforces strict output keyset matching
-When parsing in JSONAdapter mode, the resulting JSON object SHALL satisfy the signature output contract exactly.
+### Requirement: JSONAdapter enforces output keyset matching
+When parsing in JSONAdapter mode, the resulting JSON object SHALL contain all declared signature output keys. Extra keys are ignored.
 
 **Key normalization (deterministic):**
 - Decoded JSON object keys are strings.
@@ -32,14 +33,13 @@ When parsing in JSONAdapter mode, the resulting JSON object SHALL satisfy the si
 - **AND** required output fields SHALL be accepted when present and correctly validated
 
 #### Scenario: Missing output keys fail with a typed error
-- **WHEN** one or more required output keys are missing from the repaired JSON object
-- **THEN** parsing SHALL return `{:error, {:invalid_outputs, {:missing_output_keys, missing_keys}}`
-- **AND** `missing_keys` SHALL list missing output field atoms (the signature output field names that were not found after key normalization)
+- **WHEN** one or more declared signature output keys are missing from the repaired JSON object
+- **THEN** parsing SHALL return `{:error, {:missing_required_outputs, missing_keys}}`
+- **AND** `missing_keys` SHALL list missing output field atoms
 
-#### Scenario: Extra output keys fail with a typed error
+#### Scenario: Extra output keys are ignored
 - **WHEN** the repaired JSON object contains keys not declared by the signature
-- **THEN** parsing SHALL return `{:error, {:invalid_outputs, {:extra_output_keys, extra_keys}}`
-- **AND** `extra_keys` SHALL list the decoded JSON keys (strings) that did not match any declared output field after key normalization
+- **THEN** parsing SHALL ignore them (filter to expected keys) and continue validation
 
 ### Requirement: JSONAdapter delegates schema-attached output fields to typed validation/casting
 The JSONAdapter SHALL use schema-aware validation for any output field declared with `schema:` and SHALL return the validated/cast result.
@@ -68,3 +68,4 @@ The parser SHALL use tagged errors so callers can distinguish malformed JSON, ke
 #### Scenario: Top-level JSON arrays are rejected
 - **WHEN** the decoded JSON value is a top-level array
 - **THEN** parsing SHALL return `{:error, {:output_decode_failed, :top_level_array_not_allowed}}`
+

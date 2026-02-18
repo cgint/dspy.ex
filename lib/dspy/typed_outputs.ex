@@ -97,10 +97,18 @@ defmodule Dspy.TypedOutputs do
   """
   @spec parse_json_object(String.t()) :: {:ok, map()} | {:error, {:output_decode_failed, any()}}
   def parse_json_object(completion_text) when is_binary(completion_text) do
-    with {:ok, json_string} <- extract_json_object(completion_text),
-         {:ok, decoded} <- decode_json(json_string),
-         true <- is_map(decoded) do
-      {:ok, decoded}
+    with {:ok, json_string, _kind} <- extract_json_object_or_array(completion_text),
+         {:ok, decoded} <- decode_json_with_repair(json_string) do
+      cond do
+        is_map(decoded) ->
+          {:ok, decoded}
+
+        is_list(decoded) ->
+          {:error, {:output_decode_failed, :top_level_array_not_allowed}}
+
+        true ->
+          {:error, {:output_decode_failed, :not_a_json_object}}
+      end
     else
       {:error, :no_json_object_found} ->
         {:error, {:output_decode_failed, :no_json_object_found}}
@@ -108,11 +116,116 @@ defmodule Dspy.TypedOutputs do
       {:error, {:invalid_json, reason}} ->
         {:error, {:output_decode_failed, reason}}
 
-      false ->
-        {:error, {:output_decode_failed, :not_a_json_object}}
-
       other ->
         {:error, {:output_decode_failed, other}}
+    end
+  end
+
+  # --- JSON extraction/repair (deterministic, no deps) ---
+
+  defp decode_json_with_repair(json_string) when is_binary(json_string) do
+    case decode_json(json_string) do
+      {:ok, decoded} ->
+        {:ok, decoded}
+
+      {:error, {:invalid_json, _reason}} ->
+        json_string
+        |> repair_json_string()
+        |> decode_json()
+    end
+  end
+
+  defp repair_json_string(json_string) when is_binary(json_string) do
+    json_string
+    |> String.replace(~r/,\s*([}\]])/, "\\1")
+    |> String.replace(~r/'([^']*)'/, "\"\\1\"")
+  end
+
+  defp extract_json_object_or_array(text) when is_binary(text) do
+    base_text =
+      case extract_first_fenced_block(text) do
+        {:ok, fenced} -> fenced
+        :nomatch -> text
+      end
+
+    trimmed = String.trim(base_text)
+
+    cond do
+      String.starts_with?(trimmed, "{") and String.ends_with?(trimmed, "}") ->
+        {:ok, trimmed, :object}
+
+      String.starts_with?(trimmed, "[") and String.ends_with?(trimmed, "]") ->
+        {:ok, trimmed, :array}
+
+      true ->
+        obj = span_indices(base_text, "{", "}")
+        arr = span_indices(base_text, "[", "]")
+
+        chosen =
+          case {obj, arr} do
+            {nil, nil} ->
+              nil
+
+            {nil, {a_start, a_end}} ->
+              {:array, a_start, a_end}
+
+            {{o_start, o_end}, nil} ->
+              {:object, o_start, o_end}
+
+            {{o_start, o_end}, {a_start, a_end}} ->
+              if a_start < o_start do
+                {:array, a_start, a_end}
+              else
+                {:object, o_start, o_end}
+              end
+          end
+
+        case chosen do
+          nil ->
+            {:error, :no_json_object_found}
+
+          {kind, start_idx, end_idx} when start_idx < end_idx ->
+            snippet =
+              base_text |> :binary.part(start_idx, end_idx - start_idx + 1) |> String.trim()
+
+            {:ok, snippet, kind}
+
+          _ ->
+            {:error, :no_json_object_found}
+        end
+    end
+  end
+
+  defp span_indices(text, open_char, close_char) do
+    start_idx =
+      case :binary.match(text, open_char) do
+        {idx, _len} -> idx
+        :nomatch -> nil
+      end
+
+    end_idx =
+      case :binary.matches(text, close_char) do
+        [] ->
+          nil
+
+        matches ->
+          {idx, _len} = List.last(matches)
+          idx
+      end
+
+    if is_nil(start_idx) or is_nil(end_idx), do: nil, else: {start_idx, end_idx}
+  end
+
+  defp extract_first_fenced_block(text) do
+    case Regex.run(~r/```json\s*(.*?)\s*```/s, text, capture: :all_but_first) do
+      [inner] ->
+        {:ok, inner}
+
+      _ ->
+        case Regex.run(~r/```\s*(.*?)\s*```/s, text, capture: :all_but_first) do
+          [inner] -> {:ok, inner}
+          _ -> :nomatch
+        end
     end
   end
 
