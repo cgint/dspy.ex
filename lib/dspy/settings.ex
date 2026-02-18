@@ -11,6 +11,7 @@ defmodule Dspy.Settings do
   defstruct [
     :lm,
     adapter: Dspy.Signature.Adapters.Default,
+    callbacks: [],
     max_tokens: nil,
     max_completion_tokens: nil,
     temperature: nil,
@@ -24,6 +25,7 @@ defmodule Dspy.Settings do
   @type t :: %__MODULE__{
           lm: Dspy.LM.t() | nil,
           adapter: module(),
+          callbacks: list(),
           max_tokens: pos_integer() | nil,
           max_completion_tokens: pos_integer() | nil,
           temperature: number() | nil,

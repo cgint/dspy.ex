@@ -213,19 +213,81 @@ defmodule Dspy do
   end
 
   @doc """
+  Run `fun` with signature-adapter callbacks enabled for this process.
+
+  This mirrors Python DSPy’s `with_callbacks(...)` usage, adapted to Elixir’s
+  process-local execution model.
+  """
+  @spec with_callbacks(list(), (-> any())) :: any()
+  def with_callbacks(callbacks, fun) when is_list(callbacks) and is_function(fun, 0) do
+    Dspy.Signature.Adapter.Callbacks.with_callbacks(callbacks, fun)
+  end
+
+  @doc """
+  Convenience wrapper around `forward/2` with per-call options.
+
+  Currently supported options:
+  - `:callbacks` — signature-adapter callbacks (`[{module, state}]`)
+  """
+  @spec forward(Dspy.Module.t(), Dspy.Module.inputs(), keyword()) ::
+          {:ok, Dspy.Module.outputs()} | {:error, term()}
+  def forward(program, inputs, opts) when is_list(opts) do
+    callbacks = Keyword.get(opts, :callbacks, [])
+
+    with_callbacks(callbacks, fn ->
+      forward(program, inputs)
+    end)
+  end
+
+  @doc """
   Alias for `forward/2`.
 
   This name is slightly closer to Python DSPy usage ("call the program with inputs").
+
+  If `inputs` is a keyword list and contains `:callbacks`, those callbacks are
+  applied for this call (and removed from the input map before validation).
   """
   @spec call(Dspy.Module.t(), Dspy.Module.inputs()) ::
           {:ok, Dspy.Module.outputs()} | {:error, term()}
+  def call(program, inputs) when is_list(inputs) do
+    if Keyword.keyword?(inputs) and Keyword.has_key?(inputs, :callbacks) do
+      callbacks = Keyword.get(inputs, :callbacks, [])
+      inputs = Keyword.delete(inputs, :callbacks)
+      call(program, inputs, callbacks: callbacks)
+    else
+      forward(program, inputs)
+    end
+  end
+
   def call(program, inputs), do: forward(program, inputs)
 
-  @doc """
-  Alias for `forward!/2`.
-  """
+  @doc "Like `call/2`, but accepts per-call options (e.g. callbacks)."
+  @spec call(Dspy.Module.t(), Dspy.Module.inputs(), keyword()) ::
+          {:ok, Dspy.Module.outputs()} | {:error, term()}
+  def call(program, inputs, opts) when is_list(opts), do: forward(program, inputs, opts)
+
+  @doc "Alias for `forward!/2`."
   @spec call!(Dspy.Module.t(), Dspy.Module.inputs()) :: Dspy.Module.outputs()
+  def call!(program, inputs) when is_list(inputs) do
+    if Keyword.keyword?(inputs) and Keyword.has_key?(inputs, :callbacks) do
+      callbacks = Keyword.get(inputs, :callbacks, [])
+      inputs = Keyword.delete(inputs, :callbacks)
+      call!(program, inputs, callbacks: callbacks)
+    else
+      forward!(program, inputs)
+    end
+  end
+
   def call!(program, inputs), do: forward!(program, inputs)
+
+  @doc "Like `call!/2`, but accepts per-call options (e.g. callbacks)."
+  @spec call!(Dspy.Module.t(), Dspy.Module.inputs(), keyword()) :: Dspy.Module.outputs()
+  def call!(program, inputs, opts) when is_list(opts) do
+    case call(program, inputs, opts) do
+      {:ok, prediction} -> prediction
+      {:error, reason} -> raise ArgumentError, "failed to call program: #{inspect(reason)}"
+    end
+  end
 
   @doc """
   Convenience constructor for `Dspy.Predict`.
