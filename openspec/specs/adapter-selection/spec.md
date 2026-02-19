@@ -82,3 +82,16 @@ For existing built-in adapters, message formatting MUST remain backward-compatib
 - **WHEN** a predictor is configured with examples and using the default adapter
 - **THEN** the request message SHALL include the same example block text semantics (`Example 1`, `Example 2`, input/output labels) expected by current regression tests.
 
+### Requirement: System provides a TwoStep adapter option
+The system SHALL provide a built-in TwoStep adapter that performs structured-output extraction using a second LM call.
+
+#### Scenario: User configures TwoStep adapter and extraction LM
+- **WHEN** the user configures `Dspy.configure(adapter: Dspy.Signature.Adapters.TwoStep)`
+- **AND WHEN** the user configures an extraction LM (e.g. `Dspy.configure(two_step_extraction_lm: extraction_lm)`)
+- **THEN** subsequent `Dspy.Predict` executions SHALL use the TwoStep adapter behavior (two-stage completion → extraction)
+
+#### Scenario: TwoStep adapter without extraction LM fails clearly
+- **WHEN** the user configures `Dspy.configure(adapter: Dspy.Signature.Adapters.TwoStep)`
+- **AND WHEN** the user does not configure an extraction LM
+- **THEN** subsequent predictor executions SHALL fail with a tagged error indicating that extraction LM configuration is missing
+
