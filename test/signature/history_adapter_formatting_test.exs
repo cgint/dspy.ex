@@ -157,4 +157,65 @@ defmodule Dspy.Signature.HistoryAdapterFormattingTest do
     {pos2, _} = :binary.match(final_user, "Example 2:")
     assert pos1 < pos2
   end
+
+  test "JSONAdapter rejects invalid history value before LM call" do
+    lm = %CapturingLM{pid: self(), content: ~s({"answer":"ok"})}
+    Dspy.configure(lm: lm, adapter: Dspy.Signature.Adapters.JSONAdapter)
+
+    predictor = Dspy.Predict.new(HistorySig)
+
+    assert {:error, {:invalid_history_value, _detail}} =
+             Dspy.Module.forward(predictor, %{question: "q", history: :bad})
+
+    refute_receive {:lm_request, _request}
+  end
+
+  test "ChatAdapter rejects invalid history element with failing index before LM call" do
+    lm = %CapturingLM{pid: self(), content: "[[ ## answer ## ]]\nok\n"}
+    Dspy.configure(lm: lm, adapter: Dspy.Signature.Adapters.ChatAdapter)
+
+    predictor = Dspy.Predict.new(HistorySig)
+
+    history = Dspy.History.new([%{question: "q1", answer: "a1"}, %{question: "q2"}])
+
+    assert {:error, {:invalid_history_element, %{index: 1}}} =
+             Dspy.Module.forward(predictor, %{question: "q", history: history})
+
+    refute_receive {:lm_request, _request}
+  end
+
+  test "history: nil behaves like omitted history for Default adapter" do
+    lm = %CapturingLM{pid: self(), content: "Answer: ok\n"}
+    Dspy.configure(lm: lm, adapter: Dspy.Signature.Adapters.Default)
+
+    predictor = Dspy.Predict.new(HistorySig)
+
+    assert {:ok, _pred} = Dspy.Module.forward(predictor, %{question: "q", history: nil})
+
+    assert_receive {:lm_request, request}, 1_000
+    assert length(request.messages) == 1
+
+    prompt = get_in(request, [:messages, Access.at(0), :content])
+    assert prompt =~ "Question: q"
+    refute prompt =~ "Conversation History"
+  end
+
+  test "empty history behaves like omitted history for ChatAdapter" do
+    lm = %CapturingLM{pid: self(), content: "[[ ## answer ## ]]\nok\n"}
+    Dspy.configure(lm: lm, adapter: Dspy.Signature.Adapters.ChatAdapter)
+
+    predictor = Dspy.Predict.new(HistorySig)
+
+    assert {:ok, _pred} =
+             Dspy.Module.forward(predictor, %{question: "q", history: Dspy.History.new([])})
+
+    assert_receive {:lm_request, request}, 1_000
+
+    assert Enum.map(request.messages, & &1.role) == ["system", "user"]
+
+    final_user = List.last(request.messages).content
+    assert final_user =~ "[[ ## question ## ]]"
+    assert final_user =~ "q"
+    refute final_user =~ "Conversation History"
+  end
 end
