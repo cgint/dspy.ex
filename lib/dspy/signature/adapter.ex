@@ -27,7 +27,7 @@ defmodule Dspy.Signature.Adapter do
   build prompt via `Dspy.Signature.to_prompt/3` and send it as a single user message.
   """
   @callback format_request(Dspy.Signature.t(), map(), [Dspy.Example.t()], keyword()) ::
-              Dspy.LM.request()
+              Dspy.LM.request() | {:error, term()}
 
   @callback parse_outputs(Dspy.Signature.t(), String.t(), keyword()) ::
               map() | {:error, term()}

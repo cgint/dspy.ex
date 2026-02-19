@@ -22,10 +22,24 @@ defmodule Dspy.Signature.Adapters.JSONAdapter do
   @impl true
   def format_request(%Dspy.Signature{} = signature, inputs, demos, opts \\ [])
       when is_map(inputs) and is_list(demos) do
-    prompt =
-      Dspy.Signature.AdapterPipeline.legacy_prompt(signature, inputs, demos, __MODULE__, opts)
+    with {:ok, %{inputs: filtered_inputs, messages: history_messages}} <-
+           Dspy.History.extract_messages(signature, inputs) do
+      filtered_signature = %{
+        signature
+        | input_fields: Enum.reject(signature.input_fields, &(&1.type == :history))
+      }
 
-    %{messages: [%{role: "user", content: prompt}]}
+      prompt =
+        Dspy.Signature.AdapterPipeline.legacy_prompt(
+          filtered_signature,
+          filtered_inputs,
+          demos,
+          __MODULE__,
+          opts
+        )
+
+      %{messages: history_messages ++ [%{role: "user", content: prompt}]}
+    end
   end
 
   @impl true

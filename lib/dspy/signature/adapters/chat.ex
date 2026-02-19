@@ -34,17 +34,32 @@ defmodule Dspy.Signature.Adapters.ChatAdapter do
   @impl true
   def format_request(%Dspy.Signature{} = signature, inputs, demos, opts \\ [])
       when is_map(inputs) and is_list(demos) and is_list(opts) do
-    system =
-      [instruction_line(signature), format_instructions(signature, opts)]
-      |> Enum.reject(&is_nil/1)
-      |> Enum.join("\n\n")
+    with {:ok, %{inputs: filtered_inputs, messages: history_messages}} <-
+           Dspy.History.extract_messages(signature, inputs) do
+      filtered_signature = %{
+        signature
+        | input_fields: Enum.reject(signature.input_fields, &(&1.type == :history))
+      }
 
-    user =
-      [render_demos(signature, demos), render_inputs(signature, inputs)]
-      |> Enum.reject(&(&1 == ""))
-      |> Enum.join("\n\n")
+      system =
+        [instruction_line(filtered_signature), format_instructions(filtered_signature, opts)]
+        |> Enum.reject(&is_nil/1)
+        |> Enum.join("\n\n")
 
-    %{messages: [%{role: "system", content: system}, %{role: "user", content: user}]}
+      user =
+        [
+          render_demos(filtered_signature, demos),
+          render_inputs(filtered_signature, filtered_inputs)
+        ]
+        |> Enum.reject(&(&1 == ""))
+        |> Enum.join("\n\n")
+
+      %{
+        messages:
+          [%{role: "system", content: system}] ++
+            history_messages ++ [%{role: "user", content: user}]
+      }
+    end
   end
 
   @impl true

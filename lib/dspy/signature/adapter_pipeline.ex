@@ -61,10 +61,15 @@ defmodule Dspy.Signature.AdapterPipeline do
         %{messages: [%{role: "user", content: prompt}]}
       end
 
-    if is_map(request) do
-      {:ok, request}
-    else
-      {:error, {:invalid_request, request}}
+    cond do
+      is_map(request) ->
+        {:ok, request}
+
+      match?({:error, _}, request) ->
+        request
+
+      true ->
+        {:error, {:invalid_request, request}}
     end
   end
 
