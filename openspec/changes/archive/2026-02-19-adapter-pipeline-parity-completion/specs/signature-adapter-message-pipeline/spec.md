@@ -1,8 +1,5 @@
-# signature-adapter-message-pipeline Specification
+## MODIFIED Requirements
 
-## Purpose
-TBD - created by archiving change adapter-pipeline-parity. Update Purpose after archive.
-## Requirements
 ### Requirement: Signature adapters own request-message formatting for adapter-aware predictors
 The system SHALL delegate formatting of signature-call request messages to the active signature adapter, including prompt sections, demo rendering, and input substitution.
 
@@ -27,11 +24,3 @@ The system SHALL delegate formatting of signature-call request messages to the a
 - **WHEN** internal signature-based calls are executed (including extraction-style helper paths)
 - **THEN** they SHALL use the same adapter-owned format path
 - **AND** they SHALL NOT bypass it with ad hoc request reconstruction.
-
-### Requirement: Non-owned formatting behavior remains isolated
-The adapter-owned formatting path SHALL be optional extension point only for adapter-aware signature predictors.
-
-#### Scenario: Legacy formatting paths are not affected by adapter formatting ownership changes
-- **WHEN** a signature predictor is executed through existing non-adapter-aware helper paths (including current helper convenience examples)
-- **THEN** behavior SHALL remain unchanged unless the code path is migrated to adapter-owned formatting.
-
