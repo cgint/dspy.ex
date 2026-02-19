@@ -27,6 +27,48 @@ defmodule Dspy.Signature.AdapterCallbacksTest do
     output_field(:answer, :string, "Answer")
   end
 
+  defmodule AnswerSchema do
+    use JSV.Schema
+
+    defschema(%{
+      type: :object,
+      properties: %{answer: string()},
+      required: [:answer],
+      additionalProperties: false
+    })
+  end
+
+  defmodule TypedAnswerSignature do
+    use Dspy.Signature
+
+    input_field(:question, :string, "Question")
+    output_field(:result, :json, "Typed result", schema: AnswerSchema)
+  end
+
+  defmodule RetryMockLM do
+    @behaviour Dspy.LM
+    defstruct [:counter]
+
+    @impl true
+    def generate(%__MODULE__{counter: counter}, _request) do
+      call_num = Agent.get_and_update(counter, fn n -> {n + 1, n + 1} end)
+
+      content =
+        if call_num == 1,
+          do: ~s({"result": {"not_answer": "42"}}),
+          else: ~s({"result": {"answer": "42"}})
+
+      {:ok,
+       %{
+         choices: [%{message: %{role: "assistant", content: content}, finish_reason: "stop"}],
+         usage: %{prompt_tokens: 11, completion_tokens: 7, total_tokens: 18}
+       }}
+    end
+
+    @impl true
+    def supports?(_lm, _feature), do: true
+  end
+
   defmodule CapturingCB do
     @behaviour Dspy.Signature.Adapter.Callback
 
@@ -84,6 +126,28 @@ defmodule Dspy.Signature.AdapterCallbacksTest do
 
     @impl true
     def on_adapter_parse_start(_meta, _payload, state), do: state
+
+    @impl true
+    def on_adapter_parse_end(_meta, _payload, state), do: state
+  end
+
+  defmodule RaisingParseCB do
+    @behaviour Dspy.Signature.Adapter.Callback
+
+    @impl true
+    def on_adapter_format_start(_meta, _payload, state), do: state
+
+    @impl true
+    def on_adapter_format_end(_meta, _payload, state), do: state
+
+    @impl true
+    def on_adapter_call_start(_meta, _payload, state), do: state
+
+    @impl true
+    def on_adapter_call_end(_meta, _payload, state), do: state
+
+    @impl true
+    def on_adapter_parse_start(_meta, _payload, _state), do: raise("boom-parse")
 
     @impl true
     def on_adapter_parse_end(_meta, _payload, state), do: state
@@ -165,6 +229,21 @@ defmodule Dspy.Signature.AdapterCallbacksTest do
     assert_receive {:cb_event, "ok", :format_start, _meta, _payload}, 1000
   end
 
+  test "1.3 callback exceptions during parse do not fail the parent call" do
+    raising_cb = {RaisingParseCB, :state}
+    capturing_cb = {CapturingCB, %{pid: self(), id: "ok"}}
+
+    :ok = Dspy.configure(callbacks: [raising_cb, capturing_cb])
+
+    predict = Dspy.Predict.new(TestQA)
+
+    assert {:ok, pred} = Dspy.Module.forward(predict, %{question: "What is 2+2?"})
+    assert pred.attrs.answer == "4"
+
+    # Prove the second callback still ran in the parse phase.
+    assert_receive {:cb_event, "ok", :parse_start, _meta, _payload}, 1000
+  end
+
   test "0.4 call_id stays stable across all lifecycle phases" do
     cb = {CapturingCB, %{pid: self(), id: "global"}}
     :ok = Dspy.configure(callbacks: [cb])
@@ -181,6 +260,36 @@ defmodule Dspy.Signature.AdapterCallbacksTest do
       end)
 
     assert Enum.uniq(call_ids) |> length() == 1
+  end
+
+  test "1.4 retry attempts include stable call_id and incrementing attempt metadata" do
+    {:ok, counter} = Agent.start_link(fn -> 0 end)
+
+    Dspy.configure(
+      lm: %RetryMockLM{counter: counter},
+      callbacks: [{CapturingCB, %{pid: self(), id: "global"}}]
+    )
+
+    program = Dspy.Predict.new(TypedAnswerSignature, max_retries: 0, max_output_retries: 1)
+
+    assert {:ok, pred} = Dspy.Module.forward(program, %{question: "?"})
+    assert %AnswerSchema{answer: "42"} = pred.attrs.result
+
+    events = drain_events(12)
+
+    call_ids =
+      Enum.map(events, fn {:cb_event, _id, _phase, meta, _payload} ->
+        Map.fetch!(meta, :call_id)
+      end)
+
+    assert Enum.uniq(call_ids) |> length() == 1
+
+    attempts =
+      Enum.map(events, fn {:cb_event, _id, _phase, meta, _payload} ->
+        Map.fetch!(meta, :attempt)
+      end)
+
+    assert attempts == [1, 1, 1, 1, 1, 1, 2, 2, 2, 2, 2, 2]
   end
 
   test "2.3 call_end includes usage summary and bounded request summary" do
