@@ -655,6 +655,24 @@ defmodule Dspy.Signature do
       :json ->
         {:error, :invalid_json}
 
+      :tool when is_map(value) ->
+        {:ok, value}
+
+      :tool ->
+        {:error, :invalid_tool}
+
+      :tools when is_list(value) ->
+        {:ok, value}
+
+      :tools ->
+        {:error, :invalid_tools}
+
+      :tool_calls when is_list(value) ->
+        {:ok, value}
+
+      :tool_calls ->
+        {:error, :invalid_tool_calls}
+
       :code ->
         case validate_elixir_code(value) do
           :ok -> {:ok, value}
@@ -859,6 +877,9 @@ defmodule Dspy.Signature do
   defp normalize_type("boolean"), do: :boolean
   defp normalize_type("json"), do: :json
   defp normalize_type("code"), do: :code
+  defp normalize_type("tool"), do: :tool
+  defp normalize_type("tools"), do: :tools
+  defp normalize_type("tool_calls"), do: :tool_calls
 
   defp normalize_type(type) do
     raise ArgumentError, "Unknown field type: #{inspect(type)}"

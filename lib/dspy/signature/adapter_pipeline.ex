@@ -63,7 +63,9 @@ defmodule Dspy.Signature.AdapterPipeline do
 
     cond do
       is_map(request) ->
-        {:ok, request}
+        with {:ok, request} <- maybe_attach_tools(signature, inputs, request) do
+          {:ok, request}
+        end
 
       match?({:error, _}, request) ->
         request
@@ -339,6 +341,190 @@ defmodule Dspy.Signature.AdapterPipeline do
       end
     end
   end
+
+  defp maybe_attach_tools(%Signature{} = signature, inputs, request)
+       when is_map(inputs) and is_map(request) do
+    with {:ok, declared_tools} <- extract_declared_tools(signature, inputs),
+         {:ok, tools} <- normalize_declared_tools(declared_tools) do
+      request = normalize_messages_key(request)
+
+      case tools do
+        [] -> {:ok, request}
+        list -> {:ok, Map.put(request, :tools, list)}
+      end
+    end
+  end
+
+  defp extract_declared_tools(%Signature{} = signature, inputs) when is_map(inputs) do
+    signature.input_fields
+    |> Enum.filter(&(&1.type in [:tool, :tools]))
+    |> Enum.reduce_while({:ok, []}, fn field, {:ok, acc} ->
+      case fetch_input(inputs, field.name) do
+        :error ->
+          {:cont, {:ok, acc}}
+
+        {:ok, nil} ->
+          {:cont, {:ok, acc}}
+
+        {:ok, value} ->
+          case normalize_tool_field_value(field.type, value) do
+            {:ok, values} -> {:cont, {:ok, acc ++ values}}
+            {:error, reason} -> {:halt, {:error, {:invalid_tool_spec, reason}}}
+          end
+      end
+    end)
+  end
+
+  defp normalize_tool_field_value(:tool, %{} = tool), do: {:ok, [tool]}
+
+  defp normalize_tool_field_value(:tool, other),
+    do: {:error, {:expected_single_tool, other}}
+
+  defp normalize_tool_field_value(:tools, values) when is_list(values), do: {:ok, values}
+  defp normalize_tool_field_value(:tools, %{} = tool), do: {:ok, [tool]}
+
+  defp normalize_tool_field_value(:tools, other),
+    do: {:error, {:expected_tools_list, other}}
+
+  defp normalize_declared_tools(values) when is_list(values) do
+    values
+    |> Enum.with_index()
+    |> Enum.reduce_while({:ok, []}, fn {tool, index}, {:ok, acc} ->
+      case to_canonical_tool(tool) do
+        {:ok, normalized} ->
+          {:cont, {:ok, [normalized | acc]}}
+
+        {:error, reason} ->
+          {:halt, {:error, {:invalid_tool_spec, %{index: index, reason: reason}}}}
+      end
+    end)
+    |> case do
+      {:ok, tools} -> {:ok, Enum.reverse(tools)}
+      {:error, _} = error -> error
+    end
+  end
+
+  defp to_canonical_tool(%Dspy.Tools.Tool{} = tool) do
+    with {:ok, parameters} <- normalize_tool_parameters(tool.parameters || []) do
+      {:ok,
+       %{
+         "type" => "function",
+         "function" => %{
+           "name" => tool.name,
+           "description" => tool.description || "",
+           "parameters" => parameters
+         }
+       }}
+    end
+  end
+
+  defp to_canonical_tool(%{} = tool_map) do
+    type = Map.get(tool_map, :type) || Map.get(tool_map, "type")
+
+    cond do
+      type == "function" ->
+        normalize_canonical_tool(tool_map)
+
+      true ->
+        with {:ok, name} <- fetch_tool_key(tool_map, :name),
+             {:ok, description} <- fetch_tool_key(tool_map, :description),
+             {:ok, parameters} <- fetch_tool_key(tool_map, :parameters),
+             {:ok, normalized_parameters} <- normalize_tool_parameters(parameters) do
+          {:ok,
+           %{
+             "type" => "function",
+             "function" => %{
+               "name" => name,
+               "description" => description,
+               "parameters" => normalized_parameters
+             }
+           }}
+        end
+    end
+  end
+
+  defp to_canonical_tool(other), do: {:error, {:unsupported_tool, other}}
+
+  defp normalize_canonical_tool(%{} = tool_map) do
+    function = Map.get(tool_map, :function) || Map.get(tool_map, "function")
+
+    if is_map(function) do
+      with {:ok, name} <- fetch_tool_key(function, :name),
+           {:ok, description} <- fetch_tool_key(function, :description),
+           {:ok, parameters} <- fetch_tool_key(function, :parameters),
+           {:ok, normalized_parameters} <- normalize_tool_parameters(parameters) do
+        {:ok,
+         %{
+           "type" => "function",
+           "function" => %{
+             "name" => name,
+             "description" => description,
+             "parameters" => normalized_parameters
+           }
+         }}
+      end
+    else
+      {:error, :missing_function}
+    end
+  end
+
+  defp fetch_tool_key(map, key) when is_map(map) and is_atom(key) do
+    case Map.fetch(map, key) do
+      {:ok, value} -> {:ok, value}
+      :error -> Map.fetch(map, Atom.to_string(key))
+    end
+  end
+
+  defp normalize_tool_parameters(%{"type" => "object"} = schema), do: {:ok, schema}
+
+  defp normalize_tool_parameters(%{type: "object"} = schema),
+    do: {:ok, stringify_map_keys(schema)}
+
+  defp normalize_tool_parameters(params) when is_list(params) do
+    properties =
+      Enum.reduce(params, %{}, fn param, acc ->
+        name = Map.get(param, :name) || Map.get(param, "name")
+        type = Map.get(param, :type) || Map.get(param, "type") || "string"
+        description = Map.get(param, :description) || Map.get(param, "description") || ""
+
+        Map.put(acc, name, %{"type" => to_json_type(type), "description" => description})
+      end)
+
+    required = Enum.map(params, fn param -> Map.get(param, :name) || Map.get(param, "name") end)
+
+    {:ok, %{"type" => "object", "properties" => properties, "required" => required}}
+  end
+
+  defp normalize_tool_parameters(other), do: {:error, {:invalid_tool_parameters, other}}
+
+  defp stringify_map_keys(map) when is_map(map) do
+    map
+    |> Enum.map(fn {k, v} -> {to_string(k), stringify_value(v)} end)
+    |> Map.new()
+  end
+
+  defp stringify_value(v) when is_map(v), do: stringify_map_keys(v)
+  defp stringify_value(v) when is_list(v), do: Enum.map(v, &stringify_value/1)
+  defp stringify_value(v), do: v
+
+  defp to_json_type(type) when is_binary(type) do
+    case String.downcase(type) do
+      "str" -> "string"
+      "string" -> "string"
+      "int" -> "integer"
+      "integer" -> "integer"
+      "float" -> "number"
+      "number" -> "number"
+      "bool" -> "boolean"
+      "boolean" -> "boolean"
+      "object" -> "object"
+      "array" -> "array"
+      _ -> "string"
+    end
+  end
+
+  defp to_json_type(type) when is_atom(type), do: type |> Atom.to_string() |> to_json_type()
+  defp to_json_type(_type), do: "string"
 
   # --- helpers ---
 

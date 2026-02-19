@@ -341,6 +341,34 @@ defmodule Dspy.LM do
   end
 
   @doc """
+  Extract normalized first-choice content and tool_calls from a model response.
+  """
+  @spec choice_from_response(response() | String.t()) ::
+          {:ok, %{text: String.t() | nil, tool_calls: list() | nil, raw: map()}}
+          | {:error, any()}
+  def choice_from_response(response) when is_binary(response) do
+    {:ok, %{text: response, tool_calls: nil, raw: %{content: response}}}
+  end
+
+  def choice_from_response(response) do
+    case first_choice_message(response) do
+      {:ok, message} ->
+        text = Map.get(message, :content) || Map.get(message, "content")
+        tool_calls = Map.get(message, :tool_calls) || Map.get(message, "tool_calls")
+
+        {:ok,
+         %{
+           text: if(is_binary(text), do: text, else: nil),
+           tool_calls: if(is_list(tool_calls), do: tool_calls, else: nil),
+           raw: message
+         }}
+
+      {:error, _} = error ->
+        error
+    end
+  end
+
+  @doc """
   Extract the first assistant message content from a model response.
 
   Accepts both atom-keyed and string-keyed response maps.
@@ -349,13 +377,34 @@ defmodule Dspy.LM do
   def text_from_response(response) when is_binary(response), do: {:ok, response}
 
   def text_from_response(response) do
-    case get_in(response, [:choices, Access.at(0), :message]) do
-      %{"content" => content} when is_binary(content) -> {:ok, content}
-      # Support atom keys
-      %{content: content} when is_binary(content) -> {:ok, content}
-      message -> {:error, {:missing_content, message}}
+    with {:ok, choice} <- choice_from_response(response),
+         text when is_binary(text) <- Map.get(choice, :text) do
+      {:ok, text}
+    else
+      {:error, _} = error -> error
+      _ -> {:error, {:missing_content, nil}}
     end
   end
+
+  defp first_choice_message(response) when is_map(response) do
+    choices = Map.get(response, :choices) || Map.get(response, "choices")
+
+    case choices do
+      [first | _] when is_map(first) ->
+        message = Map.get(first, :message) || Map.get(first, "message")
+
+        if is_map(message) do
+          {:ok, message}
+        else
+          {:error, {:missing_content, message}}
+        end
+
+      _ ->
+        {:error, {:missing_content, nil}}
+    end
+  end
+
+  defp first_choice_message(_), do: {:error, {:missing_content, nil}}
 
   @doc """
   Check if a language model supports a feature.
