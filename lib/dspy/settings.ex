@@ -10,7 +10,10 @@ defmodule Dspy.Settings do
 
   defstruct [
     :lm,
+    :two_step_extraction_lm,
     adapter: Dspy.Signature.Adapters.Default,
+    two_step_extraction_adapter: Dspy.Signature.Adapters.JSONAdapter,
+    two_step_extraction_request_defaults: [temperature: 0],
     callbacks: [],
     max_tokens: nil,
     max_completion_tokens: nil,
@@ -24,7 +27,10 @@ defmodule Dspy.Settings do
 
   @type t :: %__MODULE__{
           lm: Dspy.LM.t() | nil,
+          two_step_extraction_lm: Dspy.LM.t() | nil,
           adapter: module(),
+          two_step_extraction_adapter: module(),
+          two_step_extraction_request_defaults: keyword(),
           callbacks: list(),
           max_tokens: pos_integer() | nil,
           max_completion_tokens: pos_integer() | nil,

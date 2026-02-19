@@ -31,6 +31,9 @@ defmodule Dspy do
   @type dspy_config :: [
           lm: Dspy.LM.t() | nil,
           adapter: module() | nil,
+          two_step_extraction_lm: Dspy.LM.t() | nil,
+          two_step_extraction_adapter: module() | nil,
+          two_step_extraction_request_defaults: keyword(),
           max_tokens: pos_integer() | nil,
           max_completion_tokens: pos_integer() | nil,
           temperature: number() | nil,
@@ -42,6 +45,9 @@ defmodule Dspy do
   @type settings :: %{
           lm: Dspy.LM.t() | nil,
           adapter: module(),
+          two_step_extraction_lm: Dspy.LM.t() | nil,
+          two_step_extraction_adapter: module(),
+          two_step_extraction_request_defaults: keyword(),
           max_tokens: pos_integer() | nil,
           max_completion_tokens: pos_integer() | nil,
           temperature: number() | nil,
@@ -58,6 +64,9 @@ defmodule Dspy do
 
   - `:lm` - Language model client (required)
   - `:adapter` - Signature output adapter module (default: `Dspy.Signature.Adapters.Default`)
+  - `:two_step_extraction_lm` - Extraction LM used by `Dspy.Signature.Adapters.TwoStep` (default: `nil`)
+  - `:two_step_extraction_adapter` - Adapter used for extraction pass (default: `Dspy.Signature.Adapters.JSONAdapter`)
+  - `:two_step_extraction_request_defaults` - Request defaults merged into extraction request (default: `[temperature: 0]`)
   - `:max_tokens` - Maximum tokens per generation (default: `nil`, provider/runtime default)
   - `:max_completion_tokens` - Maximum completion tokens per generation (default: `nil`, provider/runtime default)
   - `:temperature` - Sampling temperature (default: `nil`, provider/runtime default)
