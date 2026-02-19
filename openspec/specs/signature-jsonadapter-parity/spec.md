@@ -25,7 +25,7 @@ When parsing in JSONAdapter mode, the resulting JSON object SHALL contain all de
 - Keyset checks (missing/extra) are computed after applying this normalization.
 
 **Required outputs:**
-- Unless explicitly marked optional by the signature system, all declared signature outputs are treated as required by JSONAdapter.
+- All declared signature outputs are treated as required by JSONAdapter.
 
 #### Scenario: Exact required keys are present
 - **WHEN** the repaired JSON object contains all declared signature output keys

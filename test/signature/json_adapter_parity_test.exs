@@ -46,6 +46,17 @@ defmodule Dspy.Signature.JSONAdapterParityTest do
              Dspy.Signature.Adapters.JSONAdapter.parse_outputs(SimpleSig.signature(), text, [])
   end
 
+  test "extracts JSON object when wrapped in commentary" do
+    text = """
+    Here you go:
+    {"answer":"hi","rationale":"because"}
+    Hope this helps.
+    """
+
+    assert %{answer: "hi", rationale: "because"} =
+             Dspy.Signature.Adapters.JSONAdapter.parse_outputs(SimpleSig.signature(), text, [])
+  end
+
   test "repairs single-quoted strings" do
     text = """
     {'answer': 'hi', 'rationale': 'because'}
@@ -91,6 +102,13 @@ defmodule Dspy.Signature.JSONAdapterParityTest do
     text = "```json\n{not valid json}\n```"
 
     assert {:error, {:output_decode_failed, _reason}} =
+             Dspy.Signature.Adapters.JSONAdapter.parse_outputs(SimpleSig.signature(), text, [])
+  end
+
+  test "missing JSON object returns deterministic no_json_object_found tag" do
+    text = "Answer: hi"
+
+    assert {:error, {:output_decode_failed, :no_json_object_found}} =
              Dspy.Signature.Adapters.JSONAdapter.parse_outputs(SimpleSig.signature(), text, [])
   end
 
