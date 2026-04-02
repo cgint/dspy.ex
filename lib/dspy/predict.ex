@@ -25,7 +25,7 @@ defmodule Dspy.Predict do
   Options:
   - `:examples` (default: [])
   - `:max_retries` (default: 3) — retry LM call on provider errors
-  - `:max_output_retries` (default: 0) — retry when typed structured outputs fail to parse/validate
+  - `:max_output_retries` (default: `Dspy.Settings.max_output_retries` or `0`) — retry when adapter outputs fail to parse/validate (e.g. `{:missing_required_outputs, ...}`)
   - `:adapter` — optional signature adapter override
   - `:callbacks` — signature-adapter lifecycle callbacks (`[{module, state}]`)
   """
@@ -34,7 +34,7 @@ defmodule Dspy.Predict do
       signature: get_signature(signature),
       examples: Keyword.get(opts, :examples, []),
       max_retries: Keyword.get(opts, :max_retries, 3),
-      max_output_retries: Keyword.get(opts, :max_output_retries, 0),
+      max_output_retries: Keyword.get(opts, :max_output_retries, default_max_output_retries()),
       adapter: Keyword.get(opts, :adapter),
       callbacks: Keyword.get(opts, :callbacks, [])
     }
@@ -101,4 +101,13 @@ defmodule Dspy.Predict do
   defp get_signature(signature) when is_atom(signature), do: signature.signature()
   defp get_signature(signature) when is_binary(signature), do: Dspy.Signature.define(signature)
   defp get_signature(signature), do: signature
+
+  defp default_max_output_retries do
+    if Process.whereis(Dspy.Settings) do
+      value = Dspy.Settings.get(:max_output_retries)
+      if is_integer(value) and value >= 0, do: value, else: 0
+    else
+      0
+    end
+  end
 end

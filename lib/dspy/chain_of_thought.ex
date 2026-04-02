@@ -51,7 +51,7 @@ defmodule Dspy.ChainOfThought do
   Options:
   - `:examples` (default: [])
   - `:max_retries` (default: 3)
-  - `:max_output_retries` (default: 0)
+  - `:max_output_retries` (default: `Dspy.Settings.max_output_retries` or `0`) — retry when adapter outputs fail to parse/validate (e.g. `{:missing_required_outputs, ...}`)
   - `:reasoning_field` (default: :reasoning)
   - `:adapter` — optional signature adapter override
   - `:callbacks` — signature-adapter lifecycle callbacks (`[{module, state}]`)
@@ -66,7 +66,7 @@ defmodule Dspy.ChainOfThought do
       signature: augmented_signature,
       examples: Keyword.get(opts, :examples, []),
       max_retries: Keyword.get(opts, :max_retries, 3),
-      max_output_retries: Keyword.get(opts, :max_output_retries, 0),
+      max_output_retries: Keyword.get(opts, :max_output_retries, default_max_output_retries()),
       reasoning_field: reasoning_field,
       adapter: Keyword.get(opts, :adapter),
       callbacks: Keyword.get(opts, :callbacks, [])
@@ -146,6 +146,15 @@ defmodule Dspy.ChainOfThought do
     new_output_fields = [reasoning_field_def | signature.output_fields]
 
     %{signature | output_fields: new_output_fields}
+  end
+
+  defp default_max_output_retries do
+    if Process.whereis(Dspy.Settings) do
+      value = Dspy.Settings.get(:max_output_retries)
+      if is_integer(value) and value >= 0, do: value, else: 0
+    else
+      0
+    end
   end
 
   defp add_cot_instructions(signature) do

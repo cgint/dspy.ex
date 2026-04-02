@@ -39,7 +39,20 @@ defmodule Dspy.Signature.Adapter.Pipeline do
     callbacks = Callbacks.merge(global_callbacks, program_callbacks, call_callbacks)
 
     max_retries = Keyword.get(opts, :max_retries, 3)
-    max_output_retries = Keyword.get(opts, :max_output_retries, 0)
+
+    max_output_retries =
+      case Keyword.fetch(opts, :max_output_retries) do
+        {:ok, value} ->
+          value
+
+        :error ->
+          if Process.whereis(Dspy.Settings) do
+            value = Dspy.Settings.get(:max_output_retries)
+            if is_integer(value) and value >= 0, do: value, else: 0
+          else
+            0
+          end
+      end
 
     call_id = make_ref()
 
@@ -232,9 +245,8 @@ defmodule Dspy.Signature.Adapter.Pipeline do
        )
        when is_map(base_request) and is_binary(base_prompt) do
     cond do
-      output_retries_left > 0 and typed_output_retry_enabled?(signature) and
-          output_retryable_reason?(reason) ->
-        retry_prompt = build_output_retry_prompt(base_prompt, signature, reason)
+      output_retries_left > 0 and output_retryable_reason?(reason) ->
+        retry_prompt = build_output_retry_prompt(base_prompt, signature, adapter, reason)
 
         with {:ok, retry_request} <-
                AdapterPipeline.replace_primary_prompt_text(base_request, retry_prompt) do
@@ -281,7 +293,7 @@ defmodule Dspy.Signature.Adapter.Pipeline do
     }
   end
 
-  defp typed_output_retry_enabled?(%Signature{} = signature) do
+  defp signature_has_typed_outputs?(%Signature{} = signature) do
     Enum.any?(signature.output_fields, &Map.has_key?(&1, :schema))
   end
 
@@ -292,19 +304,64 @@ defmodule Dspy.Signature.Adapter.Pipeline do
   defp output_retryable_reason?({:invalid_outputs, _other}), do: true
   defp output_retryable_reason?(_other), do: false
 
-  defp build_output_retry_prompt(base_prompt, %Signature{} = signature, reason)
+  defp json_output_retry_mode?(%Signature{} = signature, adapter) when is_atom(adapter) do
+    adapter == Dspy.Signature.Adapters.JSONAdapter or signature_has_typed_outputs?(signature)
+  end
+
+  defp build_output_retry_prompt(base_prompt, %Signature{} = signature, adapter, reason)
+       when is_binary(base_prompt) and is_atom(adapter) do
+    if json_output_retry_mode?(signature, adapter) do
+      build_json_output_retry_prompt(base_prompt, signature, reason)
+    else
+      build_label_output_retry_prompt(base_prompt, signature, reason)
+    end
+  end
+
+  defp build_json_output_retry_prompt(base_prompt, %Signature{} = signature, reason)
        when is_binary(base_prompt) do
     keys = signature.output_fields |> Enum.map(&Atom.to_string(&1.name)) |> Enum.join(", ")
 
+    schema_hint =
+      if signature_has_typed_outputs?(signature) do
+        "Use the JSON Schema shown above."
+      else
+        "Do not include any extra text."
+      end
+
     base_prompt <>
       "\n\n" <>
-      "Your previous output did not match the required JSON schema.\n" <>
+      "Your previous output did not match the required JSON output contract.\n" <>
       "Errors:\n" <>
       format_output_retry_errors(reason) <>
       "\n\n" <>
       "Return JSON only (no markdown fences, no labels, no extra text).\n" <>
       "The top-level JSON object must contain the following keys: #{keys}.\n" <>
-      "Use the JSON Schema shown above."
+      schema_hint
+  end
+
+  defp build_label_output_retry_prompt(base_prompt, %Signature{} = signature, reason)
+       when is_binary(base_prompt) do
+    required =
+      signature.output_fields
+      |> Enum.filter(& &1.required)
+
+    format_lines =
+      required
+      |> Enum.map(fn field ->
+        label = String.capitalize(Atom.to_string(field.name))
+        "#{label}: <value>"
+      end)
+      |> Enum.join("\n")
+
+    base_prompt <>
+      "\n\n" <>
+      "Your previous output did not match the required output format.\n" <>
+      "Errors:\n" <>
+      format_output_retry_errors(reason) <>
+      "\n\n" <>
+      "Return ONLY the required labeled fields (no markdown fences, no extra text).\n" <>
+      "Use this exact format:\n" <>
+      format_lines
   end
 
   defp format_output_retry_errors({:output_decode_failed, decode_reason}) do
