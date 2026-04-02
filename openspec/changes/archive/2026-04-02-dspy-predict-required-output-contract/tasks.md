@@ -16,5 +16,5 @@
 
 ## 4. Final verification by the user
 
-- [ ] 4.1 In a downstream app that previously showed flaky `missing_required_outputs` (e.g. “Clarify”), confirm the first-attempt failure rate is materially reduced and a single click usually succeeds
-- [ ] 4.2 Confirm latency/cost impact is acceptable (retries only happen on failures, and the bound is as expected)
+- [x] 4.1 In a downstream app that previously showed flaky `missing_required_outputs` (e.g. “Clarify”), confirm the first-attempt failure rate is materially reduced and a single click usually succeeds
+- [x] 4.2 Confirm latency/cost impact is acceptable (retries only happen on failures, and the bound is as expected)
