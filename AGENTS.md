@@ -2,18 +2,28 @@
 
 This repository is being developed as an **Elixir-native port** of the upstream **Python DSPy** library (`../dspy`), designed to be reliable and welcoming for open-source adoption in the BEAM/Elixir ecosystem.
 
+## Bootstrap rule — assume this file is all a new session has
+
+Treat `AGENTS.md` as the only repo-specific information that may be available when a new assistant session starts. Therefore this file must:
+- point to the minimum reading path needed to recover context;
+- preserve durable user preferences and operating rules by reference;
+- tell the assistant where to persist new knowledge before it is lost in chat.
+
+When important information is learned, **write it down** in the right durable place (`agent/`, `plan/`, `docs/`, or `openspec/`). Do not rely on chat memory.
+
 ## Start here (reading order)
-1. `plan/NORTH_STAR.md` — the purpose, constraints, and priorities (why/what matters).
-2. `plan/RELEASE_MILESTONES.md` — the step-by-step milestone roadmap (what we ship first).
-3. `plan/INTERFACE_COMPATIBILITY.md` — explicit mapping to Python DSPy and DSPex-snakepit.
-4. `plan/REFERENCE_DSPY_INTRO.md` — reference Python example suite → acceptance test candidates.
-5. `plan/STATUS.md` — the current heartbeat (health, decisions, next tasks, verification).
-6. `plan/ITERATION_LOOPS.md` — how we keep iterating safely (outer loop + delegated inner loop).
-7. `plan/QUALITY_BAR.md` — quality bar + testing principles (tests as specification).
-8. `plan/PORTING_CHARTER.md` — scope + operating agreement for how we work.
-9. `agent/WAYOFWORKING.md` — operational playbook (delegation + context hygiene).
-10. `agent/MEMORY.md` — compact context window (decisions + “how to resume quickly”).
-11. `agent/SOUL.md` — the assistant’s stable operating principles and learned habits.
+1. `agent/USER.md` — explicit user preferences and collaboration instructions.
+2. `agent/SOUL.md` — the assistant’s stable operating principles and learned habits.
+3. `agent/MEMORY.md` — compact context window (decisions + “how to resume quickly”).
+4. `agent/WAYOFWORKING.md` — operational playbook (delegation + context hygiene).
+5. `plan/NORTH_STAR.md` — the purpose, constraints, and priorities (why/what matters).
+6. `plan/STATUS.md` — the current heartbeat (health, decisions, next tasks, verification).
+7. `plan/RELEASE_MILESTONES.md` — the step-by-step milestone roadmap (what we ship first).
+8. `plan/INTERFACE_COMPATIBILITY.md` — explicit mapping to Python DSPy and DSPex-snakepit.
+9. `plan/REFERENCE_DSPY_INTRO.md` — reference Python example suite → acceptance test candidates.
+10. `plan/ITERATION_LOOPS.md` — how we keep iterating safely (outer loop + delegated inner loop).
+11. `plan/QUALITY_BAR.md` — quality bar + testing principles (tests as specification).
+12. `plan/PORTING_CHARTER.md` — scope + operating agreement for how we work.
 
 ## Directory intent
 - `docs/`
@@ -25,15 +35,24 @@ This repository is being developed as an **Elixir-native port** of the upstream 
   - Meant to make it easy to resume work after a break without re-deriving context.
 
 - `agent/`
-  - Assistant self-organization: compact memory/context and long-lived operating principles.
+  - Assistant self-organization: compact memory/context, explicit user preferences, and long-lived operating principles.
   - The goal is to reduce context loss between sessions.
+  - Current files:
+    - `agent/USER.md` — explicit user preferences and agreements.
+    - `agent/SOUL.md` — stable assistant posture and decision principles.
+    - `agent/MEMORY.md` — compact repo memory / resume context.
+    - `agent/WAYOFWORKING.md` — operational loop, delegation, context hygiene.
 
-## Continuity rule: persist + commit
+## Continuity rule: persist + timestamp
 - Don’t leave important decisions/learnings only in chat — **persist them** in `plan/` and `agent/`.
+- Persist information the user explicitly gives and decisions we agree on.
+- Add dates to durable decisions, user preferences, research notes, and process changes so the timeline remains understandable.
 - Prefer **frequent, small commits** (including docs) so we can “time travel” and see how the plan/knowledge/assistant evolves.
 - Keep `plan/STATUS.md` current so a restart can resume without re-deriving context.
+- If web/external research affects direction, save the useful findings with date + source context (usually under `plan/research/` or a relevant planning doc).
 
 ## Working mode (Clarity First, standing approval)
+- Be a **critical yet constructive partner on eye-level**: challenge unclear goals, weak assumptions, and hidden risks while offering concrete alternatives.
 - Planning phase: investigate + propose + update planning artifacts.
 - Execution phase: proceed autonomously within this repo (implement + delegate) by default.
   - The user can say **“Hold/Stop”** to pause.

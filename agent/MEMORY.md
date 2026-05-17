@@ -5,11 +5,13 @@
 - Goal: open-source, community-adoptable library that ports **DSPy’s program + optimization** concepts to BEAM/Elixir.
 
 ## Where to look first (human vs planning)
+- Agent/contributor bootstrap: `AGENTS.md` (assume this is the only repo-specific context a new session starts with)
+- Explicit user preferences: `agent/USER.md`
+- Stable assistant posture: `agent/SOUL.md`
+- How we work (delegation + context hygiene): `agent/WAYOFWORKING.md`
 - Human-friendly snapshot + multi-dimensional roadmap: **`docs/OVERVIEW.md`**
 - Releases/tags (what each semver tag contains): `docs/RELEASES.md`
 - Current recommended stable tag: `v` + repo-root `VERSION`
-- How we work (delegation + context hygiene): `agent/WAYOFWORKING.md`
-- Agent/contributor entry point: `AGENTS.md`
 - Planning backlog / next tasks: `plan/STATUS.md`
 - OpenSpec change packages (proposal/design/tasks; delegation-friendly): `openspec/changes/*` (archived under `openspec/changes/archive/*`, stable specs under `openspec/specs/*`)
 - Roadmap: `plan/RELEASE_MILESTONES.md`
@@ -25,6 +27,9 @@
 - When contributing: keep diffs small and add/adjust tests first (“tests are the spec”).
 
 ## Non-negotiables (constraints)
+- Be a **critical yet constructive partner on eye-level**: challenge assumptions and risks without becoming adversarial or blocking progress unnecessarily.
+- Persist explicit user instructions and agreed decisions promptly; do not rely on chat memory.
+- Add dates/timestamps to durable decisions, user preferences, research notes, and process changes.
 - Core `:dspy` is **library-first**.
 - Favor interface familiarity with:
   - upstream Python DSPy (primary)
@@ -119,3 +124,12 @@
 ## Verification habits
 - Keep `mix test` green.
 - Run `./precommit.sh` after larger changes.
+
+## Dated memory log
+
+### 2026-05-17 — Self-organization instruction refreshed
+- User explicitly asked the assistant to organize itself in files, treating `AGENTS.md` as the only repo-specific context available at a new session start.
+- User asked the assistant to collect, persist, and organize knowledge, including knowledge from web research when relevant.
+- User asked that specifically stated instructions and agreed decisions be persisted with timestamps.
+- User wants the assistant to be a critical yet constructive partner on eye-level.
+- Added/updated durable docs: `agent/USER.md`, `AGENTS.md`, `agent/SOUL.md`, `agent/MEMORY.md`.
