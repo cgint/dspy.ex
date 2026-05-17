@@ -18,12 +18,23 @@ When important information is learned, **write it down** in the right durable pl
 4. `agent/WAYOFWORKING.md` — operational playbook (delegation + context hygiene).
 5. `plan/NORTH_STAR.md` — the purpose, constraints, and priorities (why/what matters).
 6. `plan/STATUS.md` — the current heartbeat (health, decisions, next tasks, verification).
-7. `plan/RELEASE_MILESTONES.md` — the step-by-step milestone roadmap (what we ship first).
-8. `plan/INTERFACE_COMPATIBILITY.md` — explicit mapping to Python DSPy and DSPex-snakepit.
-9. `plan/REFERENCE_DSPY_INTRO.md` — reference Python example suite → acceptance test candidates.
-10. `plan/ITERATION_LOOPS.md` — how we keep iterating safely (outer loop + delegated inner loop).
-11. `plan/QUALITY_BAR.md` — quality bar + testing principles (tests as specification).
-12. `plan/PORTING_CHARTER.md` — scope + operating agreement for how we work.
+7. `plan/COVERAGE_AUDIT_2026-05.md` — current post-hardening continuation plan: meaningful coverage follow-ups, 0%/near-0% module classification, and recommendations.
+8. `plan/RELEASE_MILESTONES.md` — the step-by-step milestone roadmap (what we ship first).
+9. `plan/INTERFACE_COMPATIBILITY.md` — explicit mapping to Python DSPy and DSPex-snakepit.
+10. `plan/REFERENCE_DSPY_INTRO.md` — reference Python example suite → acceptance test candidates.
+11. `plan/ITERATION_LOOPS.md` — how we keep iterating safely (outer loop + delegated inner loop).
+12. `plan/QUALITY_BAR.md` — quality bar + testing principles (tests as specification).
+13. `plan/PORTING_CHARTER.md` — scope + operating agreement for how we work.
+
+## Current continuation pointer
+
+As of 2026-05-17, the most concrete next plan is the coverage/parity hardening follow-up in `plan/COVERAGE_AUDIT_2026-05.md`, also summarized in `plan/STATUS.md`.
+
+Recommended next order:
+1. Add `Dspy.Adapters` utility characterization tests if the namespace remains public.
+2. Decide whether retrieval placeholders (`ChromaDB`, `OpenAIEmbeddings`) stay as characterized stubs, move to extras/quarantine, or are documented as optional-only.
+3. Investigate the `Dspy.Retrieve.Embeddings.ReqLLM` coverage collection warning before treating coverage as a CI gate.
+4. Only later consider coverage thresholds scoped to supported modules; do not chase a blanket 90% line coverage target.
 
 ## Directory intent
 - `docs/`

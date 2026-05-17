@@ -127,6 +127,16 @@
 
 ## Dated memory log
 
+### 2026-05-17 — Coverage hardening completed; next continuation plan persisted
+- Completed and auditor-approved coverage hardening slices: parameter/state safety, R3.2 teleprompter parity, adapter pipeline edge cases, and 0%/near-0% module audit.
+- Primary continuation artifact: `plan/COVERAGE_AUDIT_2026-05.md`.
+- Also summarized in `plan/STATUS.md`; `AGENTS.md` now explicitly points new sessions to the coverage audit as the current continuation plan.
+- Recommended next order:
+  1. Add `Dspy.Adapters` utility characterization tests if the namespace remains public.
+  2. Decide whether retrieval placeholders (`ChromaDB`, `OpenAIEmbeddings`) stay as characterized stubs, move to extras/quarantine, or are documented as optional-only.
+  3. Investigate the `Dspy.Retrieve.Embeddings.ReqLLM` coverage collection warning before treating coverage as a CI gate.
+  4. Only later consider coverage thresholds scoped to supported modules; do not chase blanket 90% line coverage.
+
 ### 2026-05-17 — Quality discipline guardrail persisted
 - User asked whether `quality-discipline` had been noted down as a guardrail.
 - Persisted it as a standing repo working rule: small verified slices, evidence over assumptions, no hacks/workaround final states, avoid provider calls in automated tests unless explicitly required, and no completion claim without concrete verification evidence.
