@@ -27,17 +27,15 @@ North star docs:
 ## Loop status
 - Loop state: ACTIVE — R3 upstream alignment / structured parity audit
 - Active control artifact: `plan/UPSTREAM_PARITY_2026-05.md`
-- Current slice: **R3.1 Core Contract Hardening** — complete; next planned slice is R3.2 Teleprompter parity audit
-  - Audited/tested `Dspy.Signature` duplicate-field and input validation behavior.
-  - Audited/tested `Dspy.ChainOfThought` rationale-field semantics versus upstream restored behavior.
-  - Audited/tested adapter behavior for empty/nil LM responses.
-  - Verified JSON output behavior for non-ASCII / diacritics.
-  - Every `Covered` R3.1 target parity claim is tied to deterministic tests in `test/r3_1_core_contract_hardening_test.exs`.
+- Current slice: **Coverage hardening 1–4** — active
+  - Slice 1 parameter/state safety tests added; no implementation fixes required.
+  - Next: R3.2 Teleprompter parity audit (`BootstrapFewShot`, `MIPROv2`, `GEPA`).
 - Backlog (ordered):
   - [x] R3.1: Inspect and test P0 upstream parity items in `plan/UPSTREAM_PARITY_2026-05.md`
   - [x] R3.1: Implement only the minimal core contract fixes justified by failing/missing tests
   - [x] R3.1: Update `plan/INTERFACE_COMPATIBILITY.md` for any deliberate divergence (none required; attachment input remains an existing documented multimodal escape hatch)
-  - [ ] R3.2: Teleprompter parity audit (`BootstrapFewShot`, `MIPROv2`, `GEPA`)
+  - [x] Coverage hardening slice 1: parameter/state safety tests
+  - [ ] Coverage hardening slice 2 / R3.2: Teleprompter parity audit (`BootstrapFewShot`, `MIPROv2`, `GEPA`)
   - [ ] R3.3: OSS hardening docs (`SECURITY.md`, AI contribution policy) if still aligned with release posture
   - [x] Contribution UX: add `CONTRIBUTING.md` + GitHub issue templates + minimal repro guidance
   - [x] Curate examples: clearly separate “official deterministic” examples from experimental scripts (reduce onboarding noise)
@@ -67,6 +65,7 @@ North star docs:
   - [x] JSON-friendly parameter export/import (`Dspy.Parameter.encode_json!/1`, `decode_json/1`)
   - [x] File helpers for parameter persistence (`Dspy.Parameter.write_json!/2`, `read_json!/1`)
 - Evidence:
+  - Evidence file: `test/parameter_state_safety_test.exs` (parameter/state safety: malformed JSON/payloads, unsupported program handling, invalid apply no-mutation, file persistence errors)
   - Evidence file: `test/r3_1_core_contract_hardening_test.exs` (R3.1 core contract hardening: duplicate fields including cross input/output collisions, typed inputs, CoT rationale/reasoning semantics, empty/nil LM responses, JSON non-ASCII)
   - Evidence file: `test/acceptance/simplest_predict_test.exs`
   - Evidence file: `test/acceptance/json_outputs_acceptance_test.exs`
@@ -193,6 +192,7 @@ Notes:
 
 ## Log
 
+- **2026-05-17**: Coverage hardening slice 1: added parameter/state safety tests for malformed JSON/payloads, unsupported program handling, invalid apply no-mutation, and file persistence errors. No implementation fixes required. Verification: `mix test test/parameter_state_safety_test.exs`.
 - **2026-05-17**: R3.1 Core Contract Hardening: added test-first upstream parity coverage for duplicate signature fields (including cross input/output collisions like `value -> value`), typed input validation (with `%Dspy.Attachments{}` preserved as multimodal escape hatch), ChainOfThought rationale/reasoning semantics, empty/nil LM responses, and JSON non-ASCII output preservation; implemented minimal Signature validation fixes. Verification: `mix test test/r3_1_core_contract_hardening_test.exs`, focused affected tests, `mix test`.
 - **2026-02-13**: Typed structured outputs reliability: added bounded retry-on-output-parse/validation failure (`max_output_retries`) for `Predict` + `ChainOfThought`; added deterministic tests; documented usage in `docs/OVERVIEW.md` + `docs/COMPATIBILITY.md`. Verification: `./precommit.sh`.
 - **2026-02-11**: Planning: added proposal doc for Pydantic-like typed structured outputs in signatures (`plan/PYDANTIC_MODELS_IN_SIGNATURES.md`) + reprioritized `dspy-intro` coverage accordingly. Verification: `mix test`.
