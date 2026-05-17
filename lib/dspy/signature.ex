@@ -39,10 +39,16 @@ defmodule Dspy.Signature do
   Create a new signature.
   """
   def new(name, opts \\ []) do
+    input_fields = Keyword.get(opts, :input_fields, [])
+    output_fields = Keyword.get(opts, :output_fields, [])
+
+    validate_field_names!(:input, input_fields)
+    validate_field_names!(:output, output_fields)
+
     %__MODULE__{
       name: name,
-      input_fields: Keyword.get(opts, :input_fields, []),
-      output_fields: Keyword.get(opts, :output_fields, []),
+      input_fields: input_fields,
+      output_fields: output_fields,
       instructions: Keyword.get(opts, :instructions)
     }
   end
@@ -124,12 +130,60 @@ defmodule Dspy.Signature do
       end)
 
     case missing_fields do
-      [] -> :ok
+      [] -> validate_input_values(signature.input_fields, inputs)
       missing -> {:error, {:missing_fields, missing}}
     end
   end
 
   def validate_inputs(_signature, _inputs), do: {:error, :invalid_inputs}
+
+  defp validate_field_names!(direction, fields) when direction in [:input, :output] do
+    duplicates =
+      fields
+      |> Enum.map(& &1.name)
+      |> Enum.frequencies()
+      |> Enum.filter(fn {_name, count} -> count > 1 end)
+      |> Enum.map(fn {name, _count} -> name end)
+
+    case duplicates do
+      [] ->
+        :ok
+
+      duplicates ->
+        raise ArgumentError,
+              "duplicate #{direction} field name(s): #{inspect(Enum.sort(duplicates))}"
+    end
+  end
+
+  defp validate_input_values(input_fields, inputs)
+       when is_list(input_fields) and is_map(inputs) do
+    input_fields
+    |> Enum.reduce_while(:ok, fn field, :ok ->
+      case fetch_input(inputs, field.name) do
+        {:ok, %Dspy.Attachments{}} ->
+          # Attachments are an intentional multimodal input escape hatch. They are
+          # merged into request parts later, even when the signature field is
+          # declared as :string for Python-DSPy-style ergonomics.
+          {:cont, :ok}
+
+        {:ok, value} ->
+          case validate_field_value(value, field) do
+            {:ok, _typed_value} -> {:cont, :ok}
+            {:error, reason} -> {:halt, {:error, {:invalid_input_value, field.name, reason}}}
+          end
+
+        :error ->
+          {:cont, :ok}
+      end
+    end)
+  end
+
+  defp fetch_input(inputs, name) when is_map(inputs) and is_atom(name) do
+    case Map.fetch(inputs, name) do
+      {:ok, value} -> {:ok, value}
+      :error -> Map.fetch(inputs, Atom.to_string(name))
+    end
+  end
 
   @doc """
   Parse outputs according to the signature.
