@@ -7,6 +7,7 @@ North star docs:
 - `plan/NORTH_STAR.md`
 - `plan/RELEASE_MILESTONES.md`
 - `plan/INTERFACE_COMPATIBILITY.md`
+- `plan/UPSTREAM_PARITY_2026-05.md` (R3 upstream alignment matrix)
 - `plan/PORTING_CHARTER.md`
 - `plan/STRATEGIC_ROADMAP_DSPY_PORT.md`
 - `plan/REFERENCE_DSPY_INTRO.md`
@@ -24,8 +25,20 @@ North star docs:
 - **Contributions are product work**: small, reviewable diffs; tests-as-spec; keep core minimal and move heavy/optional concerns into `extras/`.
 
 ## Loop status
-- Loop state: ACTIVE
+- Loop state: ACTIVE — R3 upstream alignment / structured parity audit
+- Active control artifact: `plan/UPSTREAM_PARITY_2026-05.md`
+- Current slice: **R3.1 Core Contract Hardening**
+  - Audit/fix `Dspy.Signature` duplicate-field and input validation behavior.
+  - Audit/fix `Dspy.ChainOfThought` rationale-field semantics versus upstream restored behavior.
+  - Audit/fix adapter behavior for empty/nil LM responses.
+  - Verify JSON output behavior for non-ASCII / diacritics.
+  - Keep every `Covered` parity claim tied to deterministic tests or explicit evidence.
 - Backlog (ordered):
+  - [ ] R3.1: Inspect and test P0 upstream parity items in `plan/UPSTREAM_PARITY_2026-05.md`
+  - [ ] R3.1: Implement only the minimal core contract fixes justified by failing/missing tests
+  - [ ] R3.1: Update `plan/INTERFACE_COMPATIBILITY.md` for any deliberate divergence
+  - [ ] R3.2: Teleprompter parity audit (`BootstrapFewShot`, `MIPROv2`, `GEPA`)
+  - [ ] R3.3: OSS hardening docs (`SECURITY.md`, AI contribution policy) if still aligned with release posture
   - [x] Contribution UX: add `CONTRIBUTING.md` + GitHub issue templates + minimal repro guidance
   - [x] Curate examples: clearly separate “official deterministic” examples from experimental scripts (reduce onboarding noise)
   - [x] Core scope audit: moved unproven/experimental modules out of core `lib/` into `extras/dspy_extras/unsafe/quarantine/`
