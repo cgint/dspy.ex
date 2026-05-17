@@ -49,6 +49,8 @@ defmodule Dspy.Teleprompt.BootstrapFewShot do
     :seed,
     # Bootstrap sampling strategy
     :bootstrap_strategy,
+    # Minimum metric score for accepting bootstrapped examples
+    :metric_threshold,
     # Whether to emit progress logs
     :verbose
   ]
@@ -64,6 +66,7 @@ defmodule Dspy.Teleprompt.BootstrapFewShot do
           num_threads: pos_integer(),
           seed: integer(),
           bootstrap_strategy: atom(),
+          metric_threshold: number(),
           verbose: boolean()
         }
 
@@ -80,8 +83,9 @@ defmodule Dspy.Teleprompt.BootstrapFewShot do
   - `:max_errors` - Maximum errors before stopping (default: 5)
   - `:num_candidate_programs` - Number of candidate programs (default: 16)
   - `:num_threads` - Parallel processing threads (default: auto)
-  - `:seed` - Random seed for reproducibility
+  - `:seed` - Random seed for reproducibility; `-1` preserves natural trainset order for bootstrapped demos
   - `:bootstrap_strategy` - Sampling strategy (:random, :diverse, :hard)
+  - `:metric_threshold` - Minimum metric score for accepting bootstrapped examples (default: 0)
 
   """
   @impl Dspy.Teleprompt
@@ -102,6 +106,7 @@ defmodule Dspy.Teleprompt.BootstrapFewShot do
       num_threads: Keyword.get(opts, :num_threads, System.schedulers_online()),
       seed: Keyword.get(opts, :seed, :os.system_time(:microsecond)),
       bootstrap_strategy: Keyword.get(opts, :bootstrap_strategy, :random),
+      metric_threshold: Keyword.get(opts, :metric_threshold, 0),
       verbose: Keyword.get(opts, :verbose, false)
     }
   end
@@ -180,10 +185,11 @@ defmodule Dspy.Teleprompt.BootstrapFewShot do
       max_errors: max_errors,
       metric: metric,
       num_threads: num_threads,
-      seed: seed
+      seed: seed,
+      metric_threshold: metric_threshold
     } = teleprompt
 
-    :rand.seed(:exsss, {seed, seed + 1, seed + 2})
+    seed_random_if_needed(seed)
 
     # Bootstrap examples across multiple rounds
     all_examples =
@@ -199,7 +205,8 @@ defmodule Dspy.Teleprompt.BootstrapFewShot do
               max_demos,
               max_errors,
               num_threads,
-              seed + round
+              seed_for_round(seed, round),
+              metric_threshold
             )
 
           acc_examples ++ round_examples
@@ -221,11 +228,37 @@ defmodule Dspy.Teleprompt.BootstrapFewShot do
     {:ok, best_examples}
   end
 
-  defp bootstrap_round(teacher, trainset, metric, max_demos, max_errors, num_threads, seed) do
-    # Sample training inputs for bootstrapping
+  defp seed_random_if_needed(-1), do: :ok
+
+  defp seed_random_if_needed(seed) when is_integer(seed) do
+    :rand.seed(:exsss, {seed, seed + 1, seed + 2})
+    :ok
+  end
+
+  defp seed_for_round(-1, _round), do: -1
+  defp seed_for_round(seed, round), do: seed + round
+
+  defp sample_bootstrap_inputs(trainset, count, -1), do: Enum.take(trainset, count)
+
+  defp sample_bootstrap_inputs(trainset, count, seed) do
+    Trainset.sample(trainset, count, strategy: :random, seed: seed)
+  end
+
+  defp bootstrap_round(
+         teacher,
+         trainset,
+         metric,
+         max_demos,
+         max_errors,
+         num_threads,
+         seed,
+         metric_threshold
+       ) do
+    # Sample training inputs for bootstrapping. `seed: -1` intentionally means
+    # unshuffled/natural order, matching upstream's unshuffled few-shot path.
     inputs =
       trainset
-      |> Trainset.sample(max_demos * 2, strategy: :random, seed: seed)
+      |> sample_bootstrap_inputs(max_demos * 2, seed)
       |> Enum.map(&Example.inputs/1)
 
     # Generate outputs using teacher program
@@ -242,7 +275,7 @@ defmodule Dspy.Teleprompt.BootstrapFewShot do
         timeout: 30_000
       )
       |> Enum.flat_map(fn {:ok, chunk_results} -> chunk_results end)
-      |> Enum.filter(fn {_example, score} -> score > 0 end)
+      |> Enum.filter(fn {_example, score} -> score >= metric_threshold end)
 
     results
   end
@@ -261,7 +294,7 @@ defmodule Dspy.Teleprompt.BootstrapFewShot do
         end
       end)
 
-    results
+    Enum.reverse(results)
   end
 
   defp generate_bootstrap_example(teacher, input, metric) do
