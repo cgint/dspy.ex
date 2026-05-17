@@ -27,7 +27,7 @@ North star docs:
 ## Loop status
 - Loop state: ACTIVE — R3 upstream alignment / structured parity audit
 - Active control artifact: `plan/UPSTREAM_PARITY_2026-05.md`
-- Current slice: **R3.1 Core Contract Hardening** — implementation checkpoint complete, pending commit/release decision
+- Current slice: **R3.1 Core Contract Hardening** — complete; next planned slice is R3.2 Teleprompter parity audit
   - Audited/tested `Dspy.Signature` duplicate-field and input validation behavior.
   - Audited/tested `Dspy.ChainOfThought` rationale-field semantics versus upstream restored behavior.
   - Audited/tested adapter behavior for empty/nil LM responses.
