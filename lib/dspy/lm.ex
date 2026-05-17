@@ -344,7 +344,7 @@ defmodule Dspy.LM do
   Extract normalized first-choice content and tool_calls from a model response.
   """
   @spec choice_from_response(response() | String.t()) ::
-          {:ok, %{text: String.t() | nil, tool_calls: list() | nil, raw: map()}}
+          {:ok, %{text: String.t() | nil, tool_calls: list() | nil | any(), raw: map()}}
           | {:error, any()}
   def choice_from_response(response) when is_binary(response) do
     {:ok, %{text: response, tool_calls: nil, raw: %{content: response}}}
@@ -359,7 +359,11 @@ defmodule Dspy.LM do
         {:ok,
          %{
            text: if(is_binary(text), do: text, else: nil),
-           tool_calls: if(is_list(tool_calls), do: tool_calls, else: nil),
+           # Preserve malformed non-nil tool_calls so the adapter pipeline can
+           # return an explicit merge/normalization error instead of silently
+           # treating them as absent.
+           tool_calls:
+             if(is_nil(tool_calls) or is_list(tool_calls), do: tool_calls, else: tool_calls),
            raw: message
          }}
 
