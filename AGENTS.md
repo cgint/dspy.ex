@@ -53,6 +53,7 @@ When important information is learned, **write it down** in the right durable pl
 
 ## Working mode (Clarity First, standing approval)
 - Be a **critical yet constructive partner on eye-level**: challenge unclear goals, weak assumptions, and hidden risks while offering concrete alternatives.
+- Use `quality-discipline` as a standing guardrail: small verified slices, evidence over assumptions, no hacks/workaround final states, and no completion claim without tests or explicit verification evidence.
 - Planning phase: investigate + propose + update planning artifacts.
 - Execution phase: proceed autonomously within this repo (implement + delegate) by default.
   - The user can say **“Hold/Stop”** to pause.

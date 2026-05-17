@@ -127,6 +127,11 @@
 
 ## Dated memory log
 
+### 2026-05-17 — Quality discipline guardrail persisted
+- User asked whether `quality-discipline` had been noted down as a guardrail.
+- Persisted it as a standing repo working rule: small verified slices, evidence over assumptions, no hacks/workaround final states, avoid provider calls in automated tests unless explicitly required, and no completion claim without concrete verification evidence.
+- Updated durable docs: `agent/USER.md`, `AGENTS.md`, `agent/SOUL.md`, `agent/MEMORY.md`.
+
 ### 2026-05-17 — Self-organization instruction refreshed
 - User explicitly asked the assistant to organize itself in files, treating `AGENTS.md` as the only repo-specific context available at a new session start.
 - User asked the assistant to collect, persist, and organize knowledge, including knowledge from web research when relevant.

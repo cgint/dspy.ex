@@ -17,3 +17,18 @@ Operational implications:
 - Keep `AGENTS.md` compact but strong enough to bootstrap the next session.
 - Use `agent/MEMORY.md` for compact resume context, `agent/SOUL.md` for stable behavior, and `agent/USER.md` for explicit user preferences.
 - For external/web research, persist reusable findings with source/context and date, usually under `plan/research/` or a relevant planning doc.
+
+## 2026-05-17 — Use `quality-discipline` as a standing guardrail
+
+User instruction:
+- Treat the `quality-discipline` skill as a guardrail for work in this repo.
+
+Operational implications:
+- Work steadily; correctness beats speed.
+- Prefer evidence over assumptions; investigate uncertainty before changing code.
+- Use small, verified vertical slices.
+- No hacks, hidden workarounds, or workaround final states.
+- Every claimed-complete feature needs automated test coverage or explicit verification evidence.
+- Avoid external provider calls in automated tests unless explicitly required.
+- Keep durable notes/status/memory current as work progresses.
+- Do not mark work complete until explicit success criteria are mapped to concrete evidence.
