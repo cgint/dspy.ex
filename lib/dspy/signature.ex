@@ -44,6 +44,7 @@ defmodule Dspy.Signature do
 
     validate_field_names!(:input, input_fields)
     validate_field_names!(:output, output_fields)
+    validate_distinct_input_output_names!(input_fields, output_fields)
 
     %__MODULE__{
       name: name,
@@ -152,6 +153,26 @@ defmodule Dspy.Signature do
       duplicates ->
         raise ArgumentError,
               "duplicate #{direction} field name(s): #{inspect(Enum.sort(duplicates))}"
+    end
+  end
+
+  defp validate_distinct_input_output_names!(input_fields, output_fields) do
+    input_names = MapSet.new(Enum.map(input_fields, & &1.name))
+    output_names = MapSet.new(Enum.map(output_fields, & &1.name))
+
+    collisions =
+      input_names
+      |> MapSet.intersection(output_names)
+      |> MapSet.to_list()
+      |> Enum.sort()
+
+    case collisions do
+      [] ->
+        :ok
+
+      collisions ->
+        raise ArgumentError,
+              "input and output fields must have distinct names; overlapping field name(s): #{inspect(collisions)}"
     end
   end
 

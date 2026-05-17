@@ -63,6 +63,20 @@ defmodule Dspy.R31CoreContractHardeningTest do
       end
     end
 
+    test "Dspy.Signature.new/2 rejects names reused across input and output fields" do
+      field = %{
+        name: :question,
+        type: :string,
+        description: "Question",
+        required: true,
+        default: nil
+      }
+
+      assert_raise ArgumentError, ~r/input and output fields must have distinct names/i, fn ->
+        Dspy.Signature.new("InputOutputCollision", input_fields: [field], output_fields: [field])
+      end
+    end
+
     test "Dspy.Signature.define/1 rejects duplicate arrow fields" do
       assert_raise ArgumentError, ~r/duplicate input field/i, fn ->
         Dspy.Signature.define("question, question -> answer")
@@ -70,6 +84,10 @@ defmodule Dspy.R31CoreContractHardeningTest do
 
       assert_raise ArgumentError, ~r/duplicate output field/i, fn ->
         Dspy.Signature.define("question -> answer, answer")
+      end
+
+      assert_raise ArgumentError, ~r/input and output fields must have distinct names/i, fn ->
+        Dspy.Signature.define("question -> question")
       end
     end
   end
