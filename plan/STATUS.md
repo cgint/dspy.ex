@@ -27,11 +27,11 @@ North star docs:
 ## Loop status
 - Loop state: ACTIVE — R3 upstream alignment / structured parity audit
 - Active control artifact: `plan/UPSTREAM_PARITY_2026-05.md`
-- Current slice: **Coverage hardening 1–4** — active
+- Current slice: **Coverage hardening 1–4** — implementation checkpoint complete, pending final verification
   - Slice 1 parameter/state safety tests added; no implementation fixes required.
   - Slice 2 / R3.2 teleprompter parity audit complete: BootstrapFewShot fixed/covered; MIPROv2 classified partial/not directly applicable; GEPA classified divergent/covered subset.
   - Slice 3 adapter pipeline edge-case tests added; malformed native tool calls now surface explicit merge errors.
-  - Next: 0%-coverage module audit.
+  - Slice 4 0%-coverage module audit persisted in `plan/COVERAGE_AUDIT_2026-05.md`.
 - Backlog (ordered):
   - [x] R3.1: Inspect and test P0 upstream parity items in `plan/UPSTREAM_PARITY_2026-05.md`
   - [x] R3.1: Implement only the minimal core contract fixes justified by failing/missing tests
@@ -39,7 +39,7 @@ North star docs:
   - [x] Coverage hardening slice 1: parameter/state safety tests
   - [x] Coverage hardening slice 2 / R3.2: Teleprompter parity audit (`BootstrapFewShot`, `MIPROv2`, `GEPA`)
   - [x] Coverage hardening slice 3: adapter pipeline edge-case tests
-  - [ ] Coverage hardening slice 4: 0%-coverage module audit
+  - [x] Coverage hardening slice 4: 0%-coverage module audit
   - [ ] R3.3: OSS hardening docs (`SECURITY.md`, AI contribution policy) if still aligned with release posture
   - [x] Contribution UX: add `CONTRIBUTING.md` + GitHub issue templates + minimal repro guidance
   - [x] Curate examples: clearly separate “official deterministic” examples from experimental scripts (reduce onboarding noise)
@@ -69,6 +69,7 @@ North star docs:
   - [x] JSON-friendly parameter export/import (`Dspy.Parameter.encode_json!/1`, `decode_json/1`)
   - [x] File helpers for parameter persistence (`Dspy.Parameter.write_json!/2`, `read_json!/1`)
 - Evidence:
+  - Evidence file: `plan/COVERAGE_AUDIT_2026-05.md` (0%/near-0% coverage classification and recommendations)
   - Evidence file: `test/adapter_pipeline_edge_cases_test.exs` (adapter pipeline edge cases: invalid adapter requests, attachment target failures, LM retry, malformed native tool calls)
   - Evidence file: `test/r3_2_teleprompter_parity_test.exs` (R3.2 teleprompter parity: BootstrapFewShot metric threshold and seed -1 natural order, MIPROv2 deterministic demo-selection guard, GEPA finite-candidate subset)
   - Evidence file: `test/parameter_state_safety_test.exs` (parameter/state safety: malformed JSON/payloads, unsupported program handling, invalid apply no-mutation, file persistence errors)
@@ -198,6 +199,7 @@ Notes:
 
 ## Log
 
+- **2026-05-17**: Coverage hardening slice 4: ran `mix test --cover` (325 tests passing, 8 excluded, 66.23% total line coverage, 90% threshold not met), classified 0%/near-0% modules by support status, and persisted recommendations in `plan/COVERAGE_AUDIT_2026-05.md`.
 - **2026-05-17**: Coverage hardening slice 3: added adapter pipeline edge-case tests for invalid adapter request shapes, attachment merge failures before LM calls, LM transport retries, and malformed native tool calls; fixed `Dspy.LM.choice_from_response/1` to preserve malformed non-nil `tool_calls` so the pipeline returns explicit normalization errors. Verification: `mix test test/adapter_pipeline_edge_cases_test.exs test/lm/req_llm_multimodal_test.exs test/signature/adapter_native_tool_calling_test.exs`, `mix test`.
 - **2026-05-17**: Coverage hardening slice 2 / R3.2 teleprompter parity: added deterministic tests for BootstrapFewShot `metric_threshold` + `seed: -1`, MIPROv2 deterministic demo-selection guard, and GEPA finite-candidate supported subset; implemented minimal BootstrapFewShot fixes (`metric_threshold`, seed -1 natural order, chunk order preservation); documented MIPROv2 as partial/not directly applicable and GEPA as divergent/covered subset. Verification: `mix test test/r3_2_teleprompter_parity_test.exs`, `mix test test/teleprompt test/bootstrap_few_shot_smoke_test.exs test/r3_2_teleprompter_parity_test.exs`.
 - **2026-05-17**: Coverage hardening slice 1: added parameter/state safety tests for malformed JSON/payloads, unsupported program handling, invalid apply no-mutation, and file persistence errors. No implementation fixes required. Verification: `mix test test/parameter_state_safety_test.exs`.
