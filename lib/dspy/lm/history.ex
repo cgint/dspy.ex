@@ -5,13 +5,13 @@ defmodule Dspy.LM.History do
 
   @default_max_entries 200
 
-  @type record :: map()
+  @type history_record :: map()
 
   def start_link(opts \\ []) do
     GenServer.start_link(__MODULE__, opts, name: __MODULE__)
   end
 
-  @spec record(record()) :: :ok
+  @spec record(history_record()) :: :ok
   def record(%{} = record) do
     if Process.whereis(__MODULE__) do
       GenServer.call(__MODULE__, {:record, record})
@@ -20,7 +20,7 @@ defmodule Dspy.LM.History do
     end
   end
 
-  @spec list(keyword()) :: [record()]
+  @spec list(keyword()) :: [history_record()]
   def list(opts \\ []) do
     n = Keyword.get(opts, :n, 50)
 

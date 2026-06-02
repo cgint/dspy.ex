@@ -255,7 +255,7 @@ defmodule Dspy.TypedOutputs do
     e -> {:error, {:schema_encode_failed, e}}
   end
 
-  @internal_schema_keys_to_strip ["jsv-cast", :"jsv-cast"]
+  @internal_schema_keys_to_strip ["jsv-cast", :"jsv-cast", "x-jsv-cast", :"x-jsv-cast"]
 
   defp strip_jsv_internal_keys(term) when is_map(term) do
     term
