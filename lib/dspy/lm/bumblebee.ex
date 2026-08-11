@@ -304,8 +304,11 @@ defmodule Dspy.LM.Bumblebee do
 
   defp extract_text(other), do: {:error, {:unexpected_runner_output, summarize_output(other)}}
 
-  defp summarize_output(v) when is_binary(v), do: %{type: :binary, bytes: byte_size(v)}
   defp summarize_output(v) when is_list(v), do: %{type: :list, length: length(v)}
+
+  defp summarize_output(v) when is_struct(v) do
+    %{type: :struct, struct: v.__struct__}
+  end
 
   defp summarize_output(v) when is_map(v) do
     keys = Map.keys(v)
@@ -318,7 +321,6 @@ defmodule Dspy.LM.Bumblebee do
   end
 
   defp summarize_output(v) do
-    struct = if is_struct(v), do: v.__struct__, else: nil
-    %{type: :other, struct: struct || :none}
+    %{type: :other, inspect: inspect(v, limit: 100)}
   end
 end

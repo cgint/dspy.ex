@@ -1,0 +1,14 @@
+# Trivy configuration
+# Project-specific skip rules for vendored/unmaintained directories
+# that are not part of our runtime dependency tree.
+#
+# deps/req_llm/examples is a vendored example app inside a git dependency
+# — not in our runtime tree. Findings there are false positives.
+#
+# extras/dspy_extras is a co-located sibling Mix project with its own
+# dependency tree (Cowboy/Phoenix/Plug) that is not in the core :dspy
+# runtime tree. Its CVEs are out of scope for this project.
+scan:
+  skip-dirs:
+    - deps/req_llm/examples
+    - extras/dspy_extras

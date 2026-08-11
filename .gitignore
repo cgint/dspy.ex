@@ -32,3 +32,10 @@ python_dspy_source/
 
 # Local notes (untracked scratch)
 RecursiveLanguageModels.txt
+
+# Security scan results (generated artifacts)
+.scan-results/
+# Ignore Code Giant output directory
+.codegiant/
+._cg_tmp*
+cg-task-result-*.md

@@ -126,10 +126,6 @@ defmodule Dspy.ChainOfThought do
 
   defp normalize_inputs(inputs) when is_map(inputs), do: inputs
 
-  defp normalize_inputs(inputs) when is_list(inputs) do
-    if Keyword.keyword?(inputs), do: Map.new(inputs), else: inputs
-  end
-
   defp get_signature(signature) when is_atom(signature), do: signature.signature()
   defp get_signature(signature) when is_binary(signature), do: Dspy.Signature.define(signature)
   defp get_signature(%Dspy.Signature{} = signature), do: signature
