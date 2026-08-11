@@ -9,14 +9,26 @@ defmodule Dspy.Signature.Adapters.JSONAdapter do
 
   @behaviour Dspy.Signature.Adapter
 
+  @doc "The complete outer JSON Schema owned by JSONAdapter."
+  def output_contract(%Dspy.Signature{} = signature) do
+    fields = Enum.reject(signature.output_fields, &(&1.type == :tool_calls))
+
+    %{
+      "type" => "object",
+      "properties" =>
+        Map.new(fields, fn field -> {Atom.to_string(field.name), field_schema!(field)} end),
+      "required" => Enum.map(fields, &Atom.to_string(&1.name)),
+      "additionalProperties" => true
+    }
+  end
+
   @impl true
   def format_instructions(%Dspy.Signature{} = signature, _opts \\ []) do
-    keys =
-      signature.output_fields
-      |> Enum.map(&Atom.to_string(&1.name))
-      |> Enum.join(", ")
+    contract = output_contract(signature)
+    schema_json = Jason.encode!(contract)
+    example = contract |> minimal_example() |> Jason.encode!()
 
-    "Return JSON only. Return a single valid JSON object with keys: #{keys}. Do not include any other text."
+    "Return JSON only. Return one valid JSON object conforming to this complete output contract:\n#{schema_json}\nExample: #{example}\nDo not include any other text."
   end
 
   @impl true
@@ -38,7 +50,13 @@ defmodule Dspy.Signature.Adapters.JSONAdapter do
           opts
         )
 
-      %{messages: history_messages ++ [%{role: "user", content: prompt}]}
+      request = %{messages: history_messages ++ [%{role: "user", content: prompt}]}
+
+      if Enum.any?(signature.output_fields, &(&1.type == :tool_calls)) do
+        request
+      else
+        Map.put(request, :output_contract, output_contract(signature))
+      end
     end
   end
 
@@ -57,6 +75,34 @@ defmodule Dspy.Signature.Adapters.JSONAdapter do
         error
     end
   end
+
+  defp field_schema!(%{schema: schema}) do
+    {:ok, schema_json} = Dspy.TypedOutputs.prompt_schema_json(schema)
+    Jason.decode!(schema_json)
+  end
+
+  defp field_schema!(field) do
+    schema = %{"type" => primitive_json_type(field.type)}
+    if is_list(Map.get(field, :one_of)), do: Map.put(schema, "enum", field.one_of), else: schema
+  end
+
+  defp primitive_json_type(:integer), do: "integer"
+  defp primitive_json_type(:number), do: "number"
+  defp primitive_json_type(:boolean), do: "boolean"
+  defp primitive_json_type(:json), do: "object"
+  defp primitive_json_type(_), do: "string"
+
+  defp minimal_example(%{"properties" => properties}) do
+    Map.new(properties, fn {key, schema} -> {key, example_value(schema)} end)
+  end
+
+  defp example_value(%{"enum" => [value | _]}), do: value
+  defp example_value(%{"type" => "object"}), do: %{}
+  defp example_value(%{"type" => "array"}), do: []
+  defp example_value(%{"type" => "integer"}), do: 0
+  defp example_value(%{"type" => "number"}), do: 0
+  defp example_value(%{"type" => "boolean"}), do: false
+  defp example_value(_), do: ""
 
   # JSONAdapter keyset contract: require all declared output keys; ignore extras.
   defp enforce_output_keyset(%Dspy.Signature{} = signature, decoded_map)

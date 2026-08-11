@@ -33,7 +33,8 @@ defmodule Dspy.LM.ReqLLM do
     default_opts: [],
     client_module: ReqLLM,
     context_module: ReqLLM.Context,
-    response_module: ReqLLM.Response
+    response_module: ReqLLM.Response,
+    generation_module: ReqLLM.Generation
   ]
 
   @type t :: %__MODULE__{
@@ -41,7 +42,8 @@ defmodule Dspy.LM.ReqLLM do
           default_opts: keyword(),
           client_module: module(),
           context_module: module(),
-          response_module: module()
+          response_module: module(),
+          generation_module: module()
         }
 
   @doc """
@@ -60,34 +62,86 @@ defmodule Dspy.LM.ReqLLM do
       default_opts: Keyword.get(opts, :default_opts, []),
       client_module: Keyword.get(opts, :client_module, ReqLLM),
       context_module: Keyword.get(opts, :context_module, ReqLLM.Context),
-      response_module: Keyword.get(opts, :response_module, ReqLLM.Response)
+      response_module: Keyword.get(opts, :response_module, ReqLLM.Response),
+      generation_module: Keyword.get(opts, :generation_module, ReqLLM.Generation)
     }
   end
 
   @impl true
   def generate(%__MODULE__{} = lm, request) when is_map(request) do
-    with {:ok, {input, opts}} <- to_req_llm_input_and_opts(lm, request),
-         {:ok, response} <- lm.client_module.generate_text(lm.model, input, opts) do
-      text = lm.response_module.text(response)
-      finish_reason = lm.response_module.finish_reason(response)
-      usage = lm.response_module.usage(response)
+    with {:ok, {input, opts}} <- to_req_llm_input_and_opts(lm, request) do
+      case native_object_contract(request, lm.model) do
+        {:ok, contract} ->
+          case lm.generation_module.generate_object(lm.model, input, contract, opts) do
+            {:ok, response} -> normalize_object_response(lm, response)
+            {:error, _native_reason} -> generate_text_response(lm, input, opts)
+          end
 
-      {:ok,
-       %{
-         choices: [
-           %{
-             message: %{role: "assistant", content: text || ""},
-             finish_reason: finish_reason && Atom.to_string(finish_reason)
-           }
-         ],
-         usage: map_usage(usage)
-       }}
-    else
-      {:error, reason} -> {:error, reason}
+        :fallback ->
+          generate_text_response(lm, input, opts)
+      end
     end
   end
 
+  defp generate_text_response(lm, input, opts) do
+    with {:ok, response} <- lm.client_module.generate_text(lm.model, input, opts) do
+      text = lm.response_module.text(response)
+      finish_reason = lm.response_module.finish_reason(response)
+      usage = lm.response_module.usage(response)
+      normalized_response(text || "", finish_reason, usage)
+    end
+  end
+
+  defp normalize_object_response(lm, response) do
+    object = lm.response_module.object(response)
+
+    text =
+      case lm.response_module.text(response) do
+        text when is_binary(text) and text != "" -> text
+        _ -> Jason.encode!(object)
+      end
+
+    normalized_response(
+      text,
+      lm.response_module.finish_reason(response),
+      lm.response_module.usage(response)
+    )
+  end
+
+  defp normalized_response(text, finish_reason, usage) do
+    {:ok,
+     %{
+       choices: [
+         %{
+           message: %{role: "assistant", content: text},
+           finish_reason: finish_reason && Atom.to_string(finish_reason)
+         }
+       ],
+       usage: map_usage(usage)
+     }}
+  end
+
+  defp native_object_contract(%{output_contract: contract}, model) when is_map(contract) do
+    if native_structured_model?(model), do: {:ok, contract}, else: :fallback
+  end
+
+  defp native_object_contract(_, _), do: :fallback
+
+  # ReqLLM exposes object generation for more providers, but this adapter keeps its
+  # native path intentionally limited to providers covered by this contract slice.
+  defp native_structured_model?(model) when is_binary(model) do
+    case String.split(model, ":", parts: 2) do
+      [provider, _] when provider in ["google", "google_vertex", "openai"] -> true
+      _ -> false
+    end
+  end
+
+  defp native_structured_model?(_), do: false
+
   @impl true
+  def supports?(%__MODULE__{model: model}, :structured_output),
+    do: native_structured_model?(model)
+
   def supports?(_lm, _feature), do: true
 
   defp to_req_llm_input_and_opts(%__MODULE__{} = lm, request) do

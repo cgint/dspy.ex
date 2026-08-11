@@ -23,25 +23,6 @@ defmodule Dspy.Signature.TypedSchemaIntegrationTest do
     output_field(:result, :json, "Typed result", schema: AnswerSchema)
   end
 
-  defp schema_json_for_field!(prompt, field_name) when is_binary(field_name) do
-    marker = "JSON Schema for #{field_name}:"
-
-    assert String.contains?(prompt, marker),
-           "expected prompt to contain schema marker #{inspect(marker)}. Prompt was:\n\n#{prompt}"
-
-    [_before, after_marker] = String.split(prompt, marker, parts: 2)
-
-    after_marker = String.trim_leading(after_marker)
-
-    json_line =
-      after_marker
-      |> String.split("\n", parts: 2)
-      |> List.first()
-      |> String.trim()
-
-    json_line
-  end
-
   defp contains_key_recursive?(term, key) when is_map(term) do
     Enum.any?(term, fn
       {^key, _v} -> true
@@ -63,15 +44,14 @@ defmodule Dspy.Signature.TypedSchemaIntegrationTest do
     assert field.schema == AnswerSchema
   end
 
-  test "to_prompt embeds a schema hint without internal JSV cast metadata" do
+  test "JSONAdapter owns the complete typed output schema hint without internal JSV metadata" do
     signature = TypedAnswerSignature.signature()
+    prompt = Dspy.Signature.to_prompt(signature, adapter: Dspy.Signature.Adapters.JSONAdapter)
 
-    prompt = Dspy.Signature.to_prompt(signature)
-
-    schema_json = schema_json_for_field!(prompt, "result")
-
+    assert [_, schema_json | _] = Regex.run(~r/complete output contract:\n([^\n]+)/, prompt)
     assert {:ok, decoded} = Jason.decode(schema_json)
-    refute String.contains?(schema_json, "jsv-cast")
+    assert get_in(decoded, ["properties", "result", "type"]) == "object"
+    assert "result" in decoded["required"]
     refute contains_key_recursive?(decoded, "jsv-cast")
     refute contains_key_recursive?(decoded, "x-jsv-cast")
   end

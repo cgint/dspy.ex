@@ -97,8 +97,9 @@ defmodule Dspy.TypedOutputRetryTest do
 
     second_prompt = calls |> Enum.at(1) |> Map.fetch!(:prompt)
 
-    assert second_prompt =~ "JSON Schema for result:"
     assert second_prompt =~ "Return JSON only"
+    assert second_prompt =~ "The top-level JSON object must contain the following keys: result."
+    assert second_prompt =~ "Use the required output contract above."
     assert second_prompt =~ "Errors:"
   end
 

@@ -104,7 +104,6 @@ defmodule Dspy.Signature do
     sections = [
       instruction_section(signature),
       adapter.format_instructions(signature, opts),
-      typed_schema_hint_section(signature),
       field_descriptions_section(signature),
       examples_section(examples, signature),
       input_section(signature)
@@ -421,39 +420,6 @@ defmodule Dspy.Signature do
 
   defp instruction_section(%{instructions: instructions}) do
     "Instructions: #{instructions}"
-  end
-
-  defp typed_schema_hint_section(signature) do
-    typed_fields =
-      signature.output_fields
-      |> Enum.filter(&Map.has_key?(&1, :schema))
-
-    case typed_fields do
-      [] ->
-        nil
-
-      fields ->
-        hints =
-          fields
-          |> Enum.map(fn field ->
-            schema = Map.fetch!(field, :schema)
-
-            schema_json =
-              case Dspy.TypedOutputs.prompt_schema_json(schema) do
-                {:ok, json} ->
-                  json
-
-                {:error, reason} ->
-                  raise ArgumentError,
-                        "failed to encode prompt schema for output field #{inspect(field.name)}: #{inspect(reason)}"
-              end
-
-            "JSON Schema for #{Atom.to_string(field.name)}:\n#{schema_json}"
-          end)
-          |> Enum.join("\n\n")
-
-        "Return a JSON object that matches the following schema(s):\n\n" <> hints
-    end
   end
 
   defp field_descriptions_section(signature) do

@@ -331,7 +331,7 @@ defmodule Dspy.Signature.Adapter.Pipeline do
 
     schema_hint =
       if signature_has_typed_outputs?(signature) do
-        "Use the JSON Schema shown above."
+        "Use the required output contract above."
       else
         "Do not include any extra text."
       end
