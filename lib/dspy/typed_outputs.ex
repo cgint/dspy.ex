@@ -54,9 +54,6 @@ defmodule Dspy.TypedOutputs do
 
       {:error, _other} = err ->
         err
-
-      other ->
-        {:error, {:typed_output_failed, other}}
     end
   end
 
@@ -80,9 +77,6 @@ defmodule Dspy.TypedOutputs do
 
       {:error, _other} = err ->
         err
-
-      other ->
-        {:error, {:typed_output_failed, other}}
     end
   end
 
@@ -115,9 +109,6 @@ defmodule Dspy.TypedOutputs do
 
       {:error, {:invalid_json, reason}} ->
         {:error, {:output_decode_failed, reason}}
-
-      other ->
-        {:error, {:output_decode_failed, other}}
     end
   end
 
@@ -237,7 +228,7 @@ defmodule Dspy.TypedOutputs do
   Implementation details:
   - uses `JSV.Schema.normalize_collect/2` (`as_root: true`) to inline nested module-based
     schemas under `$defs`
-  - strips internal JSV keys (at least `"jsv-cast"`) recursively
+  - strips internal JSV cast metadata keys (`"jsv-cast"` and `"x-jsv-cast"`) recursively
   """
   @spec prompt_schema_json(schema_spec()) :: {:ok, String.t()} | {:error, any()}
   def prompt_schema_json(schema_spec) do

@@ -321,7 +321,6 @@ defmodule Dspy.Signature.Adapters.ChatAdapter do
     cond do
       is_binary(value) -> {:ok, value}
       is_atom(value) -> {:ok, Atom.to_string(value)}
-      is_boolean(value) -> {:ok, if(value, do: "true", else: "false")}
       is_number(value) -> {:ok, to_string(value)}
       true -> {:error, :invalid_string}
     end
@@ -449,7 +448,6 @@ defmodule Dspy.Signature.Adapters.ChatAdapter do
     cond do
       is_binary(raw) -> {:ok, raw}
       is_atom(raw) -> {:ok, Atom.to_string(raw)}
-      is_boolean(raw) -> {:ok, if(raw, do: "true", else: "false")}
       is_number(raw) -> {:ok, to_string(raw)}
       true -> {:error, {:cannot_stringify, raw}}
     end

@@ -53,7 +53,7 @@ defmodule Dspy.Signature.Adapter.Callbacks do
       {mod, state} when is_atom(mod) ->
         fun = event_to_fun(event)
 
-        if is_atom(fun) and function_exported?(mod, fun, 3) do
+        if function_exported?(mod, fun, 3) do
           safe_apply(mod, fun, [meta, payload, state])
           |> normalize_returned_state(state)
           |> then(fn new_state -> {mod, new_state} end)

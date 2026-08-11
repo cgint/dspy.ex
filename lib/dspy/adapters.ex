@@ -149,8 +149,6 @@ defmodule Dspy.Adapters do
       end
     end
 
-    defp validate_schema(_data, nil), do: true
-
     defp validate_schema(data, schema) when is_map(data) and is_map(schema) do
       Enum.all?(schema, fn {key, expected_type} ->
         case Map.get(data, key) do

@@ -320,7 +320,7 @@ defmodule Dspy.Parameter do
 
   defp export_value(other), do: {:error, {:unsupported_value, other}}
 
-  defp export_example(%Dspy.Example{attrs: attrs, metadata: meta}) do
+  defp export_example(%{attrs: attrs, metadata: meta}) do
     with {:ok, exported_attrs} <- export_map(attrs || %{}),
          {:ok, exported_meta} <- export_map(meta || %{}) do
       {:ok,
@@ -373,7 +373,6 @@ defmodule Dspy.Parameter do
     end
   end
 
-  defp import_metadata(nil), do: {:ok, %{}}
   defp import_metadata(other), do: {:error, {:invalid_metadata, other}}
 
   defp import_value(list) when is_list(list) do

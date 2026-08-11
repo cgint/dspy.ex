@@ -63,7 +63,7 @@ defmodule Dspy.Signature.TypedSchemaIntegrationTest do
     assert field.schema == AnswerSchema
   end
 
-  test "to_prompt embeds a schema hint for typed output fields (valid JSON; excludes jsv-cast)" do
+  test "to_prompt embeds a schema hint without internal JSV cast metadata" do
     signature = TypedAnswerSignature.signature()
 
     prompt = Dspy.Signature.to_prompt(signature)
@@ -73,6 +73,7 @@ defmodule Dspy.Signature.TypedSchemaIntegrationTest do
     assert {:ok, decoded} = Jason.decode(schema_json)
     refute String.contains?(schema_json, "jsv-cast")
     refute contains_key_recursive?(decoded, "jsv-cast")
+    refute contains_key_recursive?(decoded, "x-jsv-cast")
   end
 
   test "parse_outputs validates/casts typed output field and returns a struct on success" do
