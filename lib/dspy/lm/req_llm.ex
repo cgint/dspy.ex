@@ -1,4 +1,6 @@
 defmodule Dspy.LM.ReqLLM do
+  require Logger
+
   @moduledoc """
   ReqLLM-backed language model client.
 
@@ -73,8 +75,15 @@ defmodule Dspy.LM.ReqLLM do
       case native_object_contract(request, lm.model) do
         {:ok, contract} ->
           case lm.generation_module.generate_object(lm.model, input, contract, opts) do
-            {:ok, response} -> normalize_object_response(lm, response)
-            {:error, _native_reason} -> generate_text_response(lm, input, opts)
+            {:ok, response} ->
+              normalize_object_response(lm, response)
+
+            {:error, native_reason} ->
+              Logger.warning(
+                "native structured-output generation failed; falling back to text generation: #{inspect(native_reason)}"
+              )
+
+              generate_text_response(lm, input, opts)
           end
 
         :fallback ->

@@ -135,6 +135,26 @@ defmodule DspyReqLLMAdapterTest do
              ~s({"result":"native"})
   end
 
+  test "ReqLLM adapter warns with the native failure reason before text fallback" do
+    lm =
+      Dspy.LM.ReqLLM.new(
+        model: "google:gemini",
+        client_module: FakeReqLLM,
+        context_module: FakeContext,
+        response_module: FakeResponse,
+        generation_module: FailingGeneration
+      )
+
+    ExUnit.CaptureLog.capture_log(fn ->
+      assert {:ok, _response} =
+               Dspy.LM.generate(lm, %{prompt: "q", output_contract: %{"type" => "object"}})
+    end)
+    |> then(fn log ->
+      assert log =~ "native structured-output generation failed; falling back to text generation"
+      assert log =~ ":native_failed"
+    end)
+  end
+
   test "ReqLLM adapter retries native operation failure through text generation once" do
     lm =
       Dspy.LM.ReqLLM.new(

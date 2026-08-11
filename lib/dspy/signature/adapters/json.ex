@@ -77,8 +77,13 @@ defmodule Dspy.Signature.Adapters.JSONAdapter do
   end
 
   defp field_schema!(%{schema: schema}) do
-    {:ok, schema_json} = Dspy.TypedOutputs.prompt_schema_json(schema)
-    Jason.decode!(schema_json)
+    case Dspy.TypedOutputs.native_schema(schema) do
+      {:ok, native_schema} ->
+        native_schema
+
+      {:error, reason} ->
+        raise ArgumentError, "cannot build native output schema: #{inspect(reason)}"
+    end
   end
 
   defp field_schema!(field) do

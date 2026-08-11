@@ -221,6 +221,27 @@ defmodule Dspy.TypedOutputs do
   end
 
   @doc """
+  Return a provider-compatible JSON Schema map for `schema_spec`.
+
+  Nested JSV definitions are inlined so the result contains neither `$defs` nor
+  `$ref`. Recursive and unsupported references return tagged errors rather than
+  leaking an invalid native response schema to a provider.
+  """
+  @spec native_schema(schema_spec()) :: {:ok, map()} | {:error, any()}
+  def native_schema(schema_spec) do
+    with {:ok, build_input} <- normalize_schema(schema_spec) do
+      schema =
+        build_input
+        |> JSV.Schema.normalize_collect(as_root: true)
+        |> strip_jsv_internal_keys()
+
+      inline_schema_references(schema)
+    end
+  rescue
+    e -> {:error, {:schema_normalization_failed, e}}
+  end
+
+  @doc """
   Return a compact JSON string representing a self-contained JSON Schema for `schema_spec`.
 
   This is intended for embedding in prompts.
@@ -263,19 +284,17 @@ defmodule Dspy.TypedOutputs do
   defp normalize_schema(schema) when is_map(schema), do: {:ok, schema}
 
   defp normalize_schema(schema) when is_atom(schema) do
-    # If the module exports json_schema/0 (JSV.defschema) or schema/0, treat the
-    # module itself as the schema identifier. This enables JSV's module-based
-    # schema resolution + optional struct casting (Pydantic-like feel).
+    # Ensure a schema module is loaded before checking its exported callbacks.
+    # `function_exported?/3` otherwise returns false on a fresh VM.
     try do
-      cond do
-        function_exported?(schema, :json_schema, 0) ->
-          {:ok, schema}
-
-        function_exported?(schema, :schema, 0) ->
-          {:ok, schema}
-
-        true ->
-          {:error, {:invalid_schema, schema}}
+      with {:module, ^schema} <- Code.ensure_loaded(schema) do
+        cond do
+          function_exported?(schema, :json_schema, 0) -> {:ok, schema}
+          function_exported?(schema, :schema, 0) -> {:ok, schema}
+          true -> {:error, {:invalid_schema, schema}}
+        end
+      else
+        _ -> {:error, {:invalid_schema, schema}}
       end
     rescue
       e -> {:error, {:invalid_schema, e}}
@@ -283,6 +302,65 @@ defmodule Dspy.TypedOutputs do
   end
 
   defp normalize_schema(other), do: {:error, {:invalid_schema, other}}
+
+  defp inline_schema_references(schema) when is_map(schema) do
+    definitions = Map.get(schema, "$defs", %{})
+    inline_schema_references(Map.delete(schema, "$defs"), definitions, MapSet.new())
+  end
+
+  defp inline_schema_references(term, definitions, seen) when is_map(term) do
+    case Map.get(term, "$ref") do
+      nil ->
+        term
+        |> Enum.reduce_while({:ok, %{}}, fn {key, value}, {:ok, acc} ->
+          case inline_schema_references(value, definitions, seen) do
+            {:ok, inlined} -> {:cont, {:ok, Map.put(acc, key, inlined)}}
+            {:error, _reason} = error -> {:halt, error}
+          end
+        end)
+
+      ref when is_binary(ref) ->
+        with {:ok, definition_name} <- local_definition_name(ref),
+             {:ok, definition} <- Map.fetch(definitions, definition_name),
+             :ok <- ensure_non_recursive_reference(ref, seen),
+             {:ok, inlined} <-
+               inline_schema_references(definition, definitions, MapSet.put(seen, ref)) do
+          inline_schema_references(Map.delete(term, "$ref"), definitions, seen)
+          |> case do
+            {:ok, siblings} -> {:ok, Map.merge(inlined, siblings)}
+            {:error, _reason} = error -> error
+          end
+        else
+          :error -> {:error, {:unknown_schema_reference, ref}}
+          {:error, _reason} = error -> error
+        end
+
+      ref ->
+        {:error, {:unsupported_schema_reference, ref}}
+    end
+  end
+
+  defp inline_schema_references(term, definitions, seen) when is_list(term) do
+    Enum.reduce_while(term, {:ok, []}, fn value, {:ok, acc} ->
+      case inline_schema_references(value, definitions, seen) do
+        {:ok, inlined} -> {:cont, {:ok, [inlined | acc]}}
+        {:error, _reason} = error -> {:halt, error}
+      end
+    end)
+    |> case do
+      {:ok, values} -> {:ok, Enum.reverse(values)}
+      {:error, _reason} = error -> error
+    end
+  end
+
+  defp inline_schema_references(term, _definitions, _seen), do: {:ok, term}
+
+  defp local_definition_name("#/$defs/" <> name) when name != "", do: {:ok, name}
+  defp local_definition_name(ref), do: {:error, {:unsupported_schema_reference, ref}}
+
+  defp ensure_non_recursive_reference(ref, seen) do
+    if MapSet.member?(seen, ref), do: {:error, {:recursive_schema_reference, ref}}, else: :ok
+  end
 
   defp extract_json_object(text) when is_binary(text) do
     trimmed = String.trim(text)
