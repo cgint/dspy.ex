@@ -51,7 +51,7 @@ defmodule Dspy.ChainOfThought do
   Options:
   - `:examples` (default: [])
   - `:max_retries` (default: 3)
-  - `:max_output_retries` (default: `Dspy.Settings.max_output_retries` or `0`) — retry when adapter outputs fail to parse/validate (e.g. `{:missing_required_outputs, ...}`)
+  - `:max_output_retries` (default: `Dspy.Settings.max_output_retries` or `0`) — retry when adapter outputs fail to parse/validate (e.g. inner reason `{:missing_required_outputs, ...}`); terminal pipeline failures return `{:output_parse_failed, reason, %{raw_output: response_text}}`
   - `:reasoning_field` (default: :reasoning)
   - `:adapter` — optional signature adapter override
   - `:callbacks` — signature-adapter lifecycle callbacks (`[{module, state}]`)

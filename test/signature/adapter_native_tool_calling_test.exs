@@ -148,7 +148,9 @@ defmodule Dspy.Signature.AdapterNativeToolCallingTest do
 
     predictor = Dspy.Predict.new(ToolOutputSig)
 
-    assert {:error, {:invalid_tool_call_arguments, %{name: "add"}}} =
+    assert {:error,
+            {:output_parse_failed, {:invalid_tool_call_arguments, %{name: "add"}},
+             %{raw_output: "Answer: done\n"}}} =
              Dspy.Module.forward(predictor, %{question: "q"})
   end
 

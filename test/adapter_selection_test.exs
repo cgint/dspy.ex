@@ -78,7 +78,9 @@ defmodule Dspy.AdapterSelectionTest do
 
     predictor = Dspy.Predict.new(SimpleSig)
 
-    assert {:error, {:output_decode_failed, :no_json_object_found}} =
+    assert {:error,
+            {:output_parse_failed, {:output_decode_failed, :no_json_object_found},
+             %{raw_output: "Answer: hi\n"}}} =
              Dspy.Module.forward(predictor, %{question: "q"})
   end
 
@@ -102,7 +104,9 @@ defmodule Dspy.AdapterSelectionTest do
 
     predictor = Dspy.Predict.new(SimpleSig, adapter: Dspy.Signature.Adapters.JSONAdapter)
 
-    assert {:error, {:output_decode_failed, :no_json_object_found}} =
+    assert {:error,
+            {:output_parse_failed, {:output_decode_failed, :no_json_object_found},
+             %{raw_output: "Answer: hi\n"}}} =
              Dspy.Module.forward(predictor, %{question: "q"})
   end
 

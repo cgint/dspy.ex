@@ -68,8 +68,8 @@ defmodule Dspy.UntypedOutputRetryDefaultAdapterTest do
       ~s(Output_json: {"speech_text":"hi","focus_points":["a"],"used_open_spec_change_ids":[]})
     end
 
-    defp response_content(:always_inner_json, _n) do
-      ~s({"speech_text":"hi","focus_points":["a"],"used_open_spec_change_ids":[]})
+    defp response_content(:always_inner_json, call_num) do
+      ~s({"speech_text":"attempt #{call_num}","focus_points":["a"],"used_open_spec_change_ids":[]})
     end
 
     @impl true
@@ -114,26 +114,36 @@ defmodule Dspy.UntypedOutputRetryDefaultAdapterTest do
     assert second_prompt =~ "missing required output"
   end
 
-  test "Predict(Default): stops after N output retries and returns missing_required_outputs",
+  test "Predict(Default): stops after N output retries and returns the final raw missing-output response",
        %{counter: counter} do
     Dspy.configure(lm: %RetryMockLM{counter: counter, pid: self(), mode: :always_inner_json})
 
     program = Dspy.Predict.new(SummarizeSignature, max_retries: 0, max_output_retries: 1)
 
-    assert {:error, {:missing_required_outputs, [:output_json]}} =
+    assert {:error,
+            {:output_parse_failed, {:missing_required_outputs, [:output_json]},
+             %{
+               raw_output:
+                 ~s({"speech_text":"attempt 2","focus_points":["a"],"used_open_spec_change_ids":[]})
+             }}} =
              Dspy.Module.forward(program, %{context_json: "{}"})
 
-    # 1 initial attempt + 1 retry
+    # 1 initial attempt + 1 retry; the raw output is the final attempt only.
     assert Agent.get(counter, & &1) == 2
   end
 
   test "Predict(Default): does not retry when max_output_retries is 0",
        %{counter: counter} do
-    Dspy.configure(lm: %RetryMockLM{counter: counter, pid: self(), mode: :inner_json_then_label})
+    Dspy.configure(lm: %RetryMockLM{counter: counter, pid: self(), mode: :always_inner_json})
 
     program = Dspy.Predict.new(SummarizeSignature, max_retries: 0, max_output_retries: 0)
 
-    assert {:error, {:missing_required_outputs, [:output_json]}} =
+    assert {:error,
+            {:output_parse_failed, {:missing_required_outputs, [:output_json]},
+             %{
+               raw_output:
+                 ~s({"speech_text":"attempt 1","focus_points":["a"],"used_open_spec_change_ids":[]})
+             }}} =
              Dspy.Module.forward(program, %{context_json: "{}"})
 
     assert Agent.get(counter, & &1) == 1

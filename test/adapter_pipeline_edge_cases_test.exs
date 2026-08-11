@@ -73,6 +73,17 @@ defmodule Dspy.AdapterPipelineEdgeCasesTest do
       do: Dspy.Signature.Adapters.Default.parse_outputs(signature, text, opts)
   end
 
+  defmodule UnexpectedParseAdapter do
+    @behaviour Dspy.Signature.Adapter
+
+    @impl true
+    def format_instructions(signature, opts),
+      do: Dspy.Signature.Adapters.Default.format_instructions(signature, opts)
+
+    @impl true
+    def parse_outputs(_signature, _text, _opts), do: :unexpected_adapter_result
+  end
+
   defmodule NoUserMessageAdapter do
     @behaviour Dspy.Signature.Adapter
 
@@ -117,6 +128,17 @@ defmodule Dspy.AdapterPipelineEdgeCasesTest do
     refute_receive {:lm_request, _request}, 50
   end
 
+  test "unexpected adapter parse results include the raw completion" do
+    Dspy.configure(lm: %CountingLM{pid: self(), content: "unparsed completion"})
+
+    program = Dspy.Predict.new(SimpleSig, adapter: UnexpectedParseAdapter, max_retries: 0)
+
+    assert {:error,
+            {:output_parse_failed, {:parse_failed, :unexpected_adapter_result},
+             %{raw_output: "unparsed completion"}}} =
+             Dspy.Module.forward(program, %{question: "q"})
+  end
+
   test "attachments require a user message target before LM call" do
     Dspy.configure(lm: %CountingLM{pid: self(), content: "Answer: ok"})
 
@@ -159,7 +181,9 @@ defmodule Dspy.AdapterPipelineEdgeCasesTest do
 
     program = Dspy.Predict.new(ToolCallsSig, max_retries: 0, max_output_retries: 0)
 
-    assert {:error, {:invalid_tool_calls, "not-a-tool-call-list"}} =
+    assert {:error,
+            {:output_parse_failed, {:invalid_tool_calls, "not-a-tool-call-list"},
+             %{raw_output: ""}}} =
              Dspy.Module.forward(program, %{question: "use a tool"})
   end
 end

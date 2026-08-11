@@ -145,7 +145,8 @@ defmodule Dspy.R31CoreContractHardeningTest do
       Dspy.configure(lm: %EmptyResponseLM{content: ""})
       predict = Dspy.Predict.new(SimpleSignature, max_retries: 0, max_output_retries: 0)
 
-      assert {:error, {:missing_required_outputs, [:answer]}} =
+      assert {:error,
+              {:output_parse_failed, {:missing_required_outputs, [:answer]}, %{raw_output: ""}}} =
                Dspy.Module.forward(predict, %{question: "q"})
     end
 

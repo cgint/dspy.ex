@@ -64,7 +64,10 @@ defmodule Dspy.Acceptance.ClassifierCredentialsJsonAcceptanceTest do
 
     Dspy.configure(lm: %BadJsonLM{})
 
-    assert {:error, {:invalid_output_value, :safety, {:not_in_allowed_set, ["safe", "unsafe"]}}} =
+    assert {:error,
+            {:output_parse_failed,
+             {:invalid_output_value, :safety, {:not_in_allowed_set, ["safe", "unsafe"]}},
+             %{raw_output: "```json\n{\"safety\": \"maybe\"}\n```"}}} =
              Dspy.Module.forward(classifier, %{text: "pw"})
   end
 end

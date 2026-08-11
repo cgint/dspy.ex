@@ -96,7 +96,9 @@ defmodule Dspy.Signature.TwoStepAdapterTest do
 
     predictor = Dspy.Predict.new(SimpleSig)
 
-    assert {:error, {:two_step, :extraction_lm_not_configured}} =
+    assert {:error,
+            {:output_parse_failed, {:two_step, :extraction_lm_not_configured},
+             %{raw_output: "The answer is definitely Paris."}}} =
              Dspy.Module.forward(predictor, %{question: "Capital of France?"})
   end
 
@@ -109,7 +111,10 @@ defmodule Dspy.Signature.TwoStepAdapterTest do
 
     predictor = Dspy.Predict.new(SimpleSig)
 
-    assert {:error, {:two_step, {:extraction_parse_failed, {:output_decode_failed, _}}}} =
+    assert {:error,
+            {:output_parse_failed,
+             {:two_step, {:extraction_parse_failed, {:output_decode_failed, _}}},
+             %{raw_output: "The answer is definitely Paris."}}} =
              Dspy.Module.forward(predictor, %{question: "Capital of France?"})
   end
 end

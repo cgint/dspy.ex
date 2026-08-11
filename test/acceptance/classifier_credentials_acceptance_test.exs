@@ -87,7 +87,10 @@ defmodule Dspy.Acceptance.ClassifierCredentialsAcceptanceTest do
 
     classifier = Dspy.Predict.new(CredentialsSignature)
 
-    assert {:error, {:invalid_output_value, :safety, {:not_in_allowed_set, ["safe", "unsafe"]}}} =
+    assert {:error,
+            {:output_parse_failed,
+             {:invalid_output_value, :safety, {:not_in_allowed_set, ["safe", "unsafe"]}},
+             %{raw_output: "Safety: maybe"}}} =
              Dspy.Module.forward(classifier, %{text: "hello"})
   end
 end

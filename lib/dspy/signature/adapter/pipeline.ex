@@ -181,6 +181,7 @@ defmodule Dspy.Signature.Adapter.Pipeline do
                     output_retries_left,
                     base_request,
                     base_prompt,
+                    response_text,
                     reason
                   )
               end
@@ -200,6 +201,7 @@ defmodule Dspy.Signature.Adapter.Pipeline do
                 output_retries_left,
                 base_request,
                 base_prompt,
+                response_text,
                 reason
               )
 
@@ -219,6 +221,7 @@ defmodule Dspy.Signature.Adapter.Pipeline do
                 output_retries_left,
                 base_request,
                 base_prompt,
+                response_text,
                 {:parse_failed, other}
               )
           end
@@ -241,6 +244,7 @@ defmodule Dspy.Signature.Adapter.Pipeline do
          output_retries_left,
          base_request,
          base_prompt,
+         response_text,
          reason
        )
        when is_map(base_request) and is_binary(base_prompt) do
@@ -279,8 +283,12 @@ defmodule Dspy.Signature.Adapter.Pipeline do
         end
 
       true ->
-        {:error, reason}
+        {:error, output_parse_failure(reason, response_text)}
     end
+  end
+
+  defp output_parse_failure(reason, response_text) when is_binary(response_text) do
+    {:output_parse_failed, reason, %{raw_output: response_text}}
   end
 
   defp meta(call_id, attempt, adapter, %Signature{} = signature)

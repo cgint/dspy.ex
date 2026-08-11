@@ -207,7 +207,12 @@ defmodule Dspy.ReactModuleCharacterizationTest do
 
     react = Dspy.ReAct.new("question -> answer", [add], max_steps: 1)
 
-    assert {:error, {:invalid_output_value, :next_tool_args, :invalid_json}} =
+    assert {:error,
+            {:output_parse_failed, {:invalid_output_value, :next_tool_args, :invalid_json},
+             %{
+               raw_output:
+                 "{\"next_thought\":\"call add\",\"next_tool_name\":\"add\",\"next_tool_args\":\"not_json\"}"
+             }}} =
              Dspy.call(react, %{question: "2+3"})
   end
 

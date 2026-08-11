@@ -120,7 +120,9 @@ defmodule Dspy.TypedOutputRetryTest do
 
     program = Dspy.Predict.new(TypedAnswerSignature, max_retries: 0, max_output_retries: 2)
 
-    assert {:error, {:output_validation_failed, %{field: :result, errors: errors}}} =
+    assert {:error,
+            {:output_parse_failed, {:output_validation_failed, %{field: :result, errors: errors}},
+             %{raw_output: ~s({"result": {"not_answer": "42"}})}}} =
              Dspy.Module.forward(program, %{question: "?"})
 
     assert is_list(errors) and errors != []
