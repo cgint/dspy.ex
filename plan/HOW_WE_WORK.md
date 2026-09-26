@@ -49,6 +49,7 @@ Small slices (≤1 module, no invariant touched) may merge steps 1–3 into one 
 
 ## Communication
 - Messages: `<Sender> → <Recipient>: …`, one topic, state what you need back (`herdr_prompt_agent.sh`).
+- Pings **upward** (controller → Horst, anyone → a busy lead) use non-blocking `herdr agent prompt <pane> "…"` WITHOUT `--wait`; a blocking wait on a working lead deadlocks both (observed 2026-09-26).
 - Brief contains: identity chain + owner, timebox + overrun rule (stop, partial report), model per role, contract path, phase + stop point, allowed/forbidden paths, tools, supporting agent, report path + terminal marker, escalation rules.
 - Report **file** under `plan/research/pi_handoffs/<slice>/` before the terminal marker (`WORK REPORT` / `CONTROL REPORT`): echo-back · done · evidence per scenario · tool log · findings · deviations · open questions.
 - Labels: Fact · Deduction · Hypothesis/Unverified · Proposal · Unknown.

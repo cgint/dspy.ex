@@ -11,7 +11,7 @@ DSPy state that users set per call lives in the process dictionary and is lost w
 Only `Dspy.Parallel` carries overrides (v0.3.42); nothing carries usage or callbacks. Upstream (../dspy @661a612c) merges a copy of parent overrides into each worker (`dspy/utils/parallelizer.py:88-96`), only via DSPy primitives (`dspy/dsp/utils/settings.py:56-57,63,177`); callbacks live in settings and travel with overrides; each worker gets a deep copy of `usage_tracker` (`parallelizer.py:93-95`) and **nothing is merged back**. Evidence: Greta/Ida audit `plan/research/pi_handoffs/_runs/g1.md`.
 
 ## What
-1. One public helper module `Dspy.Context` that captures all three kinds of state in the caller and runs a function in a child with them installed, returning the child's usage for merge-back into the caller.
+1. One public helper module `Dspy.Context` that captures the caller's process-local DSPy state and runs a function in a child with it installed, returning the function's value unchanged (no usage merge-back — see Decisions).
 2. Use it at every spawn site that runs user programs/LM calls:
    `lib/dspy/parallel.ex` (replace current overrides-only code), `lib/dspy/module.ex:196` (`Module.parallel`), `lib/dspy/evaluate.ex:104`, `lib/dspy/tools.ex:503,756`, `lib/dspy/teleprompt/ensemble.ex:33,337,455`, `simba.ex:163`, `bootstrap_few_shot.ex:270,416`, `mipro_v2.ex:295`, `lib/dspy/retrieve.ex:411`.
 3. Keep `Dspy.Settings.current_overrides/0` / `with_overrides/2` working (consumer-visible since v0.3.40); they may delegate.
