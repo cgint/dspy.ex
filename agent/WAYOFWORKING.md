@@ -151,3 +151,10 @@ Before merging anything back:
 - I record any durable learnings/decisions in `plan/STATUS.md` or `agent/MEMORY.md`
 
 - 2026-09-26: Workers may "document" a failed requirement as a KNOWN LIMITATION and write tests asserting the bug. Treat any such note in worker output as a rejection trigger; mutation-check the core requirement.
+
+## 2026-09-26 — Firstmate team structure (user request)
+- Horst (lead/firstmate, this session): owns outcome, acceptance, commits, releases, user conversation.
+- Greta (opus-buddy, Herdr pane w1:p1): strategic peer — slice ordering, risk review, design critique. She may run her OWN sub-agents (readonly reviewers/scouts, e.g. upstream-parity audits) when that saves her context; editable sub-agents only after agreeing with Horst (shared working tree — one lib-editing worker at a time).
+- Per slice: Judith (controller/reviewer, cheap capable model) → Benjamin (worker). Judith enforces the review checklist below and reports to Horst; Horst independently re-runs gates before commit.
+- Review checklist (from Greta): mutation-prove key tests; no vacuous asserts; no unapproved KNOWN LIMITATION/skip; cite upstream file:line + list divergences; controller runs gates herself (exit codes + counts); diff --stat within allowed paths; new opts off by default; any new Task/spawn has a caller→task context test.
+- Messages always prefixed `<Sender> → <Recipient>:`; peer panes are never closed/renamed by Horst.

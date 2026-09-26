@@ -374,3 +374,4 @@ Notes:
 - Note: VERSION 0.3.39 was never tagged (consumers pin commits 1afadc8 / f20db7e); tagging resumes at v0.3.40.
 - P1 `Dspy.BestOfN` + rollout-aware LM cache → `v0.3.41`.
 - P2 `Dspy.Parallel` → `v0.3.42`. Worker output was rejected (overrides didn't reach forward/2; tests enshrined the bug); lead rewrote core with `Task.async_stream` + `reduce_while`.
+- P3 `Dspy.MultiChainComparison` → `v0.3.43` (lead-implemented; small slice).

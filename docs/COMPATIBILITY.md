@@ -262,6 +262,7 @@ Evidence:
 
 | Python DSPy | `dspy.ex` | Notes | Evidence |
 |---|---|---|---|
+| `dspy.MultiChainComparison(sig, M=3, temperature=0.7)` | `Dspy.MultiChainComparison.new(sig, m: 3, temperature: 0.7)`; call with `%{completions: [...], ...inputs}` | Appends `reasoning_attempt_1..M` inputs, prepends `rationale` output; attempts formatted like upstream (first line of rationale/reasoning + last output field). Temperature applied via `Dspy.context/2`. Wrong completion count → `{:error, {:attempt_count_mismatch, ...}}` (upstream asserts) | `test/multi_chain_comparison_test.exs` |
 | `dspy.Parallel` | `Dspy.Parallel.new/1` + `Dspy.Parallel.run/3` | Plain executor struct (not a `Dspy.Module`); input is a list of `{module, input}` pairs; output is a list of results (aligned by index). `Task.async_stream` bounded by `:num_threads`, ordered, per-task `:timeout` (killed → failure). Caller's `Dspy.context/2` overrides propagate into every task. Failures become `nil` (upstream `None`); `:max_errors` halts scheduling → `{:error, {:max_errors_exceeded, ...}}` (default `nil` = unlimited; Python defaults to 10). `access_examples: false` passes the raw `%Dspy.Example{}` to the module's own `forward/2` | `test/parallel_test.exs` |
 
 ### Evaluation & datasets

@@ -38,6 +38,9 @@ Recommended next order:
 3. Investigate the `Dspy.Retrieve.Embeddings.ReqLLM` coverage collection warning before treating coverage as a CI gate.
 4. Only later consider coverage thresholds scoped to supported modules; do not chase a blanket 90% line coverage target.
 
+## Team process (2026-09-26)
+Parity work runs as lead (Horst) + architect buddy (Greta) + controller→worker sub-teams. Read `plan/HOW_WE_WORK.md` before briefing or accepting any slice.
+
 ## Directory intent
 - `docs/`
   - “Classic docs”: technical references, user-facing docs, integration notes.
