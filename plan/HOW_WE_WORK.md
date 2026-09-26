@@ -37,6 +37,16 @@ Depth max: Horst → controller → members. Launcher owns and closes panes. One
 
 Small slices (≤1 module, no invariant touched) may merge steps 1–3 into one contract note in the brief, but never skip controller review, mutation proof, or outside verdict.
 
+## Clarity Gate (Horst + Greta, BEFORE any controller launches) — co-signed 2026-09-26
+Lesson (H0): an unpinned API shape ("run in a child") let a nested-spawn design reach review. Clarity is our job, not the worker's.
+- **(a) Contract** pins: API signatures; which process each function runs in (never write "in a child"/"wraps" without naming the process); ownership of every spawn/link/timeout/`after` cleanup; invariants + must-not-change behaviours; **forbidden mechanisms** (e.g. no new spawn/link/await, no `trap_exit`, no new process-dict keys); decisions made vs deferred to the user; non-goals.
+- **(b) Team card**: roles, names, pane owners, who talks to whom, sub-steps, where each gate's evidence lands, which decisions return to Horst/Greta vs stay with the controller.
+- **(c) Acceptance map**: scenario → named test → mutation target naming the *wrong implementation it catches* ("double spawn passes, missing restore fails"), plus the outside-verdict owner.
+- **(d) Pre-mortem**: top ways a cheap worker could pass tests yet miss intent, each with a guard.
+- **(e) Controller echo-back** restates API signatures verbatim + one own-words sentence per invariant; any diff vs contract = gap → back to Horst/Greta, never resolved by the worker.
+- **(f) Evidence**: `proposal.md` records `Clarity Gate: Horst ✓ <date> / Greta ✓ <date>`. No controller launch without both.
+Groundwork for (a)/(d) is done by Greta's readonly scouts; Horst drafts contract + team card from her verified findings package.
+
 ## Review checklist (controller + outside reviewer)
 - Each key test proven able to fail (break one impl line → red). Mutations are reverted; `git diff`/shasum after the proof shows no residue; report lists each mutation (file:line) and which test went red.
 - No vacuous asserts (`{:ok, _}`, `is_map`, "no crash") as the only check.
