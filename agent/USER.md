@@ -32,3 +32,11 @@ Operational implications:
 - Avoid external provider calls in automated tests unless explicitly required.
 - Keep durable notes/status/memory current as work progresses.
 - Do not mark work complete until explicit success criteria are mapped to concrete evidence.
+
+## 2026-09-26 — Autonomous parity slices without breaking consumers (Firstmate mode)
+
+User instruction:
+- Goal: move dspy.ex step-by-step closer to the original Python DSPy feature set **without breaking existing consumers** (`~/dev/agent-coding-gui`, `elix-live-chat`, `third-eye-liveview`, `finance-partner`, `my-speech-google`; all depend on this repo via git).
+- The lead (strong planner model) must **autonomously evaluate and close slice after slice without asking the user**.
+- Grunt work (scouting, implementation, verification) is delegated to sub-agents on the **home-network LLM** (cheap but capable; currently `PI_WORKER_DEFAULT_MODEL=home-llm/...`), supervised via Herdr.
+- Lead keeps: slice selection, acceptance review, independent verification, commit.
