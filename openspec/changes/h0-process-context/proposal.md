@@ -17,7 +17,7 @@ Only `Dspy.Parallel` carries overrides (v0.3.42); nothing carries usage or callb
 3. Keep `Dspy.Settings.current_overrides/0` / `with_overrides/2` working (consumer-visible since v0.3.40); they may delegate.
 
 ## Decisions (answers to Greta's contract questions)
-- **Usage merge:** H0 follows upstream (option b): **no merge-back** of child usage into the caller (`parallelizer.py:93-95`); child usage stays on the child prediction as today. Merge-back (option a, Greta's pick: BEAM-correct totals, but changes reported numbers) is **pending the user's decision** and, if chosen, ships as its own slice with a COMPATIBILITY/RELEASES behavior-change note.
+- **Usage merge:** H0 follows upstream (option b): **no merge-back** of child usage into the caller (`parallelizer.py:93-95`); child usage stays on the child prediction as today. **User decision 2026-09-26: follow Python DSPy (the reference) — no merge-back.** Option (a) is closed.
 - **Callback ordering:** no ordering guarantee *between* concurrent children; within one child, start-before-end ordering holds as today. Callbacks run in the child process.
 - **`Module.parallel`:** in scope.
 
