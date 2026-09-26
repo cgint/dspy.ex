@@ -28,6 +28,8 @@ When important information is learned, **write it down** in the right durable pl
 
 ## Current continuation pointer
 
+**Since 2026-09-26 (supersedes the list below):** autonomous parity slices. Follow `plan/SLICE_LOOP.md` (rules + gates; never break `test/consumer_contract/`) and take the next `todo` row from `plan/PARITY_QUEUE.md`. Grunt work goes to home-LLM Herdr workers; the lead accepts and commits.
+
 As of 2026-05-17, the most concrete next plan is the coverage/parity hardening follow-up in `plan/COVERAGE_AUDIT_2026-05.md`, also summarized in `plan/STATUS.md`.
 
 Recommended next order:

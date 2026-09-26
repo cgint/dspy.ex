@@ -29,7 +29,7 @@ The frozen surface is `test/consumer_contract/` (tag `:consumer_contract`). Sour
 2. `mix compile --warnings-as-errors`
 3. `mix format --check-formatted`
 4. `mix test` (full) — green; `mix test --only consumer_contract` green.
-5. Consumer canary (`scripts/consumer_canary.sh`, once available): all 5 consumers compile `--warnings-as-errors` against the local checkout.
+5. Consumer canary `scripts/consumer_canary.sh` (~4 min): every consumer `PASS` or `WARN-BASELINE` (consumer-owned warnings identical to its own pin). `FAIL(...)` blocks. Proven 2026-09-26 by mutation (renaming `Attachments.new` -> third-eye FAIL(dspy-caused)).
 6. Lead reads the new code for hacks/overreach; reviewer worker for M/L slices.
 
 ## Closing a slice
@@ -38,3 +38,8 @@ The frozen surface is `test/consumer_contract/` (tag `:consumer_contract`). Sour
 - Mark the queue row done with date + tag; append a line to `plan/STATUS.md`.
 - Push `main` + tag after all gates pass.
 - A failed gate: fix root cause in a follow-up handoff; if it's not clean, revert the slice and record why in the queue.
+
+## Operational learnings
+
+- 2026-09-26: workers share one working tree. Never run lead-side mutation checks or a second lib-editing worker while a lib-editing worker is active; run parallel workers only on disjoint paths.
+- 2026-09-26: home-LLM workers tend to miss existing test patterns and write tautological tests; always read new tests, and run a mutation check for contract-level claims.

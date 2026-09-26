@@ -13,13 +13,14 @@ Effort: S/M/L. Upstream paths are relative to `../dspy/dspy/`.
 | # | Slice | Upstream | Effort | Status |
 |---|---|---|---|---|
 | S0 | Consumer contract tests `test/consumer_contract/` (14 items; 33 tests; `{:parse_failed,_}` not producible offline) | – | M | done (2026-09-26) |
-| S0b | `scripts/consumer_canary.sh`: copy each consumer into gitignored `tmp/canary/`, swap dep to `path:` this checkout, `mix deps.get && mix compile --warnings-as-errors` | – | M | todo |
+| S0b | `scripts/consumer_canary.sh`: copy each consumer into gitignored `tmp/canary/`, swap dep to `path:` this checkout, `mix deps.get && mix compile --warnings-as-errors`; allowlist copy; warnings diffed vs baseline (WARN-BASELINE = pass) | – | M | done (2026-09-26) |
 
 ## Parity slices (additive)
 
 | # | Slice | Upstream | Effort | Status |
 |---|---|---|---|---|
-| P1 | `Dspy.BestOfN` (N rollouts, reward fn, threshold, fail_count) | `predict/best_of_n.py` | S | todo |
+| P0 | `Dspy.context/2` process-scoped settings overrides (foundation for BestOfN/Parallel; `Dspy.Settings.get` consults overlay) | `dsp/utils/settings.py` context | S/M | doing |
+| P1 | `Dspy.BestOfN` (uses P0: per-attempt temperature 1.0 + `rollout_id` in cache key; note `Dspy.Refine` today repeats identical calls, which collapse under `cache: true`) (N rollouts, reward fn, threshold, fail_count) | `predict/best_of_n.py` | S | todo |
 | P2 | `Dspy.Parallel` (batch-run module/example pairs, `num_threads`→`max_concurrency`, error budget) | `predict/parallel.py` | S | todo |
 | P3 | `Dspy.MultiChainComparison` (M completions → comparison signature) | `predict/multi_chain_comparison.py` | S/M | todo |
 | P4 | Program-level `save/load` of module state to JSON (on top of parameter export/apply) | `primitives/base_module.py` save/load_state | M | todo |
