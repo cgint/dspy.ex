@@ -368,3 +368,7 @@ Notes:
 - **2026-01-21**: Tightened `./precommit.sh` checks to reduce noise: skip asset compilation when `assets.deploy` task is unavailable and only scan TODO/FIXME/XXX in comments.
 - **2026-01-21**: Added `Predict.parameters/1` + `Predict.update_parameters/2` and a deterministic `Predict` → `Evaluate` golden-path test to anchor Phase 1 success criteria.
 - **2026-01-21**: Repaired `BootstrapFewShot` to produce candidate programs via `update_parameters/2` (no dynamic modules) and added a deterministic toy-dataset smoke test that shows score improvement.
+
+## 2026-09-26 — Autonomous parity slices started (see plan/SLICE_LOOP.md, plan/PARITY_QUEUE.md)
+- S0 consumer contract suite (33 tests), S0b consumer canary (5 consumers; 2 WARN-BASELINE with consumer-owned warnings), P0 `Dspy.context/2` → `v0.3.40`.
+- Note: VERSION 0.3.39 was never tagged (consumers pin commits 1afadc8 / f20db7e); tagging resumes at v0.3.40.

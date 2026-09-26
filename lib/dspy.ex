@@ -103,6 +103,31 @@ defmodule Dspy do
   end
 
   @doc """
+  Run `fun` with process-scoped DSPy settings overrides.
+
+  Elixir equivalent of Python `dspy.context(**overrides)`.
+  Delegates to `Dspy.Settings.context/2`.
+
+  - overrides are process-local, nested calls compose (inner wins), and
+    the previous values are restored after `fun` returns (or raises/throws);
+  - the global `configure/1` state is never mutated;
+  - child processes (`Task.async`/`spawn`) do **not** inherit overrides;
+    capture them with `Dspy.Settings.current_overrides/0` and install them
+    in the child via `Dspy.Settings.with_overrides/2`.
+
+  ## Examples
+
+      Dspy.context(lm: other_lm, temperature: 0.1, fn ->
+        # settings reads inside see other_lm / 0.1
+      end)
+
+  """
+  @spec context(dspy_config(), (-> any())) :: any()
+  def context(overrides, fun) when is_list(overrides) and is_function(fun, 0) do
+    Settings.context(overrides, fun)
+  end
+
+  @doc """
   Get current DSPy configuration.
 
   ## Returns

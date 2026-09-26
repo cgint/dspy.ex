@@ -208,6 +208,36 @@ Evidence:
 - RAG pipeline + ReqLLM-backed embeddings (mocked): `test/acceptance/retrieve_rag_with_embeddings_acceptance_test.exs`
 - Built-in GenServer retriever (`Dspy.Retrieve.InMemoryRetriever`): `test/acceptance/retrieve_rag_in_memory_retriever_acceptance_test.exs`
 
+### 7) Context (process-scoped settings overrides)
+
+Python:
+
+```python
+import dspy
+
+with dspy.context(lm=other_lm, temperature=0.1):
+    # settings reads inside see other_lm / 0.1; global state unchanged
+    pred = predict(question="What is 2+2?")
+```
+
+Elixir:
+
+```elixir
+Dspy.context([lm: other_lm, temperature: 0.1], fn ->
+  # settings reads inside see other_lm / 0.1; global state unchanged
+  {:ok, pred} = Dspy.call(predict, question: "What is 2+2?")
+end)
+```
+
+Notes:
+- overrides are **process-local** (process dictionary); nested `Dspy.context/2` calls compose (inner wins) and are restored after the function returns, raises, or throws;
+- `Dspy.Settings.configure/1` state is never mutated;
+- child processes (`Task.async`/`spawn`) do **not** inherit overrides. To propagate, capture with `Dspy.Settings.current_overrides/0` and install in the child with `Dspy.Settings.with_overrides/2`;
+- unknown keys are dropped (same key rule as `configure/1`).
+
+Evidence:
+- `test/settings_context_test.exs` (visibility, nesting, restore-on-raise, process isolation, Task propagation, end-to-end Predict + temperature reaching the LM request map)
+
 ## Proven surface mapping table
 
 ### Core programs & I/O
@@ -219,6 +249,7 @@ Evidence:
 | call: `program(**kwargs)` | `Dspy.call(program, inputs)` (or `Dspy.forward/2` / `Dspy.Module.forward/2`) | `inputs` may be map, string-key map, keyword list, or `%Dspy.Example{}` | `test/predict_test.exs`, `test/module_forward_example_test.exs` |
 | output: `pred.answer` | `pred[:answer]` / `pred.attrs.answer` | Predictions store outputs in `pred.attrs` | `test/acceptance/simplest_predict_test.exs` |
 | `dspy.Example(...)` | `Dspy.Example.new(...)` | Implements `Access` (`ex[:question]`) | `test/example_prediction_access_test.exs` |
+| `with dspy.context(lm=..., **kwargs)` | `Dspy.context([lm: ...], fn -> ... end)` | Process-scoped settings overrides; global `configure/1` state untouched; child processes do NOT inherit (use `Dspy.Settings.with_overrides/2`) | `test/settings_context_test.exs` |
 | `example.with_inputs(...)` | `Dspy.Example.with_inputs/2` + `Dspy.Example.inputs/1` | Mark which attrs are inputs; `Evaluate`/teleprompts forward only inputs when configured | `test/example_with_inputs_test.exs` |
 | JSONAdapter-style outputs | `Dspy.Signature.parse_outputs/2` | Parses JSON (incl. fenced) and coerces types | `test/acceptance/json_outputs_acceptance_test.exs` |
 | Pydantic models in signatures (typed structured outputs) | `output_field(..., schema: MySchema)` + `max_output_retries:` | Validates/casts nested JSON outputs via JSON Schema (JSV). Returns typed structs. Retries on parse/validation failure are opt-in. | `test/signature_typed_schema_integration_test.exs`, `test/typed_output_retry_test.exs`, `test/acceptance/text_component_extract_acceptance_test.exs` |
