@@ -372,3 +372,4 @@ Notes:
 ## 2026-09-26 — Autonomous parity slices started (see plan/SLICE_LOOP.md, plan/PARITY_QUEUE.md)
 - S0 consumer contract suite (33 tests), S0b consumer canary (5 consumers; 2 WARN-BASELINE with consumer-owned warnings), P0 `Dspy.context/2` → `v0.3.40`.
 - Note: VERSION 0.3.39 was never tagged (consumers pin commits 1afadc8 / f20db7e); tagging resumes at v0.3.40.
+- P1 `Dspy.BestOfN` + rollout-aware LM cache → `v0.3.41`.

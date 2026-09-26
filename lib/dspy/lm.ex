@@ -267,7 +267,9 @@ defmodule Dspy.LM do
     started_at_ms = System.monotonic_time(:millisecond)
 
     if cache_enabled?() and cacheable_request?(request) do
-      case Dspy.LM.Cache.fetch(lm, request) do
+      rollout_id = Dspy.Settings.get(:rollout_id)
+
+      case Dspy.LM.Cache.fetch(lm, request, rollout_id: rollout_id) do
         {:hit, cached} ->
           duration_ms = System.monotonic_time(:millisecond) - started_at_ms
           maybe_track_usage(lm, request, cached, cache_hit?: true, duration_ms: duration_ms)
@@ -283,7 +285,7 @@ defmodule Dspy.LM do
                 duration_ms: duration_ms
               )
 
-              :ok = Dspy.LM.Cache.put(lm, request, response)
+              :ok = Dspy.LM.Cache.put(lm, request, response, rollout_id: rollout_id)
               {:ok, response}
 
             {:error, reason} ->

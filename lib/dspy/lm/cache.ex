@@ -22,11 +22,19 @@ defmodule Dspy.LM.Cache do
     end
   end
 
-  @spec fetch(lm :: term(), request :: term()) :: {:hit, term()} | :miss
-  def fetch(lm, request) do
+  @doc """
+  Fetch a cached value for `{lm, request}`.
+
+  Accepts an optional `:rollout_id` option. When a non-nil rollout id is
+  provided it participates in the cache key, so distinct rollouts never share
+  cached responses. When the option is absent or `nil`, the cache key is
+  exactly the legacy `{lm, request}` key (backwards compatible).
+  """
+  @spec fetch(lm :: term(), request :: term(), keyword()) :: {:hit, term()} | :miss
+  def fetch(lm, request, opts \\ []) do
     ensure_table!()
 
-    key = cache_key(lm, request)
+    key = cache_key(lm, request, Keyword.get(opts, :rollout_id))
 
     case :ets.lookup(@table, key) do
       [{^key, value}] -> {:hit, value}
@@ -34,11 +42,16 @@ defmodule Dspy.LM.Cache do
     end
   end
 
-  @spec put(lm :: term(), request :: term(), value :: term()) :: :ok
-  def put(lm, request, value) do
+  @doc """
+  Store `value` under `{lm, request}`.
+
+  See `fetch/3` for the `:rollout_id` option semantics.
+  """
+  @spec put(lm :: term(), request :: term(), value :: term(), keyword()) :: :ok
+  def put(lm, request, value, opts \\ []) do
     ensure_table!()
 
-    key = cache_key(lm, request)
+    key = cache_key(lm, request, Keyword.get(opts, :rollout_id))
     true = :ets.insert(@table, {key, value})
     :ok
   end
@@ -67,7 +80,11 @@ defmodule Dspy.LM.Cache do
     end
   end
 
-  defp cache_key(lm, request) do
+  defp cache_key(lm, request, nil) do
     :crypto.hash(:sha256, :erlang.term_to_binary({lm, request}))
+  end
+
+  defp cache_key(lm, request, rollout_id) do
+    :crypto.hash(:sha256, :erlang.term_to_binary({lm, request, :rollout_id, rollout_id}))
   end
 end

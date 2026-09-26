@@ -256,6 +256,7 @@ Evidence:
 | constrained outputs (`one_of`) | `output_field(..., one_of: [...])` | Invalid outputs return tagged errors | `test/acceptance/classifier_credentials_acceptance_test.exs` |
 | multimodal attachments | `%Dspy.Attachments{}` inputs | Attachments become message content parts (request-map) | `test/acceptance/simplest_attachments_acceptance_test.exs` |
 | refine loop | `Dspy.Refine.new/2` | Retries until reward threshold met | `test/acceptance/simplest_refine_acceptance_test.exs` |
+| `dspy.BestOfN(module=qa, N=3, reward_fn=..., threshold=1.0)` | `Dspy.BestOfN.new(program, n: 3, threshold: 1.0, reward_fn: fn inputs, pred -> ... end)` | Runs the program up to `n` times at `temperature: 1.0` with a distinct `:rollout_id` per attempt; returns the best-scoring prediction. `:rollout_id` participates in the LM cache key (via `Dspy.context(rollout_id: ...)` / `Dspy.Settings`) so cached responses don't leak across rollouts, but is never sent to the provider | `test/best_of_n_test.exs`, `test/lm/rollout_id_cache_test.exs` |
 
 ### Evaluation & datasets
 
