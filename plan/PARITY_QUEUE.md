@@ -21,7 +21,7 @@ Effort: S/M/L. Upstream paths are relative to `../dspy/dspy/`.
 |---|---|---|---|---|
 | P0 | `Dspy.context/2` process-scoped settings overrides (foundation for BestOfN/Parallel; `Dspy.Settings.get` consults overlay) | `dsp/utils/settings.py` context | S/M | done (2026-09-26, v0.3.40) |
 | P1 | `Dspy.BestOfN` (uses P0; per-attempt temperature 1.0 + `rollout_id` in cache key; note `Dspy.Refine` today repeats identical calls, which collapse under `cache: true`) (N rollouts, reward fn, threshold, fail_count) | `predict/best_of_n.py` | S | done (2026-09-26, v0.3.41) |
-| P2 | `Dspy.Parallel` (batch-run module/example pairs, `num_threads`→`max_concurrency`, error budget) | `predict/parallel.py` | S | todo |
+| P2 | `Dspy.Parallel` (batch-run module/example pairs, `num_threads`→`max_concurrency`, error budget) | `predict/parallel.py` | S | done (2026-09-26, v0.3.42) |
 | P3 | `Dspy.MultiChainComparison` (M completions → comparison signature) | `predict/multi_chain_comparison.py` | S/M | todo |
 | P4 | Program-level `save/load` of module state to JSON (on top of parameter export/apply) | `primitives/base_module.py` save/load_state | M | todo |
 | P5 | Module-level `inspect_history` over existing `Dspy.LM.History` | `utils/inspect_history.py`, `clients/base_lm.py` | S/M | todo |

@@ -258,6 +258,12 @@ Evidence:
 | refine loop | `Dspy.Refine.new/2` | Retries until reward threshold met | `test/acceptance/simplest_refine_acceptance_test.exs` |
 | `dspy.BestOfN(module=qa, N=3, reward_fn=..., threshold=1.0)` | `Dspy.BestOfN.new(program, n: 3, threshold: 1.0, reward_fn: fn inputs, pred -> ... end)` | Runs the program up to `n` times at `temperature: 1.0` with a distinct `:rollout_id` per attempt; returns the best-scoring prediction. `:rollout_id` participates in the LM cache key (via `Dspy.context(rollout_id: ...)` / `Dspy.Settings`) so cached responses don't leak across rollouts, but is never sent to the provider | `test/best_of_n_test.exs`, `test/lm/rollout_id_cache_test.exs` |
 
+### Parallel execution
+
+| Python DSPy | `dspy.ex` | Notes | Evidence |
+|---|---|---|---|
+| `dspy.Parallel` | `Dspy.Parallel.new/1` + `Dspy.Parallel.run/3` | Plain executor struct (not a `Dspy.Module`); input is a list of `{module, input}` pairs; output is a list of results (aligned by index). `Task.async_stream` bounded by `:num_threads`, ordered, per-task `:timeout` (killed → failure). Caller's `Dspy.context/2` overrides propagate into every task. Failures become `nil` (upstream `None`); `:max_errors` halts scheduling → `{:error, {:max_errors_exceeded, ...}}` (default `nil` = unlimited; Python defaults to 10). `access_examples: false` passes the raw `%Dspy.Example{}` to the module's own `forward/2` | `test/parallel_test.exs` |
+
 ### Evaluation & datasets
 
 | Python DSPy | `dspy.ex` | Notes | Evidence |

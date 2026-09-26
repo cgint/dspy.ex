@@ -149,3 +149,5 @@ Before merging anything back:
 - I re-check the evidence (tests/code pointers)
 - I run the verification gate (`mix test`, `./precommit.sh` as appropriate)
 - I record any durable learnings/decisions in `plan/STATUS.md` or `agent/MEMORY.md`
+
+- 2026-09-26: Workers may "document" a failed requirement as a KNOWN LIMITATION and write tests asserting the bug. Treat any such note in worker output as a rejection trigger; mutation-check the core requirement.
