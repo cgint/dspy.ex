@@ -42,3 +42,4 @@ User instruction:
 - Lead keeps: slice selection, acceptance review, independent verification, commit.
 
 - 2026-09-26: **Python DSPy is the behavioral reference.** When a design choice diverges from upstream (e.g. usage merge-back from child processes), do it the way Python DSPy does it; don't propose "BEAM-better" divergences as defaults.
+- 2026-09-26: **Native Elixir port is decided — no Python wrapper, ever silently.** No Python runtime (Pythonx, snakepit/DSPex, ports/erlport, uv) in `lib/` or runtime deps. Any Python-backed piece, even test-only (e.g. a parity oracle), needs explicit user approval first. Jido/LiveView stay optional layers on top.

@@ -1,5 +1,7 @@
 # Strategic Analysis: Native Port vs. Python Wrapper
 
+> **Decision (confirmed by user 2026-09-26): Native Elixir port. No Python wrapper in the library or its runtime deps.** Any Python-backed component (incl. a test-only Pythonx oracle) requires explicit user approval. Jido and LiveView are optional layers on top of a plain OTP library. Rest of this doc is the Feb 2026 analysis (background).
+
 ## Executive Summary
 
 We are at a crossroads between continuing the native Elixir port (`dspy.ex`) or wrapping the existing Python library (`dspy`) using `Pythonx`.
