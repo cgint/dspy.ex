@@ -34,6 +34,13 @@ never infer state from a terminal spinner. Prompting goes through `herdr_prompt_
 `sleep 150`/`240`/`280` around a backgrounded await. It burns tokens, adds uncontrolled latency,
 and yields strictly less information than one blocking call. Applies to Horst and Greta equally.
 
+**Never ask a `readonly` worker for a report file** (2026-09-28). Read-only mode blocks writes,
+so a brief demanding "write the report to `<path>` AND to the terminal" is only half-satisfiable
+and the worker has to report the contradiction instead of doing the work. A read-only reviewer's
+evidence channel is the **terminal**, and the supervisor captures it with `herdr agent read`
+**before** closing the pane — terminal output is not retained afterwards. Observed: a reviewer
+produced a full verdict that would have been lost on pane close.
+
 **"Pre-existing" is a claim that must be proven, never an assumption** (2026-09-28). A failure is
 *yours* until you show otherwise, and the only proof is a diff against the baseline recorded in
 the slice's Phase A report, or stashing the change and re-running. Observed: a worker saw 84
