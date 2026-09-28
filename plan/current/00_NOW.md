@@ -86,3 +86,9 @@ Version numbers show the milestone: M1 = v0.4.x, M2 = v0.5.x, … M6 = v0.9.x (d
 
 ## Files in this folder
 `PLAN.md` detailed plan · `PARITY_QUEUE.md` work list · `STATUS.md` history log · `GAP_ANALYSIS_3.4.0.md` the full count · `GAP_ANALYSIS_2026-05.md` old partial analysis (history).
+
+## Decisions Q2/Q3/Q-OUT (2026-09-28, user: "infer Python behaviour and take it from there")
+Evidence: `uv run tmp/pyck/ck.py` against dspy==3.4.0 (committed probe).
+- Python: non-numeric metric (None/text/map) -> TypeError, whole run crashes; bool -> OK; metric *raising* -> 0.0 (= our D-U1).
+- Python: empty devset -> ValueError. Ragged CSV -> ValueError. Non-JSON value -> TypeError.
+- **Decision: follow Python, with clear error messages.** Q2 = ArgumentError on first non-numeric result (new commit replacing 9ce326c/d1736bb); Q3 = keep raise; Q-OUT = raise (P-OUT in M1-a = raise).
