@@ -18,6 +18,9 @@ defmodule DspyEvaluateDetailedResultsTest do
     end
   end
 
+  # D-U1/D4 (H0b-2, user-approved commit 0d8afdb; upstream evaluate.py:181):
+  # a failed example is scored `failure_score` (default 0.0) and included in
+  # the mean. `scores` is always index-aligned with the testset.
   test "evaluate/4 return_all: true includes per-example items with errors" do
     program = %MaybeFailsProgram{}
 
@@ -40,11 +43,11 @@ defmodule DspyEvaluateDetailedResultsTest do
     assert result.count == 2
     assert result.successes == 1
     assert result.failures == 1
-    assert result.mean == 1.0
+    assert result.mean == 0.5
 
     assert [
              %{example: ex1, prediction: pred1, score: 1.0, error: nil},
-             %{example: ex2, prediction: nil, score: nil, error: {:forward_error, :boom}}
+             %{example: ex2, prediction: nil, score: 0.0, error: {:forward_error, :boom}}
            ] = result.items
 
     assert ex1.attrs.id == 1
@@ -52,7 +55,7 @@ defmodule DspyEvaluateDetailedResultsTest do
     assert ex2.attrs.id == 2
 
     # Index-aligned convenience lists
-    assert result.scores == [1.0, nil]
+    assert result.scores == [1.0, 0.0]
     assert match?([%Dspy.Prediction{}, nil], result.predictions)
   end
 

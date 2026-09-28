@@ -150,23 +150,36 @@ defmodule Dspy.Teleprompt do
 
   """
   @spec run_metric(metric_fun(), Example.t(), Dspy.Prediction.t()) :: number() | :error
-  def run_metric(metric, example, prediction) when is_function(metric, 2) do
+  def run_metric(metric, example, prediction) do
+    if is_function(metric, 2) do
+      run_metric_arity2(metric, example, prediction)
+    else
+      run_metric_arity1(metric, example)
+    end
+  end
+
+  defp run_metric_arity2(metric, example, prediction) do
     try do
-      score = metric.(example, prediction)
-      if is_number(score), do: score, else: :error
+      normalize_score(metric.(example, prediction))
     rescue
       _ -> :error
     end
   end
 
-  def run_metric(metric, example, _prediction) when is_function(metric, 1) do
+  defp run_metric_arity1(metric, example) do
     try do
-      score = metric.(example)
-      if is_number(score), do: score, else: :error
+      normalize_score(metric.(example))
     rescue
       _ -> :error
     end
   end
 
-  def run_metric(_, _, _), do: :error
+  # Boolean metric results map to 1.0 / 0.0 (Python bool arithmetic,
+  # upstream `evaluate.py:182` — Python sums `True`/`False` as 1/0). A result
+  # that is neither a number nor a boolean is treated as `0.0` (a valid low
+  # score) — Q2 (H0b-2) is not applied in this state.
+  defp normalize_score(true), do: 1.0
+  defp normalize_score(false), do: 0.0
+  defp normalize_score(score) when is_number(score), do: score
+  defp normalize_score(_), do: 0.0
 end

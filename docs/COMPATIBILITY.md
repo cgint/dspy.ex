@@ -71,6 +71,23 @@ Evidence:
 - `test/h0b/site_timeout_test.exs` — timeout handling (`execute_tool`, `Module.parallel`)
 - `test/h0b/s2_site_test.exs` — the 7 `Task.async_stream` sites (incl. the E4 weight-alignment discriminator + a source-characterization guard that all 7 sites carry the catch-all + `on_timeout: :kill_task`)
 
+## Evaluate error budget + failure scoring (H0b-2)
+
+`Dspy.Evaluate.evaluate/4` (and its optimizers) now behave like upstream DSPy 3.4.0:
+
+- **`max_errors` setting** (default `10`): overridable via `Dspy.configure/1` and `Dspy.context/2`.
+- **`failure_score` option** (default `0.0`): a failed example is scored `failure_score` and **included in the mean** (`scores` is always index-aligned with the testset; failures hold `failure_score`, never nil).
+- **Error budget (upstream `>=`)**: when the failure count reaches `max_errors`, pending item tasks are killed and `Dspy.Evaluate.MaxErrorsExceeded` (fields `:errors`, `:max_errors`, `:completed`) is raised.
+- **Boolean metrics** (B1): `run_metric` maps `true → 1.0`, `false → 0.0` (Python bool arithmetic). Boolean results do NOT count as failures.
+- **Optimizers propagate `MaxErrorsExceeded`** (Q1): simba, ensemble, and bootstrap re-raise it from their candidate/weight/selection streams; `compile/3` surfaces it to the caller.
+
+Evidence:
+- `test/h0b2/evaluate_failure_score_test.exs` — D-U1/D1/D4/B1 scoring
+- `test/h0b2/evaluate_max_errors_test.exs` — D2/E5 budget + kill evidence
+- `test/h0b2/settings_max_errors_test.exs` — default + override
+- `test/h0b2/compile_budget_propagation_test.exs` — Q1 optimizer re-raise (simba/ensemble/bootstrap)
+- `test/h0b2/evaluate_empty_devset_test.exs` — Q3 empty devset
+
 ## Quick mapping examples (proven)
 
 ### 1) Predict

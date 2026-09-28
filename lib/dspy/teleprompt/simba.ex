@@ -173,7 +173,15 @@ defmodule Dspy.Teleprompt.SIMBA do
               score = Evaluate.evaluate(cand, eval_batch, teleprompt.metric, progress: false).mean
               {:ok, {cand, score}}
             rescue
-              e -> {:error, {:raised, e}}
+              # H0b-2 carry-over (a): a child that hits the budget returns a
+              # tagged budget-failure value (not a raise, to avoid the task
+              # exiting and `Task.async_stream` converting it to `{:exit, _}`).
+              # The caller re-raises it after the stream is fully consumed.
+              e in Dspy.Evaluate.MaxErrorsExceeded ->
+                {:budget_exceeded, e}
+
+              e ->
+                {:error, {:raised, e}}
             catch
               :exit, reason -> {:error, {:exit, reason}}
               kind, reason -> {:error, {:thrown, kind, reason}}
@@ -184,18 +192,35 @@ defmodule Dspy.Teleprompt.SIMBA do
         timeout: 60_000,
         on_timeout: :kill_task
       )
-      |> Enum.flat_map(fn
-        {:ok, {:ok, x}} -> [x]
-        {:ok, {:error, _reason}} -> []
-        {:exit, _reason} -> []
-        _ -> []
+      |> Enum.reduce_while({[], nil}, fn element, {acc, budget_raise} ->
+        case element do
+          {:ok, {:ok, x}} ->
+            {:cont, {[x | acc], budget_raise}}
+
+          # A child that hit the budget: collect the exception and stop consuming.
+          {:ok, {:budget_exceeded, e}} ->
+            {:halt, {acc, e}}
+
+          # Any other failure: skip this candidate.
+          _ ->
+            {:cont, {acc, budget_raise}}
+        end
       end)
       |> case do
-        [] -> {program, current_score}
-        list -> Enum.max_by(list, fn {_p, s} -> s end)
+        {_results, %Dspy.Evaluate.MaxErrorsExceeded{} = e} ->
+          # Re-raise the budget exception to the caller of `compile/3`.
+          raise e
+
+        {results, nil} ->
+          # No budget exception: pick the best candidate.
+          case Enum.reverse(results) do
+            [] -> {program, current_score}
+            list -> Enum.max_by(list, fn {_p, s} -> s end)
+          end
       end
 
-    {best_program, best_score} = best
+    {best_program, best_score} =
+      best
 
     if best_score > current_score do
       TpUtil.log(

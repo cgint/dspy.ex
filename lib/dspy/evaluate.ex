@@ -22,7 +22,7 @@ defmodule Dspy.Evaluate do
 
   require Logger
 
-  alias Dspy.{Example, Module, Prediction}
+  alias Dspy.{Example, Module}
 
   @type evaluation_error ::
           {:forward_error, term()}
@@ -33,14 +33,14 @@ defmodule Dspy.Evaluate do
   @type evaluation_item :: %{
           example: Example.t(),
           prediction: Prediction.t() | nil,
-          score: number() | nil,
+          score: number(),
           error: evaluation_error() | nil
         }
 
   @type evaluation_result :: %{
-          # When `return_all: false` (default), this contains *only* numeric scores.
-          # When `return_all: true`, this is index-aligned with `items` and may contain nils.
-          scores: list(number() | nil),
+          # ALWAYS index-aligned with the testset (length == count). Failures
+          # hold `failure_score` (default 0.0), never nil (H0b-2, D4/D-U1).
+          scores: list(number()),
           # Only populated when `return_all: true`.
           predictions: list(Prediction.t() | nil),
           # Only populated when `return_all: true`.
@@ -73,15 +73,25 @@ defmodule Dspy.Evaluate do
     - `:num_threads` - parallelism (default: schedulers_online)
     - `:progress` - emit progress logs (default: false)
     - `:return_all` - include per-example details (default: false)
+    - `:max_errors` - failure budget (default: `Dspy.Settings.get(:max_errors)`,
+      i.e. 10). When the failure count reaches it (upstream `>=` boundary),
+      pending item tasks are killed and `Dspy.Evaluate.MaxErrorsExceeded` is
+      raised (H0b-2, D-U2/D2/E5).
+    - `:failure_score` - score given to a failed example (default: 0.0); it is
+      included in the mean (H0b-2, D-U1)
+    - `:timeout` - per-item timeout in ms (default: `:infinity`). A timed-out
+      item is killed (`on_timeout: :kill_task`) and scored `failure_score`.
 
   ## Returns
 
   A map with detailed statistics.
 
-  When `return_all: true`, the returned map additionally contains:
+  `scores` is ALWAYS index-aligned with the testset (length == count); failed
+  examples hold `failure_score` (H0b-2, D4). When `return_all: true`, the
+  returned map additionally contains:
+
   - `:items` - one entry per example with `example`, `prediction`, `score`, and `error`
-  - `:scores` - index-aligned with `items` (may contain nils for failures)
-  - `:predictions` - index-aligned with `items` (may contain nils for failures)
+  - `:predictions` - index-aligned with `items` (nil for failures)
 
   """
   @spec evaluate(Dspy.Module.t(), list(Example.t()), function(), keyword()) :: evaluation_result()
@@ -89,59 +99,130 @@ defmodule Dspy.Evaluate do
     num_threads = Keyword.get(opts, :num_threads, System.schedulers_online())
     show_progress = Keyword.get(opts, :progress, false)
     return_all = Keyword.get(opts, :return_all, false)
+    max_errors = Keyword.get(opts, :max_errors) || Dspy.Settings.get(:max_errors)
+    failure_score = Keyword.get(opts, :failure_score, 0.0)
+    item_timeout = Keyword.get(opts, :timeout, :infinity)
 
     if show_progress do
       Logger.info("Evaluating #{length(testset)} examples...")
     end
 
-    # Chunk testset for parallel processing
-    chunk_size = max(1, div(length(testset), num_threads))
-    chunks = Enum.chunk_every(testset, chunk_size)
-
-    # Process chunks in parallel
-    # Capture process-local DSPy state (overrides + callback stack) in the
-    # caller; reinstall it in each task (tasks do not inherit the dictionary).
+    # Per-item tasks (H0b-2 D3): one `Task.async_stream` child per example,
+    # ordered, with `on_timeout: :kill_task`. Each child runs under the
+    # caller's captured context. A child that raises/throws/exits returns a
+    # failure item (its own catch-all); a child that is killed (timeout or
+    # stream abort) surfaces as a non-`{:ok, _}` element and maps to a failure
+    # item (dead task, D1).
+    #
+    # Budget-kill mechanism (E5/D2): a tiny consumer process (`spawn_link`,
+    # no `trap_exit`) drives the stream. As each element arrives it maps it to
+    # an item; when the failure count reaches `max_errors` (upstream `>=`), the
+    # consumer (a) sends `{:abort, failures, completed}` to the caller, and
+    # (b) `Process.exit`s itself with `:normal`. Exiting a `Task.async_stream`
+    # consumer kills the stream process and every outstanding task child, so
+    # no pending example can run to completion after the raise, and no linked
+    # task crash ever reaches the caller (the consumer only exits with
+    # :normal; the caller then raises the exception itself).
     ctx = Dspy.Context.capture()
+    caller = self()
 
-    items =
-      chunks
-      |> Task.async_stream(
-        fn chunk ->
-          Dspy.Context.with_context(ctx, fn -> evaluate_chunk(program, chunk, metric_fn) end)
-        end,
-        max_concurrency: num_threads,
-        timeout: :infinity
-      )
-      |> Enum.flat_map(fn
-        {:ok, chunk_results} -> chunk_results
-        _other -> []
+    # Consumer process driving the stream (see the mechanism note above).
+    _consumer =
+      spawn_link(fn ->
+        testset
+        |> Task.async_stream(
+          fn example ->
+            Dspy.Context.with_context(ctx, fn ->
+              evaluate_item(program, example, metric_fn, failure_score)
+            end)
+          end,
+          max_concurrency: num_threads,
+          timeout: item_timeout,
+          on_timeout: :kill_task
+        )
+        |> Enum.reduce_while(
+          {[], 0},
+          fn element, {acc, failures} ->
+            {item, failed?} = map_stream_element(element, failure_score)
+            failures = failures + if(failed?, do: 1, else: 0)
+
+            if failed? and failures >= max_errors do
+              send(caller, {:abort, failures, length(acc) + 1})
+              exit(:normal)
+            else
+              {:cont, {[item | acc], failures}}
+            end
+          end
+        )
+        |> case do
+          {items, _failures} -> send(caller, {:done, Enum.reverse(items)})
+        end
       end)
 
+    receive do
+      {:done, items} ->
+        # Budget was not reached: every item was observed (completed == count).
+        finish_evaluation(items, testset, return_all, show_progress)
+
+      {:abort, errors, completed} ->
+        # Budget reached: the consumer already exited :normal, which killed the
+        # stream and all pending item tasks. Raise to the caller (E5).
+        raise Dspy.Evaluate.MaxErrorsExceeded,
+          errors: errors,
+          max_errors: max_errors,
+          completed: completed
+    end
+  end
+
+  defp map_stream_element({:ok, item}, _failure_score) do
+    {item, item.error != nil}
+  end
+
+  # A killed item task (timeout via `on_timeout: :kill_task`, or the stream
+  # aborting with an unlinked consumer) is a dead item: score failure_score.
+  defp map_stream_element(_other, failure_score) do
+    {dead_item(failure_score), true}
+  end
+
+  # A killed (dead or timed-out) item task: the example's result was never
+  # observed -> failure item at its own position.
+  defp dead_item(failure_score) do
+    %{
+      example: nil,
+      prediction: nil,
+      score: failure_score,
+      error:
+        {:exception,
+         %{type: Task.SupervisedError, message: "item task was killed (timeout or stream abort)"}}
+    }
+  end
+
+  defp finish_evaluation(items, testset, return_all, show_progress) do
     scores_by_example = Enum.map(items, & &1.score)
     predictions_by_example = Enum.map(items, & &1.prediction)
 
-    valid_scores = Enum.filter(scores_by_example, &is_number/1)
+    failures = Enum.count(items, fn %{error: error} -> error != nil end)
 
     mean_score =
-      if length(valid_scores) > 0 do
-        Enum.sum(valid_scores) / length(valid_scores)
-      else
+      if items == [] do
         0.0
+      else
+        Enum.sum(scores_by_example) / length(scores_by_example)
       end
 
-    std_score = calculate_std(valid_scores, mean_score)
+    std_score = calculate_std(scores_by_example, mean_score)
 
     result = %{
       items: if(return_all, do: items, else: []),
-      scores: if(return_all, do: scores_by_example, else: valid_scores),
+      scores: scores_by_example,
       predictions: if(return_all, do: predictions_by_example, else: []),
       mean: mean_score,
       std: std_score,
-      min: if(length(valid_scores) > 0, do: Enum.min(valid_scores), else: 0),
-      max: if(length(valid_scores) > 0, do: Enum.max(valid_scores), else: 0),
+      min: if(scores_by_example == [], do: 0, else: Enum.min(scores_by_example)),
+      max: if(scores_by_example == [], do: 0, else: Enum.max(scores_by_example)),
       count: length(testset),
-      successes: length(valid_scores),
-      failures: length(testset) - length(valid_scores)
+      successes: length(testset) - failures,
+      failures: failures
     }
 
     if show_progress do
@@ -290,40 +371,51 @@ defmodule Dspy.Evaluate do
 
   # Private functions
 
-  defp evaluate_chunk(program, examples, metric_fn) do
-    Enum.map(examples, fn example ->
-      try do
-        case Module.forward(program, Example.inputs(example)) do
-          {:ok, prediction} ->
-            case Dspy.Teleprompt.run_metric(metric_fn, example, prediction) do
-              score when is_number(score) ->
-                %{example: example, prediction: prediction, score: score, error: nil}
+  # Run a single example: forward + metric, with a per-example catch-all (the
+  # H0b-1 child catch-all, now in the per-item task body). Any failure shape
+  # scores `failure_score` (D-U1); `predictions[i]` stays nil on failure (D4).
+  defp evaluate_item(program, example, metric_fn, failure_score) do
+    try do
+      case Module.forward(program, Example.inputs(example)) do
+        {:ok, prediction} ->
+          case Dspy.Teleprompt.run_metric(metric_fn, example, prediction) do
+            score when is_number(score) ->
+              %{example: example, prediction: prediction, score: score, error: nil}
 
-              :error ->
-                %{
-                  example: example,
-                  prediction: prediction,
-                  score: nil,
-                  error: {:metric_error, :invalid_score}
-                }
-            end
+            :error ->
+              %{
+                example: example,
+                prediction: prediction,
+                score: failure_score,
+                error: {:metric_error, :invalid_score}
+              }
+          end
 
-          {:error, reason} ->
-            %{example: example, prediction: nil, score: nil, error: {:forward_error, reason}}
-        end
-      rescue
-        e ->
+        {:error, reason} ->
           %{
             example: example,
             prediction: nil,
-            score: nil,
-            error: {:exception, %{type: e.__struct__, message: Exception.message(e)}}
+            score: failure_score,
+            error: {:forward_error, reason}
           }
-      catch
-        kind, reason ->
-          %{example: example, prediction: nil, score: nil, error: {:caught, kind, reason}}
       end
-    end)
+    rescue
+      e ->
+        %{
+          example: example,
+          prediction: nil,
+          score: failure_score,
+          error: {:exception, %{type: e.__struct__, message: Exception.message(e)}}
+        }
+    catch
+      kind, reason ->
+        %{
+          example: example,
+          prediction: nil,
+          score: failure_score,
+          error: {:caught, kind, reason}
+        }
+    end
   end
 
   defp calculate_std([], _mean), do: 0.0

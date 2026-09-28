@@ -24,7 +24,8 @@ defmodule Dspy.Settings do
     history_max_entries: 200,
     experimental: [],
     teleprompt_verbose: false,
-    rollout_id: nil
+    rollout_id: nil,
+    max_errors: 10
   ]
 
   @type t :: %__MODULE__{
@@ -43,7 +44,8 @@ defmodule Dspy.Settings do
           history_max_entries: pos_integer(),
           experimental: [atom()],
           teleprompt_verbose: boolean(),
-          rollout_id: non_neg_integer() | nil
+          rollout_id: non_neg_integer() | nil,
+          max_errors: pos_integer()
         }
 
   def start_link(opts \\ []) do

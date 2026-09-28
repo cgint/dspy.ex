@@ -125,20 +125,23 @@ Grounded in HEAD `52b2658` `lib/dspy/evaluate.ex` and upstream 3.4.0 `utils/para
 
 ## Deviations — sites whose child catch-all is DEFENSE-IN-DEPTH, not behaviour-proven (Horst 2026-09-27)
 
-Three H0b-1 stream sites carry a child catch-all that **cannot be reached via the public API**: an inner layer already converts every raise/throw/exit into a defined error value, so the child body never propagates an exception to the stream. The catch-all is kept as defense-in-depth (guards against a future inner-layer regression); the characterization test asserts its presence but is **not** a behaviour proof. Recorded per site (file:line + which inner layer catches):
+One H0b-1 stream site carries a child catch-all that **cannot be reached via the public API**: an inner layer already converts every raise/throw/exit into a defined error value, so the child body never propagates an exception to the stream. The catch-all is kept as defense-in-depth (guards against a future inner-layer regression); the characterization test asserts its presence but is **not** a behaviour proof. Recorded per site (file:line + which inner layer catches):
 
 | Site (file:line) | Task body calls | Inner layer that catches first (so the child catch-all is unreachable) |
 |---|---|---|
 | `ensemble.ex:373` `train_ensemble_members` | `train_single_member/3` → `Dspy.Teleprompt.compile/3` | `train_single_member` (ensemble.ex:458-475) has a `rescue e -> {:error, {:exception, …}}` around the base teleprompter's `compile/3`; a raising LM/forward never reaches the child catch-all. |
-| `ensemble.ex:514` `calculate_performance_weights` | `Dspy.Evaluate.evaluate/4` | `Evaluate.evaluate` → `evaluate_chunk` (evaluate.ex:295-325) catches raise/throw/exit **per example** and returns a scored item (`score: nil` / `failure_score`); a failing forward or metric never reaches the child catch-all. |
-| `simba.ex:169` `score_candidates` | `Dspy.Evaluate.evaluate/4` | Same as above — `evaluate_chunk` (evaluate.ex:295-325) catches per example. |
-| `bootstrap_few_shot.ex:440` `select_best_program` | `Dspy.Evaluate.evaluate/4` | Same as ensemble:514 — `evaluate_chunk` (evaluate.ex:295-325) catches per example; a failing candidate forward/metric scores `0.0`, never reaches the child catch-all. |
 
 **Reachable sites (behaviour-proven):**
 
 - `mipro_v2.ex:299` `bootstrap_few_shot_examples` — the task body calls `Dspy.Module.forward/2` **directly** (not wrapped in `Evaluate.evaluate` or a rescuing helper), so a raising student forward DOES reach the child catch-all. Proven by `test/h0b/s2_site_test.exs` ("mipro_v2.ex:299 … raising student forward: catch-all drops example, compile returns a program") plus a mutation proof (remove the catch at 299 → red). See `plan/research/pi_handoffs/h0b/mutation-mipro-299.log`.
 
 - `bootstrap_few_shot.ex:274` `bootstrap_round` — the inner layer `generate_bootstrap_example/3` (bootstrap_few_shot.ex:317-343) has a **`rescue` clause only (no `catch` clause)** around the teacher `forward/2`. So a teacher `forward/2` that **raises** is caught there (never reaches the site-274 catch), but a teacher that **throws** or **exits** escapes the rescue and DOES reach the site-274 child catch-all's `catch kind, reason` / `catch :exit, reason` arms. Proven by `test/h0b/s2_site_test.exs` ("bootstrap_few_shot.ex:274 … throwing teacher" and "… exiting teacher": a custom teacher that throws/exits for one input and returns `{:ok, pred}` for others → `compile/3` returns `{:ok, program}`, not a crash) plus a mutation proof (remove the catch at 274 → red). See `plan/research/pi_handoffs/h0b/mutation-bootstrap-274.log`.
+
+- `simba.ex:169` `score_candidates` — **H0b-2 (2026-09-28):** now behaviour-proven. The child body re-raises `Dspy.Evaluate.MaxErrorsExceeded` (via `{:budget_exceeded, e}` tag + caller re-raise). Proven by `test/h0b2/compile_budget_propagation_test.exs` ("SIMBA compile/3 raises MaxErrorsExceeded when the budget is exceeded") plus a mutation proof. See `plan/research/pi_handoffs/h0b2/mutation-simba.log`.
+
+- `ensemble.ex:514` `calculate_performance_weights` — **H0b-2 (2026-09-28):** now behaviour-proven. Same mechanism as simba:169. Proven by `test/h0b2/compile_budget_propagation_test.exs` ("Ensemble compile/3 raises MaxErrorsExceeded") plus a mutation proof. See `plan/research/pi_handoffs/h0b2/mutation-ensemble.log`.
+
+- `bootstrap_few_shot.ex:440` `select_best_program` — **H0b-2 (2026-09-28):** now behaviour-proven. Same mechanism as simba:169. Proven by `test/h0b2/compile_budget_propagation_test.exs` ("BootstrapFewShot compile/3 raises MaxErrorsExceeded") plus a mutation proof. See `plan/research/pi_handoffs/h0b2/mutation-bootstrap.log`.
 
 **H0b-2 carry-over from the H0b-1 re-verdict (Greta 2026-09-28):** once Evaluate raises `MaxErrorsExceeded`, the H0b-1 "defense-in-depth" child catch-alls at `simba.ex:169`, `ensemble.ex:514` and `bootstrap_few_shot.ex:440` become **reachable** and would swallow it, silently dropping the candidate. This contradicts D5 (propagate, as upstream). H0b-2 must therefore:
 - (a) re-raise `Dspy.Evaluate.MaxErrorsExceeded` from those child bodies, so the caller sees it (`reraise` inside the child; the stream then exits the caller with it — decide and pin whether the caller converts the task exit back into the raise);

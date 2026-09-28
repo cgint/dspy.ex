@@ -518,7 +518,15 @@ defmodule Dspy.Teleprompt.Ensemble do
               result = Evaluate.evaluate(member, val_data, metric, progress: false)
               {:ok, result.mean}
             rescue
-              e -> {:error, {:raised, e}}
+              # H0b-2 carry-over (a): a child that hits the budget returns a
+              # tagged budget-failure value (not a raise, to avoid the task
+              # exiting and `Task.async_stream` converting it to `{:exit, _}`).
+              # The caller re-raises it after the stream is fully consumed.
+              e in Dspy.Evaluate.MaxErrorsExceeded ->
+                {:budget_exceeded, e}
+
+              e ->
+                {:error, {:raised, e}}
             catch
               :exit, reason -> {:error, {:exit, reason}}
               kind, reason -> {:error, {:thrown, kind, reason}}
@@ -528,12 +536,28 @@ defmodule Dspy.Teleprompt.Ensemble do
         timeout: 30_000,
         on_timeout: :kill_task
       )
-      |> Enum.map(fn
-        {:ok, {:ok, perf}} -> perf
-        {:ok, {:error, _reason}} -> 0.0
-        {:exit, _reason} -> 0.0
-        _ -> 0.0
+      |> Enum.reduce_while({[], nil}, fn element, {acc, budget_raise} ->
+        case element do
+          {:ok, {:ok, perf}} ->
+            {:cont, {[perf | acc], budget_raise}}
+
+          # A child that hit the budget: collect the exception and stop consuming.
+          {:ok, {:budget_exceeded, e}} ->
+            {:halt, {acc, e}}
+
+          # Any other failure: score 0.0 for this member.
+          _ ->
+            {:cont, {[0.0 | acc], budget_raise}}
+        end
       end)
+      |> case do
+        {_results, %Dspy.Evaluate.MaxErrorsExceeded{} = e} ->
+          # Re-raise the budget exception to the caller of `compile/3`.
+          raise e
+
+        {results, nil} ->
+          Enum.reverse(results)
+      end
 
     total_exp = performances |> Enum.map(&:math.exp/1) |> Enum.sum()
 
