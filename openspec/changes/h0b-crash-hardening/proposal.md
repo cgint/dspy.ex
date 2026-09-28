@@ -139,3 +139,26 @@ Three H0b-1 stream sites carry a child catch-all that **cannot be reached via th
 - `mipro_v2.ex:299` `bootstrap_few_shot_examples` — the task body calls `Dspy.Module.forward/2` **directly** (not wrapped in `Evaluate.evaluate` or a rescuing helper), so a raising student forward DOES reach the child catch-all. Proven by `test/h0b/s2_site_test.exs` ("mipro_v2.ex:299 … raising student forward: catch-all drops example, compile returns a program") plus a mutation proof (remove the catch at 299 → red). See `plan/research/pi_handoffs/h0b/mutation-mipro-299.log`.
 
 - `bootstrap_few_shot.ex:274` `bootstrap_round` — the inner layer `generate_bootstrap_example/3` (bootstrap_few_shot.ex:317-343) has a **`rescue` clause only (no `catch` clause)** around the teacher `forward/2`. So a teacher `forward/2` that **raises** is caught there (never reaches the site-274 catch), but a teacher that **throws** or **exits** escapes the rescue and DOES reach the site-274 child catch-all's `catch kind, reason` / `catch :exit, reason` arms. Proven by `test/h0b/s2_site_test.exs` ("bootstrap_few_shot.ex:274 … throwing teacher" and "… exiting teacher": a custom teacher that throws/exits for one input and returns `{:ok, pred}` for others → `compile/3` returns `{:ok, program}`, not a crash) plus a mutation proof (remove the catch at 274 → red). See `plan/research/pi_handoffs/h0b/mutation-bootstrap-274.log`.
+
+**H0b-2 carry-over from the H0b-1 re-verdict (Greta 2026-09-28):** once Evaluate raises `MaxErrorsExceeded`, the H0b-1 "defense-in-depth" child catch-alls at `simba.ex:169`, `ensemble.ex:514` and `bootstrap_few_shot.ex:440` become **reachable** and would swallow it, silently dropping the candidate. This contradicts D5 (propagate, as upstream). H0b-2 must therefore:
+- (a) re-raise `Dspy.Evaluate.MaxErrorsExceeded` from those child bodies, so the caller sees it (`reraise` inside the child; the stream then exits the caller with it — decide and pin whether the caller converts the task exit back into the raise);
+- (b) add public-entry `compile/3` tests per site: "budget exceeded inside compile → `MaxErrorsExceeded` raised to the caller", each with a mutation proof;
+- (c) retire the matching rows of the Deviations table.
+
+## H0b-2 contract sign-off (Greta 2026-09-28)
+Decisions in force for H0b-2: D-U1, D-U2, E5 and E6 (user-approved 2026-09-28); **Q1 (Horst decision 2026-09-28): the `max_errors` stop applies to all 6 optimizers** (simba, mipro_v2, copro, gepa, bootstrap_few_shot, ensemble) — this was the D5 reach; D2, D3, D4 and D5 as written above; the H0b-1 carry-over (a)–(c) above.
+
+**Finding while signing (it changes Q2):** `Dspy.Teleprompt.run_metric/3` (teleprompt.ex:153-171) returns `:error` for **booleans**. The most common DSPy metric, `example.answer == pred.answer`, returns `true`/`false`. Upstream sums Python bools (`True == 1`, evaluate.py:182). So under D1 plus D-U2, **every boolean metric would count as a failure, and Evaluate would raise after 10 examples.** Today such metrics are silently excluded from the mean, which is already wrong.
+- **B1 (not a deviation; this is upstream parity, so no user question is needed):** `run_metric` maps `true → 1.0` and `false → 0.0`. It is shared by Evaluate, mipro_v2:307 and bootstrap_few_shot:325; all three suites must stay green unchanged. Tests: a boolean metric gives mean 0.75 on 3/4, with no failures counted; a boolean metric with 11 `false` does **not** raise.
+
+### Open parameters (USER, 00_NOW §7). Build with the default; the gate for these parts stays unticked
+| # | Question | Recommended default | Alternative | Blast radius |
+|---|---|---|---|---|
+| **Q2** | What about a metric result that is neither a number nor a boolean (`nil`, a string, a map)? | **Count it as a failed example: score `failure_score` (0.0), counted toward `max_errors`, `items[i].error = {:metric_error, :invalid_score}`.** Upstream would raise a `TypeError` in `sum()` and kill the whole evaluation, so a per-example failure is gentler. Deviation, recorded in COMPATIBILITY. | Raise `ArgumentError` on the first non-numeric score (closer to upstream's crash, but a whole run dies). | Only non-number, non-boolean metrics (after B1). |
+| **Q3** | Empty devset | **Raise `ArgumentError`, "devset must contain at least one example"** (upstream evaluate.py:162-163). Breaking for callers that pass `[]`. Before switching, the team greps every internal caller that can pass an empty list (simba minibatch, cross_validate folds, copro/gepa minibatches) and guards each one. | Keep `mean 0.0` and document the deviation. | Any caller evaluating `[]`. *Note: Q3 was M1-a's G2; if it is decided here, M1-a inherits it.* |
+
+Build rule: implement Q2 and Q3 behind their defaults in **separate commits** (one small commit each), so that a user "no" is a clean revert and not a rewrite. No release before both are answered.
+
+### Clarity Gate (H0b-2)
+- `Greta ✓ 2026-09-28` for everything above **except Q2 and Q3** (Greta ☐ Q2 / ☐ Q3 pending user).
+- Horst ☐.

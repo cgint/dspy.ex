@@ -70,3 +70,21 @@ The H0 `Dspy.Context.with_context/2` wrapping SHALL remain inside every task bod
 #### Scenario: Overrides reach a hardened child
 - **WHEN** a caller inside `Dspy.context([lm: lm2], …)` runs a listed site
 - **THEN** each child SHALL see `lm2`, the same as before hardening
+
+### Requirement: Boolean metric results count as 1.0 and 0.0
+`Dspy.Teleprompt.run_metric/3` SHALL map `true` to `1.0` and `false` to `0.0` (Python bool arithmetic, upstream `evaluate.py:182`). Boolean results SHALL NOT count as failures.
+
+#### Scenario: Boolean metric mean
+- **WHEN** a metric returns `true` for 3 examples and `false` for 1
+- **THEN** the mean SHALL equal `0.75` and `failures` SHALL equal 0
+
+#### Scenario: Many false results do not exhaust the budget
+- **WHEN** a boolean metric returns `false` for 11 examples with default `max_errors`
+- **THEN** Evaluate SHALL return normally with mean `0.0`
+
+### Requirement: Budget errors propagate out of optimizers
+When Evaluate raises `Dspy.Evaluate.MaxErrorsExceeded` inside an optimizer's candidate task (simba, ensemble weights, bootstrap selection), the optimizer SHALL NOT swallow it: `compile/3` SHALL surface it to its caller.
+
+#### Scenario: Budget exceeded during compile
+- **WHEN** every candidate evaluation in a compile fails and the number of failures reaches `max_errors`
+- **THEN** `compile/3` SHALL raise `Dspy.Evaluate.MaxErrorsExceeded` to its caller and SHALL NOT return a program

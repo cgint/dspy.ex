@@ -31,7 +31,7 @@ Each row is `Example` fields merged with `Prediction` fields; on a key collision
 
 ### A4. Decisions needing a gate
 - **G1 (Horst ✓):** struct name `Dspy.Evaluate.Result` rather than `Dspy.EvaluationResult`. Alternative: also add `Dspy.EvaluationResult` as the public name. Greta: one name only, `Dspy.Evaluate.Result`, with the doc mapping it to upstream.
-- **G2 (USER — deviation/breaking, via Horst):** an empty testset: upstream **raises** `ValueError` (`:162-163`, test `test_evaluate_raises_on_empty_devset`); ours returns `mean 0.0`. Greta recommends **raise `ArgumentError`** (parity; returning 0.0 hides a caller bug). This is breaking for anyone who passes `[]`; internal callers (simba minibatches, cross_validate folds) must be checked for empty inputs **before** the switch. The alternative is to keep 0.0 as a documented deviation. **M1-a does not launch without this answer.**
+- **G2 (USER — deviation/breaking, via Horst):** an empty testset: upstream **raises** `ValueError` (`:162-163`, test `test_evaluate_raises_on_empty_devset`); ours returns `mean 0.0`. Greta recommends **raise `ArgumentError`** (parity; returning 0.0 hides a caller bug). This is breaking for anyone who passes `[]`; internal callers (simba minibatches, cross_validate folds) must be checked for empty inputs **before** the switch. The alternative is to keep 0.0 as a documented deviation. **M1-a does not launch without this answer.** *(2026-09-28: moved into H0b-2 as open parameter Q3; M1-a inherits whatever the user decides there.)*
 - **G3 (info):** `return_outputs` does not exist in our API, so there is nothing to reject.
 
 ### A5. Invariants
