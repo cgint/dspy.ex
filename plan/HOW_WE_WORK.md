@@ -64,7 +64,7 @@ Greta: when you review or report, flag it if 00_NOW or PLAN.md disagree with wha
 - Claims cite upstream `../dspy` file:line; divergences listed.
 - Gates rerun by the reviewer: exit codes + counts.
 - `git diff --stat` ⊆ allowed paths; no `test/consumer_contract/**`, `mix.exs`, `mix.lock` unless contracted; new options off by default.
-- Any new Task/spawn: tests prove all process state crosses the boundary — settings overrides, usage merge-back into the caller, adapter callbacks — and crash/timeout semantics are explicit (no linked crash reaching the caller; `on_timeout` stated).
+- Any new Task/spawn: tests prove all process state crosses the boundary — settings overrides, usage behaviour as contracted (H0: no merge-back, upstream parity), adapter callbacks — and crash/timeout semantics are explicit (no linked crash reaching the caller; `on_timeout` stated).
 - A controller never approves a documented limitation on its own: KNOWN LIMITATION = BLOCK unless Horst approves (with Greta's co-sign if an invariant is touched).
 
 ## Communication

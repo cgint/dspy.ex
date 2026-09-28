@@ -92,7 +92,7 @@ Open total: 113 items, effort points 225 (S=1, M=2, L=4).
 4. One weak model (qwen3.8-27b) did all scouting. Confidence columns are in the CSV. Horst's 12-row sample is still pending.
 
 
-## Phase C v1 — value re-rating + milestones (Greta draft 2026-09-26, NOT agreed)
+## Phase C v2 — value re-rating + milestones (Greta 2026-09-26; order agreed with Horst, pending user)
 
 ### Value re-rating (fixes caveat 1)
 The rule is mechanical and applies only to partial/missing rows (`phaseC` columns `docs_hits`, `docs_front` and `api_nav` in the CSV). It counts upstream `docs/` files outside `api/` that mention `dspy.<Sym>` or `Sym(`:
@@ -110,13 +110,26 @@ Result: **36 re-rated.** Examples: streamify, StreamListener, ProgramOfThought, 
 | **M4** | **Agents & multimodal**: Adapter options; ChatAdapter tool-call history; Image/Audio/Code/Type/ToolCallResults; TwoStepAdapter ctor; Refine feedback loop; ReActV2; XMLAdapter (P10); Reasoning; Retrieve/Embeddings/ColBERTv2 | 16 | 7/5/4 | 34 | M3 (typed errors, callbacks) | ColBERTv2 | ReAct agent with a tool + image input via ChatAdapter, one Refine round with feedback |
 | **M5** | **Streaming** (P12): streamify, StreamListener, StreamResponse, StatusMessage(+Provider), streaming_response | 7 | 2/2/3 | 16 | M3 callbacks (status messages), M4 adapters | – | stream a field's tokens + status messages from a CoT program (LiveView-consumable) |
 | **M6** | **Optimizers+**: real GEPA (reflection LM, Pareto), KNN + KNNFewShot (P6), BootstrapFinetune, InferRules, BetterTogether, AvatarOptimizer, Optuna | 9 | 2/4/3 | 28 | M1, M2, M3; Optuna = DEP → likely n/a | GEPA | GEPA improves a toy program's metric on DummyLM with a reflection LM; KNNFewShot selects demos by embedding |
-| **M7** | **3.3/3.4 surface + code execution** (scope decisions first): interpreters/ProgramOfThought/CodeAct/RLM (P9, sandbox decision), lm15 provider registry, Flex, experimental types, HF datasets, DummyLM/pretty_print_history | 36 | 1/6/29 | 83 | sandbox decision; M3 | – | per sub-bundle, defined when scoped |
+| **M7+ pool** | **Not a milestone — a pool, to be cut into milestones later, after scope decisions**: 3.3/3.4 surface + code execution: interpreters/ProgramOfThought/CodeAct/RLM (P9, sandbox decision), lm15 provider registry, Flex, experimental types, HF datasets, DummyLM/pretty_print_history | 36 | 1/6/29 | 83 | sandbox decision; M3 | – | per sub-bundle, defined when scoped |
+
+### After each milestone you can … (plain words, for 00_NOW)
+- **M1:** …measure your program reliably: failed examples count against the score as in Python, results can be saved and shown as a table, and standard metrics and data loaders are ready to use. *Reported scores can drop, because failures now count.*
+- **M2:** …optimize a program once, save it, load it later or elsewhere and get the same behaviour, and see exactly which LM calls one program made.
+- **M3:** …run against real providers robustly: clear error types, automatic retries, a cache that survives restarts, and hooks that trace every call.
+- **M4:** …build tool-using agents that also take images or audio, refine answers with feedback, and pick the XML or BAML output format.
+- **M5:** …show answers as they are generated (token streaming plus status messages), e.g. in a LiveView.
+- **M6:** …use the stronger optimizers: real GEPA, example selection by similarity (KNNFewShot), and the remaining upstream optimizers.
+- **M7+ pool:** …the remaining newest-release features (code execution, the new provider registry, Flex, experimental types). These are cut into milestones only after you decide the scope.
 
 Total open: 118 items (`missing`+`partial`), 230 effort points.
 The order follows dependencies first, then value÷effort. M1+M2 take 32 points and cover 12 of the 24 open value-H items, which is the cheap, high-value core. Almost all 3.4-only items sit in M7, consistent with "3.4.0 parity is the endpoint".
 
-### Breaking items — one batch for the user now (E14)
-1. **EvaluationResult** (M1): `Evaluate` returns a struct instead of today's shape. A compatible path, where the struct keeps the old keys and the old shape is deprecated for 1 minor version, needs checking against the consumer_contract tests.
+### Breaking items (E14) — EvaluationResult is checked now; GEPA and ColBERTv2 go to the user when their milestone starts
+1. **EvaluationResult** (M1). The risk was checked 2026-09-26, and **the change is non-breaking in practice once `Access` is implemented**:
+   - Struct semantics, verified by running them: `Map.get/2` and `%{mean: m}` matching still work. `result[:mean]` raises `UndefinedFunctionError`, and `result == %{...}` becomes false.
+   - Usage: none of the 5 consumers call `Dspy.Evaluate`. rg over `~/dev/{agent-coding-gui,elix-live-chat,third-eye-liveview,finance-partner,my-speech-google}` finds no hits. No lib/test/examples code reads results with Access, `==` on a whole map, or JSON encoding. `test/consumer_contract` has no Evaluate test.
+   - Plan: `defstruct` **plus `@behaviour Access`** (fetch/get_and_update/pop), so `result[:mean]` keeps working, and keep all current keys. The remaining difference is `==` against a plain map, which nothing in the repo or the consumers uses. The M1 contract adds a test for each old access pattern.
+   - *The score change (failures counted) is the user-visible change, not the struct.*
 2. **GEPA** (M6): options and result shape change (today: a user-supplied `candidates` list).
 3. **ColBERTv2** (M4): the constructor/return shape changes.
 
