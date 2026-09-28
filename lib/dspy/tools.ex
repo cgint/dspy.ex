@@ -515,16 +515,37 @@ defmodule Dspy.Tools do
                    kind: :exception,
                    message: Exception.message(e)
                  }}
+            catch
+              :exit, reason ->
+                {:error,
+                 %{
+                   kind: :exit,
+                   message: Dspy.Tools.format_exit(reason)
+                 }}
+
+              kind, reason ->
+                {:error,
+                 %{
+                   kind: kind,
+                   message: inspect(reason)
+                 }}
             end
           end)
         end)
 
-      case Task.yield(task, timeout) || Task.shutdown(task) do
+      case Task.yield(task, timeout) || Task.shutdown(task, :brutal_kill) do
         {:ok, {:ok, result}} ->
           notify_tool_end(callbacks, call_id, tool, result, nil)
           {:ok, result}
 
         {:ok, {:error, error}} ->
+          notify_tool_end(callbacks, call_id, tool, nil, error)
+          {:error, "Tool execution failed: #{error.message}"}
+
+        {:exit, reason} ->
+          # Child exited (e.g. a crash the catch-all did not cover, or the
+          # task was killed externally). Surface through the existing error shape.
+          error = %{kind: :exit, message: Dspy.Tools.format_exit(reason)}
           notify_tool_end(callbacks, call_id, tool, nil, error)
           {:error, "Tool execution failed: #{error.message}"}
 
