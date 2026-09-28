@@ -15,15 +15,15 @@ Today a raise/throw/exit or timeout inside a spawned task at 11 sites kills the 
 - **U3 timeout (soft):** stragglers (≤3) are resubmitted after 120s; nothing is killed (`parallelizer.py:29-30, 207-215`).
 - **U4 Evaluate:** a failed example scores `failure_score` (default `0.0`, `evaluate.py:81`), which is **included in the mean**; `assert len(devset) == len(results)` (`:179-181`).
 
-### A2. Decisions (made, pending user veto where marked)
-- **D-U1 = upstream U4** *(user rule "do it like Python"; Horst presents with the M1 proposal, user may veto)*: Evaluate failures count as `failure_score` in the mean. **Reported scores can drop.**
-- **D-U2 = upstream U2** *(same)*: new `Dspy.Settings` key `max_errors`, default `10`; `Dspy.Evaluate.evaluate/4` options `:max_errors` (nil → setting) and `:failure_score` (default `0.0`).
+### A2. Decisions — **user approved D-U1, D-U2, E6 = upstream on 2026-09-28** (commit 0d8afdb). **H0b-2 is UNBLOCKED** (it starts after H0b-1 is released).
+- **D-U1 = upstream U4** *(user approved 2026-09-28)*: Evaluate failures count as `failure_score` in the mean. **Reported scores can drop.**
+- **D-U2 = upstream U2** *(user approved 2026-09-28)*: new `Dspy.Settings` key `max_errors`, default `10`; `Dspy.Evaluate.evaluate/4` options `:max_errors` (nil → setting) and `:failure_score` (default `0.0`).
 - **E1 hard deadline instead of U3:** `on_timeout: :kill_task`; a timed-out item becomes a per-item error value. Reason: BEAM kills a task safely; upstream resubmits only because Python threads cannot be killed.
 - **E2** `Dspy.Parallel` keeps its existing `{:error, {:max_errors_exceeded, …}}` return (Elixir idiom, existing public shape). This slice does not change it.
 - **E3 sites with no upstream equivalent** (Module.parallel, tools ×2, ensemble compile ×2): U1 + E1; the caller never dies.
 - **E4 Ensemble forward:** upstream is serial and propagates exceptions (`teleprompt/ensemble.py:31-33`). Ours is parallel (existing) → U1 + E1; **member↔weight alignment is kept** (bug fix); `:all_ensemble_members_failed` is unchanged.
 - **E5 (Horst ✓ 2026-09-26 — upstream cancels + raises, parallelizer.py:102-104): Evaluate when the budget is exceeded** raises `Dspy.Evaluate.MaxErrorsExceeded` (message and fields: `:errors`, `:max_errors`, `:completed`) after killing the pending tasks. Reason: upstream raises; `evaluate/4` returns a plain result, not a tuple, so raising keeps its return shape. Alternative considered: a `{:error, …}` tuple, rejected because it changes the success return shape.
-- **E6 (NEW, flag):** teleprompter-internal evaluation (simba/mipro/bootstrap/ensemble compile) inherits `max_errors` from Settings as upstream does. A compile with ≥10 failing candidate runs therefore stops with the raise. This is upstream behaviour and is listed in the user note together with D-U1/D-U2.
+- **E6 (user approved 2026-09-28):** teleprompter-internal evaluation (simba/mipro/bootstrap/ensemble compile) inherits `max_errors` from Settings as upstream does. A compile with ≥10 failing candidate runs therefore stops with the raise. This is upstream behaviour and is listed in the user note together with D-U1/D-U2.
 
 ### A3. Per-site target — the process each piece runs in
 Two existing shapes (verified at HEAD `65b196c`, `rg Task\. lib`); **no new process is created in either**:

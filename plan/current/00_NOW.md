@@ -39,6 +39,7 @@ Order: **most useful for least effort first**, respecting what depends on what. 
 6. **M6 More optimizers** — real GEPA, KNNFewShot, the rest.
 7. *Later pool* — newest 3.3/3.4 features; cut into milestones after scope decisions.
 Before M1: crash/timeout hardening (H0b), because M1 builds on it.
+Work list per milestone: `PARITY_QUEUE.md`; first milestone outline: `M1_CONTRACT_OUTLINE.md`.
 Version numbers show the milestone: M1 = v0.4.x, M2 = v0.5.x, … M6 = v0.9.x (decided by you 2026-09-28).
 
 ## 4. What is happening right now
@@ -57,7 +58,7 @@ Version numbers show the milestone: M1 = v0.4.x, M2 = v0.5.x, … M6 = v0.9.x (d
 | v0.3.44 | Settings from `Dspy.context` now also apply inside background work (evaluation, optimizers, tools) |
 
 ## 6. Waiting for you
-- Nothing right now.
+- **For M1 (not urgent, before M1 starts):** reading CSV datasets needs a CSV parser. Option 1: add the small standard library **NimbleCSV** (by Dashbit, same authors as tools we already use) — a new dependency needs your OK. Option 2: write our own small reader (more code to maintain, easy to get quoting wrong). I recommend option 1.
 - *Decided by you 2026-09-28:* milestone order M1→M6 (later pool cut after scope decisions) ✓ · Evaluate like Python (failures count 0, stop after 10 errors, also in optimizers) ✓ · skip the 10 Python-only features ✓.
 
 ## 7. Standing decisions (yours)
