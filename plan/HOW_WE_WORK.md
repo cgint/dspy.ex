@@ -20,6 +20,7 @@ Slice mechanics/gates: `plan/SLICE_LOOP.md`. Backlog: `plan/current/PARITY_QUEUE
 | Worker | e.g. Benjamin, launched by controller | echo-back first, TDD, implements within allowed paths | scope decisions, editing existing tests, commits, launching agents |
 | Outside reviewer | fresh readonly agent by Horst, or Greta | ONE independent verdict on the final diff | being briefed by the sub-team |
 
+**Every sub-agent runs in its own herdr pane** via the `sub-agent-herdr-supervisor` scripts (`herdr-start-subagent.sh --mode readonly|editable`, await, report file, close). No `nohup`/background `pi -p` runs: they can't be watched, prompted or closed, and fail silently (observed 2026-09-26: 6 phase-B scouts produced empty output). Read-only scouts use `--mode readonly`, never `--tools bash`.
 Depth max: Horst → controller → members. Launcher owns and closes panes. One lib-editing sub-team at a time (shared working tree + `_build`).
 
 ## Slice lifecycle
