@@ -43,6 +43,19 @@ not something a test may paper over. Escalate instead. Corollary: when two write
 agree, they call **one shared function**, and the mutation that proves it is *removing the check
 from one side only* — if both sides stay green, they were agreeing by coincidence, not by design.
 
+**Test the ORDINARY case first, then the edges** (2026-09-29). A regression walked through a
+green suite because every JSON test used rows of one shape or an exotic duplicate-key case, and
+**none covered the normal shape of a run containing a failure** — upstream's everyday output.
+Four exotic tests, zero ordinary ones, is backwards. Before adding edge-case rows to an
+acceptance map, check that the plain path is pinned at all.
+
+**Reusing a function is not free: name which of its rules the new caller wants** (2026-09-29).
+A shared check was introduced by reusing a whole validator where only *part* of it applied, so
+the JSON writer silently inherited CSV's single-header row-shape rule and began rejecting output
+upstream writes happily. "It already does the check" is not a reason — it may do **more** than
+the check. State the wanted rules explicitly at each call site, and split the function when they
+differ.
+
 **Weight review toward the NEW code after a fix round** (2026-09-28). Twice in a row a fix round
 introduced a defect the previous round did not have (the B-round fixes introduced BB1, silent
 null data). A fix round is not inherently safer than the original work — it is *less* reviewed.
