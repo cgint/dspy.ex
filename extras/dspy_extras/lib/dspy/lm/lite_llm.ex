@@ -234,22 +234,43 @@ defmodule Dspy.LM.LiteLLM do
   end
 
   defp make_request(url, body, headers, timeout) do
-    json_body = Jason.encode!(body)
+    opts =
+      Application.get_env(:dspy_extras, :req_opts, [])
+      |> Keyword.put_new(:receive_timeout, timeout)
+      # HTTP clients should not silently retry: callers decide (LiteLLM keeps
+      # its retry_attempts field for future explicit retries).
+      |> Keyword.put_new(:retry, false)
 
-    case HTTPoison.post(url, json_body, headers, recv_timeout: timeout) do
-      {:ok, %HTTPoison.Response{status_code: 200, body: response_body}} ->
-        case Jason.decode(response_body) do
-          {:ok, decoded} -> {:ok, decoded}
-          {:error, _} -> {:error, "Failed to decode response"}
-        end
+    case Req.post(url, Keyword.merge([json: body, headers: headers], opts)) do
+      {:ok, %Req.Response{status: 200, body: response_body}} ->
+        decode_body(response_body)
 
-      {:ok, %HTTPoison.Response{status_code: status, body: error_body}} ->
-        {:error, "API request failed with status #{status}: #{error_body}"}
+      {:ok, %Req.Response{status: status, body: error_body}} ->
+        {:error, "API request failed with status #{status}: #{error_message(error_body)}"}
 
-      {:error, %HTTPoison.Error{reason: reason}} ->
+      {:error, %Req.TransportError{reason: reason}} ->
         {:error, "Network error: #{reason}"}
     end
   end
+
+  # Req parses JSON bodies into maps when the response content type is JSON;
+  # otherwise it leaves the body as a (binary) string. Both cases must decode
+  # to the same `%{...}` map so callers see the same shape as with HTTPoison.
+  defp decode_body(%{} = body), do: {:ok, body}
+
+  defp decode_body(body) when is_binary(body) do
+    case Jason.decode(body) do
+      {:ok, decoded} -> {:ok, decoded}
+      {:error, _} -> {:error, "Failed to decode response"}
+    end
+  end
+
+  defp decode_body(_body), do: {:error, "Failed to decode response"}
+
+  # Req may hand back a parsed map as a non-200 body; keep the old
+  # HTTPoison-style "status: <body>" message for strings.
+  defp error_message(error_body) when is_binary(error_body), do: error_body
+  defp error_message(error_body), do: inspect(error_body)
 
   defp extract_content(response, provider) do
     case provider do

@@ -34,8 +34,7 @@ defmodule DspyExtras.MixProject do
       {:phoenix_html, "~> 4.0"},
       {:phoenix_pubsub, "~> 2.1"},
       {:plug_cowboy, "~> 2.7"},
-      {:gen_stage, "~> 1.2"},
-      {:httpoison, "~> 2.2"}
+      {:gen_stage, "~> 1.2"}
     ]
   end
 end
