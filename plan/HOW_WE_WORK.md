@@ -53,7 +53,7 @@ Groundwork for (a)/(d) is done by Greta's readonly scouts; Horst drafts contract
 - While a team is editing, the lead commits plan/doc paths only.
 - **CI is a release gate:** after every push, `gh run watch` / `gh run list -L 1`; a release is not done until CI is green. Red CI blocks the next release.
 - **Toolchain gap:** CI runs OTP 28.0 / Elixir 1.19.5; local is OTP 29 / Elixir 1.20. Release step: commit locally by path → `scripts/ci_docker.sh HEAD` (exact CI job in docker, committed state only) must print `ALL STEPS GREEN` → push → `gh run watch` green. No `.tool-versions` pin: no version manager on this machine, so the docker script is the real gate.
-- Open gap: mix.exs declares `elixir: "~> 1.18"` but only 1.19.5 is tested (decide: add 1.18 to CI matrix or raise the floor).
+- Supported floor is tested (2026-09-28): CI matrix Elixir 1.18.4/OTP 27.3 (compile+test) + 1.19.5/OTP 28.0 (also format). Measured first via `CI_DOCKER_IMAGE=hexpm/elixir:1.18.4-erlang-27.3.4.16-ubuntu-noble-20260810 scripts/ci_docker.sh` (format step differs by formatter version; compile+tests green).
 
 ## Versioning (user decision 2026-09-28)
 - One **minor** version per milestone: M1 → v0.4.x, M2 → v0.5.x, M3 → v0.6.x, M4 → v0.7.x, M5 → v0.8.x, M6 → v0.9.x.

@@ -8,6 +8,18 @@ on:
 jobs:
   test:
     runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          # stated floor (mix.exs: elixir ~> 1.18) — compile + test only
+          - elixir: '1.18.4'
+            otp: '27.3'
+            check_format: false
+          # primary toolchain — the formatter check runs here only (formatter output differs across Elixir versions)
+          - elixir: '1.19.5'
+            otp: '28.0'
+            check_format: true
 
     env:
       MIX_ENV: test
@@ -18,13 +30,14 @@ jobs:
       - name: Set up BEAM
         uses: erlef/setup-beam@v1
         with:
-          otp-version: '28.0'
-          elixir-version: '1.19.5'
+          otp-version: ${{ matrix.otp }}
+          elixir-version: ${{ matrix.elixir }}
 
       - name: Core deps
         run: mix deps.get
 
       - name: Core format
+        if: matrix.check_format
         run: mix format --check-formatted
 
       - name: Core compile (warnings as errors)
@@ -37,6 +50,7 @@ jobs:
         run: cd extras/dspy_extras && mix deps.get
 
       - name: Extras format
+        if: matrix.check_format
         run: cd extras/dspy_extras && mix format --check-formatted
 
       - name: Extras compile (warnings as errors)
