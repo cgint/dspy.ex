@@ -49,6 +49,28 @@ The struct SHALL inspect as `#Dspy.Evaluate.Result<score: S, results: <N results
 - **WHEN** a value contains a comma, a quote and a newline and `save_as_csv` is given a path
 - **THEN** parsing the file SHALL give back identical rows
 
+### Requirement: Unwritable results raise (P-OUT, resolved Horst 2026-09-28)
+
+Saving SHALL match upstream and **raise** rather than silently widening or coercing the
+data. Upstream raises in both cases (probe `tmp/pyck/ck.py` against DSPy 3.4.0): a row
+carrying a key the header does not have raises `ValueError` from `csv.DictWriter`, and a
+value JSON cannot encode raises `TypeError` from `json.dump`. The raised error SHALL name
+the offending key so the caller can find it.
+
+*Rationale for the reader:* the earlier draft recommended a union header and `inspect/1`
+for odd values. That was rejected — a silently widened CSV header is precisely the
+"friendlier than Python" divergence that makes a parity port untrustworthy later.
+
+#### Scenario: Ragged row in CSV
+- **WHEN** the rows do not all carry the same keys and `save_as_csv` is given a path
+- **THEN** it SHALL raise, and the message SHALL name the offending key
+- **AND** no partial file SHALL be left behind
+
+#### Scenario: Non-encodable value in JSON
+- **WHEN** a row value cannot be encoded as JSON (e.g. a PID) and `save_as_json` is given a path
+- **THEN** it SHALL raise, and the message SHALL name the offending key
+- **AND** no partial file SHALL be left behind
+
 ### Requirement: Tracebacks on request
 With `provide_traceback: true`, an item failure SHALL be logged with the stacktrace captured in the child process.
 
