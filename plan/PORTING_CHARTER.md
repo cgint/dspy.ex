@@ -15,7 +15,7 @@ Within the constraints of this agent harness (I can’t change your env vars, ca
    - `plan/NORTH_STAR.md` defines the north star.
    - `plan/RELEASE_MILESTONES.md` defines the milestone sequence.
    - `plan/STRATEGIC_ROADMAP_DSPY_PORT.md` defines the long-term plan.
-   - `plan/STATUS.md` tracks current health, decisions, and next steps.
+   - `plan/current/STATUS.md` tracks current health, decisions, and next steps.
 
 2. **Small, verifiable, reversible progress**
    - Prefer incremental changes with tests.

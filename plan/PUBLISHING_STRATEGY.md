@@ -57,10 +57,10 @@ Optional (recommended): delegate the mechanical bookkeeping to a `pi` handoff, t
 
 ```bash
 scripts/pi_handoff.sh --models gpt-5.2 --thinking medium --tools read,bash,edit,write \
-  --goal "Release prep for vX.Y.Z: update VERSION, docs/RELEASES.md, plan/STATUS.md (no commits/tags)" \
+  --goal "Release prep for vX.Y.Z: update VERSION, docs/RELEASES.md, plan/current/STATUS.md (no commits/tags)" \
   --context VERSION \
   --context docs/RELEASES.md \
-  --context plan/STATUS.md
+  --context plan/current/STATUS.md
 ```
 
 1. Update `VERSION` to `X.Y.Z`.
@@ -69,7 +69,7 @@ scripts/pi_handoff.sh --models gpt-5.2 --thinking medium --tools read,bash,edit,
    - `scripts/verify_examples.sh`
    - (optionally) `scripts/verify_all.sh`
 3. Prepend a new row to `docs/RELEASES.md` for `vX.Y.Z` with tag-pinned evidence links.
-4. Add a short log entry to `plan/STATUS.md` (mention “Cut tag `vX.Y.Z`”).
+4. Add a short log entry to `plan/current/STATUS.md` (mention “Cut tag `vX.Y.Z`”).
 5. Commit release bookkeeping changes.
 6. Create an annotated tag:
 

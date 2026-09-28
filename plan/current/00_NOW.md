@@ -30,4 +30,5 @@ Native Elixir port of Python DSPy (the behavioral reference). No Python wrapper.
 - Native port only; any Python-backed piece needs your approval. Jido/LiveView = optional layers on top.
 
 ## Where things live
-Queue: `PARITY_QUEUE.md` · History log: `STATUS.md` · How we work: `HOW_WE_WORK.md` · File index: `README.md`
+All in `plan/current/`: queue `PARITY_QUEUE.md` · status/history `STATUS.md` · gap analysis vs upstream `GAP_ANALYSIS_2026-05.md` (May, stale-ish).
+Process: `plan/HOW_WE_WORK.md` · everything else: `plan/README.md`.

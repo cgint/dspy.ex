@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-# Outer-loop steering: update `plan/STATUS.md` backlog (non-interactive pi run).
+# Outer-loop steering: update `plan/current/STATUS.md` backlog (non-interactive pi run).
 
 root="$(git rev-parse --show-toplevel)"
 cd "$root"
@@ -30,18 +30,18 @@ prompt=$(cat <<'PROMPT'
 You are the OUTER LOOP steering agent for this repo.
 
 Task:
-- Read: AGENTS.md, plan/NORTH_STAR.md, plan/RELEASE_MILESTONES.md, plan/STATUS.md, plan/WORKFLOW.md.
-- Update ONLY planning docs (primarily plan/STATUS.md) to create/refresh a small ordered backlog under "## Loop status".
+- Read: AGENTS.md, plan/NORTH_STAR.md, plan/RELEASE_MILESTONES.md, plan/current/STATUS.md, plan/WORKFLOW.md.
+- Update ONLY planning docs (primarily plan/current/STATUS.md) to create/refresh a small ordered backlog under "## Loop status".
 
 Rules:
 - Keep backlog items small, testable, and ordered.
 - Prefer items that advance adoption-first milestones (R0 acceptance tests from dspy-intro).
 - Explicitly avoid metric-tricking, hidden workarounds, or scope creep.
 - If you believe the next step requires a handshake item (deps changes, broad refactor, heavy/system-wide commands, or anything that risks leaking secrets), then:
-  - write a short "Handshake needed" note into plan/STATUS.md under the Loop status section
+  - write a short "Handshake needed" note into plan/current/STATUS.md under the Loop status section
   - set: "- Loop state: PAUSED (backlog empty)" (to stop the worker)
 
-Formatting expectations in plan/STATUS.md "## Loop status":
+Formatting expectations in plan/current/STATUS.md "## Loop status":
 - Loop state: ACTIVE|PAUSED (backlog empty)
 - Backlog (ordered):
   - [ ] <micro-goal>
@@ -59,5 +59,5 @@ pi_print \
   @plan/NORTH_STAR.md \
   @plan/RELEASE_MILESTONES.md \
   @plan/WORKFLOW.md \
-  @plan/STATUS.md \
+  @plan/current/STATUS.md \
   "$prompt"

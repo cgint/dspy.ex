@@ -12,13 +12,13 @@ Treat `AGENTS.md` as the only repo-specific information that may be available wh
 When important information is learned, **write it down** in the right durable place (`agent/`, `plan/`, `docs/`, or `openspec/`). Do not rely on chat memory.
 
 ## Start here (reading order)
-0. `plan/00_NOW.md` — one-page current plan + status (human dashboard); `plan/README.md` classifies every plan file as LIVE / REFERENCE / SNAPSHOT / SUPERSEDED.
+0. `plan/current/00_NOW.md` — one-page current plan + status (human dashboard); `plan/README.md` classifies every plan file as LIVE / REFERENCE / SNAPSHOT / SUPERSEDED.
 1. `agent/USER.md` — explicit user preferences and collaboration instructions.
 2. `agent/SOUL.md` — the assistant’s stable operating principles and learned habits.
 3. `agent/MEMORY.md` — compact context window (decisions + “how to resume quickly”).
 4. `agent/WAYOFWORKING.md` — operational playbook (delegation + context hygiene).
 5. `plan/NORTH_STAR.md` — the purpose, constraints, and priorities (why/what matters).
-6. `plan/STATUS.md` — the current heartbeat (health, decisions, next tasks, verification).
+6. `plan/current/STATUS.md` — the current heartbeat (health, decisions, next tasks, verification).
 7. `plan/COVERAGE_AUDIT_2026-05.md` — current post-hardening continuation plan: meaningful coverage follow-ups, 0%/near-0% module classification, and recommendations.
 8. `plan/RELEASE_MILESTONES.md` — the step-by-step milestone roadmap (what we ship first).
 9. `plan/INTERFACE_COMPATIBILITY.md` — explicit mapping to Python DSPy and DSPex-snakepit.
@@ -29,9 +29,9 @@ When important information is learned, **write it down** in the right durable pl
 
 ## Current continuation pointer
 
-**Since 2026-09-26 (supersedes the list below):** autonomous parity slices. Follow `plan/SLICE_LOOP.md` (rules + gates; never break `test/consumer_contract/`) and take the next `todo` row from `plan/PARITY_QUEUE.md`. Grunt work goes to home-LLM Herdr workers; the lead accepts and commits.
+**Since 2026-09-26 (supersedes the list below):** autonomous parity slices. Follow `plan/SLICE_LOOP.md` (rules + gates; never break `test/consumer_contract/`) and take the next `todo` row from `plan/current/PARITY_QUEUE.md`. Grunt work goes to home-LLM Herdr workers; the lead accepts and commits.
 
-As of 2026-05-17, the most concrete next plan is the coverage/parity hardening follow-up in `plan/COVERAGE_AUDIT_2026-05.md`, also summarized in `plan/STATUS.md`.
+As of 2026-05-17, the most concrete next plan is the coverage/parity hardening follow-up in `plan/COVERAGE_AUDIT_2026-05.md`, also summarized in `plan/current/STATUS.md`.
 
 Recommended next order:
 1. Add `Dspy.Adapters` utility characterization tests if the namespace remains public.
@@ -65,7 +65,7 @@ Parity work runs as lead (Horst) + architect buddy (Greta) + controller→worker
 - Persist information the user explicitly gives and decisions we agree on.
 - Add dates to durable decisions, user preferences, research notes, and process changes so the timeline remains understandable.
 - Prefer **frequent, small commits** (including docs) so we can “time travel” and see how the plan/knowledge/assistant evolves.
-- Keep `plan/STATUS.md` current so a restart can resume without re-deriving context.
+- Keep `plan/current/STATUS.md` current so a restart can resume without re-deriving context.
 - If web/external research affects direction, save the useful findings with date + source context (usually under `plan/research/` or a relevant planning doc).
 
 ## Working mode (Clarity First, standing approval)

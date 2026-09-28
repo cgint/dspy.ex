@@ -36,12 +36,12 @@ fi
 
 echo
 
-echo "Checking plan/STATUS.md log mentions Cut tag ${tag}…"
+echo "Checking plan/current/STATUS.md log mentions Cut tag ${tag}…"
 status_line="Cut tag \`${tag}\`"
-if rg -n -F "$status_line" plan/STATUS.md >/dev/null; then
-  echo "OK: plan/STATUS.md mentions Cut tag ${tag}"
+if rg -n -F "$status_line" plan/current/STATUS.md >/dev/null; then
+  echo "OK: plan/current/STATUS.md mentions Cut tag ${tag}"
 else
-  echo "WARN: plan/STATUS.md does not mention Cut tag ${tag} yet" >&2
+  echo "WARN: plan/current/STATUS.md does not mention Cut tag ${tag} yet" >&2
 fi
 
 echo

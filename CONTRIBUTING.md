@@ -11,7 +11,7 @@ This repo follows an **adoption-first** approach:
 
 - What works today + evidence: `docs/OVERVIEW.md`
 - North star (priorities): `plan/NORTH_STAR.md`
-- Current backlog/health: `plan/STATUS.md`
+- Current backlog/health: `plan/current/STATUS.md`
 - End-to-end verification: `scripts/verify_all.sh`
 
 ## Requirements

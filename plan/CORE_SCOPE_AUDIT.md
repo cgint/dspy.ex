@@ -54,7 +54,7 @@ These should be moved out of the core compilation path.
 1. **Inventory**
    - Generate a list of `.ex` files under `lib/dspy/`.
    - Cross-check against:
-     - evidence list in `plan/STATUS.md`
+     - evidence list in `plan/current/STATUS.md`
      - stable claims in `docs/OVERVIEW.md`
      - usage in tests (`test/`)
 
@@ -74,7 +74,7 @@ These should be moved out of the core compilation path.
    - `scripts/verify_all.sh`
 
 5. **Docs + roadmap update**
-   - Update `docs/OVERVIEW.md` / `plan/STATUS.md` to clarify what is in core.
+   - Update `docs/OVERVIEW.md` / `plan/current/STATUS.md` to clarify what is in core.
    - Optionally add a short note in `extras/dspy_extras/unsafe/README.md` describing the quarantine purpose.
 
 ## Risks / mitigations

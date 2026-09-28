@@ -1,4 +1,4 @@
-# UPSTREAM_PARITY_2026-05.md — R3 upstream alignment matrix
+# GAP_ANALYSIS_2026-05.md — R3 upstream alignment matrix
 
 ## Summary
 

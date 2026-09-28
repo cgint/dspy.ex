@@ -7,7 +7,7 @@ Safety/intent:
 - Designed for a **business laptop**: bounded iterations, no global installs.
 
 Loop scripts:
-- `loop_steer.sh`: create/refresh an ordered backlog in `plan/STATUS.md` (non-interactive `pi`).
+- `loop_steer.sh`: create/refresh an ordered backlog in `plan/current/STATUS.md` (non-interactive `pi`).
 - `loop_worker.sh`: execute backlog items iteratively via delegated `pi` runs; capture logs locally; optionally verify + commit.
 - `loop_review.sh`: run an LLM-based code review of the current git diff; logs go to `plan/research/loop_resume/*`.
 

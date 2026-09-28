@@ -63,10 +63,10 @@ Deliverables:
 
 ## How execution will be organized
 - Each concrete chunk of work becomes an **OpenSpec change** (proposal → tasks → implementation → verify → archive).
-- `plan/STATUS.md` remains the “day-to-day” heartbeat (health, checklists, verification runs, learnings).
+- `plan/current/STATUS.md` remains the “day-to-day” heartbeat (health, checklists, verification runs, learnings).
 
 ## Current state (as of last recorded work)
-See `plan/STATUS.md` for the detailed checklist and verification commands.
+See `plan/current/STATUS.md` for the detailed checklist and verification commands.
 
 ## Open questions (to resolve early)
 1. **Parity target:** Do we want to mirror Python DSPy public APIs, or only semantics while adopting idiomatic Elixir naming?

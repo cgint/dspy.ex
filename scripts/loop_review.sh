@@ -61,6 +61,6 @@ PROMPT
 #
 # Provide repo context to anchor the reviewer.
 # Send the actual review text to stderr (so callers can capture the log path via stdout).
-(pi_print @AGENTS.md @plan/WORKFLOW.md @plan/STATUS.md "$prompt") 2>&1 | tee "$log_file" >&2
+(pi_print @AGENTS.md @plan/WORKFLOW.md @plan/current/STATUS.md "$prompt") 2>&1 | tee "$log_file" >&2
 
 echo "$log_file"

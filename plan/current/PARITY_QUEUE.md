@@ -2,7 +2,7 @@
 
 Created 2026-09-26. Loop + gates: `plan/SLICE_LOOP.md`.
 This queue supersedes older ledgers as the **work queue**. They stay as background:
-`plan/UPSTREAM_PARITY_2026-05.md` (delta audit vs upstream `661a612c`), `plan/INTERFACE_COMPARISON_MATRIX.md` (partly stale, e.g. typed outputs now exist), `plan/RELEASE_MILESTONES.md` (phase charter; R3 is effectively done).
+`plan/current/GAP_ANALYSIS_2026-05.md` (delta audit vs upstream `661a612c`), `plan/INTERFACE_COMPARISON_MATRIX.md` (partly stale, e.g. typed outputs now exist), `plan/RELEASE_MILESTONES.md` (phase charter; R3 is effectively done).
 Active OpenSpec changes are listed as rows so the queue sees them.
 
 Status: `todo` | `doing` | `done (date, tag)` | `blocked (why)` | `dropped (why)`.

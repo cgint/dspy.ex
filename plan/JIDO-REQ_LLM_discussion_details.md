@@ -115,7 +115,7 @@ i would actually NOT want to mix dspy.ex functionality and a web interface - jus
     90 -
     92 +- Should `dspy.ex` ship only `Dspy.LM.ReqLLM`, or also keep other LM adapters as optional add-ons?
 
-  └ plan/STATUS.md (+5 -1)
+  └ plan/current/STATUS.md (+5 -1)
      7  - An implementation plan exists for sequencing DSPy-core vs Jido integration work.
      8 +- `dspy.ex` remains library-only; any web UI lives in a separate package/app.
      9 +- Low-level LLM provider access is delegated to `req_llm` via an adapter.

@@ -7,7 +7,7 @@ North star docs:
 - `plan/NORTH_STAR.md`
 - `plan/RELEASE_MILESTONES.md`
 - `plan/INTERFACE_COMPATIBILITY.md`
-- `plan/UPSTREAM_PARITY_2026-05.md` (R3 upstream alignment matrix)
+- `plan/current/GAP_ANALYSIS_2026-05.md` (R3 upstream alignment matrix)
 - `plan/PORTING_CHARTER.md`
 - `plan/STRATEGIC_ROADMAP_DSPY_PORT.md`
 - `plan/REFERENCE_DSPY_INTRO.md`
@@ -26,14 +26,14 @@ North star docs:
 
 ## Loop status
 - Loop state: ACTIVE — R3 upstream alignment / structured parity audit
-- Active control artifact: `plan/UPSTREAM_PARITY_2026-05.md`
+- Active control artifact: `plan/current/GAP_ANALYSIS_2026-05.md`
 - Current slice: **Coverage hardening 1–4** — implementation checkpoint complete, pending final verification
   - Slice 1 parameter/state safety tests added; no implementation fixes required.
   - Slice 2 / R3.2 teleprompter parity audit complete: BootstrapFewShot fixed/covered; MIPROv2 classified partial/not directly applicable; GEPA classified divergent/covered subset.
   - Slice 3 adapter pipeline edge-case tests added; malformed native tool calls now surface explicit merge errors.
   - Slice 4 0%-coverage module audit persisted in `plan/COVERAGE_AUDIT_2026-05.md`.
 - Backlog (ordered):
-  - [x] R3.1: Inspect and test P0 upstream parity items in `plan/UPSTREAM_PARITY_2026-05.md`
+  - [x] R3.1: Inspect and test P0 upstream parity items in `plan/current/GAP_ANALYSIS_2026-05.md`
   - [x] R3.1: Implement only the minimal core contract fixes justified by failing/missing tests
   - [x] R3.1: Update `plan/INTERFACE_COMPATIBILITY.md` for any deliberate divergence (none required; attachment input remains an existing documented multimodal escape hatch)
   - [x] Coverage hardening slice 1: parameter/state safety tests
@@ -358,7 +358,7 @@ Notes:
 - **2026-02-08**: Added additional acceptance slices (contracts + transcription), made app startup library-first by gating optional services, and added determinism regression coverage; cut and pushed tag `v0.1.1`.
 - **2026-02-08**: Further reduced noise and hardened determinism; cut and pushed tag `v0.1.2`.
 - **2026-02-08**: Extracted optional Phoenix/"godmode"/GenStage/legacy HTTP modules into `extras/dspy_extras`; removed those deps from core; cut and pushed tag `v0.2.0`.
-- **2026-01-21**: Initialized `plan/WORKFLOW.md` (originally `docs/INSTRUCTIONS.md`) with guidelines on maintaining documentation. Added `Log` section to `plan/STATUS.md` (originally `docs/STATUS.md`) to track project evolution.
+- **2026-01-21**: Initialized `plan/WORKFLOW.md` (originally `docs/INSTRUCTIONS.md`) with guidelines on maintaining documentation. Added `Log` section to `plan/current/STATUS.md` (originally `docs/STATUS.md`) to track project evolution.
 - **2026-01-21**: Unblocked compilation by adding missing deps/config for in-tree web modules; established “req_llm for providers, Jido v2 optional later”; added checklist to support small iterative commits.
 - **2026-01-21**: Made `mix compile --warnings-as-errors` + `./precommit.sh` pass; added a regression test for `Dspy.LM.generate/3` request-map normalization.
 - **2026-01-21**: Checkpointed current repo health so we can iterate in smaller, test-driven commits.
@@ -369,7 +369,7 @@ Notes:
 - **2026-01-21**: Added `Predict.parameters/1` + `Predict.update_parameters/2` and a deterministic `Predict` → `Evaluate` golden-path test to anchor Phase 1 success criteria.
 - **2026-01-21**: Repaired `BootstrapFewShot` to produce candidate programs via `update_parameters/2` (no dynamic modules) and added a deterministic toy-dataset smoke test that shows score improvement.
 
-## 2026-09-26 — Autonomous parity slices started (see plan/SLICE_LOOP.md, plan/PARITY_QUEUE.md)
+## 2026-09-26 — Autonomous parity slices started (see plan/SLICE_LOOP.md, plan/current/PARITY_QUEUE.md)
 - S0 consumer contract suite (33 tests), S0b consumer canary (5 consumers; 2 WARN-BASELINE with consumer-owned warnings), P0 `Dspy.context/2` → `v0.3.40`.
 - Note: VERSION 0.3.39 was never tagged (consumers pin commits 1afadc8 / f20db7e); tagging resumes at v0.3.40.
 - P1 `Dspy.BestOfN` + rollout-aware LM cache → `v0.3.41`.

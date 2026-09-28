@@ -20,7 +20,7 @@ Each milestone should include:
 
 ## Current progress (at a glance)
 
-This is tracked in more detail in `plan/STATUS.md`, but the intent is:
+This is tracked in more detail in `plan/current/STATUS.md`, but the intent is:
 
 - R0: **DONE** (Predict/CoT + output parsing + provider adapter; proven by acceptance tests)
 - R1: **DONE** (Evaluate determinism + detailed results)

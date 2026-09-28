@@ -63,7 +63,7 @@ User proposal/preference: use OpenSpec **even for smaller changes** when it help
 
 Working rule (to avoid duplicate tracking):
 - If an OpenSpec change is active, treat its `tasks.md` as the **single source of truth** for the checklist.
-- Keep `plan/STATUS.md` as a **heartbeat + pointer** (link the active change, record decisions, record verification), not a second checklist.
+- Keep `plan/current/STATUS.md` as a **heartbeat + pointer** (link the active change, record decisions, record verification), not a second checklist.
 
 Default flow (matches the user’s preferred OpenSpec skill usage):
 1. **Fast-forward artifact creation**: use **`openspec-ff-change`** to scaffold the change and generate all apply-ready artifacts (proposal/design/tasks) in one go (often delegated to a sub-agent).
@@ -112,17 +112,17 @@ Interactive convenience: project skill `pi-handoff` lives at `.pi/skills/pi-hand
 When cutting a tag, delegate the mechanical bookkeeping to a sub-agent, then keep a thin driver gate for correctness:
 
 1. Driver: finish the code slice and commit it.
-2. Delegate: bump `VERSION`, prepend a row in `docs/RELEASES.md` (tag-pinned links), add a log entry in `plan/STATUS.md`.
+2. Delegate: bump `VERSION`, prepend a row in `docs/RELEASES.md` (tag-pinned links), add a log entry in `plan/current/STATUS.md`.
 3. Driver: review diff, run `scripts/release_lint.sh`, commit the release commit, tag, push.
 
 Example handoff (enable edit/write tools):
 
 ```bash
 scripts/pi_handoff.sh --models gpt-5.2 --thinking medium --tools read,bash,edit,write \
-  --goal "Release prep for vX.Y.Z: update VERSION, docs/RELEASES.md, plan/STATUS.md (no commits/tags)" \
+  --goal "Release prep for vX.Y.Z: update VERSION, docs/RELEASES.md, plan/current/STATUS.md (no commits/tags)" \
   --context VERSION \
   --context docs/RELEASES.md \
-  --context plan/STATUS.md
+  --context plan/current/STATUS.md
 ```
 
 Tip: also pass the changed files (tests + code) as `--context ...` so the sub-agent can add the right tag-pinned evidence links.
@@ -148,7 +148,7 @@ Delegated output is **draft input**.
 Before merging anything back:
 - I re-check the evidence (tests/code pointers)
 - I run the verification gate (`mix test`, `./precommit.sh` as appropriate)
-- I record any durable learnings/decisions in `plan/STATUS.md` or `agent/MEMORY.md`
+- I record any durable learnings/decisions in `plan/current/STATUS.md` or `agent/MEMORY.md`
 
 - 2026-09-26: Workers may "document" a failed requirement as a KNOWN LIMITATION and write tests asserting the bug. Treat any such note in worker output as a rejection trigger; mutation-check the core requirement.
 

@@ -2,7 +2,7 @@
 
 This file is about **how I work**, not what we’ve built.
 
-**Litmus test:** if a statement wouldn’t still be true after rewinding the repo by 50 commits, it belongs in `agent/MEMORY.md` (or `plan/STATUS.md`), not here.
+**Litmus test:** if a statement wouldn’t still be true after rewinding the repo by 50 commits, it belongs in `agent/MEMORY.md` (or `plan/current/STATUS.md`), not here.
 
 ## My default posture in this repo
 

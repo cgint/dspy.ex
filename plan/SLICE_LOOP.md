@@ -1,7 +1,7 @@
 # SLICE_LOOP.md — autonomous parity slices without breaking consumers
 
 Created 2026-09-26. Mandate: `agent/USER.md` (2026-09-26 entry).
-Work queue: `plan/PARITY_QUEUE.md`.
+Work queue: `plan/current/PARITY_QUEUE.md`.
 
 ## Roles
 
@@ -35,7 +35,7 @@ The frozen surface is `test/consumer_contract/` (tag `:consumer_contract`). Sour
 ## Closing a slice
 
 - Commit (small, conventional message), bump `VERSION`, tag `v<VERSION>`, add a row to `docs/RELEASES.md` with tag-pinned evidence links, list the feature in `docs/COMPATIBILITY.md` if stable.
-- Mark the queue row done with date + tag; append a line to `plan/STATUS.md`.
+- Mark the queue row done with date + tag; append a line to `plan/current/STATUS.md`.
 - Push `main` + tag after all gates pass.
 - A failed gate: fix root cause in a follow-up handoff; if it's not clean, revert the slice and record why in the queue.
 

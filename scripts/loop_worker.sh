@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-# Inner-loop worker: execute ordered backlog items from plan/STATUS.md via delegated `pi` runs.
+# Inner-loop worker: execute ordered backlog items from plan/current/STATUS.md via delegated `pi` runs.
 
 usage() {
   cat <<'EOF'
@@ -15,7 +15,7 @@ Note: `--models <id>` is accepted for convenience; the script passes it through 
 Notes:
 - Requires explicit `--models <id>` (refuses to default).
 - Refuses Gemini models (loop automation should not use Gemini at all).
-- Reads first unchecked item from plan/STATUS.md "## Loop status".
+- Reads first unchecked item from plan/current/STATUS.md "## Loop status".
 - Captures delegated stdout/stderr to plan/research/loop_resume/*.log (gitignored).
 - By default:
   - runs verification command (mix test)
@@ -68,7 +68,7 @@ while [[ $# -gt 0 ]]; do
   esac
 done
 
-state_file="plan/STATUS.md"
+state_file="plan/current/STATUS.md"
 if [[ ! -f "$state_file" ]]; then
   echo "ERROR: missing $state_file" >&2
   exit 1
@@ -240,16 +240,16 @@ for ((i=1; i<=max_iters; i++)); do
 You are the INNER LOOP worker for this repo.
 
 Task:
-- Read plan/STATUS.md and take the FIRST unchecked backlog item under "## Loop status".
+- Read plan/current/STATUS.md and take the FIRST unchecked backlog item under "## Loop status".
 - Implement it in the codebase with small, deterministic changes.
-- Update plan/STATUS.md:
+- Update plan/current/STATUS.md:
   - mark the item [x]
   - add evidence lines under Loop status, e.g.:
     - Evidence file: `path`
     - Verification: `mix test` (only if you actually ran it)
 
 Rules:
-- Do not change dependencies unless explicitly required; if deps change seems needed, add a "Handshake needed" note in plan/STATUS.md and set loop state to PAUSED.
+- Do not change dependencies unless explicitly required; if deps change seems needed, add a "Handshake needed" note in plan/current/STATUS.md and set loop state to PAUSED.
 - Do not commit.
 - Do not add secrets/logs.
 - Keep changes repo-scoped.
@@ -257,7 +257,7 @@ PROMPT
 )
 
   # Delegate via pi; capture output.
-  ( pi_print @AGENTS.md @plan/WORKFLOW.md @plan/STATUS.md "$prompt" ) 2>&1 | tee "$log_file"
+  ( pi_print @AGENTS.md @plan/WORKFLOW.md @plan/current/STATUS.md "$prompt" ) 2>&1 | tee "$log_file"
 
   commit_iteration_if_needed "$i" "$item"
 

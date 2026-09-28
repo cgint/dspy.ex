@@ -1,7 +1,7 @@
 # How we work — dspy.ex parity team (2026-09-26, DRAFT for Horst/Greta co-sign)
 
 Adapted from `~/dev/agent-coding-gui/docs/how-to-work/`. Point every brief here; don't restate rules.
-Slice mechanics/gates: `plan/SLICE_LOOP.md`. Backlog: `plan/PARITY_QUEUE.md`.
+Slice mechanics/gates: `plan/SLICE_LOOP.md`. Backlog: `plan/current/PARITY_QUEUE.md`.
 
 ## Principles
 1. **Clarity before code** — each slice has a written contract (what, why, non-goals, WHEN/THEN scenarios, upstream file refs) before implementation.
@@ -48,7 +48,7 @@ Lesson (H0): an unpinned API shape ("run in a child") let a nested-spawn design 
 Groundwork for (a)/(d) is done by Greta's readonly scouts; Horst drafts contract + team card from her verified findings package.
 
 ## Human dashboard
-Horst updates `plan/00_NOW.md` at every slice acceptance/release and whenever a decision waits for the user (one page, no history).
+Horst updates `plan/current/00_NOW.md` at every slice acceptance/release and whenever a decision waits for the user (one page, no history).
 
 ## Review checklist
 - **No Python runtime** (Pythonx, snakepit/DSPex, erlport, `System.cmd("python"...)`) added anywhere without explicit user approval — BLOCK (user decision 2026-09-26). (controller + outside reviewer)

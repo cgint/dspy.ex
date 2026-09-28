@@ -16,7 +16,7 @@ This is **context/input only** from that repo; we re-apply the pattern here in a
 1. Re-check alignment:
    - `plan/NORTH_STAR.md`
    - `plan/RELEASE_MILESTONES.md`
-2. Choose next work items from the ordered backlog in `plan/STATUS.md`.
+2. Choose next work items from the ordered backlog in `plan/current/STATUS.md`.
 3. Before integrating changes, explicitly check for:
    - metric-tricking / proxy-optimizing
    - hidden workarounds that reduce long-term maintainability
@@ -36,7 +36,7 @@ Hard rule (for this repo):
 - Loop automation **must not** use Gemini models.
 
 ## Backlog + pause signal (single source of truth)
-We use `plan/STATUS.md` as the resumable state file.
+We use `plan/current/STATUS.md` as the resumable state file.
 
 Convention (proposed): add/maintain a section:
 - `## Loop status`
@@ -53,11 +53,11 @@ Rules:
 ## Verification + history
 - Prefer **small atomic commits** for each completed micro-goal.
 - Always run the smallest relevant verification (often `mix test`, and periodically `./precommit.sh`).
-- Keep evidence in `plan/STATUS.md` so a restart can resume quickly.
+- Keep evidence in `plan/current/STATUS.md` so a restart can resume quickly.
 
 ## Tooling in this repo
 We provide repo-local scripts to operationalize the loop:
-- `scripts/loop_steer.sh`: outer-loop steering (refresh backlog in `plan/STATUS.md` via non-interactive `pi`).
+- `scripts/loop_steer.sh`: outer-loop steering (refresh backlog in `plan/current/STATUS.md` via non-interactive `pi`).
 - `scripts/loop_worker.sh`: inner-loop worker (execute the first unchecked backlog item via `pi`, capture logs, optionally verify + commit).
 
 Both scripts enforce:

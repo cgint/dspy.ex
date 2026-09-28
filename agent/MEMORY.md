@@ -12,7 +12,7 @@
 - Human-friendly snapshot + multi-dimensional roadmap: **`docs/OVERVIEW.md`**
 - Releases/tags (what each semver tag contains): `docs/RELEASES.md`
 - Current recommended stable tag: `v` + repo-root `VERSION`
-- Planning backlog / next tasks: `plan/STATUS.md`
+- Planning backlog / next tasks: `plan/current/STATUS.md`
 - OpenSpec change packages (proposal/design/tasks; delegation-friendly): `openspec/changes/*` (archived under `openspec/changes/archive/*`, stable specs under `openspec/specs/*`)
 - Roadmap: `plan/RELEASE_MILESTONES.md`
 
@@ -130,7 +130,7 @@
 ### 2026-05-17 — Coverage hardening completed; next continuation plan persisted
 - Completed and auditor-approved coverage hardening slices: parameter/state safety, R3.2 teleprompter parity, adapter pipeline edge cases, and 0%/near-0% module audit.
 - Primary continuation artifact: `plan/COVERAGE_AUDIT_2026-05.md`.
-- Also summarized in `plan/STATUS.md`; `AGENTS.md` now explicitly points new sessions to the coverage audit as the current continuation plan.
+- Also summarized in `plan/current/STATUS.md`; `AGENTS.md` now explicitly points new sessions to the coverage audit as the current continuation plan.
 - Recommended next order:
   1. Add `Dspy.Adapters` utility characterization tests if the namespace remains public.
   2. Decide whether retrieval placeholders (`ChromaDB`, `OpenAIEmbeddings`) stay as characterized stubs, move to extras/quarantine, or are documented as optional-only.

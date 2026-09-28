@@ -32,7 +32,7 @@ This repository is iterating toward a “DSPy-style Elixir core” with minimal 
   - Keep changes scoped to this repo unless explicitly asked.
 
 ## Workflow
-- Keep `plan/STATUS.md` up to date with:
+- Keep `plan/current/STATUS.md` up to date with:
   - Goal + success criteria
   - Decisions + rationale
   - Open questions + learnings
