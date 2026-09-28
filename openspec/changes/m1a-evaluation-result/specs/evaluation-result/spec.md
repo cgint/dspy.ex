@@ -29,7 +29,7 @@ The struct SHALL inspect as `#Dspy.Evaluate.Result<score: S, results: <N results
 
 #### Scenario: Inspect
 - **WHEN** a result with 4 results and score 75.0 is inspected
-- **THEN** the output SHALL be `#Dspy.Evaluate.Result<score: 75.0, results: <4 results>>`
+- **THEN** the output SHALL be `#Dspy.Evaluate.Result<score: 75.0, results: <list of 4 results>>`
 
 ### Requirement: Table display
 `:display_table` SHALL log a plain-text table of the result rows: `true` shows all rows, an integer n shows the first n plus a "... k more rows not displayed ..." line; cells longer than 25 words SHALL be truncated to 25 words followed by `...`.
@@ -39,7 +39,7 @@ The struct SHALL inspect as `#Dspy.Evaluate.Result<score: S, results: <N results
 - **THEN** the log SHALL show 2 rows, the line "... 2 more rows not displayed ...", and the long cell cut to 25 words plus `...`
 
 ### Requirement: Saving results
-`:save_as_json` and `:save_as_csv` SHALL write one row per example: example fields merged with prediction fields (collisions renamed `example_<k>` / `pred_<k>`), plus a column named after the metric holding the score. A failed item SHALL be written with `prediction` nil.
+`:save_as_json` and `:save_as_csv` SHALL write one row per example: example fields merged with prediction fields (collisions renamed `example_<k>` / `pred_<k>`), plus a column named after the metric holding the score. A failed item SHALL be written as the example fields plus the metric column only (its prediction is an empty `Prediction`, upstream `evaluate.py:181`, `:237`).
 
 #### Scenario: JSON with a key collision
 - **WHEN** the example and the prediction both have `answer` and `save_as_json` is given a path
@@ -62,3 +62,17 @@ Without output options, Evaluate SHALL NOT write files or log tables.
 #### Scenario: Defaults are silent
 - **WHEN** Evaluate runs with no output options
 - **THEN** no file SHALL be created and no table SHALL be logged
+
+### Requirement: Failed items in results
+A failed item SHALL appear in `results` as `{example, %Dspy.Prediction{}, failure_score}` (upstream `evaluate.py:181`), while `predictions` and `items` keep their H0b-2 meaning.
+
+#### Scenario: Raising program
+- **WHEN** the program raises for one of 4 examples
+- **THEN** that `results` entry SHALL be `{example, %Dspy.Prediction{}, 0.0}` and `score` SHALL count it as 0.0
+
+### Requirement: Average Metric log line
+Every evaluation SHALL log `Average Metric: <sum> / <n> (<pct>%)` at info level, with the percentage rounded to 1 place (upstream `evaluate.py:185`).
+
+#### Scenario: Log line
+- **WHEN** 3 of 4 examples score 1.0
+- **THEN** the log SHALL contain `Average Metric: 3.0 / 4 (75.0%)`
