@@ -2,9 +2,9 @@
 
 | Target | Symbols done/total (facet %) | Phase | Next | Updated |
 |---|---|---|---|---|
-| Python DSPy **3.4.0** (`2413b67a4d`) | unknown until phase B (~135 public symbols upstream) | A→B | Phase B inventory | 2026-09-26 |
+| Python DSPy **3.4.0** (`2413b67a4d`) | ? / 160 (count running) | A→B | Phase B inventory | 2026-09-26 |
 
-Status: **v2 — Greta E1–E14 adopted; Horst facet-scope amendment (§6) awaiting Greta OK; then for user review.** Detail: enough to steer and measure; each slice gets its own contract (Clarity Gate).
+Status: **v2 — agreed Horst + Greta 2026-09-26** (risk noted by Greta: medium-value "done" rows judged at symbol level may overstate; the checker pass re-verifies all done/n-a rows). Detail: enough to steer and measure; each slice gets its own contract (Clarity Gate).
 Current position lives in `00_NOW.md` (single source; not repeated here).
 
 ## 1. Target

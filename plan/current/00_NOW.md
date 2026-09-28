@@ -7,7 +7,7 @@ An Elixir version of Python DSPy that **behaves like Python DSPy 3.4.0** (the ne
 Rule for every release: the 5 projects that already use dspy.ex must keep working.
 
 ## 2. How far along are we?
-- Python DSPy 3.4.0 offers about **135 public features** (classes and functions).
+- Python DSPy 3.4.0 offers **160 public features** (classes and functions; exact list generated from its code). About half already existed in DSPy 2.6; the rest came with 3.0–3.4.
 - How many of those dspy.ex already has: **not counted yet.** We are counting now (see 4). Result expected within about half a day.
 - Until then, only this is certain: the basics (signatures, Predict, ChainOfThought, adapters, LM calls, evaluation, several optimizers) exist and are tested; 5 features were added this week (table below).
 
@@ -23,7 +23,7 @@ The milestones themselves will be proposed after the count (step 4) — you appr
 ## 4. What is happening right now
 | What | Why | Who | Status |
 |---|---|---|---|
-| Counting: which of the ~135 features dspy.ex has, partly has, or lacks | gives you the numbers for section 2 and the basis for milestones | Greta + helper agents; Horst checks samples | running |
+| Counting: which of the ~135 features dspy.ex has, partly has, or lacks | gives you the numbers for section 2 and the basis for milestones | Greta + 6 helper agents (visible panes); Horst checks samples | running |
 | Making parallel work crash-safe (a crash or timeout in one background task must not take the whole program down) | reliability of optimizers and evaluation | Greta prepares, then a worker team | preparing |
 
 ## 5. Done this week
