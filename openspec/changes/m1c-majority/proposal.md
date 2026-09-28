@@ -99,6 +99,7 @@ The A1 signature and opts verbatim; A2 in own words (what `nil` means, what `fal
 - **Tie trap — ELEVATED** to its own row (row 5) with the mutation stated as "implement the winner with `Enum.frequencies |> Enum.max_by`", non-alphabetical data, and a mandatory comment in the test.
 - **C3 — AGREED: declare** in `docs/COMPATIBILITY.md` that votes use Elixir term equality (`1` and `1.0` are different votes). Not emulated.
 - **C4 — AGREED: M1-b before M1-c.**
+- **Golden rows [G] — generator RULED (Horst 2026-10-01, M1-b F1):** produced by the committed `uv` generator under `plan/research/upstream_golden/` running `dspy.majority` from DSPy 3.4.0, written to a committed fixture. Python is a fixture-generation tool, not a runtime dependency: `mix test` and CI never run it.
 
 ## (b) Team card — Horst.
 
