@@ -46,6 +46,7 @@ Version numbers show the milestone: M1 = v0.4.x, M2 = v0.5.x, … M6 = v0.9.x (d
 | What | Why | Who | Status |
 |---|---|---|---|
 | Milestones M1–M6 | so every step delivers something useful | approved by you 2026-09-28 | agreed |
+| Security fix: update 3 HTTP libraries with known vulnerabilities (req, mint, hpax) | security first | helper agent Paula, checked by Horst | in progress |
 | Crash/timeout hardening (H0b-1): a crash in one parallel piece no longer takes down the caller | stability, prerequisite for M1 | contract signed; team Katrin+Lukas+Mara building (tests first) | in progress |
 
 ## 5. Done this week
