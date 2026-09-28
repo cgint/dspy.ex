@@ -57,19 +57,45 @@ carrying a key the header does not have raises `ValueError` from `csv.DictWriter
 value JSON cannot encode raises `TypeError` from `json.dump`. The raised error SHALL name
 the offending key so the caller can find it.
 
-*Rationale for the reader:* the earlier draft recommended a union header and `inspect/1`
-for odd values. That was rejected — a silently widened CSV header is precisely the
+**The CSV header SHALL be the first row's keys, in A3 order** — not the union of all rows'
+keys. The asymmetry is upstream's and it matters:
+
+- a row carrying a key the header does **not** have → **raise**, naming that key;
+- a row **missing** header keys → written with **empty cells**, no raise.
+
+*Why this is stated so precisely (corrected 2026-09-28, Greta):* an earlier draft of this
+requirement said "raise whenever the rows do not all carry the same keys". That was wrong and
+would have been a real bug. A3 deliberately makes a **failed** item's row narrower (example
+fields plus the metric only), so under the broad wording **any** run containing a failure
+would crash on CSV save — while Python writes that file without complaint. The narrow-row
+case is the *missing-keys* case, which fills empty cells.
+
+*Rationale for the reader:* the earlier draft also recommended a union header and `inspect/1`
+for odd values. Both were rejected — a silently widened CSV header is precisely the
 "friendlier than Python" divergence that makes a parity port untrustworthy later.
 
-#### Scenario: Ragged row in CSV
-- **WHEN** the rows do not all carry the same keys and `save_as_csv` is given a path
-- **THEN** it SHALL raise, and the message SHALL name the offending key
-- **AND** no partial file SHALL be left behind
+#### Scenario: First example fails, a later one succeeds
+- **WHEN** the first example fails (narrow row → header without prediction keys) and a later example succeeds
+- **THEN** `save_as_csv` SHALL raise, naming the prediction key the header lacks
+- *Catches:* a header built from the union of all rows' keys
+
+#### Scenario: A later example fails
+- **WHEN** the first example succeeds and a later example fails (narrow row)
+- **THEN** `save_as_csv` SHALL write the file with **empty cells** for the missing keys and SHALL NOT raise
+- *Catches:* raising on any key difference — i.e. the earlier, over-broad wording
 
 #### Scenario: Non-encodable value in JSON
 - **WHEN** a row value cannot be encoded as JSON (e.g. a PID) and `save_as_json` is given a path
 - **THEN** it SHALL raise, and the message SHALL name the offending key
-- **AND** no partial file SHALL be left behind
+- *Catches:* converting the value with `inspect/1`
+
+#### Scenario: No partial file after a raise
+- **WHEN** either save raises
+- **THEN** the target path SHALL NOT exist
+- **AND** the payload SHALL have been fully built and validated in memory before the file was
+  opened (or written to a temp path in the same directory and renamed on success)
+- *Declared deviation:* upstream opens with `"w"` and streams, so a raise leaves a partial file
+  behind. We keep the clean behaviour deliberately; recorded in `docs/COMPATIBILITY.md`.
 
 ### Requirement: Tracebacks on request
 With `provide_traceback: true`, an item failure SHALL be logged with the stacktrace captured in the child process.
