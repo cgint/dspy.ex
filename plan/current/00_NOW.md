@@ -1,13 +1,13 @@
 # dspy.ex — where we are (plain overview)
 
-Updated 2026-09-26 by Horst. Details for the team: `PLAN.md`.
+Updated 2026-09-28 by Horst. Details for the team: `PLAN.md`.
 
 ## 1. What we are building
 An Elixir version of Python DSPy that **behaves like Python DSPy 3.4.0** (the newest release, Sept 2026). Pure Elixir, no Python inside.
 Rule for every release: the 5 projects that already use dspy.ex must keep working.
 
 ## 2. How far along are we?
-Python DSPy 3.4.0 has **160 public features**. Of those, 10 are Python-only (we would skip them — needs your OK, see 6), leaving **150 that count**.
+Python DSPy 3.4.0 has **160 public features**. Of those, 10 are Python-only (we skip them — approved by you 2026-09-28), leaving **150 that count**.
 
 | Status | Count | Meaning |
 |---|---|---|
@@ -30,14 +30,21 @@ Not in one big push, but in **milestones**. Each milestone:
 - keeps the 5 existing user projects working.
 
 Order: **most useful for least effort first**, respecting what depends on what. Hard, low-value features come last. Anything that would break existing users comes to you first.
-The milestones themselves will be proposed after the count (step 4) — you approve them.
+**Approved milestones (2026-09-28):**
+1. **M1 Evaluation you can trust** — reliable scores (failures count), results saved/shown as table, standard metrics + data loaders.
+2. **M2 Save, inspect, reuse** — optimize once, save, load elsewhere with same behavior; see which LM calls a program made.
+3. **M3 Production LM** — clear error types, retries, cache surviving restarts, hooks tracing every call.
+4. **M4 Agents & multimodal** — tool agents with image/audio, refine with feedback, XML/BAML output.
+5. **M5 Streaming** — answers shown as they are generated (e.g. LiveView).
+6. **M6 More optimizers** — real GEPA, KNNFewShot, the rest.
+7. *Later pool* — newest 3.3/3.4 features; cut into milestones after scope decisions.
+Before M1: crash/timeout hardening (H0b), because M1 builds on it.
 
 ## 4. What is happening right now
 | What | Why | Who | Status |
 |---|---|---|---|
-| Milestone proposal M1–M6 | so every step delivers something useful | Greta + Horst agreed; waiting for you | waiting for you |
+| Milestones M1–M6 | so every step delivers something useful | approved by you 2026-09-28 | agreed |
 | Crash/timeout hardening (H0b-1): a crash in one parallel piece no longer takes down the caller | stability, prerequisite for M1 | contract signed; team Katrin+Lukas+Mara building (tests first) | in progress |
-| Making parallel work crash-safe (a crash or timeout in one background task must not take the whole program down) | reliability of optimizers and evaluation | Greta prepares, then a worker team | preparing |
 
 ## 5. Done this week
 | Version | What users get |
@@ -49,14 +56,8 @@ The milestones themselves will be proposed after the count (step 4) — you appr
 | v0.3.44 | Settings from `Dspy.context` now also apply inside background work (evaluation, optimizers, tools) |
 
 ## 6. Waiting for you
-- **Approve the 10 features we'd skip as Python-only** (reply OK or name any to keep):
-  - `OldField`, `OldInputField`, `OldOutputField`, `infer_prefix` — deprecated leftovers in Python itself
-  - `DSPyError` — Python's base exception class; Elixir uses `{:error, reason}` instead (we revisit this with the LM error types)
-  - `disable_litellm_logging`, `enable_litellm_logging` — switches for LiteLLM, a Python library we don't use
-  - `asyncify`, `syncify` — Python async plumbing; Elixir processes cover this
-  - `dspy.utils.experimental` — a Python decorator for marking experimental code
-- **Approve the milestone order** M1→M6 (see `GAP_ANALYSIS_3.4.0.md` §Phase C v2; each milestone = one sentence "after this you can…").
-- **Evaluate changes by your "like Python" rule — object if not:** failed examples count as score 0 in the average (scores can drop); evaluation stops after 10 errors (also inside optimizers, so an optimization with ≥10 failing runs stops).
+- Nothing right now.
+- *Decided by you 2026-09-28:* milestone order M1→M6 (later pool cut after scope decisions) ✓ · Evaluate like Python (failures count 0, stop after 10 errors, also in optimizers) ✓ · skip the 10 Python-only features ✓.
 
 ## 7. Standing decisions (yours)
 - Python DSPy is the reference: when unsure, do what Python does.
