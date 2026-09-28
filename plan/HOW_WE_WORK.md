@@ -34,6 +34,21 @@ never infer state from a terminal spinner. Prompting goes through `herdr_prompt_
 `sleep 150`/`240`/`280` around a backgrounded await. It burns tokens, adds uncontrolled latency,
 and yields strictly less information than one blocking call. Applies to Horst and Greta equally.
 
+**A test that accepts either outcome asserts nothing** (2026-09-28). Observed, verbatim, in a
+shipped-candidate test: *"one wins, which is undefined by the spec … both are acceptable"*. Such
+a test cannot fail, cannot catch a regression, and actively certifies undefined behaviour as
+intended — it is **worse than no test**, because it looks like coverage. Writing "both are
+acceptable" in an assertion means the **spec is ambiguous**, and that is a ruling for the lead,
+not something a test may paper over. Escalate instead. Corollary: when two writers/readers must
+agree, they call **one shared function**, and the mutation that proves it is *removing the check
+from one side only* — if both sides stay green, they were agreeing by coincidence, not by design.
+
+**Weight review toward the NEW code after a fix round** (2026-09-28). Twice in a row a fix round
+introduced a defect the previous round did not have (the B-round fixes introduced BB1, silent
+null data). A fix round is not inherently safer than the original work — it is *less* reviewed.
+Re-reviewing what already passed twice is the cheap habit; attacking what just changed is where
+the bugs are.
+
 **Urgent findings go to a FILE, not only to a pane** (2026-09-28). `herdr_prompt_agent.sh`
 refuses a `working` target, so an urgent finding can fail to deliver repeatedly while the lead
 is mid-round — and silently. Observed: a reviewer found a silent data-loss bug during a fix
