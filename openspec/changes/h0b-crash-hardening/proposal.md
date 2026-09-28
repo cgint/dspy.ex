@@ -99,3 +99,26 @@ Restate verbatim: A3's process sentence, the E5 exception name and fields, the n
 
 ## (f) Evidence
 `Clarity Gate: Horst ✓ 2026-09-26 <date> / Greta ✓ 2026-09-26` (team card present, E5 ✓, E6 → user note, `openspec validate` green).
+
+## H0b-2 delta — Evaluate (Greta 2026-09-28; needs Greta ✓ + Horst ✓ before the H0b-2 launch)
+Grounded in HEAD `52b2658` `lib/dspy/evaluate.ex` and upstream 3.4.0 `utils/parallelizer.py:57-72`, `evaluate/evaluate.py:160-185`.
+
+**Correction to A3/"Why":** `evaluate_chunk` (evaluate.ex:293-327) **already** catches raise, throw and exit per item. Items are lost only when a whole chunk task dies (a linked exit, or a kill of the chunk from outside) — `flat_map(_other -> [])` drops the chunk silently. The main user-visible change in H0b-2 is **scoring (D-U1) and the budget (D-U2)**, not crash survival.
+
+**D1. Failure definition** (what scores `failure_score` and counts toward the budget): `{:forward_error, _}`, `{:exception, _}`, `{:caught, _, _}`, `{:metric_error, :invalid_score}`, and a dead or timed-out item task. Upstream counts only raised exceptions. `{:error, _}` from forward is our exception equivalent. *Deviation, flagged:* `:invalid_score` (the metric returns a non-number) counts as a failure; upstream would sum whatever the metric returned. Horst ✓/✗.
+**D2. Budget boundary (upstream `>=`):** the run cancels when `errors >= max_errors`. So `max_errors: 2` stops at the **2nd** failure (and 1 failure passes). Raise `Dspy.Evaluate.MaxErrorsExceeded{errors, max_errors, completed}`; pending item tasks are killed first.
+**D3. Granularity:** per-item tasks (the chunking is removed), `max_concurrency: num_threads`, `ordered: true`, `on_timeout: :kill_task`. New option `:timeout` (per item, default `:infinity`). This is needed for per-item budget counting and kill evidence; with chunks, one timeout would fail a whole chunk.
+**D4. Result fields after H0b-2:**
+- `scores` is **always index-aligned** and has length `count`; failures hold `failure_score`, never nil. This is a behaviour change: `return_all: false` used to return only the valid scores. The key and type stay the same.
+- `mean`, `std`, `min`, `max` are computed over all aligned scores, failures included. `std` stays sample std as today.
+- `successes`/`failures` keep their meaning (the number of errored items), so callers can still see failures.
+- `items[i].error` is kept, and `items[i].score = failure_score`. `predictions[i]` stays `nil` on failure (upstream uses an empty `Prediction()`; nil is our existing shape, idiom).
+- Empty testset: `mean 0.0`, as today.
+**D5. Reach (E6, corrected):** internal Evaluate callers are simba (157/172/317), mipro_v2 (632), bootstrap_few_shot (432), ensemble (476), **plus copro (278/298) and gepa (66/76)**, and `cross_validate`/`batch_evaluate`/`Dspy.evaluate/4`. E6 in A2 named only four teleprompters; COPRO and GEPA inherit too. Teleprompters do **not** catch `MaxErrorsExceeded` (it propagates, as upstream). Their test suites must stay green unchanged; if one breaks, **stop and report** — do not raise `max_errors` in the test to hide it.
+
+**H0b-2 acceptance additions** (they replace rows 5–7 where stricter):
+- 5b: `return_all: false`, 1 of 4 fails → `scores == [1.0, 1.0, 0.0, 1.0]` (position kept), `mean 0.75`, `failures 1`. Mutation: filter out the failures → red.
+- 6b: boundary — `max_errors: 2`: 1 failure returns normally; 2 failures raise. Mutation `>=`→`>` → red.
+- 6c: `failure_score: -1.0` flows into `scores` and `mean`.
+- 6d: a per-item `:timeout` kills a slow item: it counts as a failure and its post-sleep message never arrives.
+- 11: the full existing teleprompter suites (simba/mipro/copro/gepa/bootstrap/ensemble) stay green with **zero test edits**.

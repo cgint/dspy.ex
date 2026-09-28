@@ -45,12 +45,20 @@ SIMBA, MIPROv2, BootstrapFewShot and Ensemble compile SHALL treat a failed candi
 - **WHEN** 3 examples score 1.0 and 1 raises, with default options
 - **THEN** there SHALL be 4 items, the failed score SHALL equal `0.0`, and the mean SHALL equal `0.75`
 
+#### Scenario: Scores stay aligned without return_all
+- **WHEN** `return_all` is false and example 3 of 4 fails
+- **THEN** `scores` SHALL equal `[1.0, 1.0, 0.0, 1.0]` and `failures` SHALL equal 1
+
 ### Requirement: Error budget stops the run
 `Dspy.Settings` SHALL provide `max_errors` (default `10`, overridable via `Dspy.configure/1` and `Dspy.context/2`). `Dspy.Evaluate.evaluate/4` SHALL accept `:max_errors` (nil means the setting). When the failure count reaches the budget, Evaluate SHALL kill the pending tasks and raise `Dspy.Evaluate.MaxErrorsExceeded` with fields `:errors`, `:max_errors` and `:completed` (upstream `parallelizer.py:66, 102-104`).
 
-#### Scenario: Budget reached
-- **WHEN** Evaluate runs with `max_errors: 2` and 3 examples fail
+#### Scenario: Budget reached (upstream `>=` boundary)
+- **WHEN** Evaluate runs with `max_errors: 2` and 2 examples fail
 - **THEN** it SHALL raise `Dspy.Evaluate.MaxErrorsExceeded`, and no pending task SHALL produce a side effect after the raise
+
+#### Scenario: Below budget
+- **WHEN** Evaluate runs with `max_errors: 2` and 1 example fails
+- **THEN** it SHALL return normally with `failures` equal to 1
 
 #### Scenario: Default and override of max_errors
 - **WHEN** no value is configured

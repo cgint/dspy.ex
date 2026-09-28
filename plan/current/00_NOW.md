@@ -57,9 +57,12 @@ Version numbers show the milestone: M1 = v0.4.x, M2 = v0.5.x, … M6 = v0.9.x (d
 | v0.3.43 | `Dspy.MultiChainComparison`: compare several reasoning attempts, pick the best |
 | v0.3.44 | Settings from `Dspy.context` now also apply inside background work (evaluation, optimizers, tools) |
 
-## 6. Waiting for you
-- **For M1 (not urgent, before M1 starts):** reading CSV datasets needs a CSV parser. Option 1: add the small standard library **NimbleCSV** (by Dashbit, same authors as tools we already use) — a new dependency needs your OK. Option 2: write our own small reader (more code to maintain, easy to get quoting wrong). I recommend option 1. *(Your "ok" 2026-09-28 read as approval of NimbleCSV — say if not.)*
-- *Decided by you 2026-09-28:* milestone order M1→M6 (later pool cut after scope decisions) ✓ · Evaluate like Python (failures count 0, stop after 10 errors, also in optimizers) ✓ · skip the 10 Python-only features ✓.
+## 6. Waiting for you (3 questions, one note — 2026-09-28)
+1. **Wider reach of "stop after 10 errors" (correction):** I told you it affects 4 optimizers; it is **6** — COPRO and GEPA also run evaluations internally. Same decision, just more places. OK?
+2. **Metric returns something that isn't a score** (e.g. `nil` or text): we count it as a failed example (score 0). Python has no such check — it crashes later with a type error. Ours is friendlier but *differs from Python*. OK, or strictly like Python?
+3. **Evaluate on an empty list of examples:** Python raises an error; dspy.ex returns 0.0. Recommend: raise like Python (breaks code that evaluates an empty list — none of the 5 projects do). OK?
+- Already read as yes: NimbleCSV for CSV files (say if not).
+- *Decided by you 2026-09-28:* milestones M1→M6 ✓ · Evaluate like Python (failures count 0, stop after 10 errors) ✓ · skip the 10 Python-only features ✓ · minor version per milestone ✓.
 
 ## 7. Standing decisions (yours)
 - Greta and Horst drive M1→M6 on their own (2026-09-28). You are asked only for: new dependencies, breaking changes, scope decisions, deviations from Python behavior.
