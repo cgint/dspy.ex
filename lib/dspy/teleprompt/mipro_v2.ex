@@ -299,23 +299,36 @@ defmodule Dspy.Teleprompt.MIPROv2 do
       |> Task.async_stream(
         fn %Example{} = gold ->
           Dspy.Context.with_context(ctx, fn ->
-            inputs = Example.inputs(gold)
+            try do
+              inputs = Example.inputs(gold)
 
-            case Dspy.Module.forward(program, inputs) do
-              {:ok, prediction} ->
-                score = Dspy.Teleprompt.run_metric(metric, gold, prediction)
-                bootstrapped = Example.new(Map.merge(inputs, prediction.attrs))
-                {bootstrapped, score}
+              case Dspy.Module.forward(program, inputs) do
+                {:ok, prediction} ->
+                  score = Dspy.Teleprompt.run_metric(metric, gold, prediction)
+                  bootstrapped = Example.new(Map.merge(inputs, prediction.attrs))
+                  {:ok, {bootstrapped, score}}
 
-              {:error, _} ->
-                nil
+                {:error, _} ->
+                  {:ok, nil}
+              end
+            rescue
+              e -> {:error, {:raised, e}}
+            catch
+              :exit, reason -> {:error, {:exit, reason}}
+              kind, reason -> {:error, {:thrown, kind, reason}}
             end
           end)
         end,
         max_concurrency: num_threads,
-        timeout: 30_000
+        timeout: 30_000,
+        on_timeout: :kill_task
       )
-      |> Enum.map(fn {:ok, result} -> result end)
+      |> Enum.map(fn
+        {:ok, {:ok, result}} -> result
+        {:ok, {:error, _reason}} -> nil
+        {:exit, _reason} -> nil
+        _ -> nil
+      end)
       |> Enum.filter(&(&1 != nil))
       |> Enum.filter(fn {_example, score} -> is_number(score) and score > 0 end)
       |> Enum.sort_by(fn {_example, score} -> score end, :desc)

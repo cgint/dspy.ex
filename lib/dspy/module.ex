@@ -187,9 +187,35 @@ defmodule Dspy.Module do
 
   @doc """
   Run modules in parallel and merge results.
+
+  Options:
+
+  * `:timeout` — maximum time (in ms, or `:infinity`) to wait for all modules
+    to complete. Defaults to `:infinity`. Tasks that do not return by the
+    deadline are killed via `Task.shutdown/2` and reported as
+    `{:error, :timeout}` in that slot.
   """
-  def parallel(modules) when is_list(modules) do
+  def parallel(modules, opts \\ []) when is_list(modules) do
+    timeout = Keyword.get(opts, :timeout, :infinity)
+
     fn inputs ->
+      # Run each module in a separate task. Each task's body carries a child-side
+      # catch-all (rescue + catch) so that an exception, throw, or exit inside
+      # `forward/2` is captured and returned to the caller as `{:error, ...}`
+      # rather than crashing the task process and (pre-fix) the caller.
+      #
+      # We use `Task.yield_many/2` + `Task.shutdown/2` instead of
+      # `Task.await_many/2` (which re-raises the first task's exit in the
+      # caller, and whose default 5 s timeout exits the caller). Tasks that did
+      # not return by the deadline are killed with `Task.shutdown/2` so they
+      # cannot outlive the call or leak LM connections.
+      #
+      # `Task.yield_many/2` wraps the body's return value in `{:ok, _}` (or
+      # returns `nil` on timeout). The body returns `{:ok, prediction}` or
+      # `{:error, reason}`, so we unwrap the outer `{:ok, _}` to recover the
+      # body's result. A non-`{:ok, _}` yield (e.g. `{:exit, _}`) is a crash
+      # the child catch-all did not cover; we kill the task and surface it.
+      #
       # Capture process-local DSPy state (overrides + callback stack) in the
       # caller; reinstall it in each task (tasks do not inherit the dictionary).
       ctx = Dspy.Context.capture()
@@ -197,10 +223,34 @@ defmodule Dspy.Module do
       tasks =
         modules
         |> Enum.map(fn module ->
-          Task.async(fn -> Dspy.Context.with_context(ctx, fn -> forward(module, inputs) end) end)
+          Task.async(fn ->
+            Dspy.Context.with_context(ctx, fn ->
+              try do
+                forward(module, inputs)
+              rescue
+                e -> {:error, {:raised, e}}
+              catch
+                :exit, reason -> {:error, {:exit, reason}}
+                kind, reason -> {:error, {:thrown, kind, reason}}
+              end
+            end)
+          end)
         end)
 
-      results = Task.await_many(tasks)
+      results =
+        Task.yield_many(tasks, timeout)
+        |> Enum.map(fn
+          {_task, {:ok, body_result}} ->
+            body_result
+
+          {task, nil} ->
+            Task.shutdown(task, :brutal_kill)
+            {:error, :timeout}
+
+          {task, other} ->
+            Task.shutdown(task, :brutal_kill)
+            {:error, other}
+        end)
 
       case Enum.find(results, fn
              {:error, _} -> true

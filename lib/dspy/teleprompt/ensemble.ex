@@ -32,24 +32,46 @@ defmodule Dspy.Teleprompt.Ensemble.Program do
       # caller; reinstall it in each task (tasks do not inherit the dictionary).
       ctx = Dspy.Context.capture()
 
-      member_predictions =
+      # Keep each surviving prediction paired with ITS OWN weight so a failed
+      # member cannot shift the weight alignment (E4): the stream emits results
+      # in input order, so pairing positionally with `weights` stays correct
+      # even when a middle member is dropped.
+      surviving =
         members
         |> Task.async_stream(
           fn member ->
-            Dspy.Context.with_context(ctx, fn -> Dspy.Module.forward(member, inputs) end)
+            Dspy.Context.with_context(ctx, fn ->
+              try do
+                # `forward/2` returns `{:ok, prediction}` on success; on
+                # exception/throw/exit we surface a tagged `{:error, ...}` so the
+                # caller can drop just this member without killing the stream.
+                Dspy.Module.forward(member, inputs)
+              rescue
+                e -> {:error, {:raised, e}}
+              catch
+                :exit, reason -> {:error, {:exit, reason}}
+                kind, reason -> {:error, {:thrown, kind, reason}}
+              end
+            end)
           end,
           max_concurrency: max_concurrency,
-          timeout: ensemble.timeout_ms || 30_000
+          timeout: ensemble.timeout_ms || 30_000,
+          on_timeout: :kill_task
         )
-        |> Enum.flat_map(fn
-          {:ok, {:ok, prediction}} -> [prediction]
-          _ -> []
+        |> Enum.map(fn
+          # stream wraps the body result in `{:ok, _}`; the body itself returns
+          # `{:ok, prediction}` or `{:error, _}`.
+          {:ok, {:ok, prediction}} -> prediction
+          _ -> nil
         end)
+        |> Enum.with_index()
+        |> Enum.filter(fn {pred, _idx} -> not is_nil(pred) end)
+        |> Enum.map(fn {pred, idx} -> {pred, Enum.at(weights, idx)} end)
 
-      if member_predictions == [] do
+      if surviving == [] do
         {:error, :all_ensemble_members_failed}
       else
-        {:ok, combine_predictions(member_predictions, weights, ensemble.strategy)}
+        {:ok, combine_predictions(surviving, ensemble.strategy)}
       end
     end
   end
@@ -67,19 +89,23 @@ defmodule Dspy.Teleprompt.Ensemble.Program do
 
   defp normalize_weights(_other, n), do: List.duplicate(1.0, n)
 
-  defp combine_predictions(predictions, weights, strategy) do
+  # `pairs` is a list of `{prediction, weight}` — each prediction stays bound to
+  # its own member's weight (E4), even when some members failed at prediction time.
+  defp combine_predictions(pairs, strategy) do
+    predictions = Enum.map(pairs, fn {pred, _weight} -> pred end)
+
     case strategy do
       :majority_vote ->
         majority_vote_combination(predictions)
 
       :weighted_average ->
-        weighted_average_combination(predictions, weights)
+        weighted_average_combination(pairs)
 
       :confidence_based ->
         confidence_based_combination(predictions)
 
       :stacking ->
-        weighted_average_combination(predictions, weights)
+        weighted_average_combination(pairs)
 
       _ ->
         majority_vote_combination(predictions)
@@ -115,14 +141,14 @@ defmodule Dspy.Teleprompt.Ensemble.Program do
     Dspy.Prediction.new(voted_attrs)
   end
 
-  defp weighted_average_combination(predictions, weights) do
+  defp weighted_average_combination(pairs) do
+    predictions = Enum.map(pairs, fn {pred, _weight} -> pred end)
     keys = all_attr_keys(predictions)
 
     combined_attrs =
       Enum.reduce(keys, %{}, fn field, acc ->
         values =
-          predictions
-          |> Enum.zip(weights)
+          pairs
           |> Enum.map(fn {pred, weight} -> {Map.get(pred.attrs, field), weight} end)
           |> Enum.reject(fn {val, _weight} -> is_nil(val) end)
 
@@ -347,15 +373,30 @@ defmodule Dspy.Teleprompt.Ensemble do
       |> Task.async_stream(
         fn {config, idx} ->
           Dspy.Context.with_context(ctx, fn ->
-            Dspy.Teleprompt.Util.log(teleprompt, "  Training member #{idx}/#{size}")
+            try do
+              Dspy.Teleprompt.Util.log(teleprompt, "  Training member #{idx}/#{size}")
 
-            train_single_member(base_type, program, config)
+              # `train_single_member/3` returns `{:ok, member}` on success.
+              train_single_member(base_type, program, config)
+            rescue
+              e -> {:error, {:raised, e}}
+            catch
+              :exit, reason -> {:error, {:exit, reason}}
+              kind, reason -> {:error, {:thrown, kind, reason}}
+            end
           end)
         end,
         max_concurrency: num_threads,
-        timeout: 300_000
+        timeout: 300_000,
+        on_timeout: :kill_task
       )
-      |> Enum.map(fn {:ok, result} -> result end)
+      # stream wraps the body result in `{:ok, _}`; the body returns
+      # `{:ok, member}` or `{:error, _}`.
+      |> Enum.map(fn
+        {:ok, result} -> result
+        {:exit, _reason} -> {:error, :exit}
+        _ -> {:error, :failed}
+      end)
       |> Enum.filter(fn
         {:ok, _member} -> true
         {:error, _reason} -> false
@@ -473,13 +514,26 @@ defmodule Dspy.Teleprompt.Ensemble do
       |> Task.async_stream(
         fn member ->
           Dspy.Context.with_context(ctx, fn ->
-            result = Evaluate.evaluate(member, val_data, metric, progress: false)
-            result.mean
+            try do
+              result = Evaluate.evaluate(member, val_data, metric, progress: false)
+              {:ok, result.mean}
+            rescue
+              e -> {:error, {:raised, e}}
+            catch
+              :exit, reason -> {:error, {:exit, reason}}
+              kind, reason -> {:error, {:thrown, kind, reason}}
+            end
           end)
         end,
-        timeout: 30_000
+        timeout: 30_000,
+        on_timeout: :kill_task
       )
-      |> Enum.map(fn {:ok, perf} -> perf end)
+      |> Enum.map(fn
+        {:ok, {:ok, perf}} -> perf
+        {:ok, {:error, _reason}} -> 0.0
+        {:exit, _reason} -> 0.0
+        _ -> 0.0
+      end)
 
     total_exp = performances |> Enum.map(&:math.exp/1) |> Enum.sum()
 

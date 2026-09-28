@@ -26,6 +26,51 @@ These are deliberate divergences to fit BEAM/Elixir constraints and keep the cor
   - If you hit an “unknown field atom” error, use module-based signatures (`use Dspy.Signature`) or ensure the atoms exist in your code.
 - **Teleprompters:** optimizers are **parameter-based** (no runtime module generation). Optimized programs are structs with updated parameters.
 
+## Crash/timeout isolation at runtime spawn sites (H0b-1)
+
+Several internal code paths fan work out across child processes (`Task.async` / `Task.async_stream`). **H0b-1 hardened all 10 runtime spawn sites** (3 × `Task.async` + 7 × `Task.async_stream`) so that a single item's crash (exception, throw, or exit) or timeout **cannot kill the caller process** and cannot leak a child task.
+
+This is a **BEAM-native reliability guarantee**, not a Python-DSPy behavior change — Python DSPy has no process-isolation concern of this kind, so there is no upstream counterpart. The public API error shapes are preserved (see per-site notes below); only the failure *modes* a caller can observe are now bounded.
+
+### Mechanism (applied uniformly)
+
+- **Child-side catch-all:** every spawned body wraps its work in `try / rescue / catch` so an exception (`rescue`), `:exit` (`catch :exit`), or throw (`catch kind, reason`) is captured *inside* the child and returned to the caller as a tagged value instead of crashing the child process.
+- **Caller-side bounded wait:**
+  - `Task.async` sites: `Task.yield(task, timeout) || Task.shutdown(task, :brutal_kill)` — a timed-out or crashed task is killed (`:brutal_kill`) so it cannot outlive the call or leak an LM connection; the result is matched exhaustively (`{:ok, _}` / `{:exit, reason}` / `nil` timeout).
+  - `Task.async_stream` sites: `on_timeout: :kill_task` — timed-out stream tasks are killed; the caller's `Enum.map`/`flat_map` matches each item exhaustively and drops failed items rather than raising.
+- **Context propagation is unchanged:** each site still wraps its body in `Dspy.Context.with_context(ctx, ...)` exactly as before (see §7 Context above). H0b-1 only adds the catch-all *inside* that wrap.
+
+### The 10 sites
+
+| # | Site | Kind | Failure → caller observes |
+|---|---|---|---|
+| 1 | `Dspy.Tools` `call_tool` (`lib/dspy/tools.ex`) | `Task.async` | existing shape: `{:error, "Tool execution failed: …"}` (raise/exit); `{:error, "Tool execution timed out"}` (timeout) |
+| 2 | `Dspy.Tools` `execute_tool/3` (`lib/dspy/tools.ex`) | `Task.async` | `{:error, "Tool exited: …"}` (raise/exit); `{:error, "Tool execution timed out"}` (timeout) |
+| 3 | `Dspy.Module.parallel/2` (`lib/dspy/module.ex`) | `Task.async` fan-out | **new** tagged slot errors: `{:error, {:raised, e}}`, `{:error, {:thrown, kind, reason}}`, `{:error, {:exit, reason}}`, `{:error, :timeout}`. On any failure the call returns `{:error, <that tag>}`; on all-success it merges as before |
+| 4 | `Ensemble.Program.forward/2` (`lib/dspy/teleprompt/ensemble.ex`) | `Task.async_stream` | failing members are **dropped**; all-fail → `{:error, :all_ensemble_members_failed}` |
+| 5 | `Ensemble` `train_ensemble_members` (`ensemble.ex`) | `Task.async_stream` | failing members dropped; `< 2` survivors → `{:error, {:insufficient_ensemble_members, min: 2, got: n}}` |
+| 6 | `Ensemble` `calculate_performance_weights` (`ensemble.ex`) | `Task.async_stream` | failing member's performance → `0.0` (weight alignment kept) |
+| 7 | `SIMBA` candidate scoring (`lib/dspy/teleprompt/simba.ex`) | `Task.async_stream` | failing candidates dropped; if none survive, current program/score is returned unchanged |
+| 8 | `MIPROv2` bootstrap (`lib/dspy/teleprompt/mipro_v2.ex`) | `Task.async_stream` | failing examples dropped |
+| 9 | `BootstrapFewShot` bootstrap round (`lib/dspy/teleprompt/bootstrap_few_shot.ex`) | `Task.async_stream` | failing chunks dropped |
+| 10 | `BootstrapFewShot` `select_best_program` (`bootstrap_few_shot.ex`) | `Task.async_stream` | failing candidates dropped |
+
+### E4 — ensemble weight alignment on partial failure
+
+`Ensemble.Program.forward/2` (`:weighted_average` / `:stacking`) combines surviving member predictions with per-member weights. **H0b-1 keeps each surviving prediction bound to its *own* member's weight** even when a middle member fails: survivors are indexed by their *original* member position (not their position among survivors), so a dropped member cannot shift the weights of later members left by one. Without this, a failure at index `k` would silently re-weight every later member.
+
+### Compatibility notes
+
+- **`Dspy.Module.parallel/2` gained a `:timeout` option** (default `:infinity`). This replaces the old hard 5-second `Task.await_many` default; the default `:infinity` preserves prior wait-forever behaviour. Pass `timeout: :infinity` explicitly to keep unbounded waits.
+- **New error shapes are additive.** The only *new* caller-visible shapes are the tagged `{:error, {:raised | :thrown | :exit, …}}` / `{:error, :timeout}` values from `Dspy.Module.parallel/2` (previously an in-task crash would propagate and kill the caller). The tool and teleprompt sites keep their existing public error shapes.
+- **No change to `max_errors` / failure-score semantics** — those live in `Dspy.Parallel` / `Dspy.Evaluate` and are out of scope for H0b-1.
+
+Evidence:
+- `test/h0b/site_raise_test.exs` — child-raise isolation (`call_tool`, `execute_tool`, `Module.parallel`)
+- `test/h0b/site_throw_exit_test.exs` — child-throw/exit isolation (same three sites)
+- `test/h0b/site_timeout_test.exs` — timeout handling (`execute_tool`, `Module.parallel`)
+- `test/h0b/s2_site_test.exs` — the 7 `Task.async_stream` sites (incl. the E4 weight-alignment discriminator + a source-characterization guard that all 7 sites carry the catch-all + `on_timeout: :kill_task`)
+
 ## Quick mapping examples (proven)
 
 ### 1) Predict

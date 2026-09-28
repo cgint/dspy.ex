@@ -44,7 +44,7 @@ Two existing shapes (verified at HEAD `65b196c`, `rg Task\. lib`); **no new proc
 ### A4. Invariants
 1. The caller process never dies because a child raises, throws, exits or times out at any listed site.
 2. A timed-out child is **dead** when the call returns (`on_timeout: :kill_task` or `Task.shutdown`); no orphaned tasks.
-3. Result order and length equal the input order and length at every site.
+3. Result order and length equal the input where results are consumed by index (Ensemble forward, performance weights, Module.parallel, tools, Evaluate). Compile sites (ensemble:347, simba, mipro, bootstrap ×2) may drop failed candidates as before, but **must return a defined outcome when every candidate fails**, not crash on an empty list. *(Amended by Greta 2026-09-28 after the H0b-1 verdict; the original wording was too strong.)*
 4. H0 propagation: `with_context` stays inside every task body; `test/context/**` stays green unchanged.
 5. Success-path return shapes are unchanged. Error shapes are unchanged except where the table says "→".
 
@@ -122,3 +122,20 @@ Grounded in HEAD `52b2658` `lib/dspy/evaluate.ex` and upstream 3.4.0 `utils/para
 - 6c: `failure_score: -1.0` flows into `scores` and `mean`.
 - 6d: a per-item `:timeout` kills a slow item: it counts as a failure and its post-sleep message never arrives.
 - 11: the full existing teleprompter suites (simba/mipro/copro/gepa/bootstrap/ensemble) stay green with **zero test edits**.
+
+## Deviations — sites whose child catch-all is DEFENSE-IN-DEPTH, not behaviour-proven (Horst 2026-09-27)
+
+Three H0b-1 stream sites carry a child catch-all that **cannot be reached via the public API**: an inner layer already converts every raise/throw/exit into a defined error value, so the child body never propagates an exception to the stream. The catch-all is kept as defense-in-depth (guards against a future inner-layer regression); the characterization test asserts its presence but is **not** a behaviour proof. Recorded per site (file:line + which inner layer catches):
+
+| Site (file:line) | Task body calls | Inner layer that catches first (so the child catch-all is unreachable) |
+|---|---|---|
+| `ensemble.ex:373` `train_ensemble_members` | `train_single_member/3` → `Dspy.Teleprompt.compile/3` | `train_single_member` (ensemble.ex:458-475) has a `rescue e -> {:error, {:exception, …}}` around the base teleprompter's `compile/3`; a raising LM/forward never reaches the child catch-all. |
+| `ensemble.ex:514` `calculate_performance_weights` | `Dspy.Evaluate.evaluate/4` | `Evaluate.evaluate` → `evaluate_chunk` (evaluate.ex:295-325) catches raise/throw/exit **per example** and returns a scored item (`score: nil` / `failure_score`); a failing forward or metric never reaches the child catch-all. |
+| `simba.ex:169` `score_candidates` | `Dspy.Evaluate.evaluate/4` | Same as above — `evaluate_chunk` (evaluate.ex:295-325) catches per example. |
+| `bootstrap_few_shot.ex:440` `select_best_program` | `Dspy.Evaluate.evaluate/4` | Same as ensemble:514 — `evaluate_chunk` (evaluate.ex:295-325) catches per example; a failing candidate forward/metric scores `0.0`, never reaches the child catch-all. |
+
+**Reachable sites (behaviour-proven):**
+
+- `mipro_v2.ex:299` `bootstrap_few_shot_examples` — the task body calls `Dspy.Module.forward/2` **directly** (not wrapped in `Evaluate.evaluate` or a rescuing helper), so a raising student forward DOES reach the child catch-all. Proven by `test/h0b/s2_site_test.exs` ("mipro_v2.ex:299 … raising student forward: catch-all drops example, compile returns a program") plus a mutation proof (remove the catch at 299 → red). See `plan/research/pi_handoffs/h0b/mutation-mipro-299.log`.
+
+- `bootstrap_few_shot.ex:274` `bootstrap_round` — the inner layer `generate_bootstrap_example/3` (bootstrap_few_shot.ex:317-343) has a **`rescue` clause only (no `catch` clause)** around the teacher `forward/2`. So a teacher `forward/2` that **raises** is caught there (never reaches the site-274 catch), but a teacher that **throws** or **exits** escapes the rescue and DOES reach the site-274 child catch-all's `catch kind, reason` / `catch :exit, reason` arms. Proven by `test/h0b/s2_site_test.exs` ("bootstrap_few_shot.ex:274 … throwing teacher" and "… exiting teacher": a custom teacher that throws/exits for one input and returns `{:ok, pred}` for others → `compile/3` returns `{:ok, program}`, not a crash) plus a mutation proof (remove the catch at 274 → red). See `plan/research/pi_handoffs/h0b/mutation-bootstrap-274.log`.

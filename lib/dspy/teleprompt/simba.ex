@@ -169,15 +169,25 @@ defmodule Dspy.Teleprompt.SIMBA do
       |> Task.async_stream(
         fn cand ->
           Dspy.Context.with_context(ctx, fn ->
-            score = Evaluate.evaluate(cand, eval_batch, teleprompt.metric, progress: false).mean
-            {cand, score}
+            try do
+              score = Evaluate.evaluate(cand, eval_batch, teleprompt.metric, progress: false).mean
+              {:ok, {cand, score}}
+            rescue
+              e -> {:error, {:raised, e}}
+            catch
+              :exit, reason -> {:error, {:exit, reason}}
+              kind, reason -> {:error, {:thrown, kind, reason}}
+            end
           end)
         end,
         max_concurrency: teleprompt.num_threads,
-        timeout: 60_000
+        timeout: 60_000,
+        on_timeout: :kill_task
       )
       |> Enum.flat_map(fn
-        {:ok, x} -> [x]
+        {:ok, {:ok, x}} -> [x]
+        {:ok, {:error, _reason}} -> []
+        {:exit, _reason} -> []
         _ -> []
       end)
       |> case do

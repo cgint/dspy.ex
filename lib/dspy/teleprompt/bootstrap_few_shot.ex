@@ -274,13 +274,25 @@ defmodule Dspy.Teleprompt.BootstrapFewShot do
       |> Task.async_stream(
         fn chunk ->
           Dspy.Context.with_context(ctx, fn ->
-            bootstrap_chunk(teacher, chunk, metric, max_errors)
+            try do
+              {:ok, bootstrap_chunk(teacher, chunk, metric, max_errors)}
+            rescue
+              e -> {:error, {:raised, e}}
+            catch
+              :exit, reason -> {:error, {:exit, reason}}
+              kind, reason -> {:error, {:thrown, kind, reason}}
+            end
           end)
         end,
         max_concurrency: num_threads,
-        timeout: 30_000
+        timeout: 30_000,
+        on_timeout: :kill_task
       )
-      |> Enum.flat_map(fn {:ok, chunk_results} -> chunk_results end)
+      |> Enum.flat_map(fn
+        {:ok, {:ok, chunk_results}} -> chunk_results
+        {:exit, _reason} -> []
+        _ -> []
+      end)
       |> Enum.filter(fn {_example, score} -> score >= metric_threshold end)
 
     results
@@ -428,30 +440,55 @@ defmodule Dspy.Teleprompt.BootstrapFewShot do
       |> Task.async_stream(
         fn candidate ->
           Dspy.Context.with_context(ctx, fn ->
-            result =
-              Evaluate.evaluate(candidate, validation_set, metric,
-                num_threads: 1,
-                progress: false
-              )
+            try do
+              result =
+                Evaluate.evaluate(candidate, validation_set, metric,
+                  num_threads: 1,
+                  progress: false
+                )
 
-            {candidate, result}
+              {:ok, {candidate, result}}
+            rescue
+              e -> {:error, {:raised, e}}
+            catch
+              :exit, reason -> {:error, {:exit, reason}}
+              kind, reason -> {:error, {:thrown, kind, reason}}
+            end
           end)
         end,
         max_concurrency: num_threads,
-        timeout: 60_000
+        timeout: 60_000,
+        on_timeout: :kill_task
       )
-      |> Enum.map(fn {:ok, result} -> result end)
+      |> Enum.map(fn
+        {:ok, {:ok, result}} -> result
+        {:ok, {:error, _reason}} -> nil
+        {:exit, _reason} -> nil
+        _ -> nil
+      end)
+      |> Enum.filter(&(&1 != nil))
 
-    # Select best performing candidate
-    {best_program, best_result} =
-      evaluations
-      |> Enum.max_by(fn {_program, result} -> result.mean end)
+    if evaluations == [] do
+      # All candidate evaluations failed (every candidate raised / threw /
+      # exited, or timed out). Upstream 3.4.0 bootstrap.py:259-274 _train/0
+      # returns self.student even when name2traces is empty (all bootstrap
+      # examples failed): the student is returned with only labeled demos.
+      # Our equivalent: return the first candidate (index 1, which carries the
+      # full bootstrapped + labeled example set) so compile/3 still returns a
+      # usable program rather than crashing with Enum.EmptyError.
+      {:ok, hd(candidates)}
+    else
+      # Select best performing candidate
+      {best_program, best_result} =
+        evaluations
+        |> Enum.max_by(fn {_program, result} -> result.mean end)
 
-    Dspy.Teleprompt.Util.log(
-      teleprompt,
-      "Best program score: #{Float.round(best_result.mean, 3)} ± #{Float.round(best_result.std, 3)}"
-    )
+      Dspy.Teleprompt.Util.log(
+        teleprompt,
+        "Best program score: #{Float.round(best_result.mean, 3)} ± #{Float.round(best_result.std, 3)}"
+      )
 
-    {:ok, best_program}
+      {:ok, best_program}
+    end
   end
 end

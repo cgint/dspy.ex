@@ -515,16 +515,37 @@ defmodule Dspy.Tools do
                    kind: :exception,
                    message: Exception.message(e)
                  }}
+            catch
+              :exit, reason ->
+                {:error,
+                 %{
+                   kind: :exit,
+                   message: Dspy.Tools.format_exit(reason)
+                 }}
+
+              kind, reason ->
+                {:error,
+                 %{
+                   kind: kind,
+                   message: inspect(reason)
+                 }}
             end
           end)
         end)
 
-      case Task.yield(task, timeout) || Task.shutdown(task) do
+      case Task.yield(task, timeout) || Task.shutdown(task, :brutal_kill) do
         {:ok, {:ok, result}} ->
           notify_tool_end(callbacks, call_id, tool, result, nil)
           {:ok, result}
 
         {:ok, {:error, error}} ->
+          notify_tool_end(callbacks, call_id, tool, nil, error)
+          {:error, "Tool execution failed: #{error.message}"}
+
+        {:exit, reason} ->
+          # Child exited (e.g. a crash the catch-all did not cover, or the
+          # task was killed externally). Surface through the existing error shape.
+          error = %{kind: :exit, message: Dspy.Tools.format_exit(reason)}
           notify_tool_end(callbacks, call_id, tool, nil, error)
           {:error, "Tool execution failed: #{error.message}"}
 
@@ -770,12 +791,19 @@ defmodule Dspy.Tools do
             {:ok, result}
           rescue
             e -> {:error, Exception.message(e)}
+          catch
+            :exit, reason ->
+              {:error, "Tool exited: #{Dspy.Tools.format_exit(reason)}"}
+
+            kind, reason ->
+              {:error, "Tool #{kind}: #{inspect(reason)}"}
           end
         end)
       end)
 
-    case Task.yield(task, timeout) || Task.shutdown(task) do
+    case Task.yield(task, timeout) || Task.shutdown(task, :brutal_kill) do
       {:ok, result} -> result
+      {:exit, reason} -> {:error, "Tool exited: #{Dspy.Tools.format_exit(reason)}"}
       nil -> {:error, "Tool execution timed out"}
     end
   end
@@ -798,4 +826,9 @@ defmodule Dspy.Tools do
 
     Supervisor.start_link(children, strategy: :one_for_one)
   end
+
+  @doc false
+  # Format a `:exit` reason (or any catch-all reason) for error messages.
+  # Delegates to `Exception.format_exit/1` (Elixir ≥ 1.17).
+  def format_exit(reason), do: Exception.format_exit(reason)
 end
