@@ -56,6 +56,11 @@ Groundwork for (a)/(d) is done by Greta's readonly scouts; Horst drafts contract
 - **Toolchain gap:** CI runs OTP 28.0 / Elixir 1.19.5; local is OTP 29 / Elixir 1.20. Release step: commit locally by path → `scripts/ci_docker.sh HEAD` (exact CI job in docker, committed state only) must print `ALL STEPS GREEN` → push → `gh run watch` green. No `.tool-versions` pin: no version manager on this machine, so the docker script is the real gate.
 - Supported floor is tested (2026-09-28): CI matrix Elixir 1.18.4/OTP 27.3 (compile+test) + 1.19.5/OTP 28.0 (also format). Measured first via `CI_DOCKER_IMAGE=hexpm/elixir:1.18.4-erlang-27.3.4.16-ubuntu-noble-20260810 scripts/ci_docker.sh` (format step differs by formatter version; compile+tests green).
 
+## Dependencies, security, toolchain (user policy 2026-09-28; Horst decides)
+- `mix hex.audit` is a release gate: an advisory → security slice (dep bump, docker CI on the whole matrix, consumer canary, patch release) before other work continues.
+- Keep deps current: `mix hex.outdated` reviewed at each milestone start; bumps as their own slice.
+- Floor: keep the lowest Elixir/OTP we can cheaply prove in the CI matrix (today 1.18.4/OTP 27 + 1.19.5/OTP 28); also add the newest stable Elixir/OTP to the matrix. Raise the floor only for a real maintenance cost, recorded here with the reason.
+
 ## Versioning (user decision 2026-09-28)
 - One **minor** version per milestone: M1 → v0.4.x, M2 → v0.5.x, M3 → v0.6.x, M4 → v0.7.x, M5 → v0.8.x, M6 → v0.9.x.
 - Each slice within a milestone = a **patch** release (v0.4.1, v0.4.2, …). The first slice of a milestone opens the minor (v0.4.0).

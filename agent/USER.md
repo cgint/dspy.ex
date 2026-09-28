@@ -51,3 +51,9 @@ User: "I would love to see Greta and you coordinate and drive that whole project
 - Still goes to the user: new dependencies, breaking public changes, scope decisions (M7+ pool, n/a additions), anything Python-runtime-related, or a deviation from upstream behaviour.
 - Honesty over speed: a real "not working yet" beats a green-looking hack; numbers in 00_NOW are verified, corrections shown openly.
 - Every milestone ships with docs (user-facing, Elixir-idiomatic) and a runnable example.
+
+## Dependency, security + toolchain policy (user, 2026-09-28)
+Horst (firstmate) decides these himself — no user round-trip — within:
+- **Security is taken seriously:** known advisories (`mix hex.audit`) in our deps are fixed promptly, as their own slice, ahead of feature work.
+- **Stay on the most recent versions where possible** (deps and CI toolchain).
+- **Don't force library users onto the newest Elixir/OTP without good reason.** Very high maintenance would be a reason; extra CI matrix entries are not. Declaring "latest only" is acceptable too, if chosen deliberately and documented.

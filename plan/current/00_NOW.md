@@ -71,6 +71,7 @@ Version numbers show the milestone: M1 = v0.4.x, M2 = v0.5.x, … M6 = v0.9.x (d
 - *Decided by you 2026-09-28:* milestones M1→M6 ✓ · Evaluate like Python (failures count 0, stop after 10 errors) ✓ · skip the 10 Python-only features ✓ · minor version per milestone ✓.
 
 ## 7. Standing decisions (yours)
+- Dependencies, security, toolchain: Horst decides (2026-09-28). Security fixed promptly; newest versions where possible; don't force users onto the newest Elixir without good reason.
 - Greta and Horst drive M1→M6 on their own (2026-09-28). You are asked only for: new dependencies, breaking changes, scope decisions, deviations from Python behavior.
 - Python DSPy is the reference: when unsure, do what Python does.
 - Pure Elixir: no Python wrapper; anything Python-based needs your approval.
