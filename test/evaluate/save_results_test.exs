@@ -137,6 +137,67 @@ defmodule DspyEvaluateSaveResultsTest do
   end
 
   # ----------------------------------------------------------------
+  # Fix round 5 (ORDINARY case, written to close the "edges but not the
+  # middle" gap): a run that contains a FAILURE produces rows of DIFFERENT
+  # shapes — the successful row carries the prediction keys (`pred_answer`),
+  # the failed row has an EMPTY prediction and so does not. JSON is a list of
+  # independent objects, so different shapes are the upstream normal case and
+  # must be WRITTEN, not rejected. (CSV enforces a single header and so raises
+  # on this shape — that is correct and separate.) The round-5 regression was
+  # that the JSON writer inherited the CSV row-shape rule via `validate_rows!`
+  # and RAISED here. This test pins the ordinary case; the mutation (call
+  # `validate_rows!` from JSON again) turns it RED.
+  # ----------------------------------------------------------------
+  test "fix round 5 (ordinary): save_as_json writes rows of DIFFERENT shapes (a failed example)" do
+    testset = [
+      Example.new(%{question: "ok", answer: "4"}),
+      Example.new(%{question: "nope", answer: "WRONG"})
+    ]
+
+    program = %SelectiveProgram{}
+    metric = fn _ex, _pred -> 1.0 end
+
+    tmp_dir =
+      Path.join(
+        System.tmp_dir!(),
+        "dspy_m1a_f5_ordinary_#{System.system_time(:second)}_#{System.unique_integer([:positive])}"
+      )
+
+    File.mkdir_p!(tmp_dir)
+    json_path = Path.join(tmp_dir, "result.json")
+    ExUnit.Callbacks.on_exit(fn -> File.rm_rf!(tmp_dir) end)
+
+    # Must NOT raise — a mixed-shape run is ordinary and JSON must accept it.
+    Evaluate.evaluate(program, testset, metric,
+      num_threads: 1,
+      progress: false,
+      save_as_json: json_path
+    )
+
+    assert File.exists?(json_path),
+           "JSON was not written for an ordinary mixed-shape run: #{json_path}"
+
+    rows = Jason.decode!(File.read!(json_path))
+    assert length(rows) == 2
+
+    [ok_row, failed_row] = rows
+
+    # Upstream shape: the successful row has the prediction field, the failed
+    # row does NOT (its prediction is empty) — different shapes, both kept.
+    assert Map.has_key?(ok_row, "pred_answer"),
+           "expected the successful row to carry pred_answer, got: #{inspect(Map.keys(ok_row))}"
+
+    assert Map.has_key?(ok_row, "question"),
+           "expected the successful row to carry question, got: #{inspect(Map.keys(ok_row))}"
+
+    refute Map.has_key?(failed_row, "pred_answer"),
+           "the failed row should have an EMPTY prediction (no pred_answer), got: #{inspect(Map.keys(failed_row))}"
+
+    assert Map.has_key?(failed_row, "question"),
+           "expected the failed row to carry question, got: #{inspect(Map.keys(failed_row))}"
+  end
+
+  # ----------------------------------------------------------------
   # Row 10c-3: PID value in a row → save_as_json raises, message names the key.
   # Row 10d (JSON half): after the raise, the target path does NOT exist.
   # ----------------------------------------------------------------

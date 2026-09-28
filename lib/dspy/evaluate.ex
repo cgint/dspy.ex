@@ -446,13 +446,19 @@ defmodule Dspy.Evaluate do
         # per-row uniqueness check as the CSV writer (ruling 1) — before the
         # payload is built — so a duplicate key (including a field named like
         # the metric column, ruling 2) RAISES in the JSON path too, instead of
-        # being silently dropped/overwritten. One shared rule, both writers.
+        # being silently dropped/overwritten.
+        #
+        # Fix round 5 (Horst): JSON gets ONLY the uniqueness rule. The row-shape
+        # rule (`validate_rows!`, "every row's keys ⊆ the header") is CSV-only —
+        # a CSV has a single header, but a JSON file is a list of INDEPENDENT
+        # objects, so rows of DIFFERENT shapes (e.g. a failed example with an
+        # empty prediction) are the upstream normal case and JSON must not
+        # reject them. Reusing the whole of `validate_rows!` here made JSON
+        # inherit that CSV rule — the round-5 regression. The two header
+        # variables were computed only for that call; they are gone with it.
         rows = rows_for(items, testset, output.metric_name)
 
-        header_pairs = elem(List.first(rows), 0)
-        header_keys = Enum.map(header_pairs, &elem(&1, 0))
-        header_set = MapSet.new(header_keys)
-        validate_rows!(rows, header_keys, header_set, "save_as_json")
+        validate_unique_keys!(rows, "save_as_json")
 
         try do
           Jason.encode!(maps_for_json(rows))

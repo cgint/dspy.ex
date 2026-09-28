@@ -50,9 +50,10 @@ Four exotic tests, zero ordinary ones, is backwards. Before adding edge-case row
 acceptance map, check that the plain path is pinned at all.
 
 **Reusing a function is not free: name which of its rules the new caller wants** (2026-09-29).
-A shared check was introduced by reusing a whole validator where only *part* of it applied, so
-the JSON writer silently inherited CSV's single-header row-shape rule and began rejecting output
-upstream writes happily. "It already does the check" is not a reason — it may do **more** than
+A shared check was introduced by reusing a whole validator where only *part* of it applied:
+`validate_rows!` enforces **two** rules — per-row key uniqueness **and** CSV's "every row's keys
+⊆ the header". The JSON writer wanted only the first, silently inherited the second, and began
+rejecting rows of differing shapes — output upstream writes happily. "It already does the check" is not a reason — it may do **more** than
 the check. State the wanted rules explicitly at each call site, and split the function when they
 differ.
 
