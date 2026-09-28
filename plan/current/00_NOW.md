@@ -35,7 +35,8 @@ The milestones themselves will be proposed after the count (step 4) — you appr
 ## 4. What is happening right now
 | What | Why | Who | Status |
 |---|---|---|---|
-| Turning the count into milestones (what to build first) | so every step delivers something useful | Greta + Horst, then you approve | drafting |
+| Milestone proposal M1–M6 | so every step delivers something useful | Greta + Horst agreed; waiting for you | waiting for you |
+| Crash/timeout hardening (H0b-1): a crash in one parallel piece no longer takes down the caller | stability, prerequisite for M1 | Greta writing the contract; then a worker team | contract drafted |
 | Making parallel work crash-safe (a crash or timeout in one background task must not take the whole program down) | reliability of optimizers and evaluation | Greta prepares, then a worker team | preparing |
 
 ## 5. Done this week
@@ -54,7 +55,8 @@ The milestones themselves will be proposed after the count (step 4) — you appr
   - `disable_litellm_logging`, `enable_litellm_logging` — switches for LiteLLM, a Python library we don't use
   - `asyncify`, `syncify` — Python async plumbing; Elixir processes cover this
   - `dspy.utils.experimental` — a Python decorator for marking experimental code
-- Coming soon: the milestone proposal (Greta and I agree it first).
+- **Approve the milestone order** M1→M6 (see `GAP_ANALYSIS_3.4.0.md` §Phase C v2; each milestone = one sentence "after this you can…").
+- **Evaluate changes by your "like Python" rule — object if not:** failed examples count as score 0 in the average (scores can drop); evaluation stops after 10 errors (also inside optimizers, so an optimization with ≥10 failing runs stops).
 
 ## 7. Standing decisions (yours)
 - Python DSPy is the reference: when unsure, do what Python does.
