@@ -33,6 +33,9 @@ defmodule Dspy.MixProject do
       # JSON Schema validation/casting for typed structured outputs.
       {:jsv, "~> 0.16"},
 
+      # CSV encoding for `Dspy.Evaluate.Result` `save_as_csv` (M1-a, Horst-confirmed dep 2026-09-28).
+      {:nimble_csv, "~> 1.2"},
+
       # LLM provider access (unified client; no provider maintenance in `dspy.ex`)
       # Using main for google_thinking_budget / reasoning_effort fix (PR #418)
       {:req_llm, github: "agentjido/req_llm"},

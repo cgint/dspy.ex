@@ -22,7 +22,7 @@ defmodule Dspy.Evaluate do
 
   require Logger
 
-  alias Dspy.{Example, Module}
+  alias Dspy.{Example, Module, Prediction}
 
   @type evaluation_error ::
           {:forward_error, term()}
@@ -42,22 +42,11 @@ defmodule Dspy.Evaluate do
           error: evaluation_error() | nil
         }
 
-  @type evaluation_result :: %{
-          # ALWAYS index-aligned with the testset (length == count). Failures
-          # hold `failure_score` (default 0.0), never nil (H0b-2, D4/D-U1).
-          scores: list(number()),
-          # Only populated when `return_all: true`.
-          predictions: list(Prediction.t() | nil),
-          # Only populated when `return_all: true`.
-          items: list(evaluation_item()),
-          mean: number(),
-          std: number(),
-          min: number(),
-          max: number(),
-          count: non_neg_integer(),
-          successes: non_neg_integer(),
-          failures: non_neg_integer()
-        }
+  # The `evaluate/4` result is the `Dspy.Evaluate.Result` struct (M1-a; upstream
+  # `EvaluationResult`). `evaluation_result()` is kept as an alias of
+  # `Result.t()` so existing `@spec`s (`compare_results/2`, the
+  # `cross_validation_result` fold results) keep compiling.
+  @type evaluation_result :: Dspy.Evaluate.Result.t()
 
   @type cross_validation_result :: %{
           fold_scores: list(number()),
@@ -77,6 +66,7 @@ defmodule Dspy.Evaluate do
   - `opts` - options:
     - `:num_threads` - parallelism (default: schedulers_online)
     - `:progress` - emit progress logs (default: false)
+    - `:display_progress` - alias of `:progress`; if both are given, `:display_progress` wins
     - `:return_all` - include per-example details (default: false)
     - `:max_errors` - failure budget (default: `Dspy.Settings.get(:max_errors)`,
       i.e. 10). When the failure count reaches it (upstream `>=` boundary),
@@ -86,20 +76,31 @@ defmodule Dspy.Evaluate do
       included in the mean (H0b-2, D-U1)
     - `:timeout` - per-item timeout in ms (default: `:infinity`). A timed-out
       item is killed (`on_timeout: :kill_task`) and scored `failure_score`.
+    - `:display_table` - `true` → whole plain-text table via `Logger.info`;
+      integer `n` → first `n` rows plus "... k more rows not displayed ..."
+    - `:provide_traceback` - on an item failure, log the stacktrace (captured
+      in the child) instead of the one-line message
+    - `:save_as_csv` - path to write the CSV result
+    - `:save_as_json` - path to write the JSON result
+    - `:metric_name` - column name for the score (default: fn name or "metric")
 
   ## Returns
 
-  A map with detailed statistics.
+  A `Dspy.Evaluate.Result` struct (upstream `EvaluationResult`) with detailed
+  statistics.
 
   `scores` is ALWAYS index-aligned with the testset (length == count); failed
-  examples hold `failure_score` (H0b-2, D4). When `return_all: true`, the
-  returned map additionally contains:
+  examples hold `failure_score` (H0b-2, D4). `score` is the percentage
+  (0..100) rounded to 2 places, and `results` holds one
+  `{example, prediction, score}` tuple per testset example, always populated
+  (M1-a). When `return_all: true`, the struct additionally carries:
 
   - `:items` - one entry per example with `example`, `prediction`, `score`, and `error`
   - `:predictions` - index-aligned with `items` (nil for failures)
 
   """
-  @spec evaluate(Dspy.Module.t(), list(Example.t()), function(), keyword()) :: evaluation_result()
+  @spec evaluate(Dspy.Module.t(), [Example.t()], function(), keyword()) ::
+          Dspy.Evaluate.Result.t()
   def evaluate(program, testset, metric_fn, opts \\ []) do
     # Q3 (upstream evaluate.py:157-158): an empty testset is a caller error.
     if testset == [] do
@@ -107,11 +108,25 @@ defmodule Dspy.Evaluate do
     end
 
     num_threads = Keyword.get(opts, :num_threads, System.schedulers_online())
-    show_progress = Keyword.get(opts, :progress, false)
+    # M1-a (upstream `display_progress`): alias of `:progress`; if BOTH are
+    # given, `:display_progress` wins (acceptance row 10e).
+    display_progress =
+      if Keyword.has_key?(opts, :display_progress) do
+        Keyword.get(opts, :display_progress, false)
+      else
+        Keyword.get(opts, :progress, false)
+      end
+
+    show_progress = display_progress != false
     return_all = Keyword.get(opts, :return_all, false)
     max_errors = Keyword.get(opts, :max_errors) || Dspy.Settings.get(:max_errors)
     failure_score = Keyword.get(opts, :failure_score, 0.0)
     item_timeout = Keyword.get(opts, :timeout, :infinity)
+    provide_traceback = Keyword.get(opts, :provide_traceback, false)
+    display_table = Keyword.get(opts, :display_table, false)
+    save_as_json = Keyword.get(opts, :save_as_json)
+    save_as_csv = Keyword.get(opts, :save_as_csv)
+    metric_name = Keyword.get(opts, :metric_name) || metric_column_name(metric_fn)
 
     if show_progress do
       Logger.info("Evaluating #{length(testset)} examples...")
@@ -144,14 +159,29 @@ defmodule Dspy.Evaluate do
         |> Task.async_stream(
           fn {example, index} ->
             Dspy.Context.with_context(ctx, fn ->
+              # M1-a (upstream `provide_traceback`): the stacktrace is captured
+              # HERE, in the child process — it is lost across the task boundary
+              # otherwise. It is carried in the failure item ONLY for the log
+              # path (transient key, stripped below); the H0b-2 `error` tuple
+              # stays byte-identical (A5.1). The `throw`s from `evaluate_item`
+              # (TRAP 2 / D-U1) do NOT hit the `kind, reason` clause — a
+              # `throw` is not an `:exception`/`:exit`, so it still reaches its
+              # own labelled `catch` clauses, exactly as before.
               try do
-                evaluate_item(program, example, metric_fn, failure_score, index)
+                evaluate_item(
+                  program,
+                  example,
+                  metric_fn,
+                  failure_score,
+                  index,
+                  provide_traceback
+                )
               catch
                 # A raising metric (D-U1) must stay a failed example
                 # (`failure_score`, counted toward `max_errors`) — not a hard
                 # error. Rebuild the failure item here, outside the per-example
                 # task, so `Task.async_stream` sees a `{:ok, item}` element.
-                {:metric_raised, :error} ->
+                :throw, {:metric_raised, :error} ->
                   %{
                     example: example,
                     prediction: nil,
@@ -163,8 +193,18 @@ defmodule Dspy.Evaluate do
                 # not be swallowed by `Task` (which would convert an uncaught
                 # throw to `{:exit, {:nocatch, _}}`). Return a tagged value so
                 # the stream consumer can re-raise it (TRAP 2).
-                {:invalid_metric_result, value, example_index} ->
-                  {:invalid_metric_result, value, example_index}
+                :throw, {:invalid_metric_result, value, ex_index} ->
+                  {:invalid_metric_result, value, ex_index}
+
+                kind, reason ->
+                  item_error_from(
+                    kind,
+                    reason,
+                    example,
+                    failure_score,
+                    provide_traceback,
+                    __STACKTRACE__
+                  )
               end
             end)
           end,
@@ -205,7 +245,13 @@ defmodule Dspy.Evaluate do
     receive do
       {:done, items} ->
         # Budget was not reached: every item was observed (completed == count).
-        finish_evaluation(items, testset, return_all, show_progress)
+        finish_evaluation(items, testset, return_all, show_progress, %{
+          provide_traceback: provide_traceback,
+          display_table: display_table,
+          save_as_json: save_as_json,
+          save_as_csv: save_as_csv,
+          metric_name: metric_name
+        })
 
       {:abort, errors, completed} ->
         # Budget reached: the consumer already exited :normal, which killed the
@@ -258,7 +304,20 @@ defmodule Dspy.Evaluate do
     }
   end
 
-  defp finish_evaluation(items, testset, return_all, show_progress) do
+  defp finish_evaluation(items, testset, return_all, show_progress, output) do
+    # M1-a (upstream `provide_traceback`): the stacktrace is captured in the
+    # child (in `item_error_from` and `evaluate_item`) and carried on the item
+    # under `:stacktrace` (transient, log-only). It is used ONLY in the log
+    # path below, and the key is stripped from the items BEFORE they reach the
+    # Result, so the H0b-2 `items[i].error` tuples and the stored items stay
+    # byte-identical (A5.1).
+    raw_items = items
+    items = Enum.map(items, &Map.delete(&1, :stacktrace))
+
+    if output.provide_traceback do
+      log_tracebacks(raw_items)
+    end
+
     scores_by_example = Enum.map(items, & &1.score)
     predictions_by_example = Enum.map(items, & &1.prediction)
 
@@ -273,7 +332,29 @@ defmodule Dspy.Evaluate do
 
     std_score = calculate_std(scores_by_example, mean_score)
 
-    result = %{
+    # M1-a (upstream evaluate.py:227): `score` is a percentage rounded to 2
+    # places, computed from the UNROUNDED, index-aligned scores (which already
+    # include `failure_score` for failures) — never from a rounded `mean`.
+    score_percentage =
+      if scores_by_example == [] do
+        0.0
+      else
+        Float.round(100 * Enum.sum(scores_by_example) / length(scores_by_example), 2)
+      end
+
+    # M1-a (upstream evaluate.py:181, :232-242): `results` is index-aligned with
+    # the testset (aligned by position, so a dead item's nil example falls back
+    # to the testset's example at that index), always populated, independent
+    # of `return_all`. A failed item carries an empty `Prediction`.
+    results =
+      Enum.with_index(testset)
+      |> Enum.map(fn {example, i} ->
+        item = Enum.at(items, i)
+        prediction = if item.prediction == nil, do: Prediction.new(), else: item.prediction
+        {example, prediction, item.score}
+      end)
+
+    result = %Dspy.Evaluate.Result{
       items: if(return_all, do: items, else: []),
       scores: scores_by_example,
       predictions: if(return_all, do: predictions_by_example, else: []),
@@ -283,8 +364,39 @@ defmodule Dspy.Evaluate do
       max: if(scores_by_example == [], do: 0, else: Enum.max(scores_by_example)),
       count: length(testset),
       successes: length(testset) - failures,
-      failures: failures
+      failures: failures,
+      score: score_percentage,
+      results: results
     }
+
+    # M1-a (upstream evaluate.py:185, always on regardless of `:progress`):
+    # the single default log line. The sum is rendered as a float (`3.0`, not
+    # `3`), and the percentage is rounded to 1 place.
+    sum = Enum.sum(scores_by_example)
+    n = length(scores_by_example)
+    average_metric_pct = Float.round(100 * sum / n, 1)
+
+    Logger.info(
+      "Average Metric: #{render_float(sum)} / #{n} (#{render_float(average_metric_pct)}%)"
+    )
+
+    # M1-a (upstream `:187-196`, `:268-300`): the plain-text table.
+    if is_boolean(output.display_table) and output.display_table do
+      log_table(rows_for(items, testset, output.metric_name), 0, length(items))
+    else
+      if is_integer(output.display_table) do
+        n = output.display_table
+        log_table(rows_for(items, testset, output.metric_name), n, length(items))
+      end
+    end
+
+    if output.save_as_json do
+      save_json(rows_for(items, testset, output.metric_name), output.save_as_json)
+    end
+
+    if output.save_as_csv do
+      save_csv(rows_for(items, testset, output.metric_name), output.save_as_csv)
+    end
 
     if show_progress do
       Logger.info(
@@ -294,6 +406,268 @@ defmodule Dspy.Evaluate do
 
     result
   end
+
+  # M1-a (A3; upstream `:232-242`, `merge_dicts` `:310-330`): the row shape
+  # shared by the table, CSV and JSON. Each row = Example attrs merged with
+  # Prediction attrs (a key collision renames the example key to
+  # `example_<k>` and the prediction key to `pred_<k>`), then the metric
+  # column. Column order: example keys, then prediction keys, then the metric —
+  # each group sorted by key (deterministic; our attrs are maps with no order).
+  # A failed item carries an empty Prediction, so its row is the example fields
+  # plus the metric only (upstream `:237`).
+  #
+  # The collision set is computed GLOBALLY (across all rows) so that the rename
+  # is consistent: if ANY row has a collision on key `k`, ALL rows rename `k`
+  # to `example_<k>` / `pred_<k>`.
+  defp rows_for(items, testset, metric_name) do
+    global_collisions =
+      Enum.reduce(testset, MapSet.new(), fn example, acc ->
+        idx = Enum.find_index(testset, &(&1 == example))
+        item = Enum.at(items, idx)
+        prediction = if item.prediction == nil, do: Prediction.new(), else: item.prediction
+
+        ex_keys = Map.keys(example.attrs)
+        pr_keys = Map.keys(prediction.attrs)
+
+        MapSet.union(acc, MapSet.new(Enum.filter(ex_keys, fn k -> k in pr_keys end)))
+      end)
+
+    Enum.with_index(testset)
+    |> Enum.map(fn {example, i} ->
+      item = Enum.at(items, i)
+      prediction = if item.prediction == nil, do: Prediction.new(), else: item.prediction
+
+      ex_attrs = example.attrs
+      pr_attrs = prediction.attrs
+
+      ex_row =
+        ex_attrs
+        |> Map.keys()
+        |> Enum.sort()
+        |> Enum.map(fn k ->
+          if MapSet.member?(global_collisions, k) do
+            {String.to_atom("example_" <> to_string(k)), k}
+          else
+            {k, k}
+          end
+        end)
+        |> Enum.into(%{}, fn {out, in_} -> {out, Map.get(ex_attrs, in_)} end)
+
+      pr_row =
+        pr_attrs
+        |> Map.keys()
+        |> Enum.sort()
+        |> Enum.map(fn k ->
+          if MapSet.member?(global_collisions, k) do
+            {String.to_atom("pred_" <> to_string(k)), k}
+          else
+            {k, k}
+          end
+        end)
+        |> Enum.into(%{}, fn {out, in_} -> {out, Map.get(pr_attrs, in_)} end)
+
+      row = Map.merge(ex_row, pr_row)
+      Map.put(row, metric_name, item.score)
+    end)
+  end
+
+  # The metric column name (upstream `metric.__name__`, proposal A2): the
+  # function name for named fns (`&Mod.fun/2` via `Function.info/2`), else
+  # `"metric"`. Anonymous fns get generated names containing "-fun-" — we
+  # detect these and fall back to `"metric"`.
+  defp metric_column_name(metric_fn) do
+    case safe_function_name(metric_fn) do
+      {:name, name} when is_atom(name) ->
+        name_str = to_string(name)
+        if String.contains?(name_str, "-fun-"), do: "metric", else: name_str
+
+      _ ->
+        "metric"
+    end
+  end
+
+  defp safe_function_name(fun) when is_function(fun) do
+    Function.info(fun, :name)
+  catch
+    _, _ -> :unknown
+  end
+
+  defp save_json(rows, path) do
+    # M1-a (row 10d): the COMPLETE payload is built and validated in memory
+    # before the file is opened. A non-encodable value (e.g. a PID) raises,
+    # naming the offending key, and the target path never exists.
+    encoded =
+      try do
+        Jason.encode!(rows)
+      rescue
+        e ->
+          raise ArgumentError,
+                "save_as_json: cannot encode value for key #{inspect(offending_key(rows, e))} " <>
+                  "(#{Exception.message(e)})"
+      end
+
+    File.write!(path, encoded)
+  end
+
+  defp offending_key(rows, _error) do
+    Enum.find_value(rows, "unknown", fn row ->
+      Enum.find_value(row, fn {key, value} ->
+        case Jason.encode(value) do
+          {:ok, _} -> nil
+          {:error, _} -> key
+        end
+      end)
+    end)
+  end
+
+  defp save_csv(rows, path) do
+    # M1-a (corrected rule): the header is the FIRST row's keys, in A3 order.
+    # A later row carrying a key the header does NOT have raises, naming that
+    # key. A later row MISSING header keys is written with empty cells.
+    # The full CSV string is built in memory before the file is opened (10d).
+    [header | _] = rows
+    header_keys = Map.keys(header)
+
+    validate_rows!(rows, header_keys)
+
+    header_cells = Enum.map(header_keys, &to_string/1)
+
+    csv_rows =
+      [header_cells] ++
+        Enum.map(rows, fn row ->
+          Enum.map(header_keys, fn key ->
+            case Map.get(row, key) do
+              nil -> ""
+              value -> cell_to_string(value)
+            end
+          end)
+        end)
+
+    csv = NimbleCSV.RFC4180.dump_to_iodata(csv_rows) |> IO.iodata_to_binary()
+    File.write!(path, csv)
+  end
+
+  defp validate_rows!([_first | rest], header_keys) do
+    Enum.each(rest, fn row ->
+      extra = Map.keys(row) -- header_keys
+
+      if extra != [] do
+        raise ArgumentError,
+              "save_as_csv: row carries key(s) not in the header (first row): " <>
+                inspect(extra)
+      end
+    end)
+  end
+
+  defp cell_to_string(value) when is_binary(value), do: value
+  defp cell_to_string(value) when is_number(value), do: to_string(value)
+  defp cell_to_string(value) when is_boolean(value), do: to_string(value)
+  defp cell_to_string(value) when is_atom(value), do: to_string(value)
+  defp cell_to_string(value), do: inspect(value)
+
+  defp log_tracebacks(items) do
+    items
+    |> Enum.with_index()
+    |> Enum.each(fn {item, i} ->
+      if item.error != nil and Map.get(item, :stacktrace) do
+        Logger.info(fn ->
+          "Example #{i} failed:\n" <>
+            format_error_with_stack(item.error, Map.get(item, :stacktrace))
+        end)
+      end
+    end)
+  end
+
+  defp format_error_with_stack({:exception, %{type: type, message: message}}, stacktrace) do
+    "#{type}: #{message}\n#{Exception.format_stacktrace(stacktrace)}"
+  end
+
+  defp format_error_with_stack({:caught, kind, reason}, stacktrace) do
+    "caught #{inspect(kind)}: #{inspect(reason)}\n#{Exception.format_stacktrace(stacktrace)}"
+  end
+
+  defp format_error_with_stack({:forward_error, reason}, stacktrace) do
+    "forward error: #{inspect(reason)}\n#{Exception.format_stacktrace(stacktrace)}"
+  end
+
+  defp format_error_with_stack({:metric_error, reason}, _stacktrace) do
+    "metric error: #{inspect(reason)}"
+  end
+
+  defp format_error_with_stack(other, _stacktrace) do
+    inspect(other)
+  end
+
+  defp item_error_from(kind, reason, example, failure_score, provide_traceback, stacktrace) do
+    error =
+      case {kind, reason} do
+        {:exception, e} ->
+          {:exception, %{type: e.__struct__, message: Exception.message(e)}}
+
+        _ ->
+          {:caught, kind, reason}
+      end
+
+    st = if provide_traceback, do: stacktrace, else: nil
+    %{example: example, prediction: nil, score: failure_score, error: error, stacktrace: st}
+  end
+
+  defp render_float(value) when is_float(value), do: to_string(value)
+  defp render_float(value) when is_integer(value), do: to_string(value / 1)
+
+  # M1-a (upstream `:268-300`): the plain-text table. `n = 0` means header
+  # only plus the "more rows" line. Cells over 25 words are cut to 25 + `...`.
+  defp log_table(rows, n, count) when is_list(rows) do
+    if rows == [] do
+      :ok
+    else
+      [header | _] = rows
+      header_keys = Map.keys(header)
+      header_line = header_keys |> Enum.map(&to_string/1) |> Enum.join(" | ")
+      separator = String.replace(header_line, ~r/\S/, "-")
+
+      data_rows =
+        if n == 0 do
+          []
+        else
+          rows
+          |> Enum.drop(1)
+          |> Enum.take(n)
+          |> Enum.map(fn row ->
+            header_keys
+            |> Enum.map(fn key ->
+              row |> Map.get(key) |> cell_to_string() |> truncate_cell()
+            end)
+            |> Enum.join(" | ")
+          end)
+        end
+
+      more_rows = count - if n == 0, do: 0, else: min(n, count - 1)
+      table_lines = [header_line, separator | data_rows]
+
+      all_lines =
+        if more_rows > 0 do
+          table_lines ++ ["... #{more_rows} more rows not displayed ..."]
+        else
+          table_lines
+        end
+
+      Logger.info(fn -> Enum.join(all_lines, "\n") end)
+      :ok
+    end
+  end
+
+  defp truncate_cell(cell) when is_binary(cell) do
+    words = String.split(cell)
+
+    if length(words) > 25 do
+      words |> Enum.take(25) |> Enum.join(" ") |> Kernel.<>("...")
+    else
+      cell
+    end
+  end
+
+  defp truncate_cell(value), do: truncate_cell(cell_to_string(value))
 
   @doc """
   Perform k-fold cross-validation on a dataset.
@@ -445,29 +819,38 @@ defmodule Dspy.Evaluate do
   # (TRAP 2). A *raising* metric is a separate case: `run_metric`
   # returns `:error`, which throws `{:metric_raised, _}` and is rebuilt as a
   # failed example at the stream boundary (D-U1, unchanged).
-  defp evaluate_item(program, example, metric_fn, failure_score, example_index) do
+  defp evaluate_item(program, example, metric_fn, failure_score, example_index, provide_traceback) do
     # Forward (and any forward failure) stays inside the per-example catch-all
     # (H0b-1). The metric result is validated OUTSIDE it, below, so a
     # non-numeric / non-boolean result can never be turned into a failed 0.0
     # (Q2, TRAP 2).
+    # M1-a: when `provide_traceback` is set, the stacktrace is captured HERE
+    # (in the child process) and carried on the failure item under `:stacktrace`
+    # (transient, log-only; stripped before the item reaches the Result).
     result =
       try do
         Module.forward(program, Example.inputs(example))
       rescue
         e ->
+          stacktrace = if provide_traceback, do: __STACKTRACE__, else: nil
+
           %{
             example: example,
             prediction: nil,
             score: failure_score,
-            error: {:exception, %{type: e.__struct__, message: Exception.message(e)}}
+            error: {:exception, %{type: e.__struct__, message: Exception.message(e)}},
+            stacktrace: stacktrace
           }
       catch
         kind, reason ->
+          stacktrace = if provide_traceback, do: __STACKTRACE__, else: nil
+
           %{
             example: example,
             prediction: nil,
             score: failure_score,
-            error: {:caught, kind, reason}
+            error: {:caught, kind, reason},
+            stacktrace: stacktrace
           }
       end
 

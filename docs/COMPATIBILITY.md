@@ -92,6 +92,44 @@ Evidence:
 - `test/h0b2/evaluate_invalid_metric_test.exs` — Q2 invalid metric (raise on nil/text/map; bool OK; raising metric still 0.0)
 - `test/h0b2/evaluate_empty_devset_test.exs` — Q3 empty devset
 
+## Evaluate output options (M1-a) — declared deviations
+
+`Dspy.Evaluate.evaluate/4` (M1-a) adds the upstream `EvaluationResult` output options:
+`display_table`, `save_as_csv`, `save_as_json`, `provide_traceback`, `display_progress`,
+and `metric_name`. Three deviations from upstream are declared explicitly:
+
+- **(a) No partial file on a raise.** Upstream opens the target file with `"w"` and
+  streams rows into it, so a `ValueError` (ragged CSV row) or `TypeError`
+  (non-serializable JSON value) leaves a **partial file** behind. We deliberately
+  build and validate the complete payload in memory (whole JSON encoded, every
+  CSV row checked against the header) **before** the file is opened, so a raise
+  leaves **no file** at the target path. This is the intended behaviour
+  (acceptance row 10d); it is a deliberate deviation from upstream's partial-file
+  side effect.
+
+- **(b) JSON error names the offending key.** Python's `json.dump` raises
+  `TypeError` naming only the value's type (e.g.
+  `Object of type int has no JSON representation` for a PID). Our
+  `save_as_json` catches the `Jason.encode!` failure and re-raises an
+  `ArgumentError` that names the **offending key** (the row key whose value
+  cannot be encoded). The message is more actionable than upstream's; it is
+  still a deviation from the upstream message.
+
+- **(c) `Float.round` rounds exact ties up; Python `round()` uses banker's
+  rounding (to even).** `score` is computed as
+  `Float.round(100 * Enum.sum(scores) / count, 2)`. For binary-exact ties
+  (e.g. 1 correct of 800 → `100/800 = 0.125` → `12.5`), Elixir's
+  `Float.round` rounds **up** to `12.5` (well, to the 2nd decimal: `12.50`),
+  while Python's `round(12.5, 2)` rounds **to even** → `12.50`. The difference
+  is only visible for values that land exactly on the midpoint between two
+  representable 2-decimal floats. Noted; nothing is built for it (the
+  probability of a binary-exact tie in a real evaluation is negligible).
+
+Evidence:
+- `test/evaluate/save_results_test.exs` — rows #6, #7, #8, #9, 10c, 10d, 10e
+- `test/evaluate/empty_devset_test.exs` — row 11 (ported oracle)
+- `test/evaluate/result_test.exs` — rows #1-#5, #10a (SS1-SS2, already shipped)
+
 ## Quick mapping examples (proven)
 
 ### 1) Predict
