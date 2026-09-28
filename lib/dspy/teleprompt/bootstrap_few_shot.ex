@@ -262,6 +262,10 @@ defmodule Dspy.Teleprompt.BootstrapFewShot do
       |> Enum.map(&Example.inputs/1)
 
     # Generate outputs using teacher program
+    # Capture process-local DSPy state (overrides + callback stack) in the
+    # caller; reinstall it in each task (tasks do not inherit the dictionary).
+    ctx = Dspy.Context.capture()
+
     chunk_size = max(1, div(length(inputs), num_threads))
     chunks = Enum.chunk_every(inputs, chunk_size)
 
@@ -269,7 +273,9 @@ defmodule Dspy.Teleprompt.BootstrapFewShot do
       chunks
       |> Task.async_stream(
         fn chunk ->
-          bootstrap_chunk(teacher, chunk, metric, max_errors)
+          Dspy.Context.with_context(ctx, fn ->
+            bootstrap_chunk(teacher, chunk, metric, max_errors)
+          end)
         end,
         max_concurrency: num_threads,
         timeout: 30_000
@@ -410,15 +416,26 @@ defmodule Dspy.Teleprompt.BootstrapFewShot do
        ) do
     Dspy.Teleprompt.Util.log(teleprompt, "Evaluating #{length(candidates)} candidate programs...")
 
+    # Capture process-local DSPy state (overrides + callback stack) in the
+    # caller; reinstall it in each task (tasks do not inherit the dictionary).
+    # D5: this is the OUTER wrap required for the nested Evaluate — without it,
+    # the inner Evaluate's tasks would see no overrides.
+    ctx = Dspy.Context.capture()
+
     # Evaluate each candidate on validation set
     evaluations =
       candidates
       |> Task.async_stream(
         fn candidate ->
-          result =
-            Evaluate.evaluate(candidate, validation_set, metric, num_threads: 1, progress: false)
+          Dspy.Context.with_context(ctx, fn ->
+            result =
+              Evaluate.evaluate(candidate, validation_set, metric,
+                num_threads: 1,
+                progress: false
+              )
 
-          {candidate, result}
+            {candidate, result}
+          end)
         end,
         max_concurrency: num_threads,
         timeout: 60_000

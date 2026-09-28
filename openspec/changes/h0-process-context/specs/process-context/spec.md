@@ -3,7 +3,7 @@
 ## ADDED Requirements
 
 ### Requirement: Captured process context is installed in spawned work
-The system SHALL provide `Dspy.Context` to capture, in the caller, settings overrides, the adapter callback stack, and usage-tracking state, and to run a function in another process with that context installed.
+The system SHALL provide `Dspy.Context` to capture, in the caller, settings overrides (including `track_usage` and `callbacks`) and the adapter callback stack, and to install that context in the current process for the duration of a function (restoring previous values afterwards, without spawning). Usage accumulators are intentionally not captured.
 
 #### Scenario: Overrides reach a child
 - **WHEN** a caller inside `Dspy.context([lm: lm2], fn -> ... end)` runs work through `Dspy.Context` in a new process

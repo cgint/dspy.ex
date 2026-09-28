@@ -158,12 +158,20 @@ defmodule Dspy.Teleprompt.SIMBA do
 
     candidates = generate_candidates(teleprompt, program, trainset, step)
 
+    # Capture process-local DSPy state (overrides + callback stack) in the
+    # caller; reinstall it in each task (tasks do not inherit the dictionary).
+    # D5: this is the OUTER wrap required for the nested Evaluate — without it,
+    # the inner Evaluate's tasks would see no overrides.
+    ctx = Dspy.Context.capture()
+
     best =
       candidates
       |> Task.async_stream(
         fn cand ->
-          score = Evaluate.evaluate(cand, eval_batch, teleprompt.metric, progress: false).mean
-          {cand, score}
+          Dspy.Context.with_context(ctx, fn ->
+            score = Evaluate.evaluate(cand, eval_batch, teleprompt.metric, progress: false).mean
+            {cand, score}
+          end)
         end,
         max_concurrency: teleprompt.num_threads,
         timeout: 60_000

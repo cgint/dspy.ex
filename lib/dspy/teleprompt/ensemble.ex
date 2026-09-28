@@ -28,10 +28,16 @@ defmodule Dspy.Teleprompt.Ensemble.Program do
         |> min(length(members))
         |> max(1)
 
+      # Capture process-local DSPy state (overrides + callback stack) in the
+      # caller; reinstall it in each task (tasks do not inherit the dictionary).
+      ctx = Dspy.Context.capture()
+
       member_predictions =
         members
         |> Task.async_stream(
-          fn member -> Dspy.Module.forward(member, inputs) end,
+          fn member ->
+            Dspy.Context.with_context(ctx, fn -> Dspy.Module.forward(member, inputs) end)
+          end,
           max_concurrency: max_concurrency,
           timeout: ensemble.timeout_ms || 30_000
         )
@@ -331,14 +337,20 @@ defmodule Dspy.Teleprompt.Ensemble do
     training_configs =
       generate_diverse_configurations(diversity_strategy, size, train_data, base_config, seed)
 
+    # Capture process-local DSPy state (overrides + callback stack) in the
+    # caller; reinstall it in each task (tasks do not inherit the dictionary).
+    ctx = Dspy.Context.capture()
+
     members =
       training_configs
       |> Enum.with_index(1)
       |> Task.async_stream(
         fn {config, idx} ->
-          Dspy.Teleprompt.Util.log(teleprompt, "  Training member #{idx}/#{size}")
+          Dspy.Context.with_context(ctx, fn ->
+            Dspy.Teleprompt.Util.log(teleprompt, "  Training member #{idx}/#{size}")
 
-          train_single_member(base_type, program, config)
+            train_single_member(base_type, program, config)
+          end)
         end,
         max_concurrency: num_threads,
         timeout: 300_000
@@ -450,12 +462,20 @@ defmodule Dspy.Teleprompt.Ensemble do
        ) do
     metric = Keyword.get(config, :metric, &Dspy.Metrics.exact_match/2)
 
+    # Capture process-local DSPy state (overrides + callback stack) in the
+    # caller; reinstall it in each task (tasks do not inherit the dictionary).
+    # D5: this is the OUTER wrap required for the nested Evaluate — without it,
+    # the inner Evaluate's tasks would see no overrides.
+    ctx = Dspy.Context.capture()
+
     performances =
       members
       |> Task.async_stream(
         fn member ->
-          result = Evaluate.evaluate(member, val_data, metric, progress: false)
-          result.mean
+          Dspy.Context.with_context(ctx, fn ->
+            result = Evaluate.evaluate(member, val_data, metric, progress: false)
+            result.mean
+          end)
         end,
         timeout: 30_000
       )

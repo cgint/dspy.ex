@@ -499,18 +499,24 @@ defmodule Dspy.Tools do
 
       notify_tool_start(callbacks, call_id, tool, args)
 
+      # Capture process-local DSPy state (overrides + callback stack) in the
+      # caller; reinstall it in the task (tasks do not inherit the dictionary).
+      ctx = Dspy.Context.capture()
+
       task =
         Task.async(fn ->
-          try do
-            {:ok, tool.function.(args)}
-          rescue
-            e ->
-              {:error,
-               %{
-                 kind: :exception,
-                 message: Exception.message(e)
-               }}
-          end
+          Dspy.Context.with_context(ctx, fn ->
+            try do
+              {:ok, tool.function.(args)}
+            rescue
+              e ->
+                {:error,
+                 %{
+                   kind: :exception,
+                   message: Exception.message(e)
+                 }}
+            end
+          end)
         end)
 
       case Task.yield(task, timeout) || Task.shutdown(task) do
@@ -752,14 +758,20 @@ defmodule Dspy.Tools do
   def execute_tool(%Tool{} = tool, args, opts \\ []) do
     timeout = opts[:timeout] || tool.timeout
 
+    # Capture process-local DSPy state (overrides + callback stack) in the
+    # caller; reinstall it in the task (tasks do not inherit the dictionary).
+    ctx = Dspy.Context.capture()
+
     task =
       Task.async(fn ->
-        try do
-          result = tool.function.(args)
-          {:ok, result}
-        rescue
-          e -> {:error, Exception.message(e)}
-        end
+        Dspy.Context.with_context(ctx, fn ->
+          try do
+            result = tool.function.(args)
+            {:ok, result}
+          rescue
+            e -> {:error, Exception.message(e)}
+          end
+        end)
       end)
 
     case Task.yield(task, timeout) || Task.shutdown(task) do

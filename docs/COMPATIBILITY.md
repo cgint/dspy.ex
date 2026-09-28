@@ -232,11 +232,18 @@ end)
 Notes:
 - overrides are **process-local** (process dictionary); nested `Dspy.context/2` calls compose (inner wins) and are restored after the function returns, raises, or throws;
 - `Dspy.Settings.configure/1` state is never mutated;
-- child processes (`Task.async`/`spawn`) do **not** inherit overrides. To propagate, capture with `Dspy.Settings.current_overrides/0` and install in the child with `Dspy.Settings.with_overrides/2`;
+- child processes (`Task.async`/`spawn`) do **not** inherit overrides. To propagate, use **`Dspy.Context`** (public API, stable entry):
+  - `ctx = Dspy.Context.capture()` in the caller (before the spawn);
+  - `Dspy.Context.with_context(ctx, fn -> ... end)` in the task body (installs + restores on return/raise/throw/exit).
+  - `Dspy.Context` captures **both** the settings overrides and the raw adapter-callback stack (see `Dspy.Context` moduledoc for the exactly-once callback semantics and the no-usage-merge rationale);
+  - the low-level `Dspy.Settings.current_overrides/0` + `Dspy.Settings.with_overrides/2` still work for overrides-only propagation, but `Dspy.Context` is the preferred entry because it also carries the callback stack;
 - unknown keys are dropped (same key rule as `configure/1`).
 
 Evidence:
 - `test/settings_context_test.exs` (visibility, nesting, restore-on-raise, process isolation, Task propagation, end-to-end Predict + temperature reaching the LM request map)
+- `test/context/context_test.exs` (Dspy.Context capture/with_context: overrides, callbacks exactly-once, usage stays on child, crash restore)
+- `test/context/context_propagation_test.exs` (per-site marker-LM: Parallel.run, Module.parallel, Evaluate.evaluate)
+- `test/context/context_s4_propagation_test.exs` (D5 chain: Parallel.run → Evaluate.evaluate; Ensemble.Program forward; retrieve:411)
 
 ## Proven surface mapping table
 
@@ -249,7 +256,7 @@ Evidence:
 | call: `program(**kwargs)` | `Dspy.call(program, inputs)` (or `Dspy.forward/2` / `Dspy.Module.forward/2`) | `inputs` may be map, string-key map, keyword list, or `%Dspy.Example{}` | `test/predict_test.exs`, `test/module_forward_example_test.exs` |
 | output: `pred.answer` | `pred[:answer]` / `pred.attrs.answer` | Predictions store outputs in `pred.attrs` | `test/acceptance/simplest_predict_test.exs` |
 | `dspy.Example(...)` | `Dspy.Example.new(...)` | Implements `Access` (`ex[:question]`) | `test/example_prediction_access_test.exs` |
-| `with dspy.context(lm=..., **kwargs)` | `Dspy.context([lm: ...], fn -> ... end)` | Process-scoped settings overrides; global `configure/1` state untouched; child processes do NOT inherit (use `Dspy.Settings.with_overrides/2`) | `test/settings_context_test.exs` |
+| `with dspy.context(lm=..., **kwargs)` | `Dspy.context([lm: ...], fn -> ... end)` | Process-scoped settings overrides; global `configure/1` state untouched; child processes do NOT inherit — propagate via **`Dspy.Context.capture/0`** + **`Dspy.Context.with_context/2`** (captures overrides + raw callback stack; restores on return/raise/throw/exit) | `test/settings_context_test.exs`, `test/context/context_test.exs` |
 | `example.with_inputs(...)` | `Dspy.Example.with_inputs/2` + `Dspy.Example.inputs/1` | Mark which attrs are inputs; `Evaluate`/teleprompts forward only inputs when configured | `test/example_with_inputs_test.exs` |
 | JSONAdapter-style outputs | `Dspy.Signature.parse_outputs/2` | Parses JSON (incl. fenced) and coerces types | `test/acceptance/json_outputs_acceptance_test.exs` |
 | Pydantic models in signatures (typed structured outputs) | `output_field(..., schema: MySchema)` + `max_output_retries:` | Validates/casts nested JSON outputs via JSON Schema (JSV). Returns typed structs. Retries on parse/validation failure are opt-in. | `test/signature_typed_schema_integration_test.exs`, `test/typed_output_retry_test.exs`, `test/acceptance/text_component_extract_acceptance_test.exs` |

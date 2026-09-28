@@ -22,10 +22,10 @@ defmodule Dspy.Parallel do
   ## Settings propagation
 
   Process-scoped settings overrides (`Dspy.context/2` /
-  `Dspy.Settings.context/2`) live in the *caller's* process dictionary and are
-  not inherited by `Task` processes. `run/3` captures
-  `Dspy.Settings.current_overrides/0` in the caller and wraps every task body
-  in `Dspy.Settings.with_overrides/2`, mirroring the upstream
+  `Dspy.Settings.context/2`) and the adapter callback stack live in the *caller's*
+  process dictionary and are not inherited by `Task` processes. `run/3` captures
+  `Dspy.Context.capture/0` in the caller and wraps every task body in
+  `Dspy.Context.with_context/2`, mirroring the upstream
   `ParallelExecutor` copying `thread_local_overrides` into each worker.
 
   ## Error budget (`:max_errors`)
@@ -59,7 +59,7 @@ defmodule Dspy.Parallel do
 
   """
 
-  alias Dspy.{Example, Module, Settings}
+  alias Dspy.{Context, Example, Module}
 
   @type t :: %__MODULE__{
           num_threads: pos_integer(),
@@ -141,14 +141,15 @@ defmodule Dspy.Parallel do
              {:max_errors_exceeded,
               %{errors: non_neg_integer(), failed_indices: [non_neg_integer()]}}}
   def run(%__MODULE__{} = parallel, exec_pairs, _opts \\ []) when is_list(exec_pairs) do
-    # Overrides live in the caller's process dictionary; capture them here and
-    # re-install them inside every task (tasks do not inherit the dictionary).
-    overrides = Settings.current_overrides()
+    # Process-local DSPy state (overrides + callback stack) lives in the caller's
+    # process dictionary; capture it here and reinstall it inside every task
+    # (tasks do not inherit the dictionary).
+    ctx = Context.capture()
 
     exec_pairs
     |> Task.async_stream(
       fn {module, input} ->
-        Settings.with_overrides(overrides, fn -> run_pair(module, input, parallel) end)
+        Context.with_context(ctx, fn -> run_pair(module, input, parallel) end)
       end,
       max_concurrency: parallel.num_threads,
       ordered: true,

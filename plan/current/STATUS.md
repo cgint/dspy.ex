@@ -377,3 +377,5 @@ Notes:
 - P3 `Dspy.MultiChainComparison` → `v0.3.43` (lead-implemented; small slice).
 - Process: plan/HOW_WE_WORK.md (Greta co-sign, Clarity Gate). Rule: Python DSPy is the behavioral reference.
 - NOW: H0 (process context) in rework under controller Judith; H0b (crash/timeout) in groundwork; then P4 save/load, P5 inspect_history.
+- H0 `Dspy.Context` (13 spawn sites) → `v0.3.44`. Team Judith/Benjamin/Clara; outside verdict Greta PASS-WITH-FIXES (vacuous crash tests fixed); Horst re-ran restore mutation (12/15 RED → 15 GREEN, checksum OK).
+  - Note: controller reported format ✓ but final test/context/context_test.exs was unformatted; Horst ran mix format (whitespace only) before release.

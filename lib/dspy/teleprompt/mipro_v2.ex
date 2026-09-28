@@ -290,21 +290,27 @@ defmodule Dspy.Teleprompt.MIPROv2 do
       Trainset.sample(train_data, max_demos * 3, strategy: :diverse, seed: teleprompt.seed + 10)
 
     # Generate outputs using program
+    # Capture process-local DSPy state (overrides + callback stack) in the
+    # caller; reinstall it in each task (tasks do not inherit the dictionary).
+    ctx = Dspy.Context.capture()
+
     bootstrapped =
       candidate_examples
       |> Task.async_stream(
         fn %Example{} = gold ->
-          inputs = Example.inputs(gold)
+          Dspy.Context.with_context(ctx, fn ->
+            inputs = Example.inputs(gold)
 
-          case Dspy.Module.forward(program, inputs) do
-            {:ok, prediction} ->
-              score = Dspy.Teleprompt.run_metric(metric, gold, prediction)
-              bootstrapped = Example.new(Map.merge(inputs, prediction.attrs))
-              {bootstrapped, score}
+            case Dspy.Module.forward(program, inputs) do
+              {:ok, prediction} ->
+                score = Dspy.Teleprompt.run_metric(metric, gold, prediction)
+                bootstrapped = Example.new(Map.merge(inputs, prediction.attrs))
+                {bootstrapped, score}
 
-            {:error, _} ->
-              nil
-          end
+              {:error, _} ->
+                nil
+            end
+          end)
         end,
         max_concurrency: num_threads,
         timeout: 30_000

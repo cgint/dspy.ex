@@ -99,11 +99,15 @@ defmodule Dspy.Evaluate do
     chunks = Enum.chunk_every(testset, chunk_size)
 
     # Process chunks in parallel
+    # Capture process-local DSPy state (overrides + callback stack) in the
+    # caller; reinstall it in each task (tasks do not inherit the dictionary).
+    ctx = Dspy.Context.capture()
+
     items =
       chunks
       |> Task.async_stream(
         fn chunk ->
-          evaluate_chunk(program, chunk, metric_fn)
+          Dspy.Context.with_context(ctx, fn -> evaluate_chunk(program, chunk, metric_fn) end)
         end,
         max_concurrency: num_threads,
         timeout: :infinity

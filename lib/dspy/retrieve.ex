@@ -407,17 +407,23 @@ defmodule Dspy.Retrieve do
 
       timeout_ms = opts[:timeout_ms] || 30_000
 
+      # Capture process-local DSPy state (overrides + callback stack) in the
+      # caller; reinstall it in each task (tasks do not inherit the dictionary).
+      ctx = Dspy.Context.capture()
+
       results =
         Task.async_stream(
           documents,
           fn doc ->
-            safe_process_single_document(
-              doc,
-              embedding_provider,
-              embedding_provider_opts,
-              chunk_size,
-              overlap
-            )
+            Dspy.Context.with_context(ctx, fn ->
+              safe_process_single_document(
+                doc,
+                embedding_provider,
+                embedding_provider_opts,
+                chunk_size,
+                overlap
+              )
+            end)
           end,
           max_concurrency: 4,
           timeout: timeout_ms,

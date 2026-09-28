@@ -190,10 +190,14 @@ defmodule Dspy.Module do
   """
   def parallel(modules) when is_list(modules) do
     fn inputs ->
+      # Capture process-local DSPy state (overrides + callback stack) in the
+      # caller; reinstall it in each task (tasks do not inherit the dictionary).
+      ctx = Dspy.Context.capture()
+
       tasks =
         modules
         |> Enum.map(fn module ->
-          Task.async(fn -> forward(module, inputs) end)
+          Task.async(fn -> Dspy.Context.with_context(ctx, fn -> forward(module, inputs) end) end)
         end)
 
       results = Task.await_many(tasks)
