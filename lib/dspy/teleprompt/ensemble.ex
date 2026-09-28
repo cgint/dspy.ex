@@ -486,10 +486,12 @@ defmodule Dspy.Teleprompt.Ensemble do
         {:ok, weights}
 
       :weighted_average ->
-        # Small trainsets can split to an empty validation set (Trainset.split
-        # uses round(n * 0.8) for the train side, so n=1..2 leave 0 val
-        # examples). Weights are then unmeasurable — use equal weights instead
-        # of calling Evaluate.evaluate/4 with [] (which raises ArgumentError).
+        # A small validation_split can split to an empty validation set
+        # (Trainset.split uses round(n * val) for the val side; e.g.
+        # validation_split 0.04 with n=10 gives round(10 * 0.04) = 0 val
+        # examples). Weights are then unmeasurable — use equal weights
+        # instead of calling Evaluate.evaluate/4 with [] (which raises
+        # ArgumentError).
         if val_data == [] do
           Logger.info(
             "Ensemble: empty validation split (trainset too small); " <>
