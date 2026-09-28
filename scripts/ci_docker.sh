@@ -10,10 +10,12 @@ set -euo pipefail
 
 REF="${1:-HEAD}"
 IMAGE="${CI_DOCKER_IMAGE:-hexpm/elixir:1.19.5-erlang-28.0.4-ubuntu-noble-20260810}"
+# Like the CI matrix: the formatter check runs on the primary toolchain only.
+CHECK_FORMAT="${CI_CHECK_FORMAT:-$([ -z "${CI_DOCKER_IMAGE:-}" ] && echo true || echo false)}"
 ROOT="$(git rev-parse --show-toplevel)"
 SHA="$(git -C "$ROOT" rev-parse --short "$REF")"
 
-echo "ci_docker: ref=$REF ($SHA) image=$IMAGE"
+echo "ci_docker: ref=$REF ($SHA) image=$IMAGE check_format=$CHECK_FORMAT"
 
 docker run --rm -e MIX_ENV=test -v "$ROOT/.git:/repo.git:ro" "$IMAGE" bash -euo pipefail -c "
   export DEBIAN_FRONTEND=noninteractive
@@ -23,12 +25,12 @@ docker run --rm -e MIX_ENV=test -v "$ROOT/.git:/repo.git:ro" "$IMAGE" bash -euo 
   mix local.hex --force >/dev/null && mix local.rebar --force >/dev/null
   step() { echo; echo \"== \$*\"; }
   step 'Core deps';    mix deps.get >/dev/null
-  step 'Core format';  mix format --check-formatted
+  if [ $CHECK_FORMAT = true ]; then step 'Core format'; mix format --check-formatted; fi
   step 'Core compile (warnings as errors)'; mix compile --warnings-as-errors
   step 'Core test';    mix test
   cd extras/dspy_extras
   step 'Extras deps';  mix deps.get >/dev/null
-  step 'Extras format'; mix format --check-formatted
+  if [ $CHECK_FORMAT = true ]; then step 'Extras format'; mix format --check-formatted; fi
   step 'Extras compile (warnings as errors)'; mix compile --warnings-as-errors
   step 'Extras test';  mix test
   echo; echo 'ci_docker: ALL STEPS GREEN'
