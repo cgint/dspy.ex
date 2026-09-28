@@ -84,8 +84,15 @@ Python DSPy 3.4.0 (`uv run tmp/pyck/ck.py`) rather than by preference.
 
 **Decided by you (2026-09-28):** milestones M1→M6 ✓ · Evaluate like Python (failures
 count 0, stop after 10 errors) ✓ · skip the 10 Python-only features ✓ · minor version
-per milestone ✓ · NimbleCSV for CSV files ✓ · dependencies/security/toolchain are mine
-to decide ✓.
+per milestone ✓ · dependencies/security/toolchain are mine to decide ✓.
+
+*Correction 2026-09-28:* NimbleCSV was previously listed here as approved by you. It was
+not — it was a tacit "read as yes" that you never confirmed. It does not need your
+approval any more either: you gave me dependency authority, so it is my decision and
+I own it. **Decided: NimbleCSV** for `DataLoader.from_csv` (Dashbit, same house as
+NimbleOptions/NimblePool, tiny, no transitive deps) rather than a hand-rolled RFC-4180
+reader, because CSV quoting is exactly the kind of thing we would get subtly wrong and
+then have to maintain forever.
 
 **Decided by me under your standing rules (2026-09-28):**
 
