@@ -1069,6 +1069,7 @@ defmodule DspyEvaluateSaveResultsTest do
   # per-row keys at all and would have emitted `answer` twice).
   test "fix round 4 (c): later-row duplicate → BOTH writers raise, no file" do
     attrs = Map.merge(Map.new(answer: "4", question: "Q2"), %{"answer" => "S2"})
+
     testset = [
       Example.new(%{question: "Q1", answer: "4"}),
       Example.new(attrs)
