@@ -87,7 +87,9 @@ Callback metadata (`callback_metadata`, M3 callbacks); the class-style `Evaluate
 | 9 | `provide_traceback: true` on a raising item → the log contains a stacktrace line of the raising module | message only → red |
 | 10 | no options → no file is created in the tmp dir; the only info log line is `Average Metric: 3.0 / 4 (75.0%)` | an always-on side effect, or a missing Average Metric line → red |
 | 10b | a failed item (raising program): `results` entry is `{ex, %Prediction{}, 0.0}`; its CSV/JSON row = example fields + metric, no `prediction` key; `predictions[i]` is still `nil` | `nil` in results, or a `prediction` column → red |
-| 10c | P-OUT per the user's answer (ragged rows; a PID value in JSON) | – |
+| 10c | P-OUT = raise: a ragged CSV row raises naming the offending key; a PID value in JSON raises naming the offending key | union header / `inspect/1` softening → red |
+| 10d | **No partial file after a raise** (added Horst 2026-09-28): after a `save_as_csv` or `save_as_json` raise, the target path does **not** exist. The payload must be fully built and validated in memory (whole JSON encoded, every row checked against the header) *before* the file is opened — or written to a temp path in the same directory and renamed on success | stream rows straight into an open handle, so the failing case leaves a truncated file → red |
+| 10e | **`display_progress` has its own row** (added Horst 2026-09-28; was "implicitly covered", which is not coverage): with `display_progress: true` progress output appears and the `Result` is unchanged; unset or `false` → no progress output | make the option a no-op → red |
 | 11 | P-Q3 per the user's answer (raise with `devset` in the message, or `score 0.0` pinned) | – |
 | 12 | full suite plus the consumer canary green; zero diff to existing tests | – |
 
