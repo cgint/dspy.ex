@@ -43,6 +43,14 @@ not something a test may paper over. Escalate instead. Corollary: when two write
 agree, they call **one shared function**, and the mutation that proves it is *removing the check
 from one side only* — if both sides stay green, they were agreeing by coincidence, not by design.
 
+**A tool that fails twice with the same error is broken tooling, not bad luck** (2026-09-29).
+A *schema* rejection is the same category as a dead launcher: the arguments are wrong and will be
+wrong on every retry, so an identical retry can never succeed. Second identical failure → change
+the approach or escalate. **Never a third.** Observed: a controller retried one rejected `read`
+call in a loop, sending **69M → 107M tokens** between two checks and compacting its own context
+mid-loop, with nothing progressing. Looping silently is the expensive failure; stopping early and
+asking is the cheap one.
+
 **Take every date in a durable document from `date` or `git log` — never from memory**
 (2026-09-29). Multiple agents independently wrote **2026-10-01**, a date that had not happened,
 into release notes, compatibility docs, queue rows and signed contracts — 19 occurrences, two of
