@@ -791,12 +791,19 @@ defmodule Dspy.Tools do
             {:ok, result}
           rescue
             e -> {:error, Exception.message(e)}
+          catch
+            :exit, reason ->
+              {:error, "Tool exited: #{Dspy.Tools.format_exit(reason)}"}
+
+            kind, reason ->
+              {:error, "Tool #{kind}: #{inspect(reason)}"}
           end
         end)
       end)
 
-    case Task.yield(task, timeout) || Task.shutdown(task) do
+    case Task.yield(task, timeout) || Task.shutdown(task, :brutal_kill) do
       {:ok, result} -> result
+      {:exit, reason} -> {:error, "Tool exited: #{Dspy.Tools.format_exit(reason)}"}
       nil -> {:error, "Tool execution timed out"}
     end
   end
@@ -818,5 +825,17 @@ defmodule Dspy.Tools do
     ]
 
     Supervisor.start_link(children, strategy: :one_for_one)
+  end
+
+  @doc false
+  # Format a `:exit` reason (or any catch-all reason) for error messages.
+  # `Exception.format_exit/1` exists in Elixir ≥ 1.17; on older versions we
+  # fall back to `inspect/1`.
+  def format_exit(reason) do
+    if function_exported?(Exception, :format_exit, 1) do
+      Exception.format_exit(reason)
+    else
+      inspect(reason)
+    end
   end
 end

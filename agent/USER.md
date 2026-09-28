@@ -44,3 +44,10 @@ User instruction:
 - 2026-09-26: **Python DSPy is the behavioral reference.** When a design choice diverges from upstream (e.g. usage merge-back from child processes), do it the way Python DSPy does it; don't propose "BEAM-better" divergences as defaults.
 - 2026-09-26: **Native Elixir port is decided — no Python wrapper, ever silently.** No Python runtime (Pythonx, snakepit/DSPex, ports/erlport, uv) in `lib/` or runtime deps. Any Python-backed piece, even test-only (e.g. a parity oracle), needs explicit user approval first. Jido/LiveView stay optional layers on top.
 - 2026-09-26: **Keep the user in the loop; keep own status.** The whole plan (target, scope, phases, progress measure, open decisions) is written down in `plan/current/` at doable/appropriate detail — not a 100% deep-dive. Horst questions himself and lets other agents (Greta + scouts) contribute; plans are agreed with Greta before presenting. The user must be able to grasp target, remaining count and current position quickly from `plan/current/00_NOW.md`.
+
+## Standing mandate (2026-09-28)
+User: "I would love to see Greta and you coordinate and drive that whole project to proper, honest success without hacks and without workarounds but with clarity and alignment, documentation and elixir target in mind."
+- Horst + Greta drive M1→M6 autonomously (contracts, teams, releases) under plan/HOW_WE_WORK.md; no per-slice user approval needed.
+- Still goes to the user: new dependencies, breaking public changes, scope decisions (M7+ pool, n/a additions), anything Python-runtime-related, or a deviation from upstream behaviour.
+- Honesty over speed: a real "not working yet" beats a green-looking hack; numbers in 00_NOW are verified, corrections shown openly.
+- Every milestone ships with docs (user-facing, Elixir-idiomatic) and a runnable example.

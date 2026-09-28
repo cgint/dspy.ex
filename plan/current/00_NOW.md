@@ -58,10 +58,11 @@ Version numbers show the milestone: M1 = v0.4.x, M2 = v0.5.x, … M6 = v0.9.x (d
 | v0.3.44 | Settings from `Dspy.context` now also apply inside background work (evaluation, optimizers, tools) |
 
 ## 6. Waiting for you
-- **For M1 (not urgent, before M1 starts):** reading CSV datasets needs a CSV parser. Option 1: add the small standard library **NimbleCSV** (by Dashbit, same authors as tools we already use) — a new dependency needs your OK. Option 2: write our own small reader (more code to maintain, easy to get quoting wrong). I recommend option 1.
+- **For M1 (not urgent, before M1 starts):** reading CSV datasets needs a CSV parser. Option 1: add the small standard library **NimbleCSV** (by Dashbit, same authors as tools we already use) — a new dependency needs your OK. Option 2: write our own small reader (more code to maintain, easy to get quoting wrong). I recommend option 1. *(Your "ok" 2026-09-28 read as approval of NimbleCSV — say if not.)*
 - *Decided by you 2026-09-28:* milestone order M1→M6 (later pool cut after scope decisions) ✓ · Evaluate like Python (failures count 0, stop after 10 errors, also in optimizers) ✓ · skip the 10 Python-only features ✓.
 
 ## 7. Standing decisions (yours)
+- Greta and Horst drive M1→M6 on their own (2026-09-28). You are asked only for: new dependencies, breaking changes, scope decisions, deviations from Python behavior.
 - Python DSPy is the reference: when unsure, do what Python does.
 - Pure Elixir: no Python wrapper; anything Python-based needs your approval.
 - Jido and LiveView can be added on top later; the library doesn't depend on them.

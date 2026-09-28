@@ -43,5 +43,7 @@ Reference: Python DSPy 3.4.0 (`../dspy-3.4.0/dspy/evaluate/`, `datasets/`, `pred
 3. The DataLoader silently grows HF/pandas scope → forbidden in M1.
 4. The struct change edits teleprompter tests to pass → `git diff test/` shows additions only.
 
-## Open for Horst
-- The dep decision (item 3), the slice order (M1-b/c are cheap and could go first while M1-a waits for H0b-2), and the team card.
+## Decided (Horst 2026-09-28)
+- **CSV:** NimbleCSV recommended to the user, answer pending. **The CSV part of M1-e is blocked** until then; JSON can go ahead.
+- **Sequencing:** one lib-editing team at a time. M1-b/c come right after the H0b-1 release, before or alongside H0b-2 in sequence; Horst decides at that point. No parallel start.
+- The team card is written by Horst at M1 launch.
