@@ -212,6 +212,7 @@ P4→M2 (S113, S054) · P5→M2 (S054.f7) · P6→M6 (S035, S083) · P7→M2 (S0
 | # | Slice | Status |
 |---|---|---|
 | H1 | Public-API snapshot guard for stable modules (complements S0) | todo |
+| H2 | **`test/adapter_selection_test.exs` is `async: true` and calls global `Dspy.configure/1`** — a pre-existing flakiness hazard, deliberately left untouched during M1-a to honour "zero diff to existing tests" (A5.2). M1-a's own three new files were fixed to `async: false`; this one still races. Fix: `async: false`, or port it to process-scoped `Dspy.context/2`. Evidence: an unchanged tree produced 1, 85, 0 and 3 failures across four runs before the M1-a files were fixed | todo |
 | H2 | `Dspy.Adapters` characterization tests (from `plan/COVERAGE_AUDIT_2026-05.md`) | todo |
 | H3 | Reconcile stale plan docs (RELEASE_MILESTONES R3, matrix typed-outputs row, STRATEGIC_ROADMAP upstream pin) | todo |
 | H4 | OpenSpec `attach-raw-output-to-parse-failures`: archive after user-verification tasks 4.1/4.2 | todo |

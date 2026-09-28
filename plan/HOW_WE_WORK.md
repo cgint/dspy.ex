@@ -34,6 +34,18 @@ never infer state from a terminal spinner. Prompting goes through `herdr_prompt_
 `sleep 150`/`240`/`280` around a backgrounded await. It burns tokens, adds uncontrolled latency,
 and yields strictly less information than one blocking call. Applies to Horst and Greta equally.
 
+**A test that calls global `Dspy.configure/1` MUST be `async: false`** (2026-09-28). `configure/1`
+mutates global settings, so an `async: true` test using it races every other async test and makes
+the whole suite non-deterministic. Prefer process-scoped `Dspy.context/2` (which propagates into
+spawned work since v0.3.44) and keep `async: true`; where global configuration is genuinely
+needed, mark the file `async: false`. Observed: three new `async: true` files calling `configure/1`
+turned the suite flaky at **1, 85, 0 and 3 failures across four runs of an unchanged tree**;
+after the fix, 10 consecutive clean runs.
+
+**Flaky is worse than failing**, and a flake is never "pre-existing and unrelated" until proven:
+a green run proves nothing on its own. When a failure count cannot be reproduced, **repeat the
+suite** (10+ runs, and under CPU load for timing-sensitive work) before believing either result.
+
 **Never ask a `readonly` worker for a report file** (2026-09-28). Read-only mode blocks writes,
 so a brief demanding "write the report to `<path>` AND to the terminal" is only half-satisfiable
 and the worker has to report the contradiction instead of doing the work. A read-only reviewer's
