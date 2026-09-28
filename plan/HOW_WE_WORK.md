@@ -21,6 +21,7 @@ Slice mechanics/gates: `plan/SLICE_LOOP.md`. Backlog: `plan/current/PARITY_QUEUE
 | Outside reviewer | fresh readonly agent by Horst, or Greta | ONE independent verdict on the final diff | being briefed by the sub-team |
 
 **Horst and Greta coordinate, decide, review and accept — they do not do the legwork** (user, 2026-09-28). Investigations, log digging, reproductions, docker runs, CI/tooling fixes, audits and mechanical edits go to a sub-agent with a brief; the lead reads the report and verifies selectively.
+**Test-evidence rule:** a test counts only if it goes through the library's public entry point; mirror tests (re-implementing the logic in the test) or source greps are not evidence (lesson H0b-1, 2026-09-28: 6 of 10 sites 'proven' by mirror tests; Greta's BLOCK).
 **Evidence rule:** every sub-agent claim ships with the raw command + a saved log path; no log = unverified (lesson 2026-09-28: a scout reported non-matching CVE ids and called a logged-in-chat result 'not reproducible'). Leads save their own logs too.
 **Every sub-agent runs in its own herdr pane** via the `sub-agent-herdr-supervisor` scripts (`herdr-start-subagent.sh --mode readonly|editable`, await, report file, close). No `nohup`/background `pi -p` runs: they can't be watched, prompted or closed, and fail silently (observed 2026-09-26: 6 phase-B scouts produced empty output). Read-only scouts use `--mode readonly`, never `--tools bash`.
 Depth max: Horst → controller → members. Launcher owns and closes panes. One lib-editing sub-team at a time (shared working tree + `_build`).
