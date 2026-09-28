@@ -57,6 +57,12 @@ Version numbers show the milestone: M1 = v0.4.x, M2 = v0.5.x, … M6 = v0.9.x (d
 | v0.3.43 | `Dspy.MultiChainComparison`: compare several reasoning attempts, pick the best |
 | v0.3.44 | Settings from `Dspy.context` now also apply inside background work (evaluation, optimizers, tools) |
 
+## Incident 2026-09-28 (fixed)
+- The automatic checks on GitHub (CI) had been **red since v0.3.42** without anyone noticing: one test file didn't compile on the older Elixir version CI uses (1.19), so CI ran no tests at all. Locally (Elixir 1.20) everything was green.
+- **Your released library code was not affected** — the library compiles cleanly on 1.19; it was a test-file ordering bug. Fixed; CI is green again, all 453 tests pass on the CI version.
+- Also: two of my plan commits accidentally included unfinished team code; removed from main within the hour, nothing released with it.
+- Prevention: every release is now checked on the exact CI version first (`scripts/ci_docker.sh`), and CI must be green before a release counts as done.
+
 ## 6. Waiting for you (3 questions, one note — 2026-09-28)
 1. **Wider reach of "stop after 10 errors" (correction):** I told you it affects 4 optimizers; it is **6** — COPRO and GEPA also run evaluations internally. Same decision, just more places. OK?
 2. **Metric returns something that isn't a score** (e.g. `nil` or text): we count it as a failed example (score 0). Python has no such check — it crashes later with a type error. Ours is friendlier but *differs from Python*. OK, or strictly like Python?

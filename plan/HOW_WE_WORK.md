@@ -52,7 +52,8 @@ Groundwork for (a)/(d) is done by Greta's readonly scouts; Horst drafts contract
 - **Never `git commit -a` / `-am`.** Always `git add <named paths>` then `git commit`; check `git show --stat HEAD` before push. (2026-09-28: two plan-only commits swept a team's unreviewed lib WIP into main; reverted in 4c66d54.)
 - While a team is editing, the lead commits plan/doc paths only.
 - **CI is a release gate:** after every push, `gh run watch` / `gh run list -L 1`; a release is not done until CI is green. Red CI blocks the next release.
-- **Elixir version gap:** CI runs OTP 28.0 / Elixir 1.19.5 (`.github/workflows/ci.yml`); local is newer. Gates must also pass on the CI version (docker `hexpm/elixir` image) before release.
+- **Toolchain gap:** CI runs OTP 28.0 / Elixir 1.19.5; local is OTP 29 / Elixir 1.20. Release step: commit locally by path → `scripts/ci_docker.sh HEAD` (exact CI job in docker, committed state only) must print `ALL STEPS GREEN` → push → `gh run watch` green. No `.tool-versions` pin: no version manager on this machine, so the docker script is the real gate.
+- Open gap: mix.exs declares `elixir: "~> 1.18"` but only 1.19.5 is tested (decide: add 1.18 to CI matrix or raise the floor).
 
 ## Versioning (user decision 2026-09-28)
 - One **minor** version per milestone: M1 → v0.4.x, M2 → v0.5.x, M3 → v0.6.x, M4 → v0.7.x, M5 → v0.8.x, M6 → v0.9.x.
