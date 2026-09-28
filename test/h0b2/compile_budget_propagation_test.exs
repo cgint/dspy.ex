@@ -32,6 +32,11 @@ defmodule DspyTelepromptH0b2BudgetPropagatesTest do
   # `MaxErrorsExceeded` inside the optimizer's candidate task.
   defp always_raise_metric, do: fn _example, _prediction -> raise "metric always fails" end
 
+  # Q2 (H0b-2): a metric that ALWAYS returns a non-number (non-boolean).
+  # `evaluate/4` raises `Dspy.Evaluate.InvalidMetricResult` inside the
+  # optimizer's candidate task — the optimizer must surface it to `compile/3`.
+  defp invalid_metric, do: fn _example, _prediction -> "not a number" end
+
   # ---------------------------------------------------------------------------
   # SIMBA
   # ---------------------------------------------------------------------------
@@ -166,5 +171,132 @@ defmodule DspyTelepromptH0b2BudgetPropagatesTest do
         Dspy.Teleprompt.compile(teleprompt, program, trainset)
       end
     end)
+  end
+
+  # ---------------------------------------------------------------------------
+  # Q2 (H0b-2): InvalidMetricResult propagation
+  # ---------------------------------------------------------------------------
+
+  @tag :h0b2_simba_invalid_metric
+  test "SIMBA compile/3 raises InvalidMetricResult when a candidate evaluation sees a non-number metric result" do
+    # Design: the metric returns 1.0 for the first K calls (baseline +
+    # current_score evaluates), then returns a string (invalid) for all
+    # subsequent calls (candidate scoring). With bsize=2, the baseline and
+    # current_score evaluates use 2*bsize=4 calls each (2 seeded batches of
+    # 2 examples), so K = 4 makes the FIRST candidate-scoring call invalid.
+    # The InvalidMetricResult must surface from the candidate stream, not the
+    # baseline (which uses valid results).
+    bsize = 2
+    k = 2 * bsize
+
+    lm = H0b2.Support.ScriptedLM.new([fn -> ~s({"answer": "a0"}) end])
+    Dspy.configure(lm: lm)
+
+    program = Dspy.Predict.new(H0b2QA)
+
+    trainset =
+      for i <- 1..10, do: Example.new(%{question: "q#{i}", answer: "a#{rem(i, 2)}"})
+
+    # Counter metric: 1.0 for calls #1..#K, "not a number" afterwards.
+    {metric, counter_pid} = H0b2.Support.counter_metric_invalid(k)
+
+    teleprompt =
+      Dspy.Teleprompt.SIMBA.new(
+        metric: metric,
+        bsize: bsize,
+        num_candidates: 2,
+        num_threads: 1,
+        max_steps: 1,
+        max_demos: 1,
+        seed: 42,
+        verbose: false,
+        candidate_strategies: [:append_demos]
+      )
+
+    error =
+      assert_raise Dspy.Evaluate.InvalidMetricResult, fn ->
+        Dspy.Teleprompt.compile(teleprompt, program, trainset)
+      end
+
+    assert error.value == "not a number"
+
+    # Sanity: candidate scoring must have actually RUN — the metric was
+    # called more than K times.
+    total_calls = Agent.get_and_update(counter_pid, fn c -> {c, c} end)
+
+    assert total_calls > k,
+           "expected candidate scoring to run (metric calls > #{k}), got #{total_calls}"
+  end
+
+  # ---------------------------------------------------------------------------
+  # ENSEMBLE
+  # ---------------------------------------------------------------------------
+
+  @tag :h0b2_ensemble_invalid_metric
+  test "Ensemble compile/3 raises InvalidMetricResult when a member weight evaluation sees a non-number metric result" do
+    # Configure an LM so the member forward calls succeed and the metric is
+    # actually called (otherwise forward failures short-circuit before the
+    # metric runs and no InvalidMetricResult is raised).
+    lm = H0b2.Support.ScriptedLM.new([fn -> ~s({"answer": "a0"}) end])
+    Dspy.configure(lm: lm)
+
+    program = Dspy.Predict.new(H0b2QA)
+
+    trainset =
+      for i <- 1..12, do: Example.new(%{question: "q#{i}", answer: "a#{rem(i, 2)}"})
+
+    teleprompt =
+      Dspy.Teleprompt.Ensemble.new(
+        size: 2,
+        combination_strategy: :weighted_average,
+        base_teleprompt: :labeled_few_shot,
+        base_teleprompt_config: [metric: invalid_metric()],
+        diversity_strategy: :different_configs,
+        validation_split: 0.25,
+        seed: 42,
+        verbose: false
+      )
+
+    error =
+      assert_raise Dspy.Evaluate.InvalidMetricResult, fn ->
+        Dspy.Teleprompt.compile(teleprompt, program, trainset)
+      end
+
+    assert error.value == "not a number"
+  end
+
+  # ---------------------------------------------------------------------------
+  # BOOTSTRAP FEW SHOT
+  # ---------------------------------------------------------------------------
+
+  @tag :h0b2_bootstrap_invalid_metric
+  test "BootstrapFewShot compile/3 raises InvalidMetricResult when candidate selection sees a non-number metric result" do
+    # Configure an LM so the candidate forward calls succeed and the metric is
+    # actually called.
+    lm = H0b2.Support.ScriptedLM.new([fn -> ~s({"answer": "a0"}) end])
+    Dspy.configure(lm: lm)
+
+    program = Dspy.Predict.new(H0b2QA)
+
+    trainset =
+      for i <- 1..6, do: Example.new(%{question: "q#{i}", answer: "a#{rem(i, 2)}"})
+
+    teleprompt =
+      Dspy.Teleprompt.BootstrapFewShot.new(
+        metric: invalid_metric(),
+        max_bootstrapped_demos: 1,
+        max_labeled_demos: 1,
+        max_rounds: 1,
+        num_candidate_programs: 2,
+        seed: 42,
+        verbose: false
+      )
+
+    error =
+      assert_raise Dspy.Evaluate.InvalidMetricResult, fn ->
+        Dspy.Teleprompt.compile(teleprompt, program, trainset)
+      end
+
+    assert error.value == "not a number"
   end
 end

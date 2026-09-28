@@ -573,7 +573,7 @@ defmodule H0b.S2SiteTest do
 
       exit_clause =
         content
-        |> String.split(":exit, reason -> {:error, {:exit, reason}}")
+        |> String.split(~r/:exit, reason ->\s*\n?\s*\{:error, \{:exit, reason\}\}/)
         |> length()
         |> Kernel.-(1)
 

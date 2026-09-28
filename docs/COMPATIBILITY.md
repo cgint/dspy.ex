@@ -79,16 +79,16 @@ Evidence:
 - **`failure_score` option** (default `0.0`): a failed example is scored `failure_score` and **included in the mean** (`scores` is always index-aligned with the testset; failures hold `failure_score`, never nil).
 - **Error budget (upstream `>=`)**: when the failure count reaches `max_errors`, pending item tasks are killed and `Dspy.Evaluate.MaxErrorsExceeded` (fields `:errors`, `:max_errors`, `:completed`) is raised.
 - **Boolean metrics** (B1): `run_metric` maps `true → 1.0`, `false → 0.0` (Python bool arithmetic). Boolean results do NOT count as failures.
-- **Non-number, non-boolean metric results** (Q2): counted as a failed example — score `failure_score` (0.0), `items[i].error = {:metric_error, :invalid_score}`, counted toward `max_errors`. *Deviation from upstream:* upstream raises a `TypeError` in `sum()` and kills the whole evaluation; we count a per-example failure instead (gentler, recoverable).
+- **Non-number, non-boolean metric results** (Q2): `evaluate/4` raises `Dspy.Evaluate.InvalidMetricResult` (fields `:value`, `:example_index`; message includes an `inspect/1` of the value and the example index). *Same outcome as Python (raise):* upstream crashes with a `TypeError` in `sum()` after all LM calls have completed; we raise earlier — at the first bad result. The raise must not be swallowed: it crosses the per-example `Task` boundary as a tagged value and is re-raised by the stream consumer (a raising metric still scores `failure_score`, which is a separate failure). *Only at the aggregation:* the shared `run_metric/3` still passes non-numeric results through unchanged, so bootstrap/mipro keep "non-numeric is not a hit" (upstream bootstrap treats `nil` as no hit).
 - **Empty testset** (Q3): `evaluate/4` raises `ArgumentError, "devset must contain at least one example"` (upstream `evaluate.py:157-158`). Internal callers (simba, mipro, copro, gepa, bootstrap, ensemble) all validate their trainset first and cannot pass `[]`. The Ensemble additionally guards against an empty validation split (which can occur for very small trainsets) by using equal member weights and logging a warning, rather than calling `Evaluate.evaluate/4` with `[]`.
-- **Optimizers propagate `MaxErrorsExceeded`** (Q1): simba, ensemble, and bootstrap re-raise it from their candidate/weight/selection streams; `compile/3` surfaces it to the caller.
+- **Optimizers propagate `MaxErrorsExceeded` and `InvalidMetricResult`** (Q1/Q2): simba, ensemble, and bootstrap re-raise both from their candidate/weight/selection streams (tagged value, re-raise after the stream, exactly like the budget raise); `compile/3` surfaces them to the caller.
 
 Evidence:
 - `test/h0b2/evaluate_failure_score_test.exs` — D-U1/D1/D4/B1 scoring
 - `test/h0b2/evaluate_max_errors_test.exs` — D2/E5 budget + kill evidence
 - `test/h0b2/settings_max_errors_test.exs` — default + override
-- `test/h0b2/compile_budget_propagation_test.exs` — Q1 optimizer re-raise (simba/ensemble/bootstrap)
-- `test/h0b2/evaluate_invalid_metric_test.exs` — Q2 invalid metric
+- `test/h0b2/compile_budget_propagation_test.exs` — Q1/Q2 optimizer re-raise (simba/ensemble/bootstrap)
+- `test/h0b2/evaluate_invalid_metric_test.exs` — Q2 invalid metric (raise on nil/text/map; bool OK; raising metric still 0.0)
 - `test/h0b2/evaluate_empty_devset_test.exs` — Q3 empty devset
 
 ## Quick mapping examples (proven)

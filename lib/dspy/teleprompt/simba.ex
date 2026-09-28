@@ -180,6 +180,12 @@ defmodule Dspy.Teleprompt.SIMBA do
               e in Dspy.Evaluate.MaxErrorsExceeded ->
                 {:budget_exceeded, e}
 
+              # Q2 (H0b-2): a child whose evaluation saw a non-numeric metric
+              # result raises `InvalidMetricResult`. Tag it so the caller
+              # re-raises it after the stream (TRAP 2: must not be skipped).
+              e in Dspy.Evaluate.InvalidMetricResult ->
+                {:invalid_metric_result, e.value, e.example_index}
+
               e ->
                 {:error, {:raised, e}}
             catch
@@ -192,26 +198,36 @@ defmodule Dspy.Teleprompt.SIMBA do
         timeout: 60_000,
         on_timeout: :kill_task
       )
-      |> Enum.reduce_while({[], nil}, fn element, {acc, budget_raise} ->
+      |> Enum.reduce_while({[], nil, nil}, fn element, {acc, budget_raise, invalid_raise} ->
         case element do
           {:ok, {:ok, x}} ->
-            {:cont, {[x | acc], budget_raise}}
+            {:cont, {[x | acc], budget_raise, invalid_raise}}
 
           # A child that hit the budget: collect the exception and stop consuming.
           {:ok, {:budget_exceeded, e}} ->
-            {:halt, {acc, e}}
+            {:halt, {acc, e, invalid_raise}}
+
+          # Q2 (H0b-2): a child saw an invalid metric result: stop consuming.
+          {:ok, {:invalid_metric_result, value, example_index}} ->
+            {:halt, {acc, budget_raise, {value, example_index}}}
 
           # Any other failure: skip this candidate.
           _ ->
-            {:cont, {acc, budget_raise}}
+            {:cont, {acc, budget_raise, invalid_raise}}
         end
       end)
       |> case do
-        {_results, %Dspy.Evaluate.MaxErrorsExceeded{} = e} ->
+        {_results, %Dspy.Evaluate.MaxErrorsExceeded{} = e, _} ->
           # Re-raise the budget exception to the caller of `compile/3`.
           raise e
 
-        {results, nil} ->
+        {_results, _, {value, example_index}} ->
+          # Q2: re-raise the invalid metric result to the caller of `compile/3`.
+          raise Dspy.Evaluate.InvalidMetricResult,
+            value: value,
+            example_index: example_index
+
+        {results, nil, nil} ->
           # No budget exception: pick the best candidate.
           case Enum.reverse(results) do
             [] -> {program, current_score}

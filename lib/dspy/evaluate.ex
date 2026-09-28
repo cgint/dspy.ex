@@ -30,6 +30,11 @@ defmodule Dspy.Evaluate do
           | {:exception, %{type: module(), message: String.t()}}
           | {:caught, term(), term()}
 
+  # NOTE: `:error` from `Dspy.Teleprompt.run_metric/3` (a metric that raised)
+  # scores `failure_score` with `error: nil` (D-U1); it is NOT an item error.
+  # Q2 (H0b-2): a non-numeric, non-boolean metric result raises
+  # `Dspy.Evaluate.InvalidMetricResult` (it never reaches an item).
+
   @type evaluation_item :: %{
           example: Example.t(),
           prediction: Prediction.t() | nil,
@@ -135,10 +140,32 @@ defmodule Dspy.Evaluate do
     _consumer =
       spawn_link(fn ->
         testset
+        |> Enum.with_index()
         |> Task.async_stream(
-          fn example ->
+          fn {example, index} ->
             Dspy.Context.with_context(ctx, fn ->
-              evaluate_item(program, example, metric_fn, failure_score)
+              try do
+                evaluate_item(program, example, metric_fn, failure_score, index)
+              catch
+                # A raising metric (D-U1) must stay a failed example
+                # (`failure_score`, counted toward `max_errors`) — not a hard
+                # error. Rebuild the failure item here, outside the per-example
+                # task, so `Task.async_stream` sees a `{:ok, item}` element.
+                {:metric_raised, :error} ->
+                  %{
+                    example: example,
+                    prediction: nil,
+                    score: failure_score,
+                    error: {:metric_error, :raised}
+                  }
+
+                # Q2 (H0b-2): a non-numeric / non-boolean metric result must
+                # not be swallowed by `Task` (which would convert an uncaught
+                # throw to `{:exit, {:nocatch, _}}`). Return a tagged value so
+                # the stream consumer can re-raise it (TRAP 2).
+                {:invalid_metric_result, value, example_index} ->
+                  {:invalid_metric_result, value, example_index}
+              end
             end)
           end,
           max_concurrency: num_threads,
@@ -148,14 +175,25 @@ defmodule Dspy.Evaluate do
         |> Enum.reduce_while(
           {[], 0},
           fn element, {acc, failures} ->
-            {item, failed?} = map_stream_element(element, failure_score)
-            failures = failures + if(failed?, do: 1, else: 0)
+            case map_stream_element(element, failure_score) do
+              {:invalid_metric_result, value, example_index} ->
+                # Q2 (H0b-2): a non-numeric, non-boolean metric result is a
+                # caller error, not a per-example failure — it must never be
+                # counted toward the budget or turned into a failed 0.0. Send
+                # the tagged value to the caller and exit :normal (killing the
+                # stream and any pending item tasks, as for MaxErrorsExceeded).
+                send(caller, {:invalid_metric_result, value, example_index})
+                exit(:normal)
 
-            if failed? and failures >= max_errors do
-              send(caller, {:abort, failures, length(acc) + 1})
-              exit(:normal)
-            else
-              {:cont, {[item | acc], failures}}
+              {item, failed?} ->
+                failures = failures + if(failed?, do: 1, else: 0)
+
+                if failed? and failures >= max_errors do
+                  send(caller, {:abort, failures, length(acc) + 1})
+                  exit(:normal)
+                else
+                  {:cont, {[item | acc], failures}}
+                end
             end
           end
         )
@@ -176,7 +214,25 @@ defmodule Dspy.Evaluate do
           errors: errors,
           max_errors: max_errors,
           completed: completed
+
+      {:invalid_metric_result, value, example_index} ->
+        # Q2: the consumer already exited :normal, which killed the stream and
+        # all pending item tasks. Raise the invalid metric result to the
+        # caller (TRAP 2).
+        raise Dspy.Evaluate.InvalidMetricResult,
+          value: value,
+          example_index: example_index
     end
+  end
+
+  # Q2 (H0b-2): a child whose metric result was non-numeric / non-boolean
+  # returns a tagged value (caught in the stream function) instead of raising
+  # inside the task. Propagate it as-is so the consumer re-raises
+  # `Dspy.Evaluate.InvalidMetricResult` (TRAP 2: it must not be counted as a
+  # failure or swallowed by `Task`). Must be matched BEFORE the general
+  # `{:ok, item}` clause (which would treat the tagged tuple as an item).
+  defp map_stream_element({:ok, {:invalid_metric_result, value, example_index}}, _failure_score) do
+    {:invalid_metric_result, value, example_index}
   end
 
   defp map_stream_element({:ok, item}, _failure_score) do
@@ -379,47 +435,79 @@ defmodule Dspy.Evaluate do
   # Run a single example: forward + metric, with a per-example catch-all (the
   # H0b-1 child catch-all, now in the per-item task body). Any failure shape
   # scores `failure_score` (D-U1); `predictions[i]` stays nil on failure (D4).
-  defp evaluate_item(program, example, metric_fn, failure_score) do
-    try do
-      case Module.forward(program, Example.inputs(example)) do
-        {:ok, prediction} ->
-          case Dspy.Teleprompt.run_metric(metric_fn, example, prediction) do
-            score when is_number(score) ->
-              %{example: example, prediction: prediction, score: score, error: nil}
-
-            :error ->
-              %{
-                example: example,
-                prediction: prediction,
-                score: failure_score,
-                error: {:metric_error, :invalid_score}
-              }
-          end
-
-        {:error, reason} ->
+  #
+  # Q2 (H0b-2): a metric result that is neither a number nor a boolean
+  # raises `Dspy.Evaluate.InvalidMetricResult` (via a tagged `throw`) BEFORE
+  # the per-example catch-all sees it, so it can never be turned into a
+  # failed 0.0. The tagged value crosses the `Task.async_stream` boundary as
+  # `{:exit, {:invalid_metric_result, _}}`, which the stream consumer
+  # re-raises (TRAP 2). A *raising* metric is a separate case: `run_metric`
+  # returns `:error`, which throws `{:metric_raised, _}` and is rebuilt as a
+  # failed example at the stream boundary (D-U1, unchanged).
+  defp evaluate_item(program, example, metric_fn, failure_score, example_index) do
+    # Forward (and any forward failure) stays inside the per-example catch-all
+    # (H0b-1). The metric result is validated OUTSIDE it, below, so a
+    # non-numeric / non-boolean result can never be turned into a failed 0.0
+    # (Q2, TRAP 2).
+    result =
+      try do
+        Module.forward(program, Example.inputs(example))
+      rescue
+        e ->
           %{
             example: example,
             prediction: nil,
             score: failure_score,
-            error: {:forward_error, reason}
+            error: {:exception, %{type: e.__struct__, message: Exception.message(e)}}
+          }
+      catch
+        kind, reason ->
+          %{
+            example: example,
+            prediction: nil,
+            score: failure_score,
+            error: {:caught, kind, reason}
           }
       end
-    rescue
-      e ->
+
+    case result do
+      {:ok, prediction} ->
+        score =
+          Dspy.Teleprompt.run_metric(metric_fn, example, prediction)
+          |> validate_metric_score(example_index)
+
+        %{example: example, prediction: prediction, score: score, error: nil}
+
+      {:error, reason} ->
         %{
           example: example,
           prediction: nil,
           score: failure_score,
-          error: {:exception, %{type: e.__struct__, message: Exception.message(e)}}
+          error: {:forward_error, reason}
         }
-    catch
-      kind, reason ->
-        %{
-          example: example,
-          prediction: nil,
-          score: failure_score,
-          error: {:caught, kind, reason}
-        }
+
+      %{} = failure_item ->
+        failure_item
+    end
+  end
+
+  # `run_metric` returns boolean/number results normalized to a number,
+  # `:error` when the metric raised (a failed example, D-U1), and anything
+  # else untouched. A non-number, non-boolean result is invalid: upstream
+  # 3.4.0 crashes with a `TypeError` in `sum()` after all LM calls (probe
+  # `tmp/pyck/ck.py`); we raise earlier, at the first bad result.
+  defp validate_metric_score(score, example_index) do
+    if is_number(score) do
+      score
+    else
+      # `:error` (a raising metric) is a per-example failure (D-U1) — it must
+      # NOT be treated as an invalid result. Everything else (nil, text, map,
+      # atoms, ...) is invalid.
+      if score == :error do
+        throw({:metric_raised, :error})
+      else
+        throw({:invalid_metric_result, score, example_index})
+      end
     end
   end
 

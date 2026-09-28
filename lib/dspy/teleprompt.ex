@@ -146,10 +146,16 @@ defmodule Dspy.Teleprompt do
 
   ## Returns
 
-  Numeric score or `:error`
+  Numeric score (boolean results normalized to 1.0/0.0) or `:error` when
+  the metric raised. Non-numeric, non-boolean results are returned as-is:
+  callers that need the upstream raise-on-invalid-score behaviour must
+  check for them themselves (Q2, H0b-2 — Evaluate raises
+  `Dspy.Evaluate.InvalidMetricResult`; bootstrap/mipro treat them as
+  "no hit").
 
   """
-  @spec run_metric(metric_fun(), Example.t(), Dspy.Prediction.t()) :: number() | :error
+  @spec run_metric(metric_fun(), Example.t(), Dspy.Prediction.t()) ::
+          number() | term() | :error
   def run_metric(metric, example, prediction) do
     if is_function(metric, 2) do
       run_metric_arity2(metric, example, prediction)
@@ -176,9 +182,11 @@ defmodule Dspy.Teleprompt do
 
   # Boolean metric results map to 1.0 / 0.0 (Python bool arithmetic,
   # upstream `evaluate.py:183` — Python sums `True`/`False` as 1/0). Anything
-  # else that is not a number is `:error` (a failed metric run).
+  # else is passed through unchanged: `Evaluate` raises
+  # `Dspy.Evaluate.InvalidMetricResult` on it (Q2, H0b-2), while
+  # bootstrap/mipro treat a non-number as "no hit" (upstream bootstrap
+  # treats `nil` as "no hit").
   defp normalize_score(true), do: 1.0
   defp normalize_score(false), do: 0.0
-  defp normalize_score(score) when is_number(score), do: score
-  defp normalize_score(_), do: :error
+  defp normalize_score(score), do: score
 end

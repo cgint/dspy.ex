@@ -137,6 +137,26 @@ defmodule H0b2.Support do
     {metric, pid}
   end
 
+  # Q2 (H0b-2): a metric that returns 1.0 for the first `pass_calls` calls,
+  # then "not a number" (an invalid result) for all subsequent calls. Used to
+  # target the candidate-scoring path specifically (the first K calls are
+  # baseline/current_score, which use valid results).
+  def counter_metric_invalid(pass_calls) do
+    {:ok, pid} = Agent.start_link(fn -> 0 end)
+
+    metric = fn _example, _prediction ->
+      n = Agent.get_and_update(pid, fn c -> {c, c + 1} end)
+
+      if n < pass_calls do
+        1.0
+      else
+        "not a number"
+      end
+    end
+
+    {metric, pid}
+  end
+
   # A scripted LM whose `generate/2` answer depends on the call sequence.
   #
   # Each `fn` in the script is 0-arity and MUST return the text content of
