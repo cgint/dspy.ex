@@ -48,6 +48,12 @@ Lesson (H0): an unpinned API shape ("run in a child") let a nested-spawn design 
 - **(f) Evidence**: `proposal.md` records `Clarity Gate: Horst ✓ <date> / Greta ✓ <date>`. No controller launch without both.
 Groundwork for (a)/(d) is done by Greta's readonly scouts; Horst drafts contract + team card from her verified findings package.
 
+## Commit + CI hygiene (lesson 2026-09-28)
+- **Never `git commit -a` / `-am`.** Always `git add <named paths>` then `git commit`; check `git show --stat HEAD` before push. (2026-09-28: two plan-only commits swept a team's unreviewed lib WIP into main; reverted in 4c66d54.)
+- While a team is editing, the lead commits plan/doc paths only.
+- **CI is a release gate:** after every push, `gh run watch` / `gh run list -L 1`; a release is not done until CI is green. Red CI blocks the next release.
+- **Elixir version gap:** CI runs OTP 28.0 / Elixir 1.19.5 (`.github/workflows/ci.yml`); local is newer. Gates must also pass on the CI version (docker `hexpm/elixir` image) before release.
+
 ## Versioning (user decision 2026-09-28)
 - One **minor** version per milestone: M1 → v0.4.x, M2 → v0.5.x, M3 → v0.6.x, M4 → v0.7.x, M5 → v0.8.x, M6 → v0.9.x.
 - Each slice within a milestone = a **patch** release (v0.4.1, v0.4.2, …). The first slice of a milestone opens the minor (v0.4.0).
