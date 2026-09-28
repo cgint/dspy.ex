@@ -248,8 +248,14 @@ defmodule Dspy.LM.LiteLLM do
       {:ok, %Req.Response{status: status, body: error_body}} ->
         {:error, "API request failed with status #{status}: #{error_message(error_body)}"}
 
-      {:error, %Req.TransportError{reason: reason}} ->
-        {:error, "Network error: #{reason}"}
+      {:error, %Req.TransportError{} = error} ->
+        {:error, "Network error: " <> Exception.message(error)}
+
+      # Safety net: Req raises/returns exceptions for unexpected failures;
+      # keep the public shape a plain error tuple (never crash on odd reasons,
+      # e.g. {:tls_alert, _} tuples).
+      {:error, error} when is_exception(error) ->
+        {:error, "Request failed: " <> Exception.message(error)}
     end
   end
 

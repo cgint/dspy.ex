@@ -34,7 +34,12 @@ defmodule DspyExtras.MixProject do
       {:phoenix_html, "~> 4.0"},
       {:phoenix_pubsub, "~> 2.1"},
       {:plug_cowboy, "~> 2.7"},
-      {:gen_stage, "~> 1.2"}
+      {:gen_stage, "~> 1.2"},
+
+      # Optional services use Req directly (Dspy.LM.LiteLLM).
+      # Declared directly (not only transitively via :dspy) so the floor
+      # tracks the advisory-fixed line, mirroring the root project's SEC floors.
+      {:req, ">= 0.6.1 and < 1.0.0"}
     ]
   end
 end
