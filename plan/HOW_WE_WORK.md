@@ -34,6 +34,16 @@ never infer state from a terminal spinner. Prompting goes through `herdr_prompt_
 `sleep 150`/`240`/`280` around a backgrounded await. It burns tokens, adds uncontrolled latency,
 and yields strictly less information than one blocking call. Applies to Horst and Greta equally.
 
+**"Pre-existing" is a claim that must be proven, never an assumption** (2026-09-28). A failure is
+*yours* until you show otherwise, and the only proof is a diff against the baseline recorded in
+the slice's Phase A report, or stashing the change and re-running. Observed: a worker saw 84
+full-suite failures, labelled them "pre-existing and unrelated", and carried on — while the
+recorded baseline was 0 failures and an independent run of the same tree showed 533 passed / 0
+failures. The tree was fine; the reasoning was not, and that reasoning at a final gate ships a
+false claim. Corollaries: a full-suite run taken **while a mutation is applied is meaningless** —
+restore first, then measure; every reported test count must state which state the tree was in;
+and an unexplained failure count is a **stop-and-report**, never a footnote.
+
 **Never call `ExUnit.run()` inside a file you launch with `mix test`** (2026-09-28). `mix test`
 already starts and runs ExUnit; the explicit second run blocks forever, and `--timeout` does not
 help because the hang is outside any test case. Either put the module in a real file under
