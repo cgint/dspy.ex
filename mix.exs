@@ -50,6 +50,8 @@ defmodule Dspy.MixProject do
       # NOTE (req >= 0.6.0): automatic response archive/compressed decoding was
       # removed and auto-decompression is off — both are opt-in (`decoders:`,
       # `compressed: true`). :dspy itself never relies on either.
+      # REMOVE these three direct deps once req_llm/finch themselves require the
+      # fixed versions (lib/ calls none of Req/Mint/HPAX directly).
       {:req, ">= 0.6.1 and < 1.0.0"},
       {:mint, ">= 1.11.0 and < 2.0.0"},
       {:hpax, ">= 1.1.0 and < 2.0.0"}
