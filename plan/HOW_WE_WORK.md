@@ -47,6 +47,9 @@ Lesson (H0): an unpinned API shape ("run in a child") let a nested-spawn design 
 - **(f) Evidence**: `proposal.md` records `Clarity Gate: Horst ✓ <date> / Greta ✓ <date>`. No controller launch without both.
 Groundwork for (a)/(d) is done by Greta's readonly scouts; Horst drafts contract + team card from her verified findings package.
 
+## Human dashboard
+Horst updates `plan/00_NOW.md` at every slice acceptance/release and whenever a decision waits for the user (one page, no history).
+
 ## Review checklist
 - **No Python runtime** (Pythonx, snakepit/DSPex, erlport, `System.cmd("python"...)`) added anywhere without explicit user approval — BLOCK (user decision 2026-09-26). (controller + outside reviewer)
 - Each key test proven able to fail (break one impl line → red). Mutations are reverted; `git diff`/shasum after the proof shows no residue; report lists each mutation (file:line) and which test went red.

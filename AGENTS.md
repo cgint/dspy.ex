@@ -12,6 +12,7 @@ Treat `AGENTS.md` as the only repo-specific information that may be available wh
 When important information is learned, **write it down** in the right durable place (`agent/`, `plan/`, `docs/`, or `openspec/`). Do not rely on chat memory.
 
 ## Start here (reading order)
+0. `plan/00_NOW.md` — one-page current plan + status (human dashboard); `plan/README.md` classifies every plan file as LIVE / REFERENCE / SNAPSHOT / SUPERSEDED.
 1. `agent/USER.md` — explicit user preferences and collaboration instructions.
 2. `agent/SOUL.md` — the assistant’s stable operating principles and learned habits.
 3. `agent/MEMORY.md` — compact context window (decisions + “how to resume quickly”).
