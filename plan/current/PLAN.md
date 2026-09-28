@@ -2,7 +2,7 @@
 
 | Target | Symbols done/total (facet %) | Phase | Next | Updated |
 |---|---|---|---|---|
-| Python DSPy **3.4.0** (`2413b67a4d`) | 37/150 in scope (25%; ~32% w/ partial=½); 10 n/a pending user | A + C | Milestone cut (phase C); H0b | 2026-09-26 |
+| Python DSPy **3.4.0** (`2413b67a4d`) | 32/150 in scope (21%; ~30% w/ partial=½; corrected from 37); 10 n/a pending user | A + C | Milestone cut (phase C); H0b | 2026-09-26 |
 
 Status: **v2 — agreed Horst + Greta 2026-09-26** (risk noted by Greta: medium-value "done" rows judged at symbol level may overstate; the checker pass re-verifies all done/n-a rows). Detail: enough to steer and measure; each slice gets its own contract (Clarity Gate).
 Current position lives in `00_NOW.md` (single source; not repeated here).

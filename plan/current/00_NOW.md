@@ -11,15 +11,16 @@ Python DSPy 3.4.0 has **160 public features**. Of those, 10 are Python-only (we 
 
 | Status | Count | Meaning |
 |---|---|---|
-| done | 18 | same behavior as Python, pinned by a test |
+| done | 13 | same behavior as Python, pinned by a test |
 | done, Elixir-style | 19 | same capability, shaped the Elixir way |
-| partial | 22 | exists, but options or behaviors are missing |
+| partial | 27 | exists, but options or behaviors are missing |
 | missing | 91 | not there |
 
-**→ 37 of 150 done (25%); about 32% if partials count half.**
-- **Core is strong, breadth is weak:** the important everyday features (signatures, Predict, ChainOfThought, adapters, LM calls) are done or partial — none missing. Most of the 91 missing are less-used extras (special optimizers, metrics, helpers).
+**→ 32 of 150 done (21%); about 30% if partials count half.**
+- *Correction 2026-09-26:* first reported as 37 (25%). Greta found 5 core features (`configure`, `Example`, `Module`, `Prediction`, `Signature`) rated done although some of their options are missing → now partial.
+- **Core is strong, breadth is weak:** the important everyday features (signatures, Predict, ChainOfThought, adapters, LM calls) are done or partial — none missing; several still lack some options. Most of the 91 missing are less-used extras (special optimizers, metrics, helpers).
 - **By DSPy release:** of features that existed in DSPy 2.6 we have 28 of 79; of those added in 3.0–3.4 only 9 of 81. The newer DSPy gets, the further behind we are.
-- Checked by: 6 helper agents + a checker (which caught 18 over-optimistic ratings) + Greta + Horst (11 random rows verified by hand).
+- Checked by: 6 helper agents + a checker (which caught 18 over-optimistic ratings; Greta later caught 5 more) + Greta + Horst (11 random rows verified by hand).
 - Details: `GAP_ANALYSIS_3.4.0.md`.
 
 ## 3. How we will get there

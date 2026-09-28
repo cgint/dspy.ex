@@ -3,12 +3,13 @@
 Status: **v1 baseline, Greta 2026-09-26, awaiting Horst sample verification.** The denominator is frozen at **160** symbols; later finds are recorded as "added +n".
 Method: PLAN.md §6. Step-0 script (`plan/research/pi_handoffs/phaseB/step0_symbols.py`) → 6 read-only scouts (B1–B6) → adversarial checker over all 61 done/idiom/na rows → Greta overrides. Raw data: `plan/research/pi_handoffs/phaseB/` (`all_symbols.csv`, `B1..B6.md`, `checker.md`, `inventory_final.csv`, which holds every column, refs and deps).
 
-## Headline
+## Headline (revised in phase C, 2026-09-26)
 | done | idiom | **done+idiom** | partial | missing | n/a |
 |---|---|---|---|---|---|
-| 18 | 19 | **37 / 150 in-scope (25%)** | 22 | 91 | 10 |
+| 13 | 19 | **32 / 150 in-scope (21%)** | 27 | 91 | 10 |
 
-In-scope = 160 − 10 n/a. Counting partial as half gives ≈32%. **The core path is strong:** of the 17 value-H symbols, 9 are done/idiom, 8 are partial and 0 are missing. **Breadth is weak:** 84 of the 91 missing symbols are value-L.
+**Facets** (value-H done/partial symbols only): 24 done + 1 idiom out of 68 classified, which is **37%**. 4 facet rows could not be parsed.
+Revision: five value-H symbols were marked "done" although their own facet rows show gaps. **configure, Example, Module, Prediction and Signature** are moved done→partial by the facet rule. The checker missed this, and so did the first version of this file. Per-area/per-release tables below are **v1** (before this revision; B1 −5 done). The authoritative per-row state is `inventory_final.csv`.
 
 ## Per area
 | Area | total | done | idiom | partial | missing | n/a |
@@ -90,12 +91,50 @@ Open total: 113 items, effort points 225 (S=1, M=2, L=4).
 3. Facets were done only for value-H done/partial rows (amendment). Value-M "done" rows (MIPROv2, COPRO, SIMBA, ReAct) are symbol-level judgements, so parameter gaps there may be understated.
 4. One weak model (qwen3.8-27b) did all scouting. Confidence columns are in the CSV. Horst's 12-row sample is still pending.
 
-## First milestone cut (proposal for phase C, not agreed)
-- **M1 "Evaluation you can trust" (≈2.6 core):** Evaluate full options + EvaluationResult (breaking, batched to the user), metrics (answer_exact_match frac, answer_passage_match, normalize_text public), Predict config/set_lm/reset/dump-load_state, logging toggles. Mostly S/M.
-- **M2 "Production LM" (3.0/3.3):** typed LM error family + is_retryable + num_retries, configure_cache (disk/size), full callbacks (BaseCallback module/LM/evaluate events), JSONAdapter response_format/repair.
-- **M3 "Agents & multimodal" (3.0/3.1):** Image/Audio/File, ChatAdapter tool-call history, Reasoning, XMLAdapter, TwoStepAdapter constructor, Refine feedback loop.
-- **M4 "Streaming" (3.0):** streamify, StreamListener, StatusMessage.
-- **M5 "Optimizers+" :** GEPA (real), BootstrapRS alias/random search, KNNFewShot, BootstrapFinetune(?); **M6 "3.3/3.4 surface":** lm15, Flex, interpreters, experimental — scope decisions needed.
+
+## Phase C v1 — value re-rating + milestones (Greta draft 2026-09-26, NOT agreed)
+
+### Value re-rating (fixes caveat 1)
+The rule is mechanical and applies only to partial/missing rows (`phaseC` columns `docs_hits`, `docs_front` and `api_nav` in the CSV). It counts upstream `docs/` files outside `api/` that mention `dspy.<Sym>` or `Sym(`:
+- **→H** if it appears in at least 2 front docs (getting-started / learn / index / cheatsheet) or in at least 8 docs files.
+- **L→M** if it appears in at least 3 docs files, or is in the API nav with at least 1 docs file.
+
+Result: **36 re-rated.** Examples: streamify, StreamListener, ProgramOfThought, Image, GEPA, BootstrapRS, BootstrapFinetune, majority, load and DataLoader go to **H**; XMLAdapter only reaches **M**, since it appears in 1 docs file. **Reasoning stays L** (0 docs hits), so my earlier guess for it was wrong. The open value mix is now H 24 / M 26 / L 63.
+
+### Milestones (scripted assignment: `plan/research/pi_handoffs/phaseB/phaseC_milestones.py`, column `milestone`)
+| M | Bundle — what a user can do afterwards | open items | value H/M/L | effort pts | depends on | breaking | exit example (runnable, DummyLM/fake provider, + canary green) |
+|---|---|---|---|---|---|---|---|
+| **M1** | **Evaluation you can trust**: Evaluate max_errors/failure_score/provide_traceback/save_as_csv/json/display_table + EvaluationResult; metrics answer_exact_match(frac, lists), answer_passage_match, normalize_text, majority, SemanticF1, CompleteAndGrounded; Dataset/DataLoader (local CSV/JSON only) | 10 | 4/5/1 | 17 | **H0b-2** (Evaluate crash semantics, D-U1/D-U2) | EvaluationResult | load a CSV with DataLoader → evaluate a CoT program with SemanticF1, max_errors=2, one failing example → failure_score shown, result struct, JSON saved |
+| **M2** | **Programs you can save, inspect, reuse**: Module named_predictors/set_lm/get_lm/batch/**inspect_history (= queue P5)**/dump_state/load_state/save/load (P4); Predict config/reset; Example/Prediction/Signature/configure facet gaps; load_settings; BootstrapRS (P7); Embedder/Embeddings facade | 12 | 8/2/2 | 15 | M1 (BootstrapRS scores via Evaluate) | – | compile with BootstrapRS → save → load in a fresh process → same outputs; `Module.inspect_history` shows only that program's calls |
+| **M3** | **Production LM**: typed LM error family + is_retryable + num_retries; LM facets (copy, dump/load_state, capabilities); configure_cache disk/size (P13); full callbacks BaseCallback/with_callbacks (P8); JSONAdapter response_format/repair; logging toggles | 28 | 5/2/21 | 37 | M2 (LM state in save/load) | – | fake provider returns 429 then 200 → typed error + retry; restart → cache hit; a callback module records module/LM/adapter start/end events |
+| **M4** | **Agents & multimodal**: Adapter options; ChatAdapter tool-call history; Image/Audio/Code/Type/ToolCallResults; TwoStepAdapter ctor; Refine feedback loop; ReActV2; XMLAdapter (P10); Reasoning; Retrieve/Embeddings/ColBERTv2 | 16 | 7/5/4 | 34 | M3 (typed errors, callbacks) | ColBERTv2 | ReAct agent with a tool + image input via ChatAdapter, one Refine round with feedback |
+| **M5** | **Streaming** (P12): streamify, StreamListener, StreamResponse, StatusMessage(+Provider), streaming_response | 7 | 2/2/3 | 16 | M3 callbacks (status messages), M4 adapters | – | stream a field's tokens + status messages from a CoT program (LiveView-consumable) |
+| **M6** | **Optimizers+**: real GEPA (reflection LM, Pareto), KNN + KNNFewShot (P6), BootstrapFinetune, InferRules, BetterTogether, AvatarOptimizer, Optuna | 9 | 2/4/3 | 28 | M1, M2, M3; Optuna = DEP → likely n/a | GEPA | GEPA improves a toy program's metric on DummyLM with a reflection LM; KNNFewShot selects demos by embedding |
+| **M7** | **3.3/3.4 surface + code execution** (scope decisions first): interpreters/ProgramOfThought/CodeAct/RLM (P9, sandbox decision), lm15 provider registry, Flex, experimental types, HF datasets, DummyLM/pretty_print_history | 36 | 1/6/29 | 83 | sandbox decision; M3 | – | per sub-bundle, defined when scoped |
+
+Total open: 118 items (`missing`+`partial`), 230 effort points.
+The order follows dependencies first, then value÷effort. M1+M2 take 32 points and cover 12 of the 24 open value-H items, which is the cheap, high-value core. Almost all 3.4-only items sit in M7, consistent with "3.4.0 parity is the endpoint".
+
+### Breaking items — one batch for the user now (E14)
+1. **EvaluationResult** (M1): `Evaluate` returns a struct instead of today's shape. A compatible path, where the struct keeps the old keys and the old shape is deprecated for 1 minor version, needs checking against the consumer_contract tests.
+2. **GEPA** (M6): options and result shape change (today: a user-supplied `candidates` list).
+3. **ColBERTv2** (M4): the constructor/return shape changes.
+
+### Out-of-denominator finds ("added +n", E3)
+- **+1 BAMLAdapter** (`dspy/adapters/baml_adapter.py:174`): public class, but not exported in `__all__`, so step 0 missed it. The queue has it as P11. Proposal: count it as added +1 (M4).
+
+### PARITY_QUEUE reconciliation
+The queue should be regenerated from milestones once M1..M7 are agreed. Mapping of today's open items:
+- P4 save/load → M2 (S113 + S054 facets)
+- **P5 → M2 as Module facet S054.f7.** The inventory's S028 `dspy.inspect_history` (global) is correctly done. The B1 facet f7 wrongly credited the global function to Module, so Module is now partial.
+- P6 → M6
+- P7 → M2
+- P8 → M3
+- P9 → M7 (sandbox decision)
+- P10 → M4
+- P11 → M4 (+1)
+- P12 → M5
+- P13 → M3
 
 ## Full inventory (refs truncated; full columns in the CSV)
 | id | area | symbol | status | V | E | introduced | score | breaking | dspy.ex ref | gap |
