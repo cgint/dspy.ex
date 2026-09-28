@@ -14,10 +14,16 @@ IMAGE="${CI_DOCKER_IMAGE:-hexpm/elixir:1.19.5-erlang-28.0.4-ubuntu-noble-2026081
 CHECK_FORMAT="${CI_CHECK_FORMAT:-$([ -z "${CI_DOCKER_IMAGE:-}" ] && echo true || echo false)}"
 ROOT="$(git rev-parse --show-toplevel)"
 SHA="$(git -C "$ROOT" rev-parse --short "$REF")"
+# Mount the real object store, not "$ROOT/.git". In a linked worktree `.git` is a
+# *file* pointing into the main repo's .git/worktrees/<name>, which is invisible
+# inside the container and fails with "fatal: not a git repository".
+# --git-common-dir resolves to the shared .git in both a normal checkout and a
+# worktree. (Found 2026-09-28 when a gate run from a worktree could not start.)
+GITDIR="$(git -C "$ROOT" rev-parse --path-format=absolute --git-common-dir)"
 
-echo "ci_docker: ref=$REF ($SHA) image=$IMAGE check_format=$CHECK_FORMAT"
+echo "ci_docker: ref=$REF ($SHA) image=$IMAGE check_format=$CHECK_FORMAT gitdir=$GITDIR"
 
-docker run --rm -e MIX_ENV=test -v "$ROOT/.git:/repo.git:ro" "$IMAGE" bash -euo pipefail -c "
+docker run --rm -e MIX_ENV=test -v "$GITDIR:/repo.git:ro" "$IMAGE" bash -euo pipefail -c "
   export DEBIAN_FRONTEND=noninteractive
   apt-get update -qq >/dev/null && apt-get install -y -qq git ca-certificates >/dev/null
   git config --global --add safe.directory '*'
