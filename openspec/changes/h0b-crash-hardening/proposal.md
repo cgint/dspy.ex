@@ -1,6 +1,6 @@
 # H0b — crash/timeout hardening at every spawn site
 
-Status: **DRAFT (Greta 2026-09-26)**. Clarity Gate: Horst ☐ / Greta ☐. **No controller launch before both ticks.**
+Status: **DRAFT (Greta 2026-09-26)**. Clarity Gate: Horst ✓ 2026-09-26 / Greta ✓ 2026-09-26. **No controller launch before both ticks.**
 Groundwork: `plan/research/pi_handoffs/h0b/PACKAGE.md` (+ g2.md, g3.md). Reference: Python DSPy **3.4.0** (`../dspy-3.4.0`); line refs below are re-verified at 3.4.0.
 Slices: **H0b-1** runtime sites (Module.parallel, tools ×2, ensemble ×3, simba, mipro, bootstrap ×2) · **H0b-2** Evaluate (+ `max_errors` setting). H0b-1 can ship alone; H0b-2 is the M1 prerequisite.
 
@@ -98,4 +98,4 @@ Outside verdict: **Greta** (independent: reads the diff, reruns the gates and 3 
 Restate verbatim: A3's process sentence, the E5 exception name and fields, the new option names and defaults. Give one own-words sentence per invariant A4.1–5. Any difference = a gap → back to Horst/Greta.
 
 ## (f) Evidence
-`Clarity Gate: Horst ☐ <date> / Greta ☐ <date>` — Greta ticks after Horst's team card and E5/E6 answer.
+`Clarity Gate: Horst ✓ 2026-09-26 <date> / Greta ✓ 2026-09-26` (team card present, E5 ✓, E6 → user note, `openspec validate` green).
