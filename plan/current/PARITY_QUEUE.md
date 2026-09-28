@@ -11,8 +11,9 @@ Reference: Python DSPy 3.4.0 (`../dspy-3.4.0`). Ids S###/U### = inventory rows. 
 
 | # | Slice | Status |
 |---|---|---|
-| H0b-1 | Crash/timeout hardening, runtime sites (`openspec/changes/h0b-crash-hardening`) | doing |
-| H0b-2 | Crash hardening Evaluate + `max_errors`/`failure_score` (D-U1/D-U2 = upstream, approved 2026-09-28) | todo (after H0b-1) |
+| H0b-1 | Crash/timeout hardening, runtime sites (`openspec/changes/h0b-crash-hardening`) | **done — v0.3.46** |
+| H0b-2 | Crash hardening Evaluate + `max_errors`/`failure_score` + Q2/Q3 raises (D-U1/D-U2 = upstream, approved 2026-09-28) | **done — v0.3.48** |
+| H0b-3 | **Pin the mipro_v2 / gepa propagation invariant.** Both call `Evaluate.evaluate` outside any stream, so `MaxErrorsExceeded` / `InvalidMetricResult` escape `compile/3` raw. That is correct per D5 and verified uncaught at v0.3.48 — but it holds by *absence of a rescue*, not by a test, so a future edit could add one and silently swallow the error with nothing going red. One public-entry pinning test per site, mutation-proven by adding a rescue and watching it go red. Declared in `docs/COMPATIBILITY.md`. Size S | todo (not urgent — behaviour is already correct) |
 
 ## History (done before regeneration)
 | # | Slice | Upstream | Effort | Status |
