@@ -57,9 +57,11 @@ Groundwork for (a)/(d) is done by Greta's readonly scouts; Horst drafts contract
 - Supported floor is tested (2026-09-28): CI matrix Elixir 1.18.4/OTP 27.3 (compile+test) + 1.19.5/OTP 28.0 (also format). Measured first via `CI_DOCKER_IMAGE=hexpm/elixir:1.18.4-erlang-27.3.4.16-ubuntu-noble-20260810 scripts/ci_docker.sh` (format step differs by formatter version; compile+tests green).
 
 ## Dependencies, security, toolchain (user policy 2026-09-28; Horst decides)
-- `mix hex.audit` is a release gate: an advisory → security slice (dep bump, docker CI on the whole matrix, consumer canary, patch release) before other work continues.
-- Keep deps current: `mix hex.outdated` reviewed at each milestone start; bumps as their own slice.
-- Floor: keep the lowest Elixir/OTP we can cheaply prove in the CI matrix (today 1.18.4/OTP 27 + 1.19.5/OTP 28); also add the newest stable Elixir/OTP to the matrix. Raise the floor only for a real maintenance cost, recorded here with the reason.
+- **Security gate:** `mix hex.audit` (Hex ≥2.x reports CVE advisories from the EEF/OSV database, plus retired packages) must be clean on every release. An advisory → security slice **next in queue** (a running lib-editing slice finishes first; security slices run in a separate git worktree so they don't collide).
+- **Consumer effect is honest:** our `mix.lock` does not reach consumers. A fix protects them only if we raise the minimum requirement in `mix.exs` so the vulnerable range can't resolve; transitive deps otherwise need `mix deps.update <pkgs>` on the consumer side → say so in `docs/RELEASES.md` and run it in the canary.
+- **Smallest safe bump first:** pick the lowest version that fixes the advisory; read the changelog (0.x minor bumps may break); newer-than-needed bumps are a separate "keep current" slice.
+- Keep deps current: `mix hex.outdated` reviewed at each milestone start.
+- **Toolchain matrix (pinned, explicit version pairs in ci.yml; no floating tags):** floor Elixir 1.18.4/OTP 27.3 (compile+test) · primary 1.19.5/OTP 28.0 (compile+test+format — the formatter check runs on this one only, as output differs by version) · newest stable, pinned (bumped at milestone start). Raise the floor only for a real maintenance cost, recorded here with the reason.
 
 ## Versioning (user decision 2026-09-28)
 - One **minor** version per milestone: M1 → v0.4.x, M2 → v0.5.x, M3 → v0.6.x, M4 → v0.7.x, M5 → v0.8.x, M6 → v0.9.x.
