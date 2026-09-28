@@ -73,6 +73,15 @@ Version numbers show the milestone: M1 = v0.4.x, M2 = v0.5.x, … M6 = v0.9.x (d
   reproducing the mutations in her own clone) + the gate battery (ci_docker 1.19/1.18,
   hex.audit, consumer canary) run by worker otto2 in an isolated worktree. I accept only
   after both come back.
+- **Tooling defect found 2026-09-28 (mine):** `scripts/ci_docker.sh` mounts `$ROOT/.git`,
+  which only works in a normal checkout. In a **linked git worktree** `.git` is a pointer
+  file, so the mount is empty inside the container and the script cannot run there. The
+  gate worker reproduced the script step-for-step via a git object pack instead. That is a
+  faithful reproduction, but it is not the script, so the **binding release gate is the
+  real `scripts/ci_docker.sh` run in the main checkout at the release sha**; the worktree
+  run counts as corroboration. Proper fix queued (small tooling slice): resolve the real
+  gitdir (`git rev-parse --git-common-dir`) so the script works from a worktree too.
+  Until that lands, run release gates from the main checkout.
 - SEC-2 findings (Horst decided): extras' `hackney` has 4 advisories (1 high) with **no fix reachable** — `httpoison` pins old hackney; `cowlib` has 2 advisories with no fix at all upstream. Decision: replace `httpoison` in extras with `req` (already our core HTTP client) as its own slice; cowlib waits for upstream. Core library is clean.
 - Newest Elixir (1.20) in CI: fails on 169 compiler warnings (new type checks) → own cleanup slice before adding it to CI.
 
