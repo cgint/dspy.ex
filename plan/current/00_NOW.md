@@ -57,6 +57,10 @@ Version numbers show the milestone: M1 = v0.4.x, M2 = v0.5.x, … M6 = v0.9.x (d
 | v0.3.42 | `Dspy.Parallel`: run many programs/inputs at once |
 | v0.3.43 | `Dspy.MultiChainComparison`: compare several reasoning attempts, pick the best |
 | v0.3.44 | Settings from `Dspy.context` now also apply inside background work (evaluation, optimizers, tools) |
+| v0.3.45 | Security: fixes 14 known vulnerabilities in the HTTP libraries used for every LM call (run `mix deps.update req mint hpax finch` once) |
+| v0.3.46 | A crash or timeout in one parallel piece no longer takes down the caller; optimizing no longer crashes when every candidate fails |
+| v0.3.47 | Extras security: `httpoison` replaced by `req`, removing 4 more advisories |
+| v0.3.48 | Evaluation you can trust the numbers of: failures count into the score, runs stop after 10 errors, true/false metrics finally count, bad input raises instead of lying |
 
 ## Incident 2026-09-28 (fixed)
 - The automatic checks on GitHub (CI) had been **red since v0.3.42** without anyone noticing: one test file didn't compile on the older Elixir version CI uses (1.19), so CI ran no tests at all. Locally (Elixir 1.20) everything was green.
@@ -64,15 +68,25 @@ Version numbers show the milestone: M1 = v0.4.x, M2 = v0.5.x, … M6 = v0.9.x (d
 - Also: two of my plan commits accidentally included unfinished team code; removed from main within the hour, nothing released with it.
 - Prevention: every release is now checked on the exact CI version first (`scripts/ci_docker.sh`), and CI must be green before a release counts as done.
 
-## H0b-2 status (2026-09-28)
-- Evaluation errors/scoring: built, Greta PASS after 2 review rounds, CI-docker green on 1.18 + 1.19.
-- **No longer held** — Q2/Q3/Q-OUT are decided (§6). The Q2 change was rebuilt as
-  "raise" (it had been built as "count as failed"); worker nora, committed locally as
-  `310827d`, 514 tests green, mutation-proven at 4 sites. **Not released, not pushed.**
-- In flight for release as **v0.3.48**: Greta's outside verdict on `310827d` (she is
-  reproducing the mutations in her own clone) + the gate battery (ci_docker 1.19/1.18,
-  hex.audit, consumer canary) run by worker otto2 in an isolated worktree. I accept only
-  after both come back.
+## H0b-2 — RELEASED as v0.3.48 (2026-09-28)
+
+**The foundations are complete. M1 is now the next work.**
+
+What changed for you: failed examples now count into the score (so **reported numbers can
+drop** — they were silently dropped before), evaluation stops at the 10th error across **6**
+optimizers, `true`/`false` metrics finally count as 1/0 (they were excluded entirely — a real
+bug, since `a == b` is the commonest DSPy metric), and two bad inputs now raise instead of
+lying: a metric result that is neither a number nor a boolean, and an empty testset. All four
+follow Python DSPy 3.4.0, decided from a probe rather than from preference.
+
+How it was proven, because this one was blocked twice before it passed:
+- Greta's verdict on the exact sha, with all **4 mutation sites reproduced in her own clone**
+  and restored (`git status --porcelain` empty, 12/12 green after restore) — not taken from the
+  worker's report.
+- No vacuous test: each optimizer test fails when *its own* site's clause is removed.
+- Orphan probe: pending tasks are killed, not leaked, measured two independent ways.
+- Gates on the release sha: ci_docker 1.19.5/OTP28 + 1.18.4/OTP27 green, `hex.audit` clean,
+  canary 3 PASS / 2 WARN-BASELINE, GitHub CI green.
 - **Tooling defect found 2026-09-28 (mine):** `scripts/ci_docker.sh` mounts `$ROOT/.git`,
   which only works in a normal checkout. In a **linked git worktree** `.git` is a pointer
   file, so the mount is empty inside the container and the script cannot run there. The
