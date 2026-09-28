@@ -96,6 +96,11 @@ defmodule Dspy.Evaluate do
   """
   @spec evaluate(Dspy.Module.t(), list(Example.t()), function(), keyword()) :: evaluation_result()
   def evaluate(program, testset, metric_fn, opts \\ []) do
+    # Q3 (upstream evaluate.py:162-163): an empty testset is a caller error.
+    if testset == [] do
+      raise ArgumentError, "devset must contain at least one example"
+    end
+
     num_threads = Keyword.get(opts, :num_threads, System.schedulers_online())
     show_progress = Keyword.get(opts, :progress, false)
     return_all = Keyword.get(opts, :return_all, false)
