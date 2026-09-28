@@ -6,6 +6,32 @@ This repo ships in **small, user-usable slices**.
 - For stability, depend on a **semver tag**.
 - Note: this file lives on `main`; older tags may not include it.
 
+## Consumer notes
+
+### Security dependency floors (SEC-1, 2026-09-28)
+
+From the next release, `:dspy` declares direct floors on its transitive HTTP stack:
+`req >= 0.6.1`, `mint >= 1.11.0`, `hpax >= 1.1.0` (advisory fixes; see `mix.exs`).
+If your app already pins a vulnerable version (req 0.5.x, mint < 1.11.0, or
+hpax < 1.1.0), add `:dspy` will **fail to resolve** until you update:
+
+    mix deps.update req mint hpax finch
+
+(If you do not depend on req/mint/hpax/finch directly, add them to your
+`mix.exs` deps with the same floors, or run `mix deps.unlock --all` then
+`mix deps.get`.)
+
+This is deliberate: the vulnerable versions contain high-severity advisories
+(e.g. req EEF-CVE-2026-49755 decompression bomb, mint HTTP/2 request smuggling +
+EEF-CVE-2026-91043 HPACK cookie memory exhaustion, hpax EEF-CVE-2026-58226 DoS).
+
+**Behavior change in req 0.6.0+ to be aware of:** automatic response
+archive/compressed decoding (zip/tar/gz/zst/csv) was removed and automatic
+decompression is off. Both are now **opt-in** (`decoders:` and
+`compressed: true` respectively). `:dspy` itself never relied on either — all
+LM HTTP goes through `req_llm` — but if *your* code calls `Req` directly and
+expected automatic decoding/decompression, add the option explicitly.
+
 ## Tags
 
 The table below is maintained on `main`, but links are **tag-pinned** so they don’t drift.
