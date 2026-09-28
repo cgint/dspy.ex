@@ -31,6 +31,21 @@ behaviours from fix round 2, both declared in `docs/COMPATIBILITY.md`:
   catch-kind match was dead code — `catch` yields `:error`, not
   `:exception`).
 
+- **Fields named `example_*`/`pred_*`/`metric` are no longer misrouted to the
+  wrong side (fix round 3, BB1).** Every row pair now carries its SOURCE
+  explicitly (`:example` / `:prediction` / `:metric`); the lookup is
+  tag-driven, never key-name-driven. An example field called `pred_label` or
+  a prediction field called `example_ref` is no longer read from the wrong
+  side and saved as null.
+
+- **String-keyed examples now collide and rename correctly with atom-keyed
+  predictions (fix round 3, BB2); output keys are strings, matching
+  upstream.** A string-keyed example (`%{"answer" => _}`) and an atom-keyed
+  prediction (`%{answer: _}`) collide on their string form and are renamed
+  `"example_answer"` / `"pred_answer"` (strings, NOT atoms — no
+  `String.to_atom` on user-supplied key names). Non-colliding keys pass
+  through as-is.
+
 ### Security dependency floors (SEC-1, 2026-09-28)
 
 From the next release, `:dspy` declares direct floors on its transitive HTTP stack:

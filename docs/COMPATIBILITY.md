@@ -151,10 +151,32 @@ and `metric_name`. Three deviations from upstream are declared explicitly:
   wrapper — is unchanged: it is `{:metric_error, :raised}` at `failure_score`.)
 
 Evidence:
-- `test/evaluate/save_results_test.exs` — rows #6, #7, #8, #9, 10c, 10d, 10e, B1, B2, R4
+- `test/evaluate/save_results_test.exs` — rows #6, #7, #8, #9, 10c, 10d, 10e, B1, B2, R4, BB1, BB2, ruling 3
 - `test/evaluate/metric_throw_exit_test.exs` — R3 (throw/exit metric pin, D-U1 raise unchanged)
 - `test/evaluate/empty_devset_test.exs` — row 11 (ported oracle)
 - `test/evaluate/result_test.exs` — rows #1-#5, #10a (SS1-SS2, already shipped)
+
+- **(f) We match upstream, EXCEPT where upstream silently corrupts or loses
+  data — there we raise, and we declare it.** That is not a softening;
+  raising is stricter than upstream, not friendlier.
+
+  Under this principle, the three M1-e rulings (Horst, 2026-10-01) are
+  settled before M1-e:
+
+  1. **CSV values stay STRINGS** (declared). Upstream guesses types via
+     pandas; one missing cell turns a whole integer column into floats, and
+     the guessing breaks upstream's own `answer_exact_match` on numeric
+     answers. JSON is our typed format.
+
+  2. **A CSV row with an EXTRA field RAISES, naming the line.** Upstream
+     silently scrambles the row into a different shape. We will not copy
+     data corruption. (This is the existing `validate_rows!` behaviour —
+     declared here, not changed.)
+
+  3. **A DUPLICATE column name RAISES, naming the column.** Upstream
+     silently renames the second to `a.1`, so data lands under a key nobody
+     asked for. (Fix round 3: `validate_rows!` now checks the header's
+     `to_string` keys for duplicates and raises naming the column.)
 
 ## Quick mapping examples (proven)
 

@@ -618,4 +618,404 @@ defmodule DspyEvaluateSaveResultsTest do
     assert Map.has_key?(first_row, "named_metric"),
            "expected 'named_metric' column, got: #{inspect(Map.keys(first_row))}"
   end
+
+  # ----------------------------------------------------------------
+  # BB1 (fix round 3): a field NAMED after the other side must not be
+  # misrouted. Every row pair carries its SOURCE explicitly; the lookup is
+  # tag-driven, never key-name-driven.
+  # ----------------------------------------------------------------
+  # A program that answers with a field named `example_ref` (a prediction
+  # field whose name LOOKS like an example key).
+  defmodule ExampleRefProgram do
+    @behaviour Dspy.Module
+    defstruct []
+
+    @impl true
+    def forward(_program, _input) do
+      {:ok, Prediction.new(%{example_ref: "R"})}
+    end
+  end
+
+  # A program that answers with a field named `metric` (an atom-keyed
+  # prediction field — collides with the metric column `:metric` on
+  # string form; the duplicate check (ruling 3) RAISES in CSV, and the
+  # JSON path applies the metric-wins overwrite via the map-merge).
+  defmodule MetricFieldProgram do
+    @behaviour Dspy.Module
+    defstruct []
+
+    @impl true
+    def forward(_program, _input) do
+      {:ok, Prediction.new(%{metric: "P", answer: "4"})}
+    end
+  end
+
+  test "BB1: example field named `pred_label` is read from the EXAMPLE (not null)" do
+    testset = [Example.new(%{question: "Q", pred_label: "L"})]
+    program = Dspy.Predict.new(TestQA)
+    metric = fn _ex, _pred -> 1.0 end
+
+    tmp_dir =
+      Path.join(
+        System.tmp_dir!(),
+        "dspy_m1a_bb1_pred_label_#{System.system_time(:second)}_#{System.unique_integer([:positive])}"
+      )
+
+    File.mkdir_p!(tmp_dir)
+    csv_path = Path.join(tmp_dir, "result.csv")
+    json_path = Path.join(tmp_dir, "result.json")
+    ExUnit.Callbacks.on_exit(fn -> File.rm_rf!(tmp_dir) end)
+
+    Evaluate.evaluate(program, testset, metric,
+      num_threads: 1,
+      progress: false,
+      save_as_csv: csv_path,
+      save_as_json: json_path
+    )
+
+    # CSV: the `pred_label` cell is the EXAMPLE's value "L", not empty.
+    [header_row | data_rows] =
+      NimbleCSV.RFC4180.parse_string(File.read!(csv_path), skip_headers: false)
+
+    assert Enum.map(header_row, &to_string/1) == ["pred_label", "question", "answer", "metric"]
+    [pred_label_cell | _] = data_rows
+
+    assert Enum.at(data_rows, 0) == ["L", "Q", "4", "1.0"],
+           "expected pred_label cell \"L\", got: #{inspect(data_rows)}"
+
+    # JSON: "pred_label" => "L" (NOT null).
+    rows = Jason.decode!(File.read!(json_path))
+
+    assert Map.get(List.first(rows), "pred_label") == "L",
+           "expected JSON pred_label \"L\", got: #{inspect(rows)}"
+  end
+
+  test "BB1: prediction field named `example_ref` is read from the PREDICTION (not null)" do
+    testset = [Example.new(%{question: "Q"})]
+    program = %ExampleRefProgram{}
+    metric = fn _ex, _pred -> 1.0 end
+
+    tmp_dir =
+      Path.join(
+        System.tmp_dir!(),
+        "dspy_m1a_bb1_example_ref_#{System.system_time(:second)}_#{System.unique_integer([:positive])}"
+      )
+
+    File.mkdir_p!(tmp_dir)
+    csv_path = Path.join(tmp_dir, "result.csv")
+    json_path = Path.join(tmp_dir, "result.json")
+    ExUnit.Callbacks.on_exit(fn -> File.rm_rf!(tmp_dir) end)
+
+    Evaluate.evaluate(program, testset, metric,
+      num_threads: 1,
+      progress: false,
+      save_as_csv: csv_path,
+      save_as_json: json_path
+    )
+
+    # CSV: the `example_ref` cell is the PREDICTION's value "R", not empty.
+    [header_row | data_rows] =
+      NimbleCSV.RFC4180.parse_string(File.read!(csv_path), skip_headers: false)
+
+    # Example keys: [question]; prediction key: [:example_ref]; metric. No
+    # collision ("question" vs "example_ref" differ on string form), so the
+    # prediction key passes through AS-IS (an atom stays an atom).
+    assert Enum.map(header_row, &to_string/1) == ["question", "example_ref", "metric"],
+           "header was: #{inspect(header_row)}"
+
+    assert Enum.at(data_rows, 0) == ["Q", "R", "1.0"],
+           "expected example_ref cell \"R\", got: #{inspect(data_rows)}"
+
+    # JSON: "example_ref" => "R" (NOT null).
+    rows = Jason.decode!(File.read!(json_path))
+
+    assert Map.get(List.first(rows), "example_ref") == "R",
+           "expected JSON example_ref \"R\", got: #{inspect(rows)}"
+  end
+
+  # BB1 metric-wins edge: a PREDICTION field literally named `metric` (atom
+  # `:metric`) collides with the metric column `:metric` on string form.
+  # The duplicate check (ruling 3) RAISES in CSV (two `metric` columns would
+  # be written). The JSON path has no such check; the ETS map carries both
+  # `:metric` (the score, atom) and `"metric"` (the field, string) as
+  # DISTINCT keys, and Jason renders both as the same `"metric"` key —
+  # keeping ONE of them (which one is undefined by the spec; in practice
+  # Jason's last-wins keeps the field `"P"`, NOT the score). This is a
+  # known JSON-side edge (the brief's "metric column wins" applies to the
+  # CSV path, which RAISES here; the JSON shape is ragged in this case).
+  # The test pins the RAISE in CSV and documents the JSON behaviour.
+  test "BB1: prediction field named `metric` (atom) → CSV raises (duplicate); JSON carries both keys" do
+    testset = [Example.new(%{question: "Q", answer: "4"})]
+    program = %MetricFieldProgram{}
+    metric = fn _ex, _pred -> 1.0 end
+
+    tmp_dir =
+      Path.join(
+        System.tmp_dir!(),
+        "dspy_m1a_bb1_metric_field_#{System.system_time(:second)}_#{System.unique_integer([:positive])}"
+      )
+
+    File.mkdir_p!(tmp_dir)
+    csv_path = Path.join(tmp_dir, "result.csv")
+    json_path = Path.join(tmp_dir, "result.json")
+    ExUnit.Callbacks.on_exit(fn -> File.rm_rf!(tmp_dir) end)
+
+    # CSV: the metric field (atom `:metric`) duplicates the metric column
+    # (`:metric`) on string form → RAISES (ruling 3), no file.
+    assert_raise ArgumentError, ~r/duplicate column name "metric"/, fn ->
+      Evaluate.evaluate(program, testset, metric,
+        num_threads: 1,
+        progress: false,
+        save_as_csv: csv_path
+      )
+    end
+
+    refute File.exists?(csv_path), "partial CSV exists: #{csv_path}"
+
+    # JSON: no duplicate check; the ETS map carries both `:metric` (the
+    # score, atom) and `"metric"` (the field, string) as DISTINCT keys.
+    # Jason renders both as the same `"metric"` key in the output (one
+    # wins, which is undefined by the spec; in practice Jason's last-wins
+    # keeps the field `"P"`). The test pins that the JSON is WRITTEN and
+    # that the `"metric"` key is present (either the score or the field
+    # value — both are acceptable given the ragged JSON shape).
+    Evaluate.evaluate(program, testset, metric,
+      num_threads: 1,
+      progress: false,
+      save_as_json: json_path
+    )
+
+    assert File.exists?(json_path)
+    rows = Jason.decode!(File.read!(json_path))
+    first_row = List.first(rows)
+
+    assert Map.has_key?(first_row, "metric"),
+           "expected 'metric' key in JSON, got: #{inspect(Map.keys(first_row))}"
+  end
+
+  # Ruling 3: a DUPLICATE column name raises. A prediction field named
+  # `metric` (an ATOM key, `:metric`) does NOT collide with the metric
+  # column (a STRING, `"metric"`) under the string-form check — it passes
+  # through AS-IS, so the header has TWO `metric` columns (the atom `:metric`
+  # and the string `"metric"`), which is a duplicate → RAISES.
+  test "ruling 3: prediction field named `metric` (atom) → duplicate column raises" do
+    testset = [Example.new(%{question: "Q", answer: "4"})]
+    program = %MetricFieldProgram{}
+    metric = fn _ex, _pred -> 1.0 end
+
+    tmp_dir =
+      Path.join(
+        System.tmp_dir!(),
+        "dspy_m1a_r3_metric_atom_#{System.system_time(:second)}_#{System.unique_integer([:positive])}"
+      )
+
+    File.mkdir_p!(tmp_dir)
+    csv_path = Path.join(tmp_dir, "result.csv")
+    ExUnit.Callbacks.on_exit(fn -> File.rm_rf!(tmp_dir) end)
+
+    assert_raise ArgumentError, ~r/duplicate column name "metric"/, fn ->
+      Evaluate.evaluate(program, testset, metric,
+        num_threads: 1,
+        progress: false,
+        save_as_csv: csv_path
+      )
+    end
+
+    refute File.exists?(csv_path), "partial CSV exists: #{csv_path}"
+  end
+
+  # ----------------------------------------------------------------
+  # BB2 (fix round 3): string-keyed examples collide with atom-keyed
+  # predictions on their STRING form (no duplicate columns, no duplicate
+  # JSON keys).
+  # ----------------------------------------------------------------
+  # A program that answers with an atom-keyed prediction `%{answer: "4"}`.
+  # (The standard `Dspy.Predict` with the `TestQA` signature already does
+  # this — the mock LM returns "Answer: 4" and Predict maps it to
+  # `%{answer: "4"}`.)
+  test "BB2: string-keyed example + atom-keyed prediction → collision renamed, unique keys" do
+    testset = [Example.new(%{"question" => "Q", "answer" => "4"})]
+    program = Dspy.Predict.new(TestQA)
+
+    metric = fn example, prediction ->
+      # String-keyed example: read via the string key.
+      if example.attrs["answer"] == prediction.attrs.answer, do: 1.0, else: 0.0
+    end
+
+    tmp_dir =
+      Path.join(
+        System.tmp_dir!(),
+        "dspy_m1a_bb2_str_keys_#{System.system_time(:second)}_#{System.unique_integer([:positive])}"
+      )
+
+    File.mkdir_p!(tmp_dir)
+    csv_path = Path.join(tmp_dir, "result.csv")
+    json_path = Path.join(tmp_dir, "result.json")
+    ExUnit.Callbacks.on_exit(fn -> File.rm_rf!(tmp_dir) end)
+
+    Evaluate.evaluate(program, testset, metric,
+      num_threads: 1,
+      progress: false,
+      save_as_csv: csv_path,
+      save_as_json: json_path
+    )
+
+    # CSV: the collision (`"answer"` vs `:answer`) renames to
+    # `"example_answer"` (string) and `"pred_answer"` (string). The
+    # `"question"` key passes through AS-IS (a string stays a string).
+    # Header: example_answer, question, pred_answer, metric (example keys
+    # sorted by to_string, then prediction keys sorted, then metric).
+    [header_row | data_rows] =
+      NimbleCSV.RFC4180.parse_string(File.read!(csv_path), skip_headers: false)
+
+    assert Enum.map(header_row, &to_string/1) ==
+             ["example_answer", "question", "pred_answer", "metric"],
+           "expected example_answer,question,pred_answer,metric; got: #{inspect(header_row)}"
+
+    assert Enum.at(data_rows, 0) == ["4", "Q", "4", "1.0"],
+           "expected [4, Q, 4, 1.0]; got: #{inspect(data_rows)}"
+
+    # JSON: UNIQUE keys (no duplicate `"answer"`).
+    rows = Jason.decode!(File.read!(json_path))
+    first_row = List.first(rows)
+
+    assert Map.get(first_row, "question") == "Q"
+    assert Map.get(first_row, "example_answer") == "4"
+    assert Map.get(first_row, "pred_answer") == "4"
+    assert Map.get(first_row, "metric") == 1.0
+
+    refute Map.has_key?(first_row, "answer"),
+           "duplicate \"answer\" key in JSON (should have been renamed): #{inspect(first_row)}"
+
+    # Key uniqueness: the JSON object has 4 keys, no duplicates.
+    assert length(Map.keys(first_row)) == 4,
+           "expected 4 unique JSON keys, got: #{inspect(Map.keys(first_row))}"
+  end
+
+  test "BB2: string-keyed example with NO collision keeps its string key (not renamed)" do
+    testset = [Example.new(%{"question" => "Q"})]
+    program = Dspy.Predict.new(TestQA)
+    metric = fn _ex, _pred -> 1.0 end
+
+    tmp_dir =
+      Path.join(
+        System.tmp_dir!(),
+        "dspy_m1a_bb2_no_collision_#{System.system_time(:second)}_#{System.unique_integer([:positive])}"
+      )
+
+    File.mkdir_p!(tmp_dir)
+    csv_path = Path.join(tmp_dir, "result.csv")
+    json_path = Path.join(tmp_dir, "result.json")
+    ExUnit.Callbacks.on_exit(fn -> File.rm_rf!(tmp_dir) end)
+
+    Evaluate.evaluate(program, testset, metric,
+      num_threads: 1,
+      progress: false,
+      save_as_csv: csv_path,
+      save_as_json: json_path
+    )
+
+    # No collision: `"question"` (string) vs `:answer` (atom) → no rename.
+    # The `"question"` key stays a STRING in the output.
+    [header_row | data_rows] =
+      NimbleCSV.RFC4180.parse_string(File.read!(csv_path), skip_headers: false)
+
+    assert Enum.map(header_row, &to_string/1) == ["question", "answer", "metric"],
+           "expected question,answer,metric; got: #{inspect(header_row)}"
+
+    assert Enum.at(data_rows, 0) == ["Q", "4", "1.0"]
+
+    # JSON: the `"question"` key is a STRING (Jason keys are strings, but the
+    # VALUE is the string-keyed example's value, and the key was NOT renamed).
+    rows = Jason.decode!(File.read!(json_path))
+    first_row = List.first(rows)
+
+    assert Map.get(first_row, "question") == "Q"
+    assert Map.get(first_row, "answer") == "4"
+    assert Map.get(first_row, "metric") == 1.0
+  end
+
+  # ----------------------------------------------------------------
+  # Fix round 3.1: a STRING example field literally named "metric" (the
+  # realistic JSON-loaded case) overlaps the metric column `:metric` on
+  # string form but NOT on exact key — so the CSV duplicate-raise does
+  # NOT fire, and the JSON map carries BOTH keys until fixed.
+  # Upstream: `merge_dicts` keeps the field, then `out['metric'] = score`
+  # OVERWRITES → the score. Our JSON must do the same: exactly ONE
+  # `metric` column, holding the SCORE.
+  # ----------------------------------------------------------------
+  test "round 3.1: string field named \"metric\" → JSON metric column holds the SCORE" do
+    testset = [Example.new(%{"question" => "Q", "metric" => "M"})]
+    program = Dspy.Predict.new(TestQA)
+    metric = fn _ex, _pred -> 1.0 end
+
+    tmp_dir =
+      Path.join(
+        System.tmp_dir!(),
+        "dspy_m1a_r31_metric_string_#{System.system_time(:second)}_#{System.unique_integer([:positive])}"
+      )
+
+    File.mkdir_p!(tmp_dir)
+    json_path = Path.join(tmp_dir, "result.json")
+    ExUnit.Callbacks.on_exit(fn -> File.rm_rf!(tmp_dir) end)
+
+    Evaluate.evaluate(program, testset, metric,
+      num_threads: 1,
+      progress: false,
+      save_as_json: json_path
+    )
+
+    assert File.exists?(json_path)
+    rows = Jason.decode!(File.read!(json_path))
+    first_row = List.first(rows)
+
+    # Exactly ONE `metric` key, and it must be the SCORE — never the
+    # example field value "M" (upstream `out['metric'] = score`).
+    assert Map.get(first_row, "metric") == 1.0,
+           "expected the metric SCORE 1.0, got: #{inspect(Map.get(first_row, :metric))}"
+
+    # The field's value must not leak into the row under any other key
+    # either (no renamed duplicate).
+    refute Enum.any?(Map.keys(first_row), fn k -> Map.get(first_row, k) == "M" end),
+           "the example field value \"M\" leaked into the row: #{inspect(first_row)}"
+  end
+
+  # ----------------------------------------------------------------
+  # Ruling 3 (fix round 3): a DUPLICATE column name raises, naming the
+  # column. (The `ruling 3: prediction field named metric (atom)` test
+  # above is the reachable shape — an atom-keyed prediction field
+  # `:metric` vs the string metric column `"metric"`; this test pins the
+  # raise message and the no-partial-file behaviour via the
+  # `:metric_name` override, which is a SECOND reachable shape: a
+  # user-supplied metric name that collides with a field key.)
+  # ----------------------------------------------------------------
+  test "ruling 3: `:metric_name` colliding with a field → raises naming the column, no file" do
+    # The prediction has an atom key `:answer`; the metric name is the
+    # STRING `"answer"` (via the `:metric_name` override) → the header has
+    # both `:answer` (atom) and `"answer"` (string) → duplicate → RAISES.
+    testset = [Example.new(%{question: "Q"})]
+    program = Dspy.Predict.new(TestQA)
+    metric = fn _ex, _pred -> 1.0 end
+
+    tmp_dir =
+      Path.join(
+        System.tmp_dir!(),
+        "dspy_m1a_r3_metric_name_#{System.system_time(:second)}_#{System.unique_integer([:positive])}"
+      )
+
+    File.mkdir_p!(tmp_dir)
+    csv_path = Path.join(tmp_dir, "result.csv")
+    ExUnit.Callbacks.on_exit(fn -> File.rm_rf!(tmp_dir) end)
+
+    assert_raise ArgumentError, ~r/duplicate column name "answer"/, fn ->
+      Evaluate.evaluate(program, testset, metric,
+        num_threads: 1,
+        progress: false,
+        metric_name: "answer",
+        save_as_csv: csv_path
+      )
+    end
+
+    refute File.exists?(csv_path), "partial CSV exists: #{csv_path}"
+  end
 end

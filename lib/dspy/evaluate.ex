@@ -402,15 +402,27 @@ defmodule Dspy.Evaluate do
       if output.save_as_csv do
         rows = rows_for(items, testset, output.metric_name)
         [header | _] = rows
-        header_keys = elem(header, 0)
+        header_pairs = elem(header, 0)
+        header_keys = Enum.map(header_pairs, &elem(&1, 0))
         header_set = MapSet.new(header_keys)
 
-        validate_rows!(rows, header_set)
+        validate_rows!(rows, header_keys, header_set)
+
+        # BB1 (fix round 3): an example/prediction field literally named after
+        # the metric column yields TWO `metric` keys. Upstream overwrites the
+        # field with the score (`out['metric'] = score`); JSON already does
+        # that (the metric pair is last in the map merge). The CSV row map
+        # below does the same — the metric cell ALWAYS carries the score
+        # (from THIS row's own pairs, so it is never another row's value).
+        metric_out_key = List.last(header_pairs) |> elem(0)
 
         csv_rows =
           [Enum.map(header_keys, &to_string/1)] ++
-            Enum.map(rows, fn {keys, values} ->
-              kv = Map.new(Enum.zip(keys, values))
+            Enum.map(rows, fn {pairs, values} ->
+              kv = Map.new(Enum.zip(Enum.map(pairs, &elem(&1, 0)), values))
+
+              kv =
+                Map.put(kv, metric_out_key, metric_value_for_row(pairs, values, metric_out_key))
 
               Enum.map(header_keys, fn key ->
                 case Map.fetch(kv, key) do
@@ -464,11 +476,30 @@ defmodule Dspy.Evaluate do
   # M1-a (A3; upstream `:232-242`, `merge_dicts` `:310-330`): the row shape
   # shared by the table, CSV and JSON. Each row = Example attrs merged with
   # Prediction attrs (a key collision renames the example key to
-  # `example_<k>` and the prediction key to `pred_<k>`), then the metric
+  # `"example_<k>"` and the prediction key to `"pred_<k>"`), then the metric
   # column. Column order: example keys, then prediction keys, then the metric —
   # each group sorted by key (deterministic; our attrs are maps with no order).
   # A failed item carries an empty Prediction, so its row is the example fields
   # plus the metric only (upstream `:237`).
+  #
+  # BB1 (fix round 3): every pair carries its SOURCE explicitly:
+  #   `{out_key, :example, k}`     — read `example.attrs[k]`
+  #   `{out_key, :prediction, k}`  — read `prediction.attrs[k]`
+  #   `{metric_name, :metric, _}`  — the score itself
+  # The value is NEVER routed by the key NAME (an example field called
+  # `pred_label` or a prediction field called `example_ref` used to be read
+  # from the wrong side and saved as null — silent data loss).
+  #
+  # BB2 (fix round 3): collisions are detected on the STRING form of the
+  # keys (upstream keys are strings: `f"example_{key}"`). A string-keyed
+  # example (`%{"answer" => _}` — what JSON-loaded examples always are) and
+  # an atom-keyed prediction (`%{answer: _}`) collide on `"answer"`. RENAMED
+  # keys are emitted as STRINGS ("example_answer"/"pred_answer") — NOT atoms
+  # (`String.to_atom` on user-supplied key names would be an unbounded
+  # atom-table leak, the same lesson as B2). Non-colliding keys pass through
+  # AS-IS (an atom `:question` stays `:question`; a string `"question"` stays
+  # `"question"`). The metric column is whatever `metric_name` is (an atom;
+  # `to_string/1` renders it in the CSV, JSON keeps it as a key).
   #
   # The collision set is computed PER ROW (upstream `merge_dicts` renames one
   # row at a time): only the keys that collide in THAT row are renamed. A
@@ -476,11 +507,13 @@ defmodule Dspy.Evaluate do
   # plain keys — including a shared field name like `answer`, which is NOT in
   # the (first successful row's) header, so `save_as_csv` raises naming it.
   #
-  # Rows are `{key_list, values}` pairs (NOT maps, NOT a header map): the key
+  # Rows are `{pair_list, values}` pairs (NOT maps, NOT a header map): the key
   # order is CONSTRUCTED (sorted groups), never derived from `Map.keys/1` —
   # since OTP 26 a small map lists atom keys in creation order, not sorted
   # order, so any map-derived order would silently depend on the VM's global
-  # atom table. The FIRST row's key list is the header (R2).
+  # atom table. The FIRST row's pair list is the header (R2). Header keys are
+  # a MIX of atoms (unrenamed keys, metric) and strings (renamed keys);
+  # everything downstream `to_string`s them, so the mix is harmless.
   defp rows_for(items, testset, metric_name) do
     Enum.with_index(testset)
     |> Enum.map(fn {example, i} ->
@@ -492,61 +525,71 @@ defmodule Dspy.Evaluate do
       ex_keys = Map.keys(ex_attrs)
       pr_keys = Map.keys(pr_attrs)
 
-      # Per-row collision set: the keys that collide in THIS row only
-      # (upstream `merge_dicts`). Each entry is `{output_key, input_key}`.
+      # Per-row collision set: the STRING forms of the keys that collide in
+      # THIS row only (upstream `merge_dicts`). BB2: atom- and
+      # string-keyed attrs collide on their string form.
+      pr_string_keys = MapSet.new(pr_keys, &to_string/1)
+      ex_string_keys = MapSet.new(ex_keys, &to_string/1)
+
       ex_pairs =
         ex_keys
         |> Enum.sort()
         |> Enum.map(fn k ->
-          if k in pr_keys, do: {String.to_atom("example_" <> to_string(k)), k}, else: {k, k}
+          if to_string(k) in pr_string_keys do
+            {"example_" <> to_string(k), :example, k}
+          else
+            {k, :example, k}
+          end
         end)
 
       pr_pairs =
         pr_keys
         |> Enum.sort()
         |> Enum.map(fn k ->
-          if k in ex_keys, do: {String.to_atom("pred_" <> to_string(k)), k}, else: {k, k}
+          if to_string(k) in ex_string_keys do
+            {"pred_" <> to_string(k), :prediction, k}
+          else
+            {k, :prediction, k}
+          end
         end)
 
-      pairs = ex_pairs ++ pr_pairs ++ [{metric_name, item.score}]
-      keys = Enum.map(pairs, &elem(&1, 0))
+      pairs = ex_pairs ++ pr_pairs ++ [{metric_name, :metric, nil}]
 
       values =
-        Enum.map(pairs, fn {out_key, in_key} ->
-          lookup_attr(out_key, in_key, ex_attrs, pr_attrs, item.score)
+        Enum.map(pairs, fn {out_key, source, in_key} ->
+          lookup_attr(out_key, source, in_key, ex_attrs, pr_attrs, item.score)
         end)
 
-      {keys, values}
+      {pairs, values}
     end)
   end
 
-  # Resolve one `{output_key, input_key}` pair to its value.
+  # Resolve one `{output_key, source, input_key}` pair to its value, by
+  # EXPLICIT SOURCE — never by the key name (BB1):
   #
-  # - The metric pair `{metric_name, item.score}`: `in_key` is the score
-  #   itself (a number, not an attr key).
-  # - A renamed example pair `{example_<k>, <k>}`: the value is the example
-  #   attr `<k>`.
-  # - A renamed prediction pair `{pred_<k>, <k>}`: the value is the prediction
-  #   attr `<k>`.
-  # - A plain pair `{k, k}`: the value is the example attr `k` if present, else
-  #   the prediction attr `k`.
-  defp lookup_attr(out_key, in_key, ex_attrs, pr_attrs, _score) do
-    cond do
-      # Metric column: the input side carries the score directly.
-      is_number(in_key) ->
-        in_key
+  # - The metric pair `{metric_name, :metric, _}`: the score.
+  # - `{out_key, :example, k}`: the example attr `k` (covers both plain and
+  #   renamed example keys — the rename only changes the OUTPUT key).
+  # - `{out_key, :prediction, k}`: the prediction attr `k`.
+  defp lookup_attr(_out_key, :metric, _in_key, _ex_attrs, _pr_attrs, score) do
+    score
+  end
 
-      # Renamed example / prediction pair.
-      String.starts_with?(to_string(out_key), "example_") ->
-        Map.get(ex_attrs, in_key)
+  defp lookup_attr(_out_key, :example, in_key, ex_attrs, _pr_attrs, _score) do
+    Map.get(ex_attrs, in_key)
+  end
 
-      String.starts_with?(to_string(out_key), "pred_") ->
-        Map.get(pr_attrs, in_key)
+  defp lookup_attr(_out_key, :prediction, in_key, _ex_attrs, pr_attrs, _score) do
+    Map.get(pr_attrs, in_key)
+  end
 
-      # Plain (unrenamed) key.
-      true ->
-        Map.get(ex_attrs, in_key, Map.get(pr_attrs, in_key))
-    end
+  # The metric column value for ONE row (BB1): the value paired with the
+  # metric output key in THAT row's pairs. The metric pair is always last in
+  # the constructed key list, so `List.last` takes it in O(1) — and it is
+  # THIS row's own score, never another row's.
+  defp metric_value_for_row(pairs, values, _metric_out_key) do
+    {_metric_out_key, :metric, _} = List.last(pairs)
+    Enum.at(values, length(pairs) - 1)
   end
 
   # The metric column name (upstream `metric.__name__`, proposal A2): the
@@ -574,13 +617,42 @@ defmodule Dspy.Evaluate do
   # row's CONSTRUCTED key list. With the per-row rename (R1) a failed row
   # keeps its plain keys, so JSON rows are ragged in the QA shape (upstream's
   # shape; declared in docs/COMPATIBILITY.md).
+  #
+  # Metric-wins (upstream `out['metric'] = score`): an example/prediction
+  # field literally named after the metric column arrives here as a DISTINCT
+  # key (atom `:metric` column vs string `"metric"` field — or vice versa) —
+  # the duplicate-raise does not fire, and a naive `Map.new` over the zipped
+  # pairs leaves BOTH keys in the map. Jason then renders two `"metric"`
+  # entries and keeps ONE (ETS order, spec-undefined — in practice the
+  # FIELD, not the score). We match upstream exactly: build the row map
+  # from all pairs EXCEPT the metric pair, drop any key whose string form
+  # equals the metric column's (the field), then `Map.put` the metric pair
+  # LAST — so the JSON row has exactly ONE `metric` column holding the
+  # SCORE.
   defp maps_for_json(rows) do
-    Enum.map(rows, fn {keys, values} -> Map.new(Enum.zip(keys, values)) end)
+    Enum.map(rows, fn {pairs, values} ->
+      {metric_pair, metric_value} = {List.last(pairs), List.last(values)}
+      {metric_name, _source, _in_key} = metric_pair
+
+      base =
+        pairs
+        |> Enum.drop(-1)
+        |> Enum.map(&elem(&1, 0))
+        |> Enum.zip(Enum.drop(values, -1))
+        # Drop any key whose string form matches the metric column (but is
+        # not the metric key itself) — the field that upstream overwrites.
+        |> Enum.reject(fn {out_key, _value} ->
+          to_string(out_key) == to_string(metric_name) and out_key != metric_name
+        end)
+        |> Map.new()
+
+      Map.put(base, metric_name, metric_value)
+    end)
   end
 
   defp offending_key(rows, _error) do
-    Enum.find_value(rows, "unknown", fn {keys, values} ->
-      Enum.find_value(Enum.zip(keys, values), fn {key, value} ->
+    Enum.find_value(rows, "unknown", fn {pairs, values} ->
+      Enum.find_value(Enum.zip(Enum.map(pairs, &elem(&1, 0)), values), fn {key, value} ->
         case Jason.encode(value) do
           {:ok, _} -> nil
           {:error, _} -> key
@@ -589,8 +661,45 @@ defmodule Dspy.Evaluate do
     end)
   end
 
-  defp validate_rows!([_first | rest], header_set) do
-    Enum.each(rest, fn {keys, _values} ->
+  # Ruling 3 (fix round 3): a DUPLICATE column name raises, naming the column.
+  # Upstream silently renames the second occurrence (`a.1`, pandas
+  # duplicate-column behaviour), so data lands under a key nobody asked for.
+  # We will not copy data corruption. Checked on the STRING form of the
+  # header keys (the brief's "duplicate to_string key" wording): an atom
+  # `:metric` and a string `"metric"` in the same header ARE a duplicate
+  # (they render as the same CSV column text). The per-row collision rename
+  # does NOT fire on this overlap (it only renames example/prediction pairs
+  # that collide with EACH OTHER, not with the metric column), so a
+  # reachable shape — an example field literally named after the metric
+  # column (atom `:metric` when the metric column is the atom `:metric`;
+  # string `"metric"` when `:metric_name` is the string `"metric"`) —
+  # reaches the header as two keys whose string forms match → RAISES.
+  # (The JSON path has no such check; the map-merge last-in semantics apply
+  # there instead — the metric column wins over the field.)
+  defp validate_header_keys!(header_keys) do
+    seen = MapSet.new()
+
+    Enum.reduce_while(header_keys, seen, fn key, acc ->
+      string = to_string(key)
+
+      if acc |> MapSet.member?(string) do
+        {:halt,
+         raise(
+           ArgumentError,
+           "save_as_csv: duplicate column name #{inspect(string)} in the header (first row)"
+         )}
+      else
+        {:cont, MapSet.put(acc, string)}
+      end
+    end)
+  end
+
+  defp validate_rows!(rows, header_keys, header_set) do
+    # Ruling 3: the header itself must not carry a duplicate column name.
+    validate_header_keys!(header_keys)
+
+    Enum.each(rows, fn {pairs, _values} ->
+      keys = Enum.map(pairs, &elem(&1, 0))
       extra = keys -- MapSet.to_list(header_set)
 
       if extra != [] do
@@ -667,7 +776,8 @@ defmodule Dspy.Evaluate do
     if rows == [] do
       :ok
     else
-      [{header_keys, _} | _] = rows
+      [{header_pairs, _} | _] = rows
+      header_keys = Enum.map(header_pairs, &elem(&1, 0))
       header_line = header_keys |> Enum.map(&to_string/1) |> Enum.join(" | ")
       separator = String.replace(header_line, ~r/\S/, "-")
 
@@ -678,8 +788,8 @@ defmodule Dspy.Evaluate do
           rows
           |> Enum.drop(1)
           |> Enum.take(n)
-          |> Enum.map(fn {keys, values} ->
-            kv = Map.new(Enum.zip(keys, values))
+          |> Enum.map(fn {pairs, values} ->
+            kv = Map.new(Enum.zip(Enum.map(pairs, &elem(&1, 0)), values))
 
             header_keys
             |> Enum.map(fn key ->
