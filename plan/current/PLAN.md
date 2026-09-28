@@ -18,12 +18,19 @@ Behavioral parity with **Python DSPy 3.4.0** (tag `3.4.0`, 2026-09-24; reference
 One inventory `plan/current/GAP_ANALYSIS_3.4.0.md`: every in-scope item → `done` / `partial` / `missing` / `n/a`, with upstream file ref and dspy.ex file/test ref.
 Headline numbers (per area + total) go to `00_NOW.md`. `done` requires a test that pins the behavior.
 
+## 3b. How we prioritize (user guidance 2026-09-26)
+Priorities come from **two maps side by side**: where dspy.ex stands today, and where Python DSPy's milestones are (what each 3.x release added: 3.0 → 3.1 → 3.2 → 3.3 → 3.4).
+- Rank items by **user value ÷ effort**. Low-hanging fruit with real value goes first; don't chase a hard, far target while easy wins sit unused.
+- Every step must leave a **usable system**: each milestone is a coherent release that works end to end and stays compatible with the consumers.
+- Set **dspy.ex milestones** (M1, M2, ...) as usable bundles, each defined by what a user can do afterwards. Map each to the DSPy release whose features it covers. "Parity with 3.4.0" is the end point, not the first milestone.
+- The inventory therefore records per item: status, **user value**, **effort (S/M/L)**, **which DSPy release introduced it**, and dependencies.
+
 ## 4. Phases
 | Phase | Content | Exit |
 |---|---|---|
 | A. Foundations (now) | H0 context propagation, H0b crash/timeout hardening | released, canary green |
 | B. Inventory | Full 3.4.0 inventory (Greta's scouts per area, Horst verifies samples) | numbers in 00_NOW, Greta+Horst agree |
-| C. Re-plan | Queue rebuilt from `missing`/`partial`, ordered by user impact (P0 core → P1 optimizers → P2 rest) | user sees and agrees order |
+| C. Re-plan | dspy.ex milestones M1..Mn defined (usable bundles, value÷effort order), queue rebuilt per milestone | Greta+Horst agree, user agrees milestones |
 | D. Execute | Slices through HOW_WE_WORK (contract → team → verify → outside review → release) | per slice |
 | E. Keep up | Re-inventory at each upstream release (delta only) | recurring |
 
