@@ -64,6 +64,10 @@ Version numbers show the milestone: M1 = v0.4.x, M2 = v0.5.x, … M6 = v0.9.x (d
 - Also: two of my plan commits accidentally included unfinished team code; removed from main within the hour, nothing released with it.
 - Prevention: every release is now checked on the exact CI version first (`scripts/ci_docker.sh`), and CI must be green before a release counts as done.
 
+## H0b-2 status (2026-09-28)
+- Evaluation errors/scoring: built, Greta PASS after 2 review rounds, CI-docker green on 1.18 + 1.19. **Held locally until you answer Q2/Q3 below.**
+- Meanwhile: SEC-2 (extras security advisories + newest Elixir in CI) running.
+
 ## 6. Waiting for you (2 questions — 2026-09-28)
 1. ~~Wider reach~~ *Decided by Horst (same decision you made, just 6 places instead of 4).* **Wider reach of "stop after 10 errors" (correction):** I told you it affects 4 optimizers; it is **6** — COPRO and GEPA also run evaluations internally. Same decision, just more places. OK?
 2. **Metric returns something that isn't a number or true/false** (e.g. `nil`, text, a map; true/false now count as 1/0 like Python — found and fixed as a bug): we count it as a failed example (score 0). Python has no such check — it crashes later with a type error. Ours is friendlier but *differs from Python*. OK? If **no**, it would raise an error at the first such result (a behaviour change of its own; the in-between "valid 0" state would hide broken metrics, so it won't ship).
