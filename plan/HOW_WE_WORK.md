@@ -43,6 +43,14 @@ not something a test may paper over. Escalate instead. Corollary: when two write
 agree, they call **one shared function**, and the mutation that proves it is *removing the check
 from one side only* — if both sides stay green, they were agreeing by coincidence, not by design.
 
+**Take every date in a durable document from `date` or `git log` — never from memory**
+(2026-09-29). Multiple agents independently wrote **2026-10-01**, a date that had not happened,
+into release notes, compatibility docs, queue rows and signed contracts — 19 occurrences, two of
+them in files that were about to ship inside a tag. Nobody had a source; everybody guessed the
+same wrong way. Treat it as a shared failure mode, not one agent's slip: an agent has no
+reliable clock, so a date written from memory is fabricated evidence, and it is the kind that
+looks authoritative forever afterwards. This rule binds the lead equally.
+
 **Test the ORDINARY case first, then the edges** (2026-09-29). A regression walked through a
 green suite because every JSON test used rows of one shape or an exotic duplicate-key case, and
 **none covered the normal shape of a run containing a failure** — upstream's everyday output.

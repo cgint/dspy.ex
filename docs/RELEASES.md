@@ -8,7 +8,7 @@ This repo ships in **small, user-usable slices**.
 
 ## Consumer notes
 
-### M1-a evaluate output options (fix round 2, 2026-10-01)
+### M1-a evaluate output options (fix round 2, 2026-09-29)
 
 M1-a adds the upstream `EvaluationResult` output options to
 `Dspy.Evaluate.evaluate/4` (`display_table`, `save_as_csv`, `save_as_json`,

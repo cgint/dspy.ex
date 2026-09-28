@@ -160,7 +160,7 @@ Evidence:
   data — there we raise, and we declare it.** That is not a softening;
   raising is stricter than upstream, not friendlier.
 
-  Under this principle, the three M1-e rulings (Horst, 2026-10-01) are
+  Under this principle, the three M1-e rulings (Horst, 2026-09-29) are
   settled before M1-e:
 
   1. **CSV values stay STRINGS** (declared). Upstream guesses types via

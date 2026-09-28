@@ -171,7 +171,7 @@ The A1 signatures verbatim; A2's generator steps in own words, including why `n`
 - **E8 — `sample` included.** It shares the generator and costs one function. Can be split off if you want M1-e smaller.
 - **E9 — M1 exit example lives here (row 22)** and needs M1-d. If M1-e lands first, row 22 moves to M1-d.
 
-### RULED 2026-10-01 (Horst)
+### RULED 2026-09-28 (Horst)
 **Governing principle** (now in `plan/HOW_WE_WORK.md`): *we match upstream, except where upstream silently corrupts or loses data — there we raise, and we declare it.* Raising is stricter than upstream, not friendlier, so it does not weaken the parity rule of P-OUT and B1. The test for each case: is upstream making a design choice (match it), or losing the user's data (raise)?
 
 - **E1 — AGREED, generator RULED (M1-b F1):** our own generator, specified as CPython's MT19937 + `shuffle`/`sample` (A2), pinned by golden vectors from the committed `uv` generator under `plan/research/upstream_golden/`. **Python is a fixture-generation tool, not a runtime dependency:** nothing in `lib/` or `mix test` runs it, CI needs no Python, and the committed fixtures are the test input.
