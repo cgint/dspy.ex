@@ -107,4 +107,76 @@ defmodule H0b2.Support do
       end
     end
   end
+
+  # A metric that succeeds for the first `pass_calls` invocations and fails
+  # (raises) on every call after that. Backed by an `Agent` counter so the
+  # count is shared across the per-item task processes (process-local state
+  # does not cross the task boundary). Used to make the *base* evaluation pass
+  # while the *candidate* evaluations (which call the metric afterwards) hit
+  # the budget.
+  #
+  # Returns the metric function and the Agent pid, so the test can inspect the
+  # final call count (sanity check that candidate scoring actually ran).
+  def counter_metric(pass_calls, log_table \\ nil) do
+    {:ok, pid} = Agent.start_link(fn -> 0 end)
+
+    metric = fn _example, _prediction ->
+      n = Agent.get_and_update(pid, fn c -> {c, c + 1} end)
+
+      if log_table do
+        :ets.insert(log_table, {n})
+      end
+
+      if n < pass_calls do
+        1.0
+      else
+        raise "metric failed after #{pass_calls} calls (call #{n + 1})"
+      end
+    end
+
+    {metric, pid}
+  end
+
+  # A scripted LM whose `generate/2` answer depends on the call sequence.
+  #
+  # Each `fn` in the script is 0-arity and MUST return the text content of
+  # the assistant message. Calls beyond the scripted list repeat the last
+  # entry. The counter lives in `:persistent_term` (keyed by a unique LM
+  # instance key) so the sequence works even though Evaluate's per-example
+  # tasks do not share the caller's process dictionary. With
+  # `num_threads: 1` the call order is deterministic.
+  defmodule ScriptedLM do
+    @behaviour Dspy.LM
+    defstruct [:script, :key]
+
+    def new(script) do
+      key = {__MODULE__, System.unique_integer([:positive])}
+      :persistent_term.put(key, 0)
+      %__MODULE__{script: script, key: key}
+    end
+
+    @impl true
+    def generate(%__MODULE__{script: script, key: key}, _request) do
+      n = :persistent_term.get(key)
+      :persistent_term.put(key, n + 1)
+
+      content =
+        if n < length(script) do
+          Enum.at(script, n).()
+        else
+          hd(script).()
+        end
+
+      {:ok,
+       %{
+         choices: [
+           %{message: %{role: "assistant", content: content}, finish_reason: "stop"}
+         ],
+         usage: nil
+       }}
+    end
+
+    @impl true
+    def supports?(_lm, _feature), do: true
+  end
 end

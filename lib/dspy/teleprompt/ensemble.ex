@@ -234,6 +234,7 @@ defmodule Dspy.Teleprompt.Ensemble do
   alias Dspy.{Example, Evaluate, Trainset}
   alias Dspy.Teleprompt.{BootstrapFewShot, LabeledFewShot}
 
+  require Logger
   alias __MODULE__.Program
 
   defstruct [
@@ -485,7 +486,20 @@ defmodule Dspy.Teleprompt.Ensemble do
         {:ok, weights}
 
       :weighted_average ->
-        calculate_performance_weights(teleprompt, members, val_data)
+        # Small trainsets can split to an empty validation set (Trainset.split
+        # uses round(n * 0.8) for the train side, so n=1..2 leave 0 val
+        # examples). Weights are then unmeasurable — use equal weights instead
+        # of calling Evaluate.evaluate/4 with [] (which raises ArgumentError).
+        if val_data == [] do
+          Logger.info(
+            "Ensemble: empty validation split (trainset too small); " <>
+              "using equal member weights for :weighted_average"
+          )
+
+          {:ok, Enum.map(members, fn _ -> 1.0 end)}
+        else
+          calculate_performance_weights(teleprompt, members, val_data)
+        end
 
       :confidence_based ->
         weights = members |> Enum.map(fn _ -> 1.0 end)
@@ -571,7 +585,15 @@ defmodule Dspy.Teleprompt.Ensemble do
     {:ok, weights}
   end
 
-  defp calculate_stacking_weights(_teleprompt, members, _val_data) do
+  defp calculate_stacking_weights(_teleprompt, members, val_data) do
+    if val_data == [] do
+      # Same small-trainset guard as :weighted_average (empty val split).
+      Logger.info(
+        "Ensemble: empty validation split (trainset too small); " <>
+          "using equal member weights for :stacking"
+      )
+    end
+
     weights = members |> Enum.map(fn _ -> 1.0 / length(members) end)
     {:ok, weights}
   end
