@@ -175,7 +175,7 @@ defmodule Dspy.Teleprompt do
   end
 
   # Boolean metric results map to 1.0 / 0.0 (Python bool arithmetic,
-  # upstream `evaluate.py:182` — Python sums `True`/`False` as 1/0). Anything
+  # upstream `evaluate.py:183` — Python sums `True`/`False` as 1/0). Anything
   # else that is not a number is `:error` (a failed metric run).
   defp normalize_score(true), do: 1.0
   defp normalize_score(false), do: 0.0

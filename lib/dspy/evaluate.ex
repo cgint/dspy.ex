@@ -96,7 +96,7 @@ defmodule Dspy.Evaluate do
   """
   @spec evaluate(Dspy.Module.t(), list(Example.t()), function(), keyword()) :: evaluation_result()
   def evaluate(program, testset, metric_fn, opts \\ []) do
-    # Q3 (upstream evaluate.py:162-163): an empty testset is a caller error.
+    # Q3 (upstream evaluate.py:157-158): an empty testset is a caller error.
     if testset == [] do
       raise ArgumentError, "devset must contain at least one example"
     end
