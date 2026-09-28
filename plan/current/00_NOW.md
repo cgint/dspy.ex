@@ -1,40 +1,47 @@
-# NOW — dspy.ex at a glance (for humans)
+# dspy.ex — where we are (plain overview)
 
-Updated: 2026-09-26 by Horst. Kept current at every slice acceptance/release. One page, no history (history → `STATUS.md`).
+Updated 2026-09-26 by Horst. Details for the team: `PLAN.md`.
 
-## Target & position (see PLAN.md)
-- Target: behavioral parity with **Python DSPy 3.4.0**, native Elixir. Plan: `PLAN.md` (v2: Greta's critique adopted; one amendment pending her OK).
-- Remaining count / % done: **unknown until the 3.4.0 inventory (phase B)** — the May analysis was only a delta, not a full inventory.
-- Current phase: A (H0 done v0.3.44; H0b next) + B (3.4.0 inventory) starting in parallel.
+## 1. What we are building
+An Elixir version of Python DSPy that **behaves like Python DSPy 3.4.0** (the newest release, Sept 2026). Pure Elixir, no Python inside.
+Rule for every release: the 5 projects that already use dspy.ex must keep working.
 
-## Goal
-Native Elixir port of Python DSPy (the behavioral reference). No Python wrapper. Every release keeps the 5 consumer projects compiling (consumer canary).
+## 2. How far along are we?
+- Python DSPy 3.4.0 offers about **135 public features** (classes and functions).
+- How many of those dspy.ex already has: **not counted yet.** We are counting now (see 4). Result expected within about half a day.
+- Until then, only this is certain: the basics (signatures, Predict, ChainOfThought, adapters, LM calls, evaluation, several optimizers) exist and are tested; 5 features were added this week (table below).
 
-## Done (latest)
-| Tag | What |
+## 3. How we will get there
+Not in one big push, but in **milestones**. Each milestone:
+- adds a bundle of features that is useful on its own,
+- is proven by a working end-to-end example,
+- keeps the 5 existing user projects working.
+
+Order: **most useful for least effort first**, respecting what depends on what. Hard, low-value features come last. Anything that would break existing users comes to you first.
+The milestones themselves will be proposed after the count (step 4) — you approve them.
+
+## 4. What is happening right now
+| What | Why | Who | Status |
+|---|---|---|---|
+| Counting: which of the ~135 features dspy.ex has, partly has, or lacks | gives you the numbers for section 2 and the basis for milestones | Greta + helper agents; Horst checks samples | running |
+| Making parallel work crash-safe (a crash or timeout in one background task must not take the whole program down) | reliability of optimizers and evaluation | Greta prepares, then a worker team | preparing |
+
+## 5. Done this week
+| Version | What users get |
 |---|---|
-| v0.3.40 | `Dspy.context/2` (scoped settings overrides) |
-| v0.3.41 | `Dspy.BestOfN` + rollout-aware LM cache |
-| v0.3.42 | `Dspy.Parallel` |
-| v0.3.43 | `Dspy.MultiChainComparison` |
-| v0.3.44 | `Dspy.Context`: caller settings + callbacks reach all 13 spawn sites (H0) |
+| v0.3.40 | `Dspy.context`: temporarily change settings (e.g. which LM) for one block of code |
+| v0.3.41 | `Dspy.BestOfN`: try a program up to N times, keep the best answer |
+| v0.3.42 | `Dspy.Parallel`: run many programs/inputs at once |
+| v0.3.43 | `Dspy.MultiChainComparison`: compare several reasoning attempts, pick the best |
+| v0.3.44 | Settings from `Dspy.context` now also apply inside background work (evaluation, optimizers, tools) |
 
-## In progress
-| Slice | State | Owner |
-|---|---|---|
-| Phase B: 3.4.0 inventory (target/remaining/position numbers) | scouts running, ~half a day | Greta |
-| H0b crash/timeout hardening at spawn sites | groundwork (Greta's scouts) → Clarity Gate → launch after H0 | Greta / Horst |
+## 6. Waiting for you
+- Nothing right now. Next time you'll be asked: approve the milestones and the list of Python features we deliberately skip (with reasons).
 
-## Next (order)
-1. P4 program `save/load` · 2. P5 `inspect_history` · 3. Gap analysis vs Python DSPy **3.4.0** (last one is May, 210 upstream commits behind) — *needs your go* (updates `../dspy` reference checkout).
+## 7. Standing decisions (yours)
+- Python DSPy is the reference: when unsure, do what Python does.
+- Pure Elixir: no Python wrapper; anything Python-based needs your approval.
+- Jido and LiveView can be added on top later; the library doesn't depend on them.
 
-## Waiting for you
-- Nothing right now — PLAN.md v1 is being reviewed with Greta; you get the agreed version.
-
-## Decisions (standing)
-- Python DSPy is the behavioral reference (no usage merge-back from child processes).
-- Native port only; any Python-backed piece needs your approval. Jido/LiveView = optional layers on top.
-
-## Where things live
-All in `plan/current/`: queue `PARITY_QUEUE.md` · status/history `STATUS.md` · gap analysis vs upstream `GAP_ANALYSIS_2026-05.md` (May, stale-ish).
-Process: `plan/HOW_WE_WORK.md` · everything else: `plan/README.md`.
+## Files in this folder
+`PLAN.md` detailed plan · `PARITY_QUEUE.md` work list · `STATUS.md` history log · `GAP_ANALYSIS_2026-05.md` old partial analysis (will be replaced by the count).

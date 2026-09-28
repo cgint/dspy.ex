@@ -71,3 +71,6 @@ Horst updates `plan/current/00_NOW.md` at every slice acceptance/release and whe
 
 ## Toolbox
 colgrep / `rg` (repo search) · `cg-task.sh investigate|diff-review|architecture-review|discrepancy-check -d lib/dspy/...` · `asks.sh liveview-elixir-phoenix-beam` · Elixir expert agent (cwd `~/dev/concepts/advisor-agent-elixir/`) · upstream `../dspy` · `openspec` · Herdr supervisor scripts. Tool output is a lead, not proof. No Dialyzer in this repo (not a gate).
+
+## 00_NOW writing rule (user feedback 2026-09-26)
+`plan/current/00_NOW.md` is for the user, not the team: plain language, no internal codes (H0b, phase B, canary, facets), no contradictions with other files. Answer: what are we building, how far along (numbers), how we get there (milestones), what's happening now and why, what's done, what waits for the user. Team detail goes in `PLAN.md`.
