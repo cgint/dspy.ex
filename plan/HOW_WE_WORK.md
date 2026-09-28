@@ -34,6 +34,13 @@ never infer state from a terminal spinner. Prompting goes through `herdr_prompt_
 `sleep 150`/`240`/`280` around a backgrounded await. It burns tokens, adds uncontrolled latency,
 and yields strictly less information than one blocking call. Applies to Horst and Greta equally.
 
+**Never run a mutation with `mix test --trace`** (2026-09-28). `--trace` disables ExUnit's
+per-test timeouts, so a mutation whose failure mode is a *hang* runs forever instead of going
+red — a worker burned 40 minutes on exactly this. Use `--timeout <ms>`. Note also that a
+mutation detected only by timeout is weaker evidence than one detected by an assertion: it is
+acceptable when the hang is deterministic (e.g. removing a `receive` clause), but say so
+explicitly in the verdict rather than reporting a bare "RED".
+
 **A mutation is not done until it is restored.** No verdict may be produced over a tree that
 still carries a mutation: the worker restores the file, re-runs green, and `git status
 --porcelain` is **empty**, proven by the actual command output, not by the worker's word.

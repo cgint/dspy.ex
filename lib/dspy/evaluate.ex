@@ -439,9 +439,10 @@ defmodule Dspy.Evaluate do
   # Q2 (H0b-2): a metric result that is neither a number nor a boolean
   # raises `Dspy.Evaluate.InvalidMetricResult` (via a tagged `throw`) BEFORE
   # the per-example catch-all sees it, so it can never be turned into a
-  # failed 0.0. The tagged value crosses the `Task.async_stream` boundary as
-  # `{:exit, {:invalid_metric_result, _}}`, which the stream consumer
-  # re-raises (TRAP 2). A *raising* metric is a separate case: `run_metric`
+  # failed 0.0. The `throw` is caught inside the stream function and returned
+  # as a tagged *value*, so it crosses the `Task.async_stream` boundary as
+  # `{:ok, {:invalid_metric_result, _}}`, which the stream consumer re-raises
+  # (TRAP 2). A *raising* metric is a separate case: `run_metric`
   # returns `:error`, which throws `{:metric_raised, _}` and is rebuilt as a
   # failed example at the stream boundary (D-U1, unchanged).
   defp evaluate_item(program, example, metric_fn, failure_score, example_index) do
