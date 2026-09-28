@@ -390,12 +390,66 @@ defmodule Dspy.Evaluate do
       end
     end
 
-    if output.save_as_json do
-      save_json(rows_for(items, testset, output.metric_name), output.save_as_json)
-    end
+    # M1-a (R4): prepare BOTH payloads in memory BEFORE writing either file —
+    # the JSON payload is fully encoded (a non-encodable value raises here,
+    # naming the key) and the CSV is validated + encoded (a ragged row raises
+    # here, naming the key). A failure in either payload therefore writes
+    # NOTHING (no partial JSON left behind by a CSV failure, and vice versa);
+    # an EXISTING file at either path stays untouched (upstream would
+    # overwrite it with a partial one). Files are written in upstream order:
+    # CSV first, then JSON.
+    csv_payload =
+      if output.save_as_csv do
+        rows = rows_for(items, testset, output.metric_name)
+        [header | _] = rows
+        header_keys = elem(header, 0)
+        header_set = MapSet.new(header_keys)
+
+        validate_rows!(rows, header_set)
+
+        csv_rows =
+          [Enum.map(header_keys, &to_string/1)] ++
+            Enum.map(rows, fn {keys, values} ->
+              kv = Map.new(Enum.zip(keys, values))
+
+              Enum.map(header_keys, fn key ->
+                case Map.fetch(kv, key) do
+                  {:ok, value} -> cell_to_string(value)
+                  :error -> ""
+                end
+              end)
+            end)
+
+        NimbleCSV.RFC4180.dump_to_iodata(csv_rows) |> IO.iodata_to_binary()
+      else
+        nil
+      end
+
+    json_payload =
+      if output.save_as_json do
+        # M1-a (row 10d): the COMPLETE JSON payload is built in memory before
+        # either file is opened (R4). A non-encodable value (e.g. a PID)
+        # raises, naming the offending key, and NOTHING is written.
+        rows = rows_for(items, testset, output.metric_name)
+
+        try do
+          Jason.encode!(maps_for_json(rows))
+        rescue
+          e ->
+            raise ArgumentError,
+                  "save_as_json: cannot encode value for key #{inspect(offending_key(rows, e))} " <>
+                    "(#{Exception.message(e)})"
+        end
+      else
+        nil
+      end
 
     if output.save_as_csv do
-      save_csv(rows_for(items, testset, output.metric_name), output.save_as_csv)
+      File.write!(output.save_as_csv, csv_payload)
+    end
+
+    if output.save_as_json do
+      File.write!(output.save_as_json, json_payload)
     end
 
     if show_progress do
@@ -416,22 +470,18 @@ defmodule Dspy.Evaluate do
   # A failed item carries an empty Prediction, so its row is the example fields
   # plus the metric only (upstream `:237`).
   #
-  # The collision set is computed GLOBALLY (across all rows) so that the rename
-  # is consistent: if ANY row has a collision on key `k`, ALL rows rename `k`
-  # to `example_<k>` / `pred_<k>`.
+  # The collision set is computed PER ROW (upstream `merge_dicts` renames one
+  # row at a time): only the keys that collide in THAT row are renamed. A
+  # failed row (empty prediction) therefore has no collisions and keeps its
+  # plain keys — including a shared field name like `answer`, which is NOT in
+  # the (first successful row's) header, so `save_as_csv` raises naming it.
+  #
+  # Rows are `{key_list, values}` pairs (NOT maps, NOT a header map): the key
+  # order is CONSTRUCTED (sorted groups), never derived from `Map.keys/1` —
+  # since OTP 26 a small map lists atom keys in creation order, not sorted
+  # order, so any map-derived order would silently depend on the VM's global
+  # atom table. The FIRST row's key list is the header (R2).
   defp rows_for(items, testset, metric_name) do
-    global_collisions =
-      Enum.reduce(testset, MapSet.new(), fn example, acc ->
-        idx = Enum.find_index(testset, &(&1 == example))
-        item = Enum.at(items, idx)
-        prediction = if item.prediction == nil, do: Prediction.new(), else: item.prediction
-
-        ex_keys = Map.keys(example.attrs)
-        pr_keys = Map.keys(prediction.attrs)
-
-        MapSet.union(acc, MapSet.new(Enum.filter(ex_keys, fn k -> k in pr_keys end)))
-      end)
-
     Enum.with_index(testset)
     |> Enum.map(fn {example, i} ->
       item = Enum.at(items, i)
@@ -439,36 +489,64 @@ defmodule Dspy.Evaluate do
 
       ex_attrs = example.attrs
       pr_attrs = prediction.attrs
+      ex_keys = Map.keys(ex_attrs)
+      pr_keys = Map.keys(pr_attrs)
 
-      ex_row =
-        ex_attrs
-        |> Map.keys()
+      # Per-row collision set: the keys that collide in THIS row only
+      # (upstream `merge_dicts`). Each entry is `{output_key, input_key}`.
+      ex_pairs =
+        ex_keys
         |> Enum.sort()
         |> Enum.map(fn k ->
-          if MapSet.member?(global_collisions, k) do
-            {String.to_atom("example_" <> to_string(k)), k}
-          else
-            {k, k}
-          end
+          if k in pr_keys, do: {String.to_atom("example_" <> to_string(k)), k}, else: {k, k}
         end)
-        |> Enum.into(%{}, fn {out, in_} -> {out, Map.get(ex_attrs, in_)} end)
 
-      pr_row =
-        pr_attrs
-        |> Map.keys()
+      pr_pairs =
+        pr_keys
         |> Enum.sort()
         |> Enum.map(fn k ->
-          if MapSet.member?(global_collisions, k) do
-            {String.to_atom("pred_" <> to_string(k)), k}
-          else
-            {k, k}
-          end
+          if k in ex_keys, do: {String.to_atom("pred_" <> to_string(k)), k}, else: {k, k}
         end)
-        |> Enum.into(%{}, fn {out, in_} -> {out, Map.get(pr_attrs, in_)} end)
 
-      row = Map.merge(ex_row, pr_row)
-      Map.put(row, metric_name, item.score)
+      pairs = ex_pairs ++ pr_pairs ++ [{metric_name, item.score}]
+      keys = Enum.map(pairs, &elem(&1, 0))
+
+      values =
+        Enum.map(pairs, fn {out_key, in_key} ->
+          lookup_attr(out_key, in_key, ex_attrs, pr_attrs, item.score)
+        end)
+
+      {keys, values}
     end)
+  end
+
+  # Resolve one `{output_key, input_key}` pair to its value.
+  #
+  # - The metric pair `{metric_name, item.score}`: `in_key` is the score
+  #   itself (a number, not an attr key).
+  # - A renamed example pair `{example_<k>, <k>}`: the value is the example
+  #   attr `<k>`.
+  # - A renamed prediction pair `{pred_<k>, <k>}`: the value is the prediction
+  #   attr `<k>`.
+  # - A plain pair `{k, k}`: the value is the example attr `k` if present, else
+  #   the prediction attr `k`.
+  defp lookup_attr(out_key, in_key, ex_attrs, pr_attrs, _score) do
+    cond do
+      # Metric column: the input side carries the score directly.
+      is_number(in_key) ->
+        in_key
+
+      # Renamed example / prediction pair.
+      String.starts_with?(to_string(out_key), "example_") ->
+        Map.get(ex_attrs, in_key)
+
+      String.starts_with?(to_string(out_key), "pred_") ->
+        Map.get(pr_attrs, in_key)
+
+      # Plain (unrenamed) key.
+      true ->
+        Map.get(ex_attrs, in_key, Map.get(pr_attrs, in_key))
+    end
   end
 
   # The metric column name (upstream `metric.__name__`, proposal A2): the
@@ -492,26 +570,17 @@ defmodule Dspy.Evaluate do
     _, _ -> :unknown
   end
 
-  defp save_json(rows, path) do
-    # M1-a (row 10d): the COMPLETE payload is built and validated in memory
-    # before the file is opened. A non-encodable value (e.g. a PID) raises,
-    # naming the offending key, and the target path never exists.
-    encoded =
-      try do
-        Jason.encode!(rows)
-      rescue
-        e ->
-          raise ArgumentError,
-                "save_as_json: cannot encode value for key #{inspect(offending_key(rows, e))} " <>
-                  "(#{Exception.message(e)})"
-      end
-
-    File.write!(path, encoded)
+  # JSON rows keep maps (Jason needs that shape); each map is rebuilt from the
+  # row's CONSTRUCTED key list. With the per-row rename (R1) a failed row
+  # keeps its plain keys, so JSON rows are ragged in the QA shape (upstream's
+  # shape; declared in docs/COMPATIBILITY.md).
+  defp maps_for_json(rows) do
+    Enum.map(rows, fn {keys, values} -> Map.new(Enum.zip(keys, values)) end)
   end
 
   defp offending_key(rows, _error) do
-    Enum.find_value(rows, "unknown", fn row ->
-      Enum.find_value(row, fn {key, value} ->
+    Enum.find_value(rows, "unknown", fn {keys, values} ->
+      Enum.find_value(Enum.zip(keys, values), fn {key, value} ->
         case Jason.encode(value) do
           {:ok, _} -> nil
           {:error, _} -> key
@@ -520,36 +589,9 @@ defmodule Dspy.Evaluate do
     end)
   end
 
-  defp save_csv(rows, path) do
-    # M1-a (corrected rule): the header is the FIRST row's keys, in A3 order.
-    # A later row carrying a key the header does NOT have raises, naming that
-    # key. A later row MISSING header keys is written with empty cells.
-    # The full CSV string is built in memory before the file is opened (10d).
-    [header | _] = rows
-    header_keys = Map.keys(header)
-
-    validate_rows!(rows, header_keys)
-
-    header_cells = Enum.map(header_keys, &to_string/1)
-
-    csv_rows =
-      [header_cells] ++
-        Enum.map(rows, fn row ->
-          Enum.map(header_keys, fn key ->
-            case Map.get(row, key) do
-              nil -> ""
-              value -> cell_to_string(value)
-            end
-          end)
-        end)
-
-    csv = NimbleCSV.RFC4180.dump_to_iodata(csv_rows) |> IO.iodata_to_binary()
-    File.write!(path, csv)
-  end
-
-  defp validate_rows!([_first | rest], header_keys) do
-    Enum.each(rest, fn row ->
-      extra = Map.keys(row) -- header_keys
+  defp validate_rows!([_first | rest], header_set) do
+    Enum.each(rest, fn {keys, _values} ->
+      extra = keys -- MapSet.to_list(header_set)
 
       if extra != [] do
         raise ArgumentError,
@@ -601,8 +643,12 @@ defmodule Dspy.Evaluate do
   defp item_error_from(kind, reason, example, failure_score, provide_traceback, stacktrace) do
     error =
       case {kind, reason} do
-        {:exception, e} ->
-          {:exception, %{type: e.__struct__, message: Exception.message(e)}}
+        # `catch` yields kind `:error` for a rescued exception (NOT `:exception`
+        # — that match was dead code since v0.3.48). A metric exception that
+        # reaches this catch-all is recorded in the standard `{:exception, ...}`
+        # shape, exactly like a forward exception.
+        {:error, %_{} = exception} ->
+          {:exception, %{type: exception.__struct__, message: Exception.message(exception)}}
 
         _ ->
           {:caught, kind, reason}
@@ -621,8 +667,7 @@ defmodule Dspy.Evaluate do
     if rows == [] do
       :ok
     else
-      [header | _] = rows
-      header_keys = Map.keys(header)
+      [{header_keys, _} | _] = rows
       header_line = header_keys |> Enum.map(&to_string/1) |> Enum.join(" | ")
       separator = String.replace(header_line, ~r/\S/, "-")
 
@@ -633,10 +678,15 @@ defmodule Dspy.Evaluate do
           rows
           |> Enum.drop(1)
           |> Enum.take(n)
-          |> Enum.map(fn row ->
+          |> Enum.map(fn {keys, values} ->
+            kv = Map.new(Enum.zip(keys, values))
+
             header_keys
             |> Enum.map(fn key ->
-              row |> Map.get(key) |> cell_to_string() |> truncate_cell()
+              case Map.fetch(kv, key) do
+                {:ok, value} -> cell_to_string(value) |> truncate_cell()
+                :error -> ""
+              end
             end)
             |> Enum.join(" | ")
           end)

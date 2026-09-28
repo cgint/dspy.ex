@@ -125,8 +125,34 @@ and `metric_name`. Three deviations from upstream are declared explicitly:
   representable 2-decimal floats. Noted; nothing is built for it (the
   probability of a binary-exact tie in a real evaluation is negligible).
 
+- **(d) Per-row collision rename (upstream parity, not a deviation).** The
+  example/prediction key collision (`answer` shared by both) is renamed
+  `example_<k>` / `pred_<k>` **one row at a time** (upstream `merge_dicts`,
+  evaluate.py:310-330). A failed row carries an empty prediction, so it has no
+  collisions and keeps its **plain** keys. Consequence for the QA shape (where
+  `answer` is both an example and a prediction field): if ANY example fails and
+  you `save_as_csv`, the failed row's plain `answer` is NOT in the (first
+  successful row's) header, so `save_as_csv` **raises naming `answer`** — this
+  is upstream's behaviour. JSON rows are accordingly ragged in that shape (the
+  failed row keeps `answer`, the successful rows use `example_answer`/
+  `pred_answer`); that is upstream's JSON shape. (Fix round 2: previously we
+  computed the collision set across ALL rows, which diverged from upstream —
+  a failed row would wrongly also be renamed, so the raise did not happen.)
+
+- **(e) Throwing/exiting metric no longer crashes the caller (v0.3.48 fix).**
+  A metric that `throw`s or `exit`s used to crash the caller on v0.3.48 (the
+  pre-M1-a catch-all did not cover `throw`/`exit` from the metric path). M1-a's
+  per-item catch-all now records each in its own position as
+  `{:caught, :throw, reason}` / `{:caught, :exit, reason}`. Additionally, a
+  metric EXCEPTION that reaches the catch-all is now recorded in the standard
+  `{:exception, ...}` shape — the old `{:exception, _}` catch-kind match was
+  dead code (Elixir `catch` yields `:error`, not `:exception`). (The D-U1
+  raising-metric path — a metric that raises and is RESCUED by the metric
+  wrapper — is unchanged: it is `{:metric_error, :raised}` at `failure_score`.)
+
 Evidence:
-- `test/evaluate/save_results_test.exs` — rows #6, #7, #8, #9, 10c, 10d, 10e
+- `test/evaluate/save_results_test.exs` — rows #6, #7, #8, #9, 10c, 10d, 10e, B1, B2, R4
+- `test/evaluate/metric_throw_exit_test.exs` — R3 (throw/exit metric pin, D-U1 raise unchanged)
 - `test/evaluate/empty_devset_test.exs` — row 11 (ported oracle)
 - `test/evaluate/result_test.exs` — rows #1-#5, #10a (SS1-SS2, already shipped)
 

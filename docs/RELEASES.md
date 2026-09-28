@@ -8,6 +8,29 @@ This repo ships in **small, user-usable slices**.
 
 ## Consumer notes
 
+### M1-a evaluate output options (fix round 2, 2026-10-01)
+
+M1-a adds the upstream `EvaluationResult` output options to
+`Dspy.Evaluate.evaluate/4` (`display_table`, `save_as_csv`, `save_as_json`,
+`provide_traceback`, `display_progress`, `metric_name`). Two consumer-facing
+behaviours from fix round 2, both declared in `docs/COMPATIBILITY.md`:
+
+- **Per-row collision rename (upstream parity).** A shared example/prediction
+  field (e.g. `answer`) is renamed `example_<k>` / `pred_<k>` one row at a
+  time (upstream `merge_dicts`, evaluate.py:310-330). After M1-a, saving CSV
+  from a QA run whose examples share an `answer` field **will raise if ANY
+  example failed** (the failed row keeps the plain `answer`, which is not in
+  the header). This is upstream behaviour; unlike upstream we leave no
+  partial file.
+
+- **Throwing/exiting metric no longer crashes the caller.** M1-a fixes a
+  v0.3.48 path where a metric that `throw`s or `exit`s crashed the caller;
+  each is now recorded in its own position as `{:caught, :throw, reason}` /
+  `{:caught, :exit, reason}`. A metric EXCEPTION reaching the catch-all is
+  now recorded in the standard `{:exception, ...}` shape (the `{:exception, _}`
+  catch-kind match was dead code — `catch` yields `:error`, not
+  `:exception`).
+
 ### Security dependency floors (SEC-1, 2026-09-28)
 
 From the next release, `:dspy` declares direct floors on its transitive HTTP stack:
