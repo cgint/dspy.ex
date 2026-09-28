@@ -3,9 +3,9 @@
 Updated: 2026-09-26 by Horst. Kept current at every slice acceptance/release. One page, no history (history → `STATUS.md`).
 
 ## Target & position (see PLAN.md)
-- Target: behavioral parity with **Python DSPy 3.4.0**, native Elixir. Plan: `PLAN.md` (DRAFT v1, under Greta's review).
+- Target: behavioral parity with **Python DSPy 3.4.0**, native Elixir. Plan: `PLAN.md` (v2: Greta's critique adopted; one amendment pending her OK).
 - Remaining count / % done: **unknown until the 3.4.0 inventory (phase B)** — the May analysis was only a delta, not a full inventory.
-- Current phase: A (foundations: H0, H0b).
+- Current phase: A (H0 done v0.3.44; H0b next) + B (3.4.0 inventory) starting in parallel.
 
 ## Goal
 Native Elixir port of Python DSPy (the behavioral reference). No Python wrapper. Every release keeps the 5 consumer projects compiling (consumer canary).
@@ -17,11 +17,12 @@ Native Elixir port of Python DSPy (the behavioral reference). No Python wrapper.
 | v0.3.41 | `Dspy.BestOfN` + rollout-aware LM cache |
 | v0.3.42 | `Dspy.Parallel` |
 | v0.3.43 | `Dspy.MultiChainComparison` |
+| v0.3.44 | `Dspy.Context`: caller settings + callbacks reach all 13 spawn sites (H0) |
 
 ## In progress
 | Slice | State | Owner |
 |---|---|---|
-| H0 caller context into all 13 spawn sites | all sites tested + mutation-proven, gates green; **awaiting Greta's outside verdict** → v0.3.44 | Judith's team |
+| Phase B: 3.4.0 inventory (target/remaining/position numbers) | scouts running, ~half a day | Greta |
 | H0b crash/timeout hardening at spawn sites | groundwork (Greta's scouts) → Clarity Gate → launch after H0 | Greta / Horst |
 
 ## Next (order)
