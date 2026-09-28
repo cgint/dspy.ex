@@ -34,6 +34,23 @@ never infer state from a terminal spinner. Prompting goes through `herdr_prompt_
 `sleep 150`/`240`/`280` around a backgrounded await. It burns tokens, adds uncontrolled latency,
 and yields strictly less information than one blocking call. Applies to Horst and Greta equally.
 
+**Urgent findings go to a FILE, not only to a pane** (2026-09-28). `herdr_prompt_agent.sh`
+refuses a `working` target, so an urgent finding can fail to deliver repeatedly while the lead
+is mid-round — and silently. Observed: a reviewer found a silent data-loss bug during a fix
+round, tried to send it several times, never got through, and the fix round shipped without it.
+**Rule:** anyone holding an urgent finding writes it to
+`plan/research/pi_handoffs/URGENT.md` (append, dated, with sender and sha) *and* attempts the
+send. The lead **reads that file at every round boundary** — before accepting a report, before
+committing, and before asking for a verdict. A second failed send is itself a signal: stop and
+write it down rather than retrying into a busy pane.
+
+**Parity, except where upstream silently corrupts or loses data** (2026-09-28). Where upstream's
+behaviour is a design choice we match it, even when ours would be friendlier — that is the P-OUT
+and B1 rule. But where upstream silently *corrupts* (pandas type-guessing turning an integer
+column into floats; a row with an extra field scrambled into a different shape; a duplicate
+column quietly renamed `a.1`), we **raise and declare it**. Raising is *stricter* than upstream,
+not friendlier, so it does not weaken the parity rule — it protects the user's data.
+
 **A test that calls global `Dspy.configure/1` MUST be `async: false`** (2026-09-28). `configure/1`
 mutates global settings, so an `async: true` test using it races every other async test and makes
 the whole suite non-deterministic. Prefer process-scoped `Dspy.context/2` (which propagates into
