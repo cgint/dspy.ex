@@ -24,6 +24,20 @@ Slice mechanics/gates: `plan/SLICE_LOOP.md`. Backlog: `plan/current/PARITY_QUEUE
 **Test-evidence rule:** a test counts only if it goes through the library's public entry point; mirror tests (re-implementing the logic in the test) or source greps are not evidence (lesson H0b-1, 2026-09-28: 6 of 10 sites 'proven' by mirror tests; Greta's BLOCK).
 **Push rule:** push to main only after Greta's PASS on the exact sha being pushed, or on a content-identical ancestor with only release metadata (VERSION, RELEASES row) after it (lesson 2026-09-28, EXT-HTTP pushed before re-verdict).
 **Evidence rule:** every sub-agent claim ships with the raw command + a saved log path; no log = unverified (lesson 2026-09-28: a scout reported non-matching CVE ids and called a logged-in-chat result 'not reproducible'). Leads save their own logs too.
+**Wait with the helper, never with sleeps** (2026-09-28, user). `herdr_await_agent.sh` is
+event-based and blocking: call it **once, in the foreground, with a long `--timeout-ms`**, and
+let it return lifecycle state plus a bounded terminal snapshot. If it times out, call it again.
+Do **not** wrap it in `sleep`, do not background it and poll `herdr agent get` around it, and
+never infer state from a terminal spinner. Prompting goes through `herdr_prompt_agent.sh`, never
+`pane send-text`/`send-keys` (except a deliberate `esc` interrupt by the owner). Observed
+2026-09-28 at both levels: the lead polled `sleep 240` loops and the architect buddy ran
+`sleep 150`/`240`/`280` around a backgrounded await. It burns tokens, adds uncontrolled latency,
+and yields strictly less information than one blocking call. Applies to Horst and Greta equally.
+
+**A mutation is not done until it is restored.** No verdict may be produced over a tree that
+still carries a mutation: the worker restores the file, re-runs green, and `git status
+--porcelain` is **empty**, proven by the actual command output, not by the worker's word.
+
 **Every sub-agent runs in its own herdr pane** via the `sub-agent-herdr-supervisor` scripts (`herdr-start-subagent.sh --mode readonly|editable`, await, report file, close). No `nohup`/background `pi -p` runs: they can't be watched, prompted or closed, and fail silently (observed 2026-09-26: 6 phase-B scouts produced empty output). Read-only scouts use `--mode readonly`, never `--tools bash`.
 Depth max: Horst → controller → members. Launcher owns and closes panes. One lib-editing sub-team at a time (shared working tree + `_build`).
 
