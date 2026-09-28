@@ -47,8 +47,13 @@ Lesson (H0): an unpinned API shape ("run in a child") let a nested-spawn design 
 - **(f) Evidence**: `proposal.md` records `Clarity Gate: Horst ✓ <date> / Greta ✓ <date>`. No controller launch without both.
 Groundwork for (a)/(d) is done by Greta's readonly scouts; Horst drafts contract + team card from her verified findings package.
 
-## Human dashboard
-Horst updates `plan/current/00_NOW.md` at every slice acceptance/release and whenever a decision waits for the user (one page, no history).
+## Keeping plan/current/ up to date (Horst owns; Greta checks)
+Update **`00_NOW.md` (user) and `PLAN.md` (team)** at each of these moments, in the same commit as the event:
+1. a release (Done table, In-progress table);
+2. a phase/milestone starts or ends, or numbers change (e.g. inventory result → section 2 counts);
+3. something starts waiting for the user, or the user decides something;
+4. the plan changes (Greta reviews PLAN.md changes; 00_NOW is updated in plain words).
+Greta: when you review or report, flag it if 00_NOW or PLAN.md disagree with what you know.
 
 ## Review checklist
 - **No Python runtime** (Pythonx, snakepit/DSPex, erlport, `System.cmd("python"...)`) added anywhere without explicit user approval — BLOCK (user decision 2026-09-26). (controller + outside reviewer)
