@@ -65,17 +65,44 @@ Version numbers show the milestone: M1 = v0.4.x, M2 = v0.5.x, … M6 = v0.9.x (d
 - Prevention: every release is now checked on the exact CI version first (`scripts/ci_docker.sh`), and CI must be green before a release counts as done.
 
 ## H0b-2 status (2026-09-28)
-- Evaluation errors/scoring: built, Greta PASS after 2 review rounds, CI-docker green on 1.18 + 1.19. **Held locally until you answer Q2/Q3 below.**
+- Evaluation errors/scoring: built, Greta PASS after 2 review rounds, CI-docker green on 1.18 + 1.19.
+- **No longer held** — Q2/Q3/Q-OUT are decided (§6). The Q2 change was rebuilt as
+  "raise" (it had been built as "count as failed"); worker nora, committed locally as
+  `310827d`, 514 tests green, mutation-proven at 4 sites. **Not released, not pushed.**
+- In flight for release as **v0.3.48**: Greta's outside verdict on `310827d` (she is
+  reproducing the mutations in her own clone) + the gate battery (ci_docker 1.19/1.18,
+  hex.audit, consumer canary) run by worker otto2 in an isolated worktree. I accept only
+  after both come back.
 - SEC-2 findings (Horst decided): extras' `hackney` has 4 advisories (1 high) with **no fix reachable** — `httpoison` pins old hackney; `cowlib` has 2 advisories with no fix at all upstream. Decision: replace `httpoison` in extras with `req` (already our core HTTP client) as its own slice; cowlib waits for upstream. Core library is clean.
 - Newest Elixir (1.20) in CI: fails on 169 compiler warnings (new type checks) → own cleanup slice before adding it to CI.
 
-## 6. Waiting for you (2 questions — 2026-09-28)
-1. ~~Wider reach~~ *Decided by Horst (same decision you made, just 6 places instead of 4).* **Wider reach of "stop after 10 errors" (correction):** I told you it affects 4 optimizers; it is **6** — COPRO and GEPA also run evaluations internally. Same decision, just more places. OK?
-2. **Metric returns something that isn't a number or true/false** (e.g. `nil`, text, a map; true/false now count as 1/0 like Python — found and fixed as a bug): we count it as a failed example (score 0). Python has no such check — it crashes later with a type error. Ours is friendlier but *differs from Python*. OK? If **no**, it would raise an error at the first such result (a behaviour change of its own; the in-between "valid 0" state would hide broken metrics, so it won't ship).
-3. **Evaluate on an empty list of examples:** Python raises an error; dspy.ex returns 0.0. Recommend: raise like Python (breaks code that evaluates an empty list — none of the 5 projects do). OK?
-3. **Saving results to CSV/JSON (M1):** Python crashes when rows have different fields or a value isn't JSON-compatible. Recommend: we don't crash (CSV header = all fields seen; odd values written as text). Or strictly like Python (raise)?
-- Already read as yes: NimbleCSV for CSV files (say if not).
-- *Decided by you 2026-09-28:* milestones M1→M6 ✓ · Evaluate like Python (failures count 0, stop after 10 errors) ✓ · skip the 10 Python-only features ✓ · minor version per milestone ✓.
+## 6. Waiting for you — **nothing** (2026-09-28)
+
+All open questions are closed. You handed the last three to me with "infer how Python
+would behave and take it from there", so I settled them by running a probe against
+Python DSPy 3.4.0 (`uv run tmp/pyck/ck.py`) rather than by preference.
+
+**Decided by you (2026-09-28):** milestones M1→M6 ✓ · Evaluate like Python (failures
+count 0, stop after 10 errors) ✓ · skip the 10 Python-only features ✓ · minor version
+per milestone ✓ · NimbleCSV for CSV files ✓ · dependencies/security/toolchain are mine
+to decide ✓.
+
+**Decided by me under your standing rules (2026-09-28):**
+
+| # | Question | Decision | Basis |
+|---|---|---|---|
+| Q1 | Reach of "stop after 10 errors" | 6 optimizers, not 4 — COPRO and GEPA also evaluate internally | your decision, just more places |
+| Q2 | Metric returns neither number nor true/false (`nil`, text, a map) | **raise** `Dspy.Evaluate.InvalidMetricResult` at the first bad result | Python raises `TypeError`; probe-verified |
+| Q3 | `evaluate` on an empty example list | **raise** `ArgumentError` | Python raises `ValueError`; probe-verified |
+| Q-OUT | Saving results to CSV/JSON with ragged rows or non-JSON values | **raise** | Python raises `ValueError`/`TypeError`; probe-verified |
+
+I had recommended the friendlier non-raising option for Q2 and Q-OUT. The probe showed
+Python raises in every one of these cases, and "do what Python does" is your standing
+rule, so I dropped my own preference. One deviation stays, and is documented in
+`docs/COMPATIBILITY.md`: we raise at the *first* bad result, Python only after all LM
+calls have finished. Same outcome, ours fails earlier and costs fewer calls.
+
+*(Housekeeping: this section previously numbered two different questions "3".)*
 
 ## 7. Standing decisions (yours)
 - Dependencies, security, toolchain: Horst decides (2026-09-28). Security fixed promptly; newest versions where possible; don't force users onto the newest Elixir without good reason.
