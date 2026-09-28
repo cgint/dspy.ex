@@ -61,6 +61,7 @@ Version numbers show the milestone: M1 = v0.4.x, M2 = v0.5.x, … M6 = v0.9.x (d
 | v0.3.46 | A crash or timeout in one parallel piece no longer takes down the caller; optimizing no longer crashes when every candidate fails |
 | v0.3.47 | Extras security: `httpoison` replaced by `req`, removing 4 more advisories |
 | v0.3.48 | Evaluation you can trust the numbers of: failures count into the score, runs stop after 10 errors, true/false metrics finally count, bad input raises instead of lying |
+| **v0.4.0** | **M1 opens** — evaluation results you can keep: a proper result struct you can still read the old way, upstream's score percentage, and saving results as CSV or JSON |
 
 ## Incident 2026-09-28 (fixed)
 - The automatic checks on GitHub (CI) had been **red since v0.3.42** without anyone noticing: one test file didn't compile on the older Elixir version CI uses (1.19), so CI ran no tests at all. Locally (Elixir 1.20) everything was green.
@@ -68,9 +69,22 @@ Version numbers show the milestone: M1 = v0.4.x, M2 = v0.5.x, … M6 = v0.9.x (d
 - Also: two of my plan commits accidentally included unfinished team code; removed from main within the hour, nothing released with it.
 - Prevention: every release is now checked on the exact CI version first (`scripts/ci_docker.sh`), and CI must be green before a release counts as done.
 
-## H0b-2 — RELEASED as v0.3.48 (2026-09-28)
+## M1 is OPEN — M1-a released as v0.4.0 (2026-09-29)
 
-**The foundations are complete. M1 is now the next work.**
+**33 of 150 symbols.** Foundations complete; the first milestone has begun.
+
+- **Shipped (v0.4.0):** `Evaluate` returns a `%Dspy.Evaluate.Result{}` you can still read the old
+  way (`r.mean`, `r[:mean]`, `Map.get/2`, pattern matching), plus upstream's `score` percentage,
+  an always-populated `results` list, and saving results as CSV or JSON. Also fixes a v0.3.48
+  path where a metric that threw or exited crashed the caller. New dep: `nimble_csv`.
+- **Cost, honestly:** four blocking review verdicts, each a real data-integrity defect — a CSV
+  header that would have crashed saving any run containing a failure; column order decided by
+  the VM's atom table; two silent data-loss bugs; and the two writers disagreeing with each
+  other. None reached a release.
+- **In progress:** M1-b (metrics) → v0.4.1. **Contracted and validated behind it:** M1-c
+  (majority), M1-d (LM-judged metrics), M1-e (Dataset/DataLoader).
+- **Known, declared:** saving CSV from a QA run whose examples share an `answer` field raises if
+  any example failed. That is upstream behaviour; unlike upstream we leave no partial file.
 
 What changed for you: failed examples now count into the score (so **reported numbers can
 drop** — they were silently dropped before), evaluation stops at the 10th error across **6**
