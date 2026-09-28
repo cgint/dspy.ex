@@ -36,7 +36,28 @@ Each row is `Example` fields merged with `Prediction` fields; on a key collision
 - **P-Q3 (parameter; was G2) — follows the user's H0b-2 Q3 answer.** If *yes*: already implemented in H0b-2 (`4b8aaa0`); M1-a only ports the oracle `test_evaluate_raises_on_empty_devset` (`match: "devset"`). If *no*: M1-a pins `evaluate(p, [], m)` → `score 0.0, results [], mean 0.0` and records the deviation. *History:*  an empty testset: upstream **raises** `ValueError` (`:162-163`, test `test_evaluate_raises_on_empty_devset`); ours returns `mean 0.0`. Greta recommends **raise `ArgumentError`** (parity; returning 0.0 hides a caller bug). This is breaking for anyone who passes `[]`; internal callers (simba minibatches, cross_validate folds) must be checked for empty inputs **before** the switch. The alternative is to keep 0.0 as a documented deviation. **M1-a does not launch without this answer.** *(2026-09-28: moved into H0b-2 as open parameter Q3; M1-a inherits whatever the user decides there.)*
 - **G3 (info):** upstream raises on the removed `return_outputs` kwarg (`:113-114`). Our keyword opts never had it; unknown opts are ignored today. Nothing to port.
 - **P-OUT (USER — two small deviations where upstream crashes; batch into one question):** (i) CSV header: upstream takes the keys of the **first** row, so a later row with extra keys makes `DictWriter` raise `ValueError`. Recommended: header = the union of all row keys, missing cells empty. (ii) JSON: upstream `json.dump` raises `TypeError` on a non-serializable value. Recommended: render such values with `inspect/1`. Alternative for both: match upstream and raise. Build each behind its default in its own commit (same rule as H0b-2 Q2/Q3).
-- **Dep (Horst, dependency owner):** NimbleCSV — `00_NOW` records it as "read as yes, say if not". Horst confirms before launch; it is the only allowed `mix.exs`/`mix.lock` change.
+- **Dep (Horst, dependency owner):** NimbleCSV — **CONFIRMED, Horst ✓ 2026-09-28.** The user granted dependency authority, so this is Horst's decision, not a pending user handshake (the earlier "read as yes" was never actually confirmed and is withdrawn as a basis). Chosen over a hand-rolled RFC-4180 reader because quoting and embedded newlines are easy to get subtly wrong and would then be ours forever. It is the only allowed `mix.exs`/`mix.lock` change; `hex.audit` and the canary cover it like any dependency change.
+
+### RESOLVED 2026-09-28 (Horst) — both open parameters are closed
+
+Basis: the user's standing rule "Python DSPy is the reference", applied to a probe of
+Python DSPy 3.4.0 (`uv run tmp/pyck/ck.py`). The user delegated these with "infer how
+Python would behave and take it from there".
+
+- **P-Q3 = RAISE ("yes" branch).** Upstream raises `ValueError` on an empty devset. H0b-2
+  already implements the raise (`ArgumentError`, `4b8aaa0`/`4f084b8`, internal-caller audit
+  and Ensemble guard done). **M1-a therefore only ports the oracle test**
+  `test_evaluate_raises_on_empty_devset` (`match: "devset"`). Acceptance row 11 collapses to
+  that one test. No new work.
+- **P-OUT = RAISE, both halves.** The probe showed upstream raises in both cases: a ragged
+  row → `ValueError` from `DictWriter`, a non-serializable value → `TypeError` from
+  `json.dump`. So M1-a **matches upstream and raises**, rather than the union-header /
+  `inspect/1` softening Greta and I had both recommended. We dropped our own preference
+  because the rule is parity, and a silently-widened CSV header is exactly the kind of
+  "friendlier than Python" divergence that makes the port untrustworthy later.
+  Acceptance row 10c becomes two tests: a ragged row raises, and a PID value raises, each
+  with a clear message naming the offending key. Both ship in one commit (no user-veto
+  branch is needed any more, so the separate-commit rule from H0b-2 Q2/Q3 does not apply).
 
 ### A5. Invariants
 1. H0b-2 semantics are unchanged (failure_score, max_errors, alignment, `MaxErrorsExceeded`).
@@ -80,9 +101,38 @@ Callback metadata (`callback_metadata`, M3 callbacks); the class-style `Evaluate
 
 ## (e) Echo-back before the first edit: A1 field list, `score` formula, the failed-item triple, A3 collision rule, the P-Q3/P-OUT answers, one sentence per A5 invariant.
 
+## (b) Team card (Horst, 2026-09-28)
+
+Identity chain: `Horst (lead, w1:p4) → Greta (architect buddy, w1:p1) → Ilse (controller) → Bruno (worker) → Clemens (reviewer)`.
+
+| Person | Role | Mode | Owns | Escalates to |
+|---|---|---|---|---|
+| Horst | lead | — | scope, contract, acceptance, all git, release | the user (API breaks / scope only) |
+| Greta | architect buddy, outside verdict | peer pane, not Horst's to close | independent verdict on the released sha; may not also implement | Horst |
+| Ilse | controller | editable, main tree | sub-step order, her own team, gates, one report per sub-step | Horst |
+| Bruno | worker | editable, main tree | the only one who edits `lib/` | Ilse |
+| Clemens | reviewer | readonly | per-sub-step review, mutation checks | Ilse |
+
+Rules carried in from H0/H0b, in the brief verbatim:
+- Tests count as evidence **only through the public API**. A mirror test that rebuilds the
+  logic inside the test file is an automatic block. So is a source-text `grep` test.
+- Every acceptance row needs a mutation that turns it **red**, with the tree restored
+  afterwards and the restore proven (checksum or `git diff` empty).
+- "Cannot be tested" is a **block**, not a limitation. It comes to Horst with evidence.
+- Workers never run `git`. Horst commits, path-scoped, never `-a`.
+- Every claim ships with the command and a saved log path. No log = unverified.
+- Stop rules: any change to `test/consumer_contract/**`, to H0b-2 semantics, or to `mix.exs`
+  beyond the single NimbleCSV line → stop and escalate.
+
+Sequencing: **one lib-editing team at a time.** Ilse's team launches only after v0.3.48 is
+tagged and pushed, because nora's H0b-2 work sits in the same tree.
+
 ## (f) Clarity Gate
-- `Greta ✓ 2026-09-28` for everything **except P-Q3 and P-OUT** (☐, pending user). Launch additionally requires H0b-2 released and Horst's NimbleCSV confirmation.
-- Horst ☐.
+- `Greta ✓ 2026-09-28` for everything **except P-Q3 and P-OUT** (☐, pending user *at the time*).
+- **`Horst ✓ 2026-09-28`** — P-Q3 and P-OUT are now resolved above (both = raise, from the
+  Python probe under the user's delegation), NimbleCSV is confirmed, and the team card is
+  written. Greta re-signs the two resolved parameters at launch; the remaining launch
+  condition is **H0b-2 released as v0.3.48**.
 
 ## (g) Side findings for H0b-2 (cite hygiene, no behaviour change)
 - The H0b-2 Q3 code comment and COMPATIBILITY cite `evaluate.py:162-163`; the 3.4.0 raise is at **`:157-158`**. Upstream message: `"devset must contain at least one example, got an empty devset."`; ours lacks the suffix (the oracle only matches `devset`, fine).
