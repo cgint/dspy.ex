@@ -36,7 +36,7 @@ The milestones themselves will be proposed after the count (step 4) — you appr
 | What | Why | Who | Status |
 |---|---|---|---|
 | Milestone proposal M1–M6 | so every step delivers something useful | Greta + Horst agreed; waiting for you | waiting for you |
-| Crash/timeout hardening (H0b-1): a crash in one parallel piece no longer takes down the caller | stability, prerequisite for M1 | Greta writing the contract; then a worker team | contract drafted |
+| Crash/timeout hardening (H0b-1): a crash in one parallel piece no longer takes down the caller | stability, prerequisite for M1 | contract signed; team (Katrin) preparing | starting |
 | Making parallel work crash-safe (a crash or timeout in one background task must not take the whole program down) | reliability of optimizers and evaluation | Greta prepares, then a worker team | preparing |
 
 ## 5. Done this week
