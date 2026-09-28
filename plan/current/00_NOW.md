@@ -39,6 +39,7 @@ Order: **most useful for least effort first**, respecting what depends on what. 
 6. **M6 More optimizers** — real GEPA, KNNFewShot, the rest.
 7. *Later pool* — newest 3.3/3.4 features; cut into milestones after scope decisions.
 Before M1: crash/timeout hardening (H0b), because M1 builds on it.
+Version numbers show the milestone: M1 = v0.4.x, M2 = v0.5.x, … M6 = v0.9.x (decided by you 2026-09-28).
 
 ## 4. What is happening right now
 | What | Why | Who | Status |

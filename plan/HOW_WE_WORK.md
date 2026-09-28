@@ -48,6 +48,12 @@ Lesson (H0): an unpinned API shape ("run in a child") let a nested-spawn design 
 - **(f) Evidence**: `proposal.md` records `Clarity Gate: Horst ✓ <date> / Greta ✓ <date>`. No controller launch without both.
 Groundwork for (a)/(d) is done by Greta's readonly scouts; Horst drafts contract + team card from her verified findings package.
 
+## Versioning (user decision 2026-09-28)
+- One **minor** version per milestone: M1 → v0.4.x, M2 → v0.5.x, M3 → v0.6.x, M4 → v0.7.x, M5 → v0.8.x, M6 → v0.9.x.
+- Each slice within a milestone = a **patch** release (v0.4.1, v0.4.2, …). The first slice of a milestone opens the minor (v0.4.0).
+- Milestone done = its end-to-end example runs + last slice released; noted in RELEASES.md as "M<n> complete" and in 00_NOW/PLAN.
+- Work before M1 (H0b) stays on v0.3.x.
+
 ## Keeping plan/current/ up to date (Horst owns; Greta checks)
 Update **`00_NOW.md` (user) and `PLAN.md` (team)** at each of these moments, in the same commit as the event:
 1. a release (Done table, In-progress table);
