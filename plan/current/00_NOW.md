@@ -2,6 +2,11 @@
 
 Updated: 2026-09-26 by Horst. Kept current at every slice acceptance/release. One page, no history (history → `STATUS.md`).
 
+## Target & position (see PLAN.md)
+- Target: behavioral parity with **Python DSPy 3.4.0**, native Elixir. Plan: `PLAN.md` (DRAFT v1, under Greta's review).
+- Remaining count / % done: **unknown until the 3.4.0 inventory (phase B)** — the May analysis was only a delta, not a full inventory.
+- Current phase: A (foundations: H0, H0b).
+
 ## Goal
 Native Elixir port of Python DSPy (the behavioral reference). No Python wrapper. Every release keeps the 5 consumer projects compiling (consumer canary).
 
@@ -23,7 +28,7 @@ Native Elixir port of Python DSPy (the behavioral reference). No Python wrapper.
 1. P4 program `save/load` · 2. P5 `inspect_history` · 3. Gap analysis vs Python DSPy **3.4.0** (last one is May, 210 upstream commits behind) — *needs your go* (updates `../dspy` reference checkout).
 
 ## Waiting for you
-- Go for the 3.4.0 gap analysis?
+- Nothing right now — PLAN.md v1 is being reviewed with Greta; you get the agreed version.
 
 ## Decisions (standing)
 - Python DSPy is the behavioral reference (no usage merge-back from child processes).
