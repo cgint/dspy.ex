@@ -34,6 +34,12 @@ never infer state from a terminal spinner. Prompting goes through `herdr_prompt_
 `sleep 150`/`240`/`280` around a backgrounded await. It burns tokens, adds uncontrolled latency,
 and yields strictly less information than one blocking call. Applies to Horst and Greta equally.
 
+**Never call `ExUnit.run()` inside a file you launch with `mix test`** (2026-09-28). `mix test`
+already starts and runs ExUnit; the explicit second run blocks forever, and `--timeout` does not
+help because the hang is outside any test case. Either put the module in a real file under
+`test/` with no `ExUnit.run()` line, or keep it self-contained and run it with `mix run`. Cost
+when missed: 23 minutes of a worker spinning on a scratch debug file.
+
 **Never run a mutation with `mix test --trace`** (2026-09-28). `--trace` disables ExUnit's
 per-test timeouts, so a mutation whose failure mode is a *hang* runs forever instead of going
 red — a worker burned 40 minutes on exactly this. Use `--timeout <ms>`. Note also that a
