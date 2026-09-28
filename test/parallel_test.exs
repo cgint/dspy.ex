@@ -47,6 +47,26 @@ defmodule Dspy.ParallelTest do
   # A module whose forward/2 records entry/exit in the shared tracker, sleeps
   # for a per-module duration, and returns a prediction that encodes both the
   # LM identity (from process-scoped settings) and the input.
+  defmodule MockLM do
+    @moduledoc false
+    @behaviour Dspy.LM
+
+    defstruct [:tag]
+
+    def new(tag), do: %__MODULE__{tag: tag}
+
+    @impl true
+    def generate(_lm, _request) do
+      {:ok,
+       %{
+         choices: [
+           %{message: %{role: "assistant", content: "ok"}, finish_reason: "stop"}
+         ],
+         usage: nil
+       }}
+    end
+  end
+
   defmodule SleepyModule do
     @moduledoc false
 
@@ -142,26 +162,6 @@ defmodule Dspy.ParallelTest do
 
     def forward(_module, _other) do
       {:error, :not_an_example}
-    end
-  end
-
-  defmodule MockLM do
-    @moduledoc false
-    @behaviour Dspy.LM
-
-    defstruct [:tag]
-
-    def new(tag), do: %__MODULE__{tag: tag}
-
-    @impl true
-    def generate(_lm, _request) do
-      {:ok,
-       %{
-         choices: [
-           %{message: %{role: "assistant", content: "ok"}, finish_reason: "stop"}
-         ],
-         usage: nil
-       }}
     end
   end
 

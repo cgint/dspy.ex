@@ -5,7 +5,7 @@ Groundwork: `plan/research/pi_handoffs/h0b/PACKAGE.md` (+ g2.md, g3.md). Referen
 Slices: **H0b-1** runtime sites (Module.parallel, tools ×2, ensemble ×3, simba, mipro, bootstrap ×2) · **H0b-2** Evaluate (+ `max_errors` setting). H0b-1 can ship alone; H0b-2 is the M1 prerequisite.
 
 ## Why
-Today a raise/throw/exit or timeout inside a spawned task at 11 sites kills the caller (linked tasks, default `on_timeout: :exit`), or silently drops work (Evaluate chunks). The Ensemble forward also misaligns weights with members after any member failure (a bug). Upstream isolates each item (`dspy/utils/parallelizer.py:63-67`), keeps results index-aligned, and never lets one item take down the run.
+Today a raise/throw/exit or timeout inside a spawned task at 11 sites kills the caller (linked tasks, default `on_timeout: :exit`), or (Evaluate only) silently drops a whole chunk when that chunk task dies. Evaluate already catches per-example raise/throw/exit (evaluate.ex:293-327); for Evaluate the real change is **scoring + budget** (D-U1/D-U2), not crash survival. The Ensemble forward also misaligns weights with members after any member failure (a bug). Upstream isolates each item (`dspy/utils/parallelizer.py:63-67`), keeps results index-aligned, and never lets one item take down the run.
 
 ## (a) Contract
 
@@ -36,7 +36,7 @@ Two existing shapes (verified at HEAD `65b196c`, `rg Task\. lib`); **no new proc
 | `lib/dspy/parallel.ex:150` | unchanged (reference implementation) | – |
 | `lib/dspy/retrieve.ex:415` | unchanged (reference implementation) | – |
 | `Dspy.Module.parallel` | U1+E1. The first error in module order is returned as `{:error, reason}` (as today). A crash becomes `{:error, {:raised \| :thrown \| :exit, …}}` and a timeout becomes `{:error, :timeout}` | caller death → error tuple (bug fix) |
-| `lib/dspy/evaluate.ex:108` (H0b-2) | per-item U1+E1; `items`/`scores` aligned 1:1 with the testset (length assert); failure → `failure_score` counted in the mean (D-U1); budget → E5 | chunks silently dropped / failures excluded → counted |
+| `lib/dspy/evaluate.ex:108` (H0b-2) | per-item U1+E1; `items`/`scores` aligned 1:1 with the testset (length assert); failure → `failure_score` counted in the mean (D-U1); budget → E5 | failures excluded from mean/scores (and a dead chunk is dropped) → counted and aligned |
 | `lib/dspy/tools.ex:507`, `:766` | also catch throw/exit → the **existing** shapes `"Tool execution failed: …"` / `{:error, msg}` | throw/exit killed the caller (bug fix) |
 | ensemble forward `:37` | U1+E1, alignment kept (E4) | timeout killed the caller; weights shifted |
 | ensemble compile `:347`, `:473`; `simba:169`; `mipro_v2:299`; `bootstrap_few_shot:274`, `:428` | U1+E1; a failed item counts as a failed candidate/score, the same as Evaluate semantics | compile died (bug fix) |
@@ -100,15 +100,15 @@ Restate verbatim: A3's process sentence, the E5 exception name and fields, the n
 ## (f) Evidence
 `Clarity Gate: Horst ✓ 2026-09-26 <date> / Greta ✓ 2026-09-26` (team card present, E5 ✓, E6 → user note, `openspec validate` green).
 
-## H0b-2 delta — Evaluate (Greta 2026-09-28; needs Greta ✓ + Horst ✓ before the H0b-2 launch)
+## H0b-2 delta — Evaluate (Greta 2026-09-28). Launches after the H0b-1 release **and** the user's answer on D1.
 Grounded in HEAD `52b2658` `lib/dspy/evaluate.ex` and upstream 3.4.0 `utils/parallelizer.py:57-72`, `evaluate/evaluate.py:160-185`.
 
 **Correction to A3/"Why":** `evaluate_chunk` (evaluate.ex:293-327) **already** catches raise, throw and exit per item. Items are lost only when a whole chunk task dies (a linked exit, or a kill of the chunk from outside) — `flat_map(_other -> [])` drops the chunk silently. The main user-visible change in H0b-2 is **scoring (D-U1) and the budget (D-U2)**, not crash survival.
 
-**D1. Failure definition** (what scores `failure_score` and counts toward the budget): `{:forward_error, _}`, `{:exception, _}`, `{:caught, _, _}`, `{:metric_error, :invalid_score}`, and a dead or timed-out item task. Upstream counts only raised exceptions. `{:error, _}` from forward is our exception equivalent. *Deviation, flagged:* `:invalid_score` (the metric returns a non-number) counts as a failure; upstream would sum whatever the metric returned. Horst ✓/✗.
+**D1 (USER decision pending, 00_NOW §6). Failure definition** (what scores `failure_score` and counts toward the budget): `{:forward_error, _}`, `{:exception, _}`, `{:caught, _, _}`, `{:metric_error, :invalid_score}`, and a dead or timed-out item task. Upstream counts only raised exceptions. `{:error, _}` from forward is our exception equivalent. *Deviation, flagged:* `:invalid_score` (the metric returns a non-number) counts as a failure; upstream would sum whatever the metric returned. → user (deviation from upstream).
 **D2. Budget boundary (upstream `>=`):** the run cancels when `errors >= max_errors`. So `max_errors: 2` stops at the **2nd** failure (and 1 failure passes). Raise `Dspy.Evaluate.MaxErrorsExceeded{errors, max_errors, completed}`; pending item tasks are killed first.
-**D3. Granularity:** per-item tasks (the chunking is removed), `max_concurrency: num_threads`, `ordered: true`, `on_timeout: :kill_task`. New option `:timeout` (per item, default `:infinity`). This is needed for per-item budget counting and kill evidence; with chunks, one timeout would fail a whole chunk.
-**D4. Result fields after H0b-2:**
+**D3 (Horst ✓ 2026-09-28). Granularity:** per-item tasks (the chunking is removed), `max_concurrency: num_threads`, `ordered: true`, `on_timeout: :kill_task`. New option `:timeout` (per item, default `:infinity`). This is needed for per-item budget counting and kill evidence; with chunks, one timeout would fail a whole chunk.
+**D4 (Horst ✓ 2026-09-28). Result fields after H0b-2:**
 - `scores` is **always index-aligned** and has length `count`; failures hold `failure_score`, never nil. This is a behaviour change: `return_all: false` used to return only the valid scores. The key and type stay the same.
 - `mean`, `std`, `min`, `max` are computed over all aligned scores, failures included. `std` stays sample std as today.
 - `successes`/`failures` keep their meaning (the number of errored items), so callers can still see failures.
