@@ -80,7 +80,7 @@ Evidence:
 - **Error budget (upstream `>=`)**: when the failure count reaches `max_errors`, pending item tasks are killed and `Dspy.Evaluate.MaxErrorsExceeded` (fields `:errors`, `:max_errors`, `:completed`) is raised.
 - **Boolean metrics** (B1): `run_metric` maps `true → 1.0`, `false → 0.0` (Python bool arithmetic). Boolean results do NOT count as failures.
 - **Non-number, non-boolean metric results** (Q2): counted as a failed example — score `failure_score` (0.0), `items[i].error = {:metric_error, :invalid_score}`, counted toward `max_errors`. *Deviation from upstream:* upstream raises a `TypeError` in `sum()` and kills the whole evaluation; we count a per-example failure instead (gentler, recoverable).
-- **Empty testset** (Q3): `evaluate/4` raises `ArgumentError, "devset must contain at least one example"` (upstream `evaluate.py:162-163`). Internal callers (simba, mipro, copro, gepa, bootstrap, ensemble) all validate their trainset first and cannot pass `[]`.
+- **Empty testset** (Q3): `evaluate/4` raises `ArgumentError, "devset must contain at least one example"` (upstream `evaluate.py:162-163`). Internal callers (simba, mipro, copro, gepa, bootstrap, ensemble) all validate their trainset first and cannot pass `[]`. The Ensemble additionally guards against an empty validation split (which can occur for very small trainsets) by using equal member weights and logging a warning, rather than calling `Evaluate.evaluate/4` with `[]`.
 - **Optimizers propagate `MaxErrorsExceeded`** (Q1): simba, ensemble, and bootstrap re-raise it from their candidate/weight/selection streams; `compile/3` surfaces it to the caller.
 
 Evidence:
