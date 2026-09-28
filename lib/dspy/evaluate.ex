@@ -406,7 +406,7 @@ defmodule Dspy.Evaluate do
         header_keys = Enum.map(header_pairs, &elem(&1, 0))
         header_set = MapSet.new(header_keys)
 
-        validate_rows!(rows, header_keys, header_set)
+        validate_rows!(rows, header_keys, header_set, "save_as_csv")
 
         # BB1 (fix round 3): an example/prediction field literally named after
         # the metric column yields TWO `metric` keys. Upstream overwrites the
@@ -442,7 +442,17 @@ defmodule Dspy.Evaluate do
         # M1-a (row 10d): the COMPLETE JSON payload is built in memory before
         # either file is opened (R4). A non-encodable value (e.g. a PID)
         # raises, naming the offending key, and NOTHING is written.
+        # Fix round 4 (ruling 1 + 2): the JSON writer applies the SAME shared
+        # per-row uniqueness check as the CSV writer (ruling 1) — before the
+        # payload is built — so a duplicate key (including a field named like
+        # the metric column, ruling 2) RAISES in the JSON path too, instead of
+        # being silently dropped/overwritten. One shared rule, both writers.
         rows = rows_for(items, testset, output.metric_name)
+
+        header_pairs = elem(List.first(rows), 0)
+        header_keys = Enum.map(header_pairs, &elem(&1, 0))
+        header_set = MapSet.new(header_keys)
+        validate_rows!(rows, header_keys, header_set, "save_as_json")
 
         try do
           Jason.encode!(maps_for_json(rows))
@@ -629,24 +639,14 @@ defmodule Dspy.Evaluate do
   # equals the metric column's (the field), then `Map.put` the metric pair
   # LAST — so the JSON row has exactly ONE `metric` column holding the
   # SCORE.
+  # Fix round 4 (ruling 2): a field named like the metric column RAISES in
+  # BOTH writers (the shared `validate_unique_keys!/2` catches it as a row
+  # duplicate before this runs). So there is NO longer any overwrite
+  # special-casing here — the JSON row is simply the zip of output keys and
+  # values (the metric pair is last, so its key is the metric column).
   defp maps_for_json(rows) do
     Enum.map(rows, fn {pairs, values} ->
-      {metric_pair, metric_value} = {List.last(pairs), List.last(values)}
-      {metric_name, _source, _in_key} = metric_pair
-
-      base =
-        pairs
-        |> Enum.drop(-1)
-        |> Enum.map(&elem(&1, 0))
-        |> Enum.zip(Enum.drop(values, -1))
-        # Drop any key whose string form matches the metric column (but is
-        # not the metric key itself) — the field that upstream overwrites.
-        |> Enum.reject(fn {out_key, _value} ->
-          to_string(out_key) == to_string(metric_name) and out_key != metric_name
-        end)
-        |> Map.new()
-
-      Map.put(base, metric_name, metric_value)
+      Map.new(Enum.zip(Enum.map(pairs, &elem(&1, 0)), values))
     end)
   end
 
@@ -676,37 +676,55 @@ defmodule Dspy.Evaluate do
   # reaches the header as two keys whose string forms match → RAISES.
   # (The JSON path has no such check; the map-merge last-in semantics apply
   # there instead — the metric column wins over the field.)
-  defp validate_header_keys!(header_keys) do
-    seen = MapSet.new()
+  defp validate_rows!(rows, _header_keys, header_set, writer) do
+    # Fix round 4 (ruling 1 + 2): the SAME per-row uniqueness check both writers
+    # call — every output key must be unique by `to_string` within a row, else
+    # RAISE naming the key (this subsumes the old header-duplicate check, which
+    # was a special case of a row duplicate; a field named like the metric
+    # column is also a row duplicate, so it raises in BOTH writers — ruling 2,
+    # and the corrupt-or-lose principle: upstream overwrites and loses the
+    # value, we do not copy data loss).
+    validate_unique_keys!(rows, writer)
 
-    Enum.reduce_while(header_keys, seen, fn key, acc ->
-      string = to_string(key)
-
-      if acc |> MapSet.member?(string) do
-        {:halt,
-         raise(
-           ArgumentError,
-           "save_as_csv: duplicate column name #{inspect(string)} in the header (first row)"
-         )}
-      else
-        {:cont, MapSet.put(acc, string)}
-      end
-    end)
-  end
-
-  defp validate_rows!(rows, header_keys, header_set) do
-    # Ruling 3: the header itself must not carry a duplicate column name.
-    validate_header_keys!(header_keys)
-
+    # Then: every row's keys must be a subset of the header's keys (a later
+    # row carrying a key the header lacks raises, naming the key).
     Enum.each(rows, fn {pairs, _values} ->
       keys = Enum.map(pairs, &elem(&1, 0))
       extra = keys -- MapSet.to_list(header_set)
 
       if extra != [] do
         raise ArgumentError,
-              "save_as_csv: row carries key(s) not in the header (first row): " <>
+              "#{writer}: row carries key(s) not in the header (first row): " <>
                 inspect(extra)
       end
+    end)
+  end
+
+  # Fix round 4 (ruling 1): ONE shared per-row uniqueness check, used by BOTH
+  # `save_as_csv` and `save_as_json`, applied to EVERY row before anything is
+  # written. Every output key must be unique by `to_string` within a row, else
+  # RAISE naming the key, and no file is written. This is what makes the two
+  # writers agree on identical input (previously only the CSV checked, and the
+  # JSON silently dropped/overwrote/dupe-d on the same shapes).
+  defp validate_unique_keys!(rows, writer) do
+    Enum.each(rows, fn {pairs, _values} ->
+      keys = Enum.map(pairs, &elem(&1, 0))
+
+      seen = MapSet.new()
+
+      Enum.reduce_while(keys, seen, fn key, acc ->
+        string = to_string(key)
+
+        if acc |> MapSet.member?(string) do
+          {:halt,
+           raise(
+             ArgumentError,
+             "#{writer}: duplicate column name #{inspect(string)} in a row; every output key must be unique by to_string"
+           )}
+        else
+          {:cont, MapSet.put(acc, string)}
+        end
+      end)
     end)
   end
 

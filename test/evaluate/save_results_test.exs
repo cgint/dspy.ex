@@ -650,6 +650,20 @@ defmodule DspyEvaluateSaveResultsTest do
     end
   end
 
+  # Fix round 4: a program whose prediction carries an ATOM `:other` key (not
+  # `:answer`), so a mixed `:answer` + `"answer"` example pair has NO
+  # example/prediction collision — the duplicate comes purely from the two
+  # spellings of the same field on string form.
+  defmodule MixedAnswerProgram do
+    @behaviour Dspy.Module
+    defstruct []
+
+    @impl true
+    def forward(_program, _input) do
+      {:ok, Prediction.new(%{other: "4"})}
+    end
+  end
+
   test "BB1: example field named `pred_label` is read from the EXAMPLE (not null)" do
     testset = [Example.new(%{question: "Q", pred_label: "L"})]
     program = Dspy.Predict.new(TestQA)
@@ -744,15 +758,25 @@ defmodule DspyEvaluateSaveResultsTest do
   # known JSON-side edge (the brief's "metric column wins" applies to the
   # CSV path, which RAISES here; the JSON shape is ragged in this case).
   # The test pins the RAISE in CSV and documents the JSON behaviour.
-  test "BB1: prediction field named `metric` (atom) → CSV raises (duplicate); JSON carries both keys" do
-    testset = [Example.new(%{question: "Q", answer: "4"})]
-    program = %MetricFieldProgram{}
+  # Fix round 4 (ruling 1 + 2): the SAME shared per-row uniqueness check both
+  # writers call. A row whose output keys are not unique by `to_string` RAISES
+  # in BOTH `save_as_csv` and `save_as_json` (naming the key, writing NO file).
+  # Case (a): an example carrying BOTH `:answer` (atom) and `"answer"` (string)
+  # with a prediction `:answer` — the two spellings collide on `to_string`, and
+  # because the prediction is ALSO `answer`, BOTH spellings rename to
+  # `example_answer` (a duplicate), so the check raises naming
+  # `example_answer`. Python cannot have both keys in one dict, so there is no
+  # upstream behaviour to match: we define it as raise.
+  test "fix round 4 (a): example :answer + \"answer\", prediction :answer → BOTH writers raise, no file" do
+    attrs = Map.merge(Map.new(answer: "4", question: "Q"), %{"answer" => "S"})
+    testset = [Example.new(attrs)]
+    program = Dspy.Predict.new(TestQA)
     metric = fn _ex, _pred -> 1.0 end
 
     tmp_dir =
       Path.join(
         System.tmp_dir!(),
-        "dspy_m1a_bb1_metric_field_#{System.system_time(:second)}_#{System.unique_integer([:positive])}"
+        "dspy_m1a_f4_a_#{System.system_time(:second)}_#{System.unique_integer([:positive])}"
       )
 
     File.mkdir_p!(tmp_dir)
@@ -760,9 +784,8 @@ defmodule DspyEvaluateSaveResultsTest do
     json_path = Path.join(tmp_dir, "result.json")
     ExUnit.Callbacks.on_exit(fn -> File.rm_rf!(tmp_dir) end)
 
-    # CSV: the metric field (atom `:metric`) duplicates the metric column
-    # (`:metric`) on string form → RAISES (ruling 3), no file.
-    assert_raise ArgumentError, ~r/duplicate column name "metric"/, fn ->
+    # CSV: the two spellings both rename to `example_answer` → duplicate → RAISES.
+    assert_raise ArgumentError, ~r/duplicate column name "example_answer"/, fn ->
       Evaluate.evaluate(program, testset, metric,
         num_threads: 1,
         progress: false,
@@ -772,25 +795,58 @@ defmodule DspyEvaluateSaveResultsTest do
 
     refute File.exists?(csv_path), "partial CSV exists: #{csv_path}"
 
-    # JSON: no duplicate check; the ETS map carries both `:metric` (the
-    # score, atom) and `"metric"` (the field, string) as DISTINCT keys.
-    # Jason renders both as the same `"metric"` key in the output (one
-    # wins, which is undefined by the spec; in practice Jason's last-wins
-    # keeps the field `"P"`). The test pins that the JSON is WRITTEN and
-    # that the `"metric"` key is present (either the score or the field
-    # value — both are acceptable given the ragged JSON shape).
-    Evaluate.evaluate(program, testset, metric,
-      num_threads: 1,
-      progress: false,
-      save_as_json: json_path
-    )
+    # JSON: the SAME shared check RAISES too (previously it silently dropped
+    # the atom value and kept the string one).
+    assert_raise ArgumentError, ~r/duplicate column name "example_answer"/, fn ->
+      Evaluate.evaluate(program, testset, metric,
+        num_threads: 1,
+        progress: false,
+        save_as_json: json_path
+      )
+    end
 
-    assert File.exists?(json_path)
-    rows = Jason.decode!(File.read!(json_path))
-    first_row = List.first(rows)
+    refute File.exists?(json_path), "partial JSON exists: #{json_path}"
+  end
 
-    assert Map.has_key?(first_row, "metric"),
-           "expected 'metric' key in JSON, got: #{inspect(Map.keys(first_row))}"
+  # Case (b): the same mixed pair but NO example/prediction collision (the
+  # prediction has `:other`), so the duplicate comes purely from the two
+  # spellings of the example field. Both writers must raise on `answer`.
+  test "fix round 4 (b): example :answer + \"answer\", prediction :other → BOTH writers raise, no file" do
+    attrs = Map.merge(Map.new(answer: "4", question: "Q"), %{"answer" => "S"})
+    testset = [Example.new(attrs)]
+    program = %MixedAnswerProgram{}
+    metric = fn _ex, _pred -> 1.0 end
+
+    tmp_dir =
+      Path.join(
+        System.tmp_dir!(),
+        "dspy_m1a_f4_b_#{System.system_time(:second)}_#{System.unique_integer([:positive])}"
+      )
+
+    File.mkdir_p!(tmp_dir)
+    csv_path = Path.join(tmp_dir, "result.csv")
+    json_path = Path.join(tmp_dir, "result.json")
+    ExUnit.Callbacks.on_exit(fn -> File.rm_rf!(tmp_dir) end)
+
+    assert_raise ArgumentError, ~r/duplicate column name "answer"/, fn ->
+      Evaluate.evaluate(program, testset, metric,
+        num_threads: 1,
+        progress: false,
+        save_as_csv: csv_path
+      )
+    end
+
+    refute File.exists?(csv_path), "partial CSV exists: #{csv_path}"
+
+    assert_raise ArgumentError, ~r/duplicate column name "answer"/, fn ->
+      Evaluate.evaluate(program, testset, metric,
+        num_threads: 1,
+        progress: false,
+        save_as_json: json_path
+      )
+    end
+
+    refute File.exists?(json_path), "partial JSON exists: #{json_path}"
   end
 
   # Ruling 3: a DUPLICATE column name raises. A prediction field named
@@ -944,40 +1000,101 @@ defmodule DspyEvaluateSaveResultsTest do
   # OVERWRITES → the score. Our JSON must do the same: exactly ONE
   # `metric` column, holding the SCORE.
   # ----------------------------------------------------------------
-  test "round 3.1: string field named \"metric\" → JSON metric column holds the SCORE" do
-    testset = [Example.new(%{"question" => "Q", "metric" => "M"})]
+  # Case (c): the duplicate appears in a LATER row, not the first. The first
+  # row is clean (a single `answer`); the second row's example carries BOTH
+  # `:answer` and `"answer"`, so its output keys duplicate on `to_string`.
+  # This is the case that proves the writers share ONE check: the CSV raises
+  # on the later row, and the JSON must too (previously it never checked
+  # per-row keys at all and would have emitted `answer` twice).
+  test "fix round 4 (c): later-row duplicate → BOTH writers raise, no file" do
+    attrs = Map.merge(Map.new(answer: "4", question: "Q2"), %{"answer" => "S2"})
+    testset = [
+      Example.new(%{question: "Q1", answer: "4"}),
+      Example.new(attrs)
+    ]
+
     program = Dspy.Predict.new(TestQA)
     metric = fn _ex, _pred -> 1.0 end
 
     tmp_dir =
       Path.join(
         System.tmp_dir!(),
-        "dspy_m1a_r31_metric_string_#{System.system_time(:second)}_#{System.unique_integer([:positive])}"
+        "dspy_m1a_f4_c_#{System.system_time(:second)}_#{System.unique_integer([:positive])}"
       )
 
     File.mkdir_p!(tmp_dir)
+    csv_path = Path.join(tmp_dir, "result.csv")
     json_path = Path.join(tmp_dir, "result.json")
     ExUnit.Callbacks.on_exit(fn -> File.rm_rf!(tmp_dir) end)
 
-    Evaluate.evaluate(program, testset, metric,
-      num_threads: 1,
-      progress: false,
-      save_as_json: json_path
-    )
+    # The later row's two spellings both rename to `example_answer` (the
+    # prediction is `:answer`) → duplicate → RAISES on the later row.
+    assert_raise ArgumentError, ~r/duplicate column name "example_answer"/, fn ->
+      Evaluate.evaluate(program, testset, metric,
+        num_threads: 1,
+        progress: false,
+        save_as_csv: csv_path
+      )
+    end
 
-    assert File.exists?(json_path)
-    rows = Jason.decode!(File.read!(json_path))
-    first_row = List.first(rows)
+    refute File.exists?(csv_path), "partial CSV exists: #{csv_path}"
 
-    # Exactly ONE `metric` key, and it must be the SCORE — never the
-    # example field value "M" (upstream `out['metric'] = score`).
-    assert Map.get(first_row, "metric") == 1.0,
-           "expected the metric SCORE 1.0, got: #{inspect(Map.get(first_row, :metric))}"
+    # JSON: the SAME shared per-row check raises on the later row too
+    # (previously the JSON never checked per-row keys and would have emitted
+    # `answer` twice).
+    assert_raise ArgumentError, ~r/duplicate column name "example_answer"/, fn ->
+      Evaluate.evaluate(program, testset, metric,
+        num_threads: 1,
+        progress: false,
+        save_as_json: json_path
+      )
+    end
 
-    # The field's value must not leak into the row under any other key
-    # either (no renamed duplicate).
-    refute Enum.any?(Map.keys(first_row), fn k -> Map.get(first_row, k) == "M" end),
-           "the example field value \"M\" leaked into the row: #{inspect(first_row)}"
+    refute File.exists?(json_path), "partial JSON exists: #{json_path}"
+  end
+
+  # Case (d): an example field literally named `metric` (the atom `:metric`,
+  # the default metric column). The field and the metric column duplicate on
+  # `to_string` → RAISES in BOTH writers. Upstream overwrites the field with
+  # the score (losing its value); the corrupt-or-lose principle says we do not
+  # copy data loss, so both writers raise instead (ruling 2).
+  test "fix round 4 (d): example field named :metric → BOTH writers raise, no file" do
+    testset = [Example.new(%{question: "Q", metric: "M"})]
+    program = Dspy.Predict.new(TestQA)
+    metric = fn _ex, _pred -> 1.0 end
+
+    tmp_dir =
+      Path.join(
+        System.tmp_dir!(),
+        "dspy_m1a_f4_d_#{System.system_time(:second)}_#{System.unique_integer([:positive])}"
+      )
+
+    File.mkdir_p!(tmp_dir)
+    csv_path = Path.join(tmp_dir, "result.csv")
+    json_path = Path.join(tmp_dir, "result.json")
+    ExUnit.Callbacks.on_exit(fn -> File.rm_rf!(tmp_dir) end)
+
+    assert_raise ArgumentError, ~r/duplicate column name "metric"/, fn ->
+      Evaluate.evaluate(program, testset, metric,
+        num_threads: 1,
+        progress: false,
+        save_as_csv: csv_path
+      )
+    end
+
+    refute File.exists?(csv_path), "partial CSV exists: #{csv_path}"
+
+    # JSON: previously OVERWROTE the field with the score; now RAISES (the
+    # shared check), identical to the CSV rule.
+    assert_raise ArgumentError, ~r/duplicate column name "metric"/, fn ->
+      Evaluate.evaluate(program, testset, metric,
+        num_threads: 1,
+        progress: false,
+        save_as_json: json_path
+      )
+    end
+
+    refute File.exists?(json_path), "partial JSON exists: #{json_path}"
   end
 
   # ----------------------------------------------------------------
