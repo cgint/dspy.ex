@@ -47,7 +47,7 @@ Version numbers show the milestone: M1 = v0.4.x, M2 = v0.5.x, … M6 = v0.9.x (d
 |---|---|---|---|
 | Milestones M1–M6 | so every step delivers something useful | approved by you 2026-09-28 | agreed |
 | Security fix: update 3 HTTP libraries with known vulnerabilities (req, mint, hpax) | security first | helper agent Paula, checked by Horst + Greta | **released v0.3.45** (consumers: run `mix deps.update req mint hpax finch`) |
-| Crash/timeout hardening (H0b-1): a crash in one parallel piece no longer takes down the caller | stability, prerequisite for M1 | team finished, but Greta's review found 6 of 10 places not truly tested and 1 real bug → being fixed | **released v0.3.46** (Greta PASS after 1 block) |
+| Crash/timeout hardening (H0b-1): a crash in one parallel piece no longer takes down the caller | stability, prerequisite for M1 | review blocked once (tests didn't really test; 1 real bug), fixed and re-checked | **released v0.3.46** (Greta PASS after 1 block) |
 
 ## 5. Done this week
 | Version | What users get |
@@ -64,8 +64,8 @@ Version numbers show the milestone: M1 = v0.4.x, M2 = v0.5.x, … M6 = v0.9.x (d
 - Also: two of my plan commits accidentally included unfinished team code; removed from main within the hour, nothing released with it.
 - Prevention: every release is now checked on the exact CI version first (`scripts/ci_docker.sh`), and CI must be green before a release counts as done.
 
-## 6. Waiting for you (3 questions, one note — 2026-09-28)
-1. **Wider reach of "stop after 10 errors" (correction):** I told you it affects 4 optimizers; it is **6** — COPRO and GEPA also run evaluations internally. Same decision, just more places. OK?
+## 6. Waiting for you (2 questions — 2026-09-28)
+1. ~~Wider reach~~ *Decided by Horst (same decision you made, just 6 places instead of 4).* **Wider reach of "stop after 10 errors" (correction):** I told you it affects 4 optimizers; it is **6** — COPRO and GEPA also run evaluations internally. Same decision, just more places. OK?
 2. **Metric returns something that isn't a score** (e.g. `nil` or text): we count it as a failed example (score 0). Python has no such check — it crashes later with a type error. Ours is friendlier but *differs from Python*. OK, or strictly like Python?
 3. **Evaluate on an empty list of examples:** Python raises an error; dspy.ex returns 0.0. Recommend: raise like Python (breaks code that evaluates an empty list — none of the 5 projects do). OK?
 - Already read as yes: NimbleCSV for CSV files (say if not).
