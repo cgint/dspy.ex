@@ -2,7 +2,7 @@
 
 | Target | Symbols done/total (facet %) | Phase | Next | Updated |
 |---|---|---|---|---|
-| Python DSPy **3.4.0** (`2413b67a4d`) | ? / 160 (count running) | A→B | Phase B inventory | 2026-09-26 |
+| Python DSPy **3.4.0** (`2413b67a4d`) | 37/150 in scope (25%; ~32% w/ partial=½); 10 n/a pending user | A + C | Milestone cut (phase C); H0b | 2026-09-26 |
 
 Status: **v2 — agreed Horst + Greta 2026-09-26** (risk noted by Greta: medium-value "done" rows judged at symbol level may overstate; the checker pass re-verifies all done/n-a rows). Detail: enough to steer and measure; each slice gets its own contract (Clarity Gate).
 Current position lives in `00_NOW.md` (single source; not repeated here).
@@ -34,7 +34,7 @@ Two maps side by side: where dspy.ex stands, and which DSPy release introduced e
 | Phase | Content | Exit |
 |---|---|---|
 | A. Foundations | H0 (done, v0.3.44), H0b crash/timeout hardening | H0b released; its user decisions (D-U1/D-U2) answered |
-| B. Inventory | 3.4.0 surface inventory (method §6) | Greta+Horst agree; denominator frozen; numbers in 00_NOW |
+| B. Inventory (**done 2026-09-26**, Horst sample 11/11 OK) | 3.4.0 surface inventory (method §6) | Greta+Horst agree; denominator frozen; numbers in 00_NOW |
 | C. Milestones | M1..Mn cut from ranked backlog; `n/a` list | Greta+Horst agree → **user agrees milestones + n/a list** |
 | D. Execute | Slices via HOW_WE_WORK | per milestone exit test |
 | E. Keep up | Delta inventory at each upstream release | recurring |
