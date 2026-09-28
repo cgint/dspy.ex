@@ -175,11 +175,10 @@ defmodule Dspy.Teleprompt do
   end
 
   # Boolean metric results map to 1.0 / 0.0 (Python bool arithmetic,
-  # upstream `evaluate.py:182` — Python sums `True`/`False` as 1/0). A result
-  # that is neither a number nor a boolean is treated as `0.0` (a valid low
-  # score) — Q2 (H0b-2) is not applied in this state.
+  # upstream `evaluate.py:182` — Python sums `True`/`False` as 1/0). Anything
+  # else that is not a number is `:error` (a failed metric run).
   defp normalize_score(true), do: 1.0
   defp normalize_score(false), do: 0.0
   defp normalize_score(score) when is_number(score), do: score
-  defp normalize_score(_), do: 0.0
+  defp normalize_score(_), do: :error
 end
