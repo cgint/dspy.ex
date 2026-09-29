@@ -105,6 +105,22 @@ and the lead is often blocked awaiting *you* — a deadlock in which neither sid
 Report, then stop or continue with work that does not depend on the answer; the lead comes to
 you. Use `herdr_prompt_agent.sh`, which preflights instead of trapping.
 
+**Before trusting a verification tool, break something on purpose and confirm it complains**
+(2026-09-29, Greta). This is the *only* test that proves a harness works, and reasoning is no
+substitute. Observed: a harness wrote backup files only if none existed and never deleted them,
+so **from the second run on it restored the first run's sources** — testing stale code and
+**silently reverting the developer's edits**, while printing `ALL CLEAR 18/18`. Greta found it by
+editing an anchor and checking whether the tool noticed; it didn't.
+
+**A verification tool must not keep state on disk** (2026-09-29). Hold originals in memory and
+restore in `try/finally`. A tool that writes files to protect source files is one interrupted run
+away from being the thing that corrupts them.
+
+**Every layer of verification is itself code that can be wrong** (2026-09-29). The chain this
+slice: a false zero in the tests → build a harness → the harness skipped a test file → fix it →
+the harness's *backup mechanism* was still wrong underneath. "The tool said ALL CLEAR" is a claim
+like any other, and each new layer of checking needs its own check.
+
 **The harness must FAIL on a vanished mutation, not just report it** (2026-09-29, Britta). A
 standard that depends on someone carefully comparing two numbers is weaker than one that cannot
 produce a false pass: make `NOT-APPLICABLE > 0` a **hard failure, exit 1**. Stronger than the
