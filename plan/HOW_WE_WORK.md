@@ -43,6 +43,22 @@ not something a test may paper over. Escalate instead. Corollary: when two write
 agree, they call **one shared function**, and the mutation that proves it is *removing the check
 from one side only* — if both sides stay green, they were agreeing by coincidence, not by design.
 
+**The acceptance gate must be the command CI actually runs** (2026-09-29). Plain `mix test`,
+default timeout — because `scripts/ci_docker.sh` and `.github/workflows/ci.yml` run exactly that.
+A gate with different flags certifies something CI never executes, so a green gate stops
+predicting a green CI; that is how this project shipped a red CI for six releases. `--timeout` is
+a **diagnostic** for hunting a suspected hang, never a gate setting (`--trace` is banned outright
+— it disables timeouts). Observed: a controller gated at `--timeout 3000` and reported 571/573 as
+flakiness; the same sha ran 573/573 repeatedly at the default. It had induced the failures it
+reported. Corollary: **take the baseline with the same command as the gate** — a baseline taken
+with different flags is worse than none, because every later "pre-existing" claim is measured
+against it.
+
+**Never `--wait` on the lead's pane** (2026-09-29). It blocks until the lead's state changes,
+and the lead is often blocked awaiting *you* — a deadlock in which neither side's tokens move.
+Report, then stop or continue with work that does not depend on the answer; the lead comes to
+you. Use `herdr_prompt_agent.sh`, which preflights instead of trapping.
+
 **Mutation-test with a SCRIPT, not by hand** (2026-09-29). Hand-mutating one row at a time asks
 "did this test go red?"; a script asks the question that matters — **"which of my claimed
 behaviours does NO test catch?"** Write a small script that applies N deliberate code changes and
