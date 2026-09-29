@@ -26,7 +26,7 @@ defmodule Dspy do
   acceptance-tested; prefer relying on what’s documented in `docs/OVERVIEW.md`.
   """
 
-  alias Dspy.{Settings, Example, Prediction, Predict, ChainOfThought, Evaluate}
+  alias Dspy.{Settings, Example, Prediction, Predict, ChainOfThought, Evaluate, Majority}
 
   @type dspy_config :: [
           lm: Dspy.LM.t() | nil,
@@ -394,5 +394,30 @@ defmodule Dspy do
   @spec prediction(map()) :: Prediction.t()
   def prediction(attrs \\ %{}) do
     Prediction.new(attrs)
+  end
+
+  @doc """
+  Returns the most common completion for the target field.
+
+  Port of Python DSPy's `dspy.majority`: takes a list of completions (maps
+  with atom keys or `%Dspy.Prediction{}`) in caller order, normalises the
+  chosen field of each, and returns the first original completion whose
+  normalised value is the most common one, as a `%Dspy.Prediction{}`.
+
+  ## Options
+
+  - `:field` — the completion key to vote on. Required unless every completion
+    has exactly one and the same key.
+  - `:normalize` — `(term() -> term()) | nil`. Default:
+    `&Dspy.Majority.default_normalize/1`. `nil` means no normalisation.
+
+  ## Examples
+
+      Dspy.majority([%{answer: "2"}, %{answer: "2"}, %{answer: "3"}])
+
+  """
+  @spec majority([map() | Prediction.t()], keyword()) :: Prediction.t()
+  def majority(completions, opts \\ []) do
+    Majority.majority(completions, opts)
   end
 end

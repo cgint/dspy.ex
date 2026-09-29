@@ -1,0 +1,14 @@
+Installed 66 packages in 142ms
+field-test: Prediction(
+    answer='2',
+    other='1'
+)
+tie: Prediction(
+    answer='b'
+)
+interleaved: Prediction(
+    answer='x'
+)
+norm-orig: Prediction(
+    answer=' 2'
+)

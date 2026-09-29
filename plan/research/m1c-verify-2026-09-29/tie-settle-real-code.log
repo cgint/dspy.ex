@@ -1,0 +1,28 @@
+    warning: function index_of/2 is unused
+    │
+ 94 │   defp index_of(list, key), do: Enum.find_index(list, fn {k, _} -> k == key end)
+    │        ~
+    │
+    └─ plan/research/m1c-verify-2026-09-29/majority_broken.ex:94:8: Dspy.MajorityBroken (module)
+
+b,a   correct="b"  broken="b"  NO FLIP
+9,a   correct="9"  broken="a"  FLIPS
+x,y,y,x   correct="x"  broken="y"  FLIPS
+2,3,4   correct="2"  broken="4"  FLIPS
+b,a,a   correct="a"  broken="a"  NO FLIP
+
+--- probe: Horst's broken model vs the mutate_m1c.py broken version, same data ---
+** (Mix) No such file: -
+--- probe: Horst's broken model vs the mutate_m1c.py broken model, same data ---
+b,a  horst-model="a"  harness-model="b"
+9,a  horst-model="9"  harness-model="a"
+x,y,y,x  horst-model="x"  harness-model="y"
+2,3,4  horst-model="2"  harness-model="4"
+    │
+    └─ plan/research/m1c-verify-2026-09-29/majority_countonly.ex:94:8: Dspy.MajorityCountOnly (module)
+
+b,a  correct="b"  count-only-broken="a"  FLIPS
+9,a  correct="9"  count-only-broken="9"  NO FLIP
+x,y,y,x  correct="x"  count-only-broken="x"  NO FLIP
+2,3,4  correct="2"  count-only-broken="2"  NO FLIP
+b,a,a  correct="a"  count-only-broken="a"  NO FLIP

@@ -1,0 +1,11 @@
+Compiling 1 file (.ex)
+    warning: function index_of/2 is unused
+    │
+ 88 │   defp index_of(list, key), do: Enum.find_index(list, fn {k, _} -> k == key end)
+    │        ~
+    │
+    └─ lib/dspy/majority.ex:88:8: Dspy.Majority (module)
+
+plain: "b"
+default: "b"
+interleave: "y"

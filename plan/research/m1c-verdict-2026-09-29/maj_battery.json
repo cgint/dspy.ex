@@ -1,0 +1,18 @@
+[
+  {"id": "tie b,a",             "vals": ["b", "a"],                 "norm": "identity"},
+  {"id": "tie x,y,y,x",         "vals": ["x", "y", "y", "x"],       "norm": "identity"},
+  {"id": "3-way tie",           "vals": ["a", "b", "b", "a", "c", "c"], "norm": "identity"},
+  {"id": "tie c,b,b,c",         "vals": ["c", "b", "b", "c"],       "norm": "identity"},
+  {"id": "no majority 2,3,4",   "vals": ["2", "3", "4"],            "norm": "identity"},
+  {"id": "clear majority",      "vals": ["3", "2", "2"],            "norm": "identity"},
+  {"id": "default: !!,!!,3",    "vals": ["!!", "!!", "3"],          "norm": "default"},
+  {"id": "default: all empty",  "vals": ["!!", "??"],               "norm": "default"},
+  {"id": "default: 3, 2, 2",    "vals": ["3", " 2", "2"],           "norm": "default"},
+  {"id": "nil for x",           "vals": ["x", "x", "y"],            "norm": "nil_for_x"},
+  {"id": "false for x",         "vals": ["x", "x", "y"],            "norm": "false_for_x"},
+  {"id": "1 vs 1.0 (C3)",       "vals": ["2", "1", "1.0"],          "norm": "num"},
+  {"id": "true vs 1",           "vals": ["z", "t", "one"],          "norm": "bool_num"},
+  {"id": "all nil",             "vals": ["p", "q"],                 "norm": "all_nil"},
+  {"id": "explicit null value", "vals": [null, "a"],                "norm": "identity"},
+  {"id": "explicit null value, 2", "vals": [null, null, "a"],       "norm": "identity"}
+]

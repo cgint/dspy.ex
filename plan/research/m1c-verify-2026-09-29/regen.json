@@ -1,0 +1,23 @@
+{
+  "_meta": {
+    "source": "dspy==3.4.0",
+    "date": "2026-09-29T01:33:51.864388+00:00",
+    "description": "Golden fixtures for upstream dspy.majority",
+    "note": "Every expected value is the winner's answer field from dspy.majority(...).completions[0]['answer']. A string value starting with 'ERROR:' would be a generator artefact, not an expected value — the consumer test asserts no such entry exists."
+  },
+  "oracle": {
+    "[{'answer': '2'}, {'answer': '2'}, {'answer': '3'}] default": "2",
+    "[{'answer': '2'}, {'answer': ' 2'}, {'answer': '3'}] normalize_text": "2",
+    "[{'answer': '2', 'other': '1'}, {'answer': '2', 'other': '1'}, {'answer': '3', 'other': '2'}] field='other'": "2",
+    "[{'answer': '2'}, {'answer': '3'}, {'answer': '4'}] default": "2"
+  },
+  "tie": {
+    "[{'answer': 'b'}, {'answer': 'a'}] default": "b",
+    "[{'answer': 'x'}, {'answer': 'y'}, {'answer': 'y'}, {'answer': 'x'}] default": "x",
+    "[{'answer': '9'}, {'answer': 'a'}] default": "9"
+  },
+  "normalise": {
+    "[{'answer': '3'}, {'answer': ' 2'}, {'answer': '2'}] normalize_text": " 2",
+    "[{'answer': '!!'}, {'answer': '!!'}, {'answer': '3'}] default": "3"
+  }
+}

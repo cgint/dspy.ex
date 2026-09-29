@@ -1,0 +1,5 @@
+BC1 string field (single other key): {:raise, "Dspy.majority/2: :field must be an atom naming the completion key (or omit it when every completion shares one single key), got: \"answer\""}
+BC1 string field (multi-key): {:raise, "Dspy.majority/2: :field must be an atom naming the completion key (or omit it when every completion shares one single key), got: \"answer\""}
+BC2 nil value + identity: "a"
+BC2 nil value + default: {:raise, "no function clause matching in Dspy.Metrics.normalize_text/1"}
+BC2 missing key: {:raise, "Dspy.majority/2: completion %{other: \"2\"} is missing field :answer"}

@@ -1,0 +1,2 @@
+string field, single other key: %Dspy.Prediction{attrs: %{other: "x"}, completions: [], metadata: %{}}
+string field, multi-key: [functions: #Function<0.105435930 in file:plan/research/m1c-verify-2026-09-29/bc1_probe.exs>]
