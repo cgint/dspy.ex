@@ -43,6 +43,21 @@ not something a test may paper over. Escalate instead. Corollary: when two write
 agree, they call **one shared function**, and the mutation that proves it is *removing the check
 from one side only* — if both sides stay green, they were agreeing by coincidence, not by design.
 
+**Mutation-test with a SCRIPT, not by hand** (2026-09-29). Hand-mutating one row at a time asks
+"did this test go red?"; a script asks the question that matters — **"which of my claimed
+behaviours does NO test catch?"** Write a small script that applies N deliberate code changes and
+reports the survivors. **Target: zero survivors.** Evidence: a full day of careful hand-mutation
+found two unpinned rows; one automated sweep of 14 mutations found **five**, including an
+entire tokenizer that could be replaced by `String.split/1` with nothing failing. Correct code
+that no test protects becomes incorrect the first time someone refactors it.
+
+**A generated fixture can silently record an error as an expected value** (2026-09-29). When the
+oracle comes from a generator rather than hand-written cases, the generator is load-bearing: one
+fixture row had captured a **Python error message** as its expected value because the generator
+called the wrong upstream function, and the test quietly skipped it. Re-run the generator and
+diff it against the committed fixture as part of review; assert that every expected value is of
+the type the row claims.
+
 **A tool that fails twice with the same error is broken tooling, not bad luck** (2026-09-29).
 A *schema* rejection is the same category as a dead launcher: the arguments are wrong and will be
 wrong on every retry, so an identical retry can never succeed. Second identical failure → change
