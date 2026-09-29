@@ -43,6 +43,20 @@ not something a test may paper over. Escalate instead. Corollary: when two write
 agree, they call **one shared function**, and the mutation that proves it is *removing the check
 from one side only* — if both sides stay green, they were agreeing by coincidence, not by design.
 
+**Rule from what the code and upstream DO, not from what the language makes available**
+(2026-09-29). The lead ruled that `1` and `1.0` must be *different* votes — reasoning from Elixir
+having strict equality — and required it declared as a deviation. The code already used `==`, so
+they counted as **one** vote, exactly as Python does: the ruling would have moved us *away* from
+parity for no reason. Check the implementation and run upstream **before** ruling on behaviour; a
+ruling is a claim like any other. (The real deviation was hiding underneath: Python counts `True`
+and `1` as the same vote, we don't.)
+
+**An unpinned behaviour is a coin flip** (2026-09-29). Two findings in one review: one where the
+code was **right** and no test said so, one where it was **wrong** and no test said so. Both
+looked identical from the outside — a green suite. You discover which one you had when someone
+refactors. This is what the mutation sweep is for: the question is never "do the tests pass" but
+"which of my claimed behaviours would survive being broken".
+
 **The acceptance gate must be the command CI actually runs** (2026-09-29). Plain `mix test`,
 default timeout — because `scripts/ci_docker.sh` and `.github/workflows/ci.yml` run exactly that.
 A gate with different flags certifies something CI never executes, so a green gate stops
