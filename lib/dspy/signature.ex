@@ -616,6 +616,11 @@ defmodule Dspy.Signature do
     end
   end
 
+  # Strict string parsing for :integer / :number output fields.
+  # The single source of truth is Dspy.Signature.NumberParser (H12 SS3,
+  # Horst Ruling 1 2026-09-29): all three parser copies (this module,
+  # Adapters.Chat, Adapters.JSON) MUST call into it so the verdicts stay in
+  # lockstep. Do NOT re-implement the logic inline here.
   defp validate_field_type(value, type) do
     case type do
       :string ->
@@ -630,11 +635,7 @@ defmodule Dspy.Signature do
         {:ok, value}
 
       :integer when is_binary(value) ->
-        case Integer.parse(String.trim(value)) do
-          {num, ""} -> {:ok, num}
-          {num, _rest} -> {:ok, num}
-          :error -> {:error, :invalid_integer}
-        end
+        Dspy.Signature.NumberParser.parse_integer(value)
 
       :integer ->
         {:error, :invalid_integer}
@@ -643,19 +644,7 @@ defmodule Dspy.Signature do
         {:ok, value}
 
       :number when is_binary(value) ->
-        case Float.parse(String.trim(value)) do
-          {num, ""} ->
-            {:ok, num}
-
-          {num, _} ->
-            {:ok, num}
-
-          :error ->
-            case Integer.parse(value) do
-              {num, ""} -> {:ok, num}
-              _ -> {:error, :invalid_number}
-            end
-        end
+        Dspy.Signature.NumberParser.parse_number(value)
 
       :number ->
         {:error, :invalid_number}

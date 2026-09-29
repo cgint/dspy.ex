@@ -238,11 +238,7 @@ defmodule Dspy.Signature.Adapters.JSONAdapter do
         {:ok, value}
 
       :integer when is_binary(value) ->
-        case Integer.parse(String.trim(value)) do
-          {num, ""} -> {:ok, num}
-          {num, _rest} -> {:ok, num}
-          :error -> {:error, :invalid_integer}
-        end
+        Dspy.Signature.NumberParser.parse_integer(value)
 
       :integer ->
         {:error, :invalid_integer}
@@ -251,19 +247,7 @@ defmodule Dspy.Signature.Adapters.JSONAdapter do
         {:ok, value}
 
       :number when is_binary(value) ->
-        case Float.parse(String.trim(value)) do
-          {num, ""} ->
-            {:ok, num}
-
-          {num, _} ->
-            {:ok, num}
-
-          :error ->
-            case Integer.parse(value) do
-              {num, ""} -> {:ok, num}
-              _ -> {:error, :invalid_number}
-            end
-        end
+        Dspy.Signature.NumberParser.parse_number(value)
 
       :number ->
         {:error, :invalid_number}

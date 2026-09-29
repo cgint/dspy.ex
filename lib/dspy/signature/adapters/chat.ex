@@ -328,34 +328,15 @@ defmodule Dspy.Signature.Adapters.ChatAdapter do
 
   defp validate_field_type(value, :integer) when is_integer(value), do: {:ok, value}
 
-  defp validate_field_type(value, :integer) when is_binary(value) do
-    case Integer.parse(String.trim(value)) do
-      {num, ""} -> {:ok, num}
-      {num, _rest} -> {:ok, num}
-      :error -> {:error, :invalid_integer}
-    end
-  end
+  defp validate_field_type(value, :integer) when is_binary(value),
+    do: Dspy.Signature.NumberParser.parse_integer(value)
 
   defp validate_field_type(_value, :integer), do: {:error, :invalid_integer}
 
   defp validate_field_type(value, :number) when is_number(value), do: {:ok, value}
 
-  defp validate_field_type(value, :number) when is_binary(value) do
-    case Float.parse(String.trim(value)) do
-      {num, ""} ->
-        {:ok, num}
-
-      {num, _rest} ->
-        {:ok, num}
-
-      :error ->
-        case Integer.parse(String.trim(value)) do
-          {num, ""} -> {:ok, num}
-          {num, _} -> {:ok, num}
-          :error -> {:error, :invalid_number}
-        end
-    end
-  end
+  defp validate_field_type(value, :number) when is_binary(value),
+    do: Dspy.Signature.NumberParser.parse_number(value)
 
   defp validate_field_type(_value, :number), do: {:error, :invalid_number}
 

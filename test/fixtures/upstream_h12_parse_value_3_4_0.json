@@ -1,0 +1,2093 @@
+{
+  "_meta": {
+    "source": "dspy==3.4.0",
+    "generated": "2026-09-29T05:19:50.912634+00:00",
+    "function": "dspy.adapters.utils.parse_value",
+    "description": "H12 golden: upstream parse_value(s, float|int) verdicts. declared_deviation rows are intentional rejections ruled by Horst 2026-09-29 (corrupt-or-lose principle)."
+  },
+  "cases": [
+    {
+      "input": "0.8",
+      "annotation": "float",
+      "upstream": {
+        "type": "float",
+        "value_hex": "0x1.999999999999ap-1",
+        "raises": false
+      }
+    },
+    {
+      "input": " 0.8 ",
+      "annotation": "float",
+      "upstream": {
+        "type": "float",
+        "value_hex": "0x1.999999999999ap-1",
+        "raises": false
+      }
+    },
+    {
+      "input": "0.8\n",
+      "annotation": "float",
+      "upstream": {
+        "type": "float",
+        "value_hex": "0x1.999999999999ap-1",
+        "raises": false
+      }
+    },
+    {
+      "input": "1",
+      "annotation": "float",
+      "upstream": {
+        "type": "float",
+        "value_hex": "0x1.0000000000000p+0",
+        "raises": false
+      }
+    },
+    {
+      "input": "-0.2",
+      "annotation": "float",
+      "upstream": {
+        "type": "float",
+        "value_hex": "-0x1.999999999999ap-3",
+        "raises": false
+      }
+    },
+    {
+      "input": ".5",
+      "annotation": "float",
+      "upstream": {
+        "type": "float",
+        "value_hex": "0x1.0000000000000p-1",
+        "raises": false
+      }
+    },
+    {
+      "input": "5.",
+      "annotation": "float",
+      "upstream": {
+        "type": "float",
+        "value_hex": "0x1.4000000000000p+2",
+        "raises": false
+      }
+    },
+    {
+      "input": "1e-1",
+      "annotation": "float",
+      "upstream": {
+        "type": "float",
+        "value_hex": "0x1.999999999999ap-4",
+        "raises": false
+      }
+    },
+    {
+      "input": "1E3",
+      "annotation": "float",
+      "upstream": {
+        "type": "float",
+        "value_hex": "0x1.f400000000000p+9",
+        "raises": false
+      }
+    },
+    {
+      "input": "+0.5",
+      "annotation": "float",
+      "upstream": {
+        "type": "float",
+        "value_hex": "0x1.0000000000000p-1",
+        "raises": false
+      }
+    },
+    {
+      "input": "\"0.8\"",
+      "annotation": "float",
+      "upstream": {
+        "type": "float",
+        "value_hex": "0x1.999999999999ap-1",
+        "raises": false
+      }
+    },
+    {
+      "input": "1_000",
+      "annotation": "float",
+      "upstream": {
+        "type": "float",
+        "value_hex": "0x1.f400000000000p+9",
+        "raises": false
+      }
+    },
+    {
+      "input": "1",
+      "annotation": "int",
+      "upstream": {
+        "type": "int",
+        "value": 1,
+        "raises": false
+      }
+    },
+    {
+      "input": " 1 ",
+      "annotation": "int",
+      "upstream": {
+        "type": "int",
+        "value": 1,
+        "raises": false
+      }
+    },
+    {
+      "input": "1\n",
+      "annotation": "int",
+      "upstream": {
+        "type": "int",
+        "value": 1,
+        "raises": false
+      }
+    },
+    {
+      "input": "10",
+      "annotation": "float",
+      "upstream": {
+        "type": "float",
+        "value_hex": "0x1.4000000000000p+3",
+        "raises": false
+      }
+    },
+    {
+      "input": "10",
+      "annotation": "int",
+      "upstream": {
+        "type": "int",
+        "value": 10,
+        "raises": false
+      }
+    },
+    {
+      "input": "\t-2.5e+3 ",
+      "annotation": "float",
+      "upstream": {
+        "type": "float",
+        "value_hex": "-0x1.3880000000000p+11",
+        "raises": false
+      }
+    },
+    {
+      "input": "\t-2.5e+3 ",
+      "annotation": "int",
+      "upstream": {
+        "type": "int",
+        "value": -2500,
+        "raises": false
+      }
+    },
+    {
+      "input": "3.",
+      "annotation": "float",
+      "upstream": {
+        "type": "float",
+        "value_hex": "0x1.8000000000000p+1",
+        "raises": false
+      }
+    },
+    {
+      "input": "3.",
+      "annotation": "int",
+      "upstream": {
+        "type": "int",
+        "value": 3,
+        "raises": false
+      }
+    },
+    {
+      "input": "+1e2",
+      "annotation": "float",
+      "upstream": {
+        "type": "float",
+        "value_hex": "0x1.9000000000000p+6",
+        "raises": false
+      }
+    },
+    {
+      "input": "+1e2",
+      "annotation": "int",
+      "upstream": {
+        "type": "int",
+        "value": 100,
+        "raises": false
+      }
+    },
+    {
+      "input": "1_0",
+      "annotation": "float",
+      "upstream": {
+        "type": "float",
+        "value_hex": "0x1.4000000000000p+3",
+        "raises": false
+      }
+    },
+    {
+      "input": "1_0",
+      "annotation": "int",
+      "upstream": {
+        "type": "int",
+        "value": 10,
+        "raises": false
+      }
+    },
+    {
+      "input": "010",
+      "annotation": "float",
+      "upstream": {
+        "type": "float",
+        "value_hex": "0x1.4000000000000p+3",
+        "raises": false
+      }
+    },
+    {
+      "input": "010",
+      "annotation": "int",
+      "upstream": {
+        "type": "int",
+        "value": 10,
+        "raises": false
+      }
+    },
+    {
+      "input": "007",
+      "annotation": "float",
+      "upstream": {
+        "type": "float",
+        "value_hex": "0x1.c000000000000p+2",
+        "raises": false
+      }
+    },
+    {
+      "input": "007",
+      "annotation": "int",
+      "upstream": {
+        "type": "int",
+        "value": 7,
+        "raises": false
+      }
+    },
+    {
+      "input": "12345.6",
+      "annotation": "float",
+      "upstream": {
+        "type": "float",
+        "value_hex": "0x1.81ccccccccccdp+13",
+        "raises": false
+      }
+    },
+    {
+      "input": "12345.6",
+      "annotation": "int",
+      "upstream": {
+        "raises": true,
+        "type": "int",
+        "error_type": "ValidationError"
+      }
+    },
+    {
+      "input": "1,000",
+      "annotation": "float",
+      "upstream": {
+        "raises": true,
+        "type": "float",
+        "error_type": "ValidationError"
+      }
+    },
+    {
+      "input": "1,000",
+      "annotation": "int",
+      "upstream": {
+        "raises": true,
+        "type": "int",
+        "error_type": "ValidationError"
+      }
+    },
+    {
+      "input": "80%",
+      "annotation": "float",
+      "upstream": {
+        "raises": true,
+        "type": "float",
+        "error_type": "ValidationError"
+      }
+    },
+    {
+      "input": "80%",
+      "annotation": "int",
+      "upstream": {
+        "raises": true,
+        "type": "int",
+        "error_type": "ValidationError"
+      }
+    },
+    {
+      "input": "1/2",
+      "annotation": "float",
+      "upstream": {
+        "raises": true,
+        "type": "float",
+        "error_type": "ValidationError"
+      }
+    },
+    {
+      "input": "1/2",
+      "annotation": "int",
+      "upstream": {
+        "raises": true,
+        "type": "int",
+        "error_type": "ValidationError"
+      }
+    },
+    {
+      "input": "0.8/1.0",
+      "annotation": "float",
+      "upstream": {
+        "raises": true,
+        "type": "float",
+        "error_type": "ValidationError"
+      }
+    },
+    {
+      "input": "0.8/1.0",
+      "annotation": "int",
+      "upstream": {
+        "raises": true,
+        "type": "int",
+        "error_type": "ValidationError"
+      }
+    },
+    {
+      "input": "0.8 (high)",
+      "annotation": "float",
+      "upstream": {
+        "raises": true,
+        "type": "float",
+        "error_type": "ValidationError"
+      }
+    },
+    {
+      "input": "0.8 (high)",
+      "annotation": "int",
+      "upstream": {
+        "raises": true,
+        "type": "int",
+        "error_type": "ValidationError"
+      }
+    },
+    {
+      "input": "about 0.8",
+      "annotation": "float",
+      "upstream": {
+        "raises": true,
+        "type": "float",
+        "error_type": "ValidationError"
+      }
+    },
+    {
+      "input": "about 0.8",
+      "annotation": "int",
+      "upstream": {
+        "raises": true,
+        "type": "int",
+        "error_type": "ValidationError"
+      }
+    },
+    {
+      "input": "0,8",
+      "annotation": "float",
+      "upstream": {
+        "raises": true,
+        "type": "float",
+        "error_type": "ValidationError"
+      }
+    },
+    {
+      "input": "0,8",
+      "annotation": "int",
+      "upstream": {
+        "raises": true,
+        "type": "int",
+        "error_type": "ValidationError"
+      }
+    },
+    {
+      "input": "12,345.6",
+      "annotation": "float",
+      "upstream": {
+        "raises": true,
+        "type": "float",
+        "error_type": "ValidationError"
+      }
+    },
+    {
+      "input": "12,345.6",
+      "annotation": "int",
+      "upstream": {
+        "raises": true,
+        "type": "int",
+        "error_type": "ValidationError"
+      }
+    },
+    {
+      "input": "N/A",
+      "annotation": "float",
+      "upstream": {
+        "raises": true,
+        "type": "float",
+        "error_type": "ValidationError"
+      }
+    },
+    {
+      "input": "N/A",
+      "annotation": "int",
+      "upstream": {
+        "raises": true,
+        "type": "int",
+        "error_type": "ValidationError"
+      }
+    },
+    {
+      "input": "",
+      "annotation": "float",
+      "upstream": {
+        "raises": true,
+        "type": "float",
+        "error_type": "ValidationError"
+      }
+    },
+    {
+      "input": "",
+      "annotation": "int",
+      "upstream": {
+        "raises": true,
+        "type": "int",
+        "error_type": "ValidationError"
+      }
+    },
+    {
+      "input": " ",
+      "annotation": "float",
+      "upstream": {
+        "raises": true,
+        "type": "float",
+        "error_type": "ValidationError"
+      }
+    },
+    {
+      "input": " ",
+      "annotation": "int",
+      "upstream": {
+        "raises": true,
+        "type": "int",
+        "error_type": "ValidationError"
+      }
+    },
+    {
+      "input": "[0.8]",
+      "annotation": "float",
+      "upstream": {
+        "raises": true,
+        "type": "float",
+        "error_type": "ValidationError"
+      }
+    },
+    {
+      "input": "[0.8]",
+      "annotation": "int",
+      "upstream": {
+        "raises": true,
+        "type": "int",
+        "error_type": "ValidationError"
+      }
+    },
+    {
+      "input": "(0.8)",
+      "annotation": "float",
+      "upstream": {
+        "type": "float",
+        "value_hex": "0x1.999999999999ap-1",
+        "raises": false
+      }
+    },
+    {
+      "input": "(0.8)",
+      "annotation": "int",
+      "upstream": {
+        "raises": true,
+        "type": "int",
+        "error_type": "ValidationError"
+      }
+    },
+    {
+      "input": "0.8.1",
+      "annotation": "float",
+      "upstream": {
+        "raises": true,
+        "type": "float",
+        "error_type": "ValidationError"
+      }
+    },
+    {
+      "input": "0.8.1",
+      "annotation": "int",
+      "upstream": {
+        "raises": true,
+        "type": "int",
+        "error_type": "ValidationError"
+      }
+    },
+    {
+      "input": "null",
+      "annotation": "float",
+      "upstream": {
+        "raises": true,
+        "type": "float",
+        "error_type": "ValidationError"
+      }
+    },
+    {
+      "input": "null",
+      "annotation": "int",
+      "upstream": {
+        "raises": true,
+        "type": "int",
+        "error_type": "ValidationError"
+      }
+    },
+    {
+      "input": "None",
+      "annotation": "float",
+      "upstream": {
+        "raises": true,
+        "type": "float",
+        "error_type": "ValidationError"
+      }
+    },
+    {
+      "input": "None",
+      "annotation": "int",
+      "upstream": {
+        "raises": true,
+        "type": "int",
+        "error_type": "ValidationError"
+      }
+    },
+    {
+      "input": "NaN",
+      "annotation": "float",
+      "upstream": {
+        "type": "float",
+        "raises": false,
+        "value_marker": "nan"
+      },
+      "declared_deviation": true
+    },
+    {
+      "input": "nan",
+      "annotation": "float",
+      "upstream": {
+        "type": "float",
+        "raises": false,
+        "value_marker": "nan"
+      },
+      "declared_deviation": true
+    },
+    {
+      "input": "NAN",
+      "annotation": "float",
+      "upstream": {
+        "type": "float",
+        "raises": false,
+        "value_marker": "nan"
+      },
+      "declared_deviation": true
+    },
+    {
+      "input": "inf",
+      "annotation": "float",
+      "upstream": {
+        "type": "float",
+        "raises": false,
+        "value_marker": "inf"
+      },
+      "declared_deviation": true
+    },
+    {
+      "input": "-inf",
+      "annotation": "float",
+      "upstream": {
+        "type": "float",
+        "raises": false,
+        "value_marker": "-inf"
+      },
+      "declared_deviation": true
+    },
+    {
+      "input": "INF",
+      "annotation": "float",
+      "upstream": {
+        "type": "float",
+        "raises": false,
+        "value_marker": "inf"
+      },
+      "declared_deviation": true
+    },
+    {
+      "input": "+inf",
+      "annotation": "float",
+      "upstream": {
+        "type": "float",
+        "raises": false,
+        "value_marker": "inf"
+      },
+      "declared_deviation": true
+    },
+    {
+      "input": "NaN",
+      "annotation": "int",
+      "upstream": {
+        "raises": true,
+        "type": "int",
+        "error_type": "ValidationError"
+      }
+    },
+    {
+      "input": "nan",
+      "annotation": "int",
+      "upstream": {
+        "raises": true,
+        "type": "int",
+        "error_type": "ValidationError"
+      }
+    },
+    {
+      "input": "NAN",
+      "annotation": "int",
+      "upstream": {
+        "raises": true,
+        "type": "int",
+        "error_type": "ValidationError"
+      }
+    },
+    {
+      "input": "inf",
+      "annotation": "int",
+      "upstream": {
+        "raises": true,
+        "type": "int",
+        "error_type": "ValidationError"
+      }
+    },
+    {
+      "input": "-inf",
+      "annotation": "int",
+      "upstream": {
+        "raises": true,
+        "type": "int",
+        "error_type": "ValidationError"
+      }
+    },
+    {
+      "input": "INF",
+      "annotation": "int",
+      "upstream": {
+        "raises": true,
+        "type": "int",
+        "error_type": "ValidationError"
+      }
+    },
+    {
+      "input": "+inf",
+      "annotation": "int",
+      "upstream": {
+        "raises": true,
+        "type": "int",
+        "error_type": "ValidationError"
+      }
+    },
+    {
+      "input": "true",
+      "annotation": "float",
+      "upstream": {
+        "type": "float",
+        "value_hex": "0x1.0000000000000p+0",
+        "raises": false
+      },
+      "declared_deviation": true
+    },
+    {
+      "input": "True",
+      "annotation": "float",
+      "upstream": {
+        "type": "float",
+        "value_hex": "0x1.0000000000000p+0",
+        "raises": false
+      },
+      "declared_deviation": true
+    },
+    {
+      "input": "False",
+      "annotation": "float",
+      "upstream": {
+        "type": "float",
+        "value_hex": "0x0.0p+0",
+        "raises": false
+      },
+      "declared_deviation": true
+    },
+    {
+      "input": "true",
+      "annotation": "int",
+      "upstream": {
+        "type": "int",
+        "value": 1,
+        "raises": false
+      },
+      "declared_deviation": true
+    },
+    {
+      "input": "True",
+      "annotation": "int",
+      "upstream": {
+        "type": "int",
+        "value": 1,
+        "raises": false
+      },
+      "declared_deviation": true
+    },
+    {
+      "input": "False",
+      "annotation": "int",
+      "upstream": {
+        "type": "int",
+        "value": 0,
+        "raises": false
+      },
+      "declared_deviation": true
+    },
+    {
+      "input": "0x10",
+      "annotation": "float",
+      "upstream": {
+        "type": "float",
+        "value_hex": "0x1.0000000000000p+4",
+        "raises": false
+      }
+    },
+    {
+      "input": "0x10_0",
+      "annotation": "float",
+      "upstream": {
+        "type": "float",
+        "value_hex": "0x1.0000000000000p+8",
+        "raises": false
+      }
+    },
+    {
+      "input": "0b101",
+      "annotation": "float",
+      "upstream": {
+        "type": "float",
+        "value_hex": "0x1.4000000000000p+2",
+        "raises": false
+      }
+    },
+    {
+      "input": "0x10",
+      "annotation": "int",
+      "upstream": {
+        "type": "int",
+        "value": 16,
+        "raises": false
+      }
+    },
+    {
+      "input": "0x10_0",
+      "annotation": "int",
+      "upstream": {
+        "type": "int",
+        "value": 256,
+        "raises": false
+      }
+    },
+    {
+      "input": "0b101",
+      "annotation": "int",
+      "upstream": {
+        "type": "int",
+        "value": 5,
+        "raises": false
+      }
+    },
+    {
+      "input": "0x",
+      "annotation": "float",
+      "upstream": {
+        "raises": true,
+        "type": "float",
+        "error_type": "ValidationError"
+      }
+    },
+    {
+      "input": "0x",
+      "annotation": "int",
+      "upstream": {
+        "raises": true,
+        "type": "int",
+        "error_type": "ValidationError"
+      }
+    },
+    {
+      "input": "0b",
+      "annotation": "float",
+      "upstream": {
+        "raises": true,
+        "type": "float",
+        "error_type": "ValidationError"
+      }
+    },
+    {
+      "input": "0b",
+      "annotation": "int",
+      "upstream": {
+        "raises": true,
+        "type": "int",
+        "error_type": "ValidationError"
+      }
+    },
+    {
+      "input": ".",
+      "annotation": "float",
+      "upstream": {
+        "raises": true,
+        "type": "float",
+        "error_type": "ValidationError"
+      }
+    },
+    {
+      "input": ".",
+      "annotation": "int",
+      "upstream": {
+        "raises": true,
+        "type": "int",
+        "error_type": "ValidationError"
+      }
+    },
+    {
+      "input": "+",
+      "annotation": "float",
+      "upstream": {
+        "raises": true,
+        "type": "float",
+        "error_type": "ValidationError"
+      }
+    },
+    {
+      "input": "+",
+      "annotation": "int",
+      "upstream": {
+        "raises": true,
+        "type": "int",
+        "error_type": "ValidationError"
+      }
+    },
+    {
+      "input": "-",
+      "annotation": "float",
+      "upstream": {
+        "raises": true,
+        "type": "float",
+        "error_type": "ValidationError"
+      }
+    },
+    {
+      "input": "-",
+      "annotation": "int",
+      "upstream": {
+        "raises": true,
+        "type": "int",
+        "error_type": "ValidationError"
+      }
+    },
+    {
+      "input": "+.",
+      "annotation": "float",
+      "upstream": {
+        "raises": true,
+        "type": "float",
+        "error_type": "ValidationError"
+      }
+    },
+    {
+      "input": "+.",
+      "annotation": "int",
+      "upstream": {
+        "raises": true,
+        "type": "int",
+        "error_type": "ValidationError"
+      }
+    },
+    {
+      "input": "-.",
+      "annotation": "float",
+      "upstream": {
+        "raises": true,
+        "type": "float",
+        "error_type": "ValidationError"
+      }
+    },
+    {
+      "input": "-.",
+      "annotation": "int",
+      "upstream": {
+        "raises": true,
+        "type": "int",
+        "error_type": "ValidationError"
+      }
+    },
+    {
+      "input": "1.0",
+      "annotation": "float",
+      "upstream": {
+        "type": "float",
+        "value_hex": "0x1.0000000000000p+0",
+        "raises": false
+      }
+    },
+    {
+      "input": "1.0",
+      "annotation": "int",
+      "upstream": {
+        "type": "int",
+        "value": 1,
+        "raises": false
+      }
+    },
+    {
+      "input": "2.0",
+      "annotation": "float",
+      "upstream": {
+        "type": "float",
+        "value_hex": "0x1.0000000000000p+1",
+        "raises": false
+      }
+    },
+    {
+      "input": "2.0",
+      "annotation": "int",
+      "upstream": {
+        "type": "int",
+        "value": 2,
+        "raises": false
+      }
+    },
+    {
+      "input": "1.5",
+      "annotation": "float",
+      "upstream": {
+        "type": "float",
+        "value_hex": "0x1.8000000000000p+0",
+        "raises": false
+      }
+    },
+    {
+      "input": "1.5",
+      "annotation": "int",
+      "upstream": {
+        "raises": true,
+        "type": "int",
+        "error_type": "ValidationError"
+      }
+    },
+    {
+      "input": "0.0",
+      "annotation": "float",
+      "upstream": {
+        "type": "float",
+        "value_hex": "0x0.0p+0",
+        "raises": false
+      }
+    },
+    {
+      "input": "0.0",
+      "annotation": "int",
+      "upstream": {
+        "type": "int",
+        "value": 0,
+        "raises": false
+      }
+    },
+    {
+      "input": "-0.0",
+      "annotation": "float",
+      "upstream": {
+        "type": "float",
+        "value_hex": "-0x0.0p+0",
+        "raises": false
+      }
+    },
+    {
+      "input": "-0.0",
+      "annotation": "int",
+      "upstream": {
+        "type": "int",
+        "value": 0,
+        "raises": false
+      }
+    },
+    {
+      "input": "1_000_000",
+      "annotation": "float",
+      "upstream": {
+        "type": "float",
+        "value_hex": "0x1.e848000000000p+19",
+        "raises": false
+      }
+    },
+    {
+      "input": "1_000_000",
+      "annotation": "int",
+      "upstream": {
+        "type": "int",
+        "value": 1000000,
+        "raises": false
+      }
+    },
+    {
+      "input": "_1",
+      "annotation": "float",
+      "upstream": {
+        "raises": true,
+        "type": "float",
+        "error_type": "ValidationError"
+      }
+    },
+    {
+      "input": "_1",
+      "annotation": "int",
+      "upstream": {
+        "raises": true,
+        "type": "int",
+        "error_type": "ValidationError"
+      }
+    },
+    {
+      "input": "1_",
+      "annotation": "float",
+      "upstream": {
+        "raises": true,
+        "type": "float",
+        "error_type": "ValidationError"
+      }
+    },
+    {
+      "input": "1_",
+      "annotation": "int",
+      "upstream": {
+        "raises": true,
+        "type": "int",
+        "error_type": "ValidationError"
+      }
+    },
+    {
+      "input": "0xG",
+      "annotation": "float",
+      "upstream": {
+        "raises": true,
+        "type": "float",
+        "error_type": "ValidationError"
+      }
+    },
+    {
+      "input": "0xG",
+      "annotation": "int",
+      "upstream": {
+        "raises": true,
+        "type": "int",
+        "error_type": "ValidationError"
+      }
+    },
+    {
+      "input": "0x10G",
+      "annotation": "float",
+      "upstream": {
+        "raises": true,
+        "type": "float",
+        "error_type": "ValidationError"
+      }
+    },
+    {
+      "input": "0x10G",
+      "annotation": "int",
+      "upstream": {
+        "raises": true,
+        "type": "int",
+        "error_type": "ValidationError"
+      }
+    },
+    {
+      "input": "1e",
+      "annotation": "float",
+      "upstream": {
+        "raises": true,
+        "type": "float",
+        "error_type": "ValidationError"
+      }
+    },
+    {
+      "input": "1e",
+      "annotation": "int",
+      "upstream": {
+        "raises": true,
+        "type": "int",
+        "error_type": "ValidationError"
+      }
+    },
+    {
+      "input": "1e-",
+      "annotation": "float",
+      "upstream": {
+        "raises": true,
+        "type": "float",
+        "error_type": "ValidationError"
+      }
+    },
+    {
+      "input": "1e-",
+      "annotation": "int",
+      "upstream": {
+        "raises": true,
+        "type": "int",
+        "error_type": "ValidationError"
+      }
+    },
+    {
+      "input": "1e+",
+      "annotation": "float",
+      "upstream": {
+        "raises": true,
+        "type": "float",
+        "error_type": "ValidationError"
+      }
+    },
+    {
+      "input": "1e+",
+      "annotation": "int",
+      "upstream": {
+        "raises": true,
+        "type": "int",
+        "error_type": "ValidationError"
+      }
+    },
+    {
+      "input": "1.2.3.4",
+      "annotation": "float",
+      "upstream": {
+        "raises": true,
+        "type": "float",
+        "error_type": "ValidationError"
+      }
+    },
+    {
+      "input": "1.2.3.4",
+      "annotation": "int",
+      "upstream": {
+        "raises": true,
+        "type": "int",
+        "error_type": "ValidationError"
+      }
+    },
+    {
+      "input": "1 000",
+      "annotation": "float",
+      "upstream": {
+        "raises": true,
+        "type": "float",
+        "error_type": "ValidationError"
+      }
+    },
+    {
+      "input": "1 000",
+      "annotation": "int",
+      "upstream": {
+        "raises": true,
+        "type": "int",
+        "error_type": "ValidationError"
+      }
+    },
+    {
+      "input": "1,000.5",
+      "annotation": "float",
+      "upstream": {
+        "raises": true,
+        "type": "float",
+        "error_type": "ValidationError"
+      }
+    },
+    {
+      "input": "1,000.5",
+      "annotation": "int",
+      "upstream": {
+        "raises": true,
+        "type": "int",
+        "error_type": "ValidationError"
+      }
+    },
+    {
+      "input": "2e2",
+      "annotation": "float",
+      "upstream": {
+        "type": "float",
+        "value_hex": "0x1.9000000000000p+7",
+        "raises": false
+      }
+    },
+    {
+      "input": "2e2",
+      "annotation": "int",
+      "upstream": {
+        "type": "int",
+        "value": 200,
+        "raises": false
+      }
+    },
+    {
+      "input": "1d3",
+      "annotation": "float",
+      "upstream": {
+        "raises": true,
+        "type": "float",
+        "error_type": "ValidationError"
+      }
+    },
+    {
+      "input": "1d3",
+      "annotation": "int",
+      "upstream": {
+        "raises": true,
+        "type": "int",
+        "error_type": "ValidationError"
+      }
+    },
+    {
+      "input": "1f",
+      "annotation": "float",
+      "upstream": {
+        "raises": true,
+        "type": "float",
+        "error_type": "ValidationError"
+      }
+    },
+    {
+      "input": "1f",
+      "annotation": "int",
+      "upstream": {
+        "raises": true,
+        "type": "int",
+        "error_type": "ValidationError"
+      }
+    },
+    {
+      "input": "'",
+      "annotation": "float",
+      "upstream": {
+        "raises": true,
+        "type": "float",
+        "error_type": "ValidationError"
+      }
+    },
+    {
+      "input": "'",
+      "annotation": "int",
+      "upstream": {
+        "raises": true,
+        "type": "int",
+        "error_type": "ValidationError"
+      }
+    },
+    {
+      "input": "+2",
+      "annotation": "int",
+      "upstream": {
+        "type": "int",
+        "value": 2,
+        "raises": false
+      }
+    },
+    {
+      "input": "-3",
+      "annotation": "int",
+      "upstream": {
+        "type": "int",
+        "value": -3,
+        "raises": false
+      }
+    },
+    {
+      "input": "0.8",
+      "annotation": "int",
+      "upstream": {
+        "raises": true,
+        "type": "int",
+        "error_type": "ValidationError"
+      }
+    },
+    {
+      "input": " 0.8 ",
+      "annotation": "int",
+      "upstream": {
+        "raises": true,
+        "type": "int",
+        "error_type": "ValidationError"
+      }
+    },
+    {
+      "input": "0.8\n",
+      "annotation": "int",
+      "upstream": {
+        "raises": true,
+        "type": "int",
+        "error_type": "ValidationError"
+      }
+    },
+    {
+      "input": "-0.2",
+      "annotation": "int",
+      "upstream": {
+        "raises": true,
+        "type": "int",
+        "error_type": "ValidationError"
+      }
+    },
+    {
+      "input": ".5",
+      "annotation": "int",
+      "upstream": {
+        "raises": true,
+        "type": "int",
+        "error_type": "ValidationError"
+      }
+    },
+    {
+      "input": "1e-1",
+      "annotation": "int",
+      "upstream": {
+        "raises": true,
+        "type": "int",
+        "error_type": "ValidationError"
+      }
+    },
+    {
+      "input": "+0.5",
+      "annotation": "int",
+      "upstream": {
+        "raises": true,
+        "type": "int",
+        "error_type": "ValidationError"
+      }
+    },
+    {
+      "input": "1E3",
+      "annotation": "int",
+      "upstream": {
+        "type": "int",
+        "value": 1000,
+        "raises": false
+      }
+    },
+    {
+      "input": "+-1",
+      "annotation": "float",
+      "upstream": {
+        "raises": true,
+        "type": "float",
+        "error_type": "ValidationError"
+      }
+    },
+    {
+      "input": "+-1",
+      "annotation": "int",
+      "upstream": {
+        "raises": true,
+        "type": "int",
+        "error_type": "ValidationError"
+      }
+    },
+    {
+      "input": "+-1.5",
+      "annotation": "float",
+      "upstream": {
+        "raises": true,
+        "type": "float",
+        "error_type": "ValidationError"
+      }
+    },
+    {
+      "input": "+-1.5",
+      "annotation": "int",
+      "upstream": {
+        "raises": true,
+        "type": "int",
+        "error_type": "ValidationError"
+      }
+    },
+    {
+      "input": "-+1",
+      "annotation": "float",
+      "upstream": {
+        "raises": true,
+        "type": "float",
+        "error_type": "ValidationError"
+      }
+    },
+    {
+      "input": "-+1",
+      "annotation": "int",
+      "upstream": {
+        "raises": true,
+        "type": "int",
+        "error_type": "ValidationError"
+      }
+    },
+    {
+      "input": "++1",
+      "annotation": "float",
+      "upstream": {
+        "raises": true,
+        "type": "float",
+        "error_type": "ValidationError"
+      }
+    },
+    {
+      "input": "++1",
+      "annotation": "int",
+      "upstream": {
+        "raises": true,
+        "type": "int",
+        "error_type": "ValidationError"
+      }
+    },
+    {
+      "input": "--1",
+      "annotation": "float",
+      "upstream": {
+        "raises": true,
+        "type": "float",
+        "error_type": "ValidationError"
+      }
+    },
+    {
+      "input": "--1",
+      "annotation": "int",
+      "upstream": {
+        "raises": true,
+        "type": "int",
+        "error_type": "ValidationError"
+      }
+    },
+    {
+      "input": "++0.5",
+      "annotation": "float",
+      "upstream": {
+        "raises": true,
+        "type": "float",
+        "error_type": "ValidationError"
+      }
+    },
+    {
+      "input": "\"5\"",
+      "annotation": "int",
+      "upstream": {
+        "type": "int",
+        "value": 5,
+        "raises": false
+      }
+    },
+    {
+      "input": "\"5\"",
+      "annotation": "float",
+      "upstream": {
+        "type": "float",
+        "value_hex": "0x1.4000000000000p+2",
+        "raises": false
+      }
+    },
+    {
+      "input": "\"0.8\"",
+      "annotation": "int",
+      "upstream": {
+        "raises": true,
+        "type": "int",
+        "error_type": "ValidationError"
+      }
+    },
+    {
+      "input": "\" 5 \"",
+      "annotation": "int",
+      "upstream": {
+        "type": "int",
+        "value": 5,
+        "raises": false
+      }
+    },
+    {
+      "input": "\" 5 \"",
+      "annotation": "float",
+      "upstream": {
+        "type": "float",
+        "value_hex": "0x1.4000000000000p+2",
+        "raises": false
+      }
+    },
+    {
+      "input": "\"5 \"",
+      "annotation": "float",
+      "upstream": {
+        "type": "float",
+        "value_hex": "0x1.4000000000000p+2",
+        "raises": false
+      }
+    },
+    {
+      "input": "\" 5\"",
+      "annotation": "float",
+      "upstream": {
+        "type": "float",
+        "value_hex": "0x1.4000000000000p+2",
+        "raises": false
+      }
+    },
+    {
+      "input": "\" -3 \"",
+      "annotation": "int",
+      "upstream": {
+        "type": "int",
+        "value": -3,
+        "raises": false
+      }
+    },
+    {
+      "input": "\" -3 \"",
+      "annotation": "float",
+      "upstream": {
+        "type": "float",
+        "value_hex": "-0x1.8000000000000p+1",
+        "raises": false
+      }
+    },
+    {
+      "input": "\"(5)\"",
+      "annotation": "float",
+      "upstream": {
+        "raises": true,
+        "type": "float",
+        "error_type": "ValidationError"
+      }
+    },
+    {
+      "input": "\"(5)\"",
+      "annotation": "int",
+      "upstream": {
+        "raises": true,
+        "type": "int",
+        "error_type": "ValidationError"
+      }
+    },
+    {
+      "input": "  \"5\"  ",
+      "annotation": "float",
+      "upstream": {
+        "type": "float",
+        "value_hex": "0x1.4000000000000p+2",
+        "raises": false
+      }
+    },
+    {
+      "input": "  \"5\"  ",
+      "annotation": "int",
+      "upstream": {
+        "type": "int",
+        "value": 5,
+        "raises": false
+      }
+    },
+    {
+      "input": "5.e3",
+      "annotation": "float",
+      "upstream": {
+        "type": "float",
+        "value_hex": "0x1.3880000000000p+12",
+        "raises": false
+      }
+    },
+    {
+      "input": "5.e3",
+      "annotation": "int",
+      "upstream": {
+        "type": "int",
+        "value": 5000,
+        "raises": false
+      }
+    },
+    {
+      "input": ".5e3",
+      "annotation": "float",
+      "upstream": {
+        "type": "float",
+        "value_hex": "0x1.f400000000000p+8",
+        "raises": false
+      }
+    },
+    {
+      "input": ".5e3",
+      "annotation": "int",
+      "upstream": {
+        "type": "int",
+        "value": 500,
+        "raises": false
+      }
+    },
+    {
+      "input": "5.e-3",
+      "annotation": "float",
+      "upstream": {
+        "type": "float",
+        "value_hex": "0x1.47ae147ae147bp-8",
+        "raises": false
+      }
+    },
+    {
+      "input": "5.e",
+      "annotation": "float",
+      "upstream": {
+        "raises": true,
+        "type": "float",
+        "error_type": "ValidationError"
+      }
+    },
+    {
+      "input": "1e1_0",
+      "annotation": "float",
+      "upstream": {
+        "type": "float",
+        "value_hex": "0x1.2a05f20000000p+33",
+        "raises": false
+      }
+    },
+    {
+      "input": "1e1_0",
+      "annotation": "int",
+      "upstream": {
+        "type": "int",
+        "value": 10000000000,
+        "raises": false
+      }
+    },
+    {
+      "input": "1e_1",
+      "annotation": "float",
+      "upstream": {
+        "type": "float",
+        "value_hex": "0x1.4000000000000p+3",
+        "raises": false
+      }
+    },
+    {
+      "input": "1E_1",
+      "annotation": "float",
+      "upstream": {
+        "type": "float",
+        "value_hex": "0x1.4000000000000p+3",
+        "raises": false
+      }
+    },
+    {
+      "input": "-0x10",
+      "annotation": "float",
+      "upstream": {
+        "type": "float",
+        "value_hex": "-0x1.0000000000000p+4",
+        "raises": false
+      }
+    },
+    {
+      "input": "-0x10",
+      "annotation": "int",
+      "upstream": {
+        "type": "int",
+        "value": -16,
+        "raises": false
+      }
+    },
+    {
+      "input": "-0b1",
+      "annotation": "float",
+      "upstream": {
+        "type": "float",
+        "value_hex": "-0x1.0000000000000p+0",
+        "raises": false
+      }
+    },
+    {
+      "input": "-0b1",
+      "annotation": "int",
+      "upstream": {
+        "type": "int",
+        "value": -1,
+        "raises": false
+      }
+    },
+    {
+      "input": "+0x10",
+      "annotation": "float",
+      "upstream": {
+        "type": "float",
+        "value_hex": "0x1.0000000000000p+4",
+        "raises": false
+      }
+    },
+    {
+      "input": "+0x10",
+      "annotation": "int",
+      "upstream": {
+        "type": "int",
+        "value": 16,
+        "raises": false
+      }
+    },
+    {
+      "input": "-0X10",
+      "annotation": "float",
+      "upstream": {
+        "type": "float",
+        "value_hex": "-0x1.0000000000000p+4",
+        "raises": false
+      }
+    },
+    {
+      "input": "-0X10",
+      "annotation": "int",
+      "upstream": {
+        "type": "int",
+        "value": -16,
+        "raises": false
+      }
+    },
+    {
+      "input": "0x-10",
+      "annotation": "float",
+      "upstream": {
+        "raises": true,
+        "type": "float",
+        "error_type": "ValidationError"
+      }
+    },
+    {
+      "input": "\"010\"",
+      "annotation": "int",
+      "upstream": {
+        "type": "int",
+        "value": 10,
+        "raises": false
+      }
+    },
+    {
+      "input": "\"010\"",
+      "annotation": "float",
+      "upstream": {
+        "type": "float",
+        "value_hex": "0x1.4000000000000p+3",
+        "raises": false
+      }
+    },
+    {
+      "input": "\"1E3\"",
+      "annotation": "int",
+      "upstream": {
+        "raises": true,
+        "type": "int",
+        "error_type": "ValidationError"
+      }
+    },
+    {
+      "input": "\"1E3\"",
+      "annotation": "float",
+      "upstream": {
+        "type": "float",
+        "value_hex": "0x1.f400000000000p+9",
+        "raises": false
+      }
+    },
+    {
+      "input": "\"2.0\"",
+      "annotation": "int",
+      "upstream": {
+        "type": "int",
+        "value": 2,
+        "raises": false
+      }
+    },
+    {
+      "input": "\"2.0\"",
+      "annotation": "float",
+      "upstream": {
+        "type": "float",
+        "value_hex": "0x1.0000000000000p+1",
+        "raises": false
+      }
+    },
+    {
+      "input": "\"1_000\"",
+      "annotation": "int",
+      "upstream": {
+        "type": "int",
+        "value": 1000,
+        "raises": false
+      }
+    },
+    {
+      "input": "\"1_000\"",
+      "annotation": "float",
+      "upstream": {
+        "type": "float",
+        "value_hex": "0x1.f400000000000p+9",
+        "raises": false
+      }
+    },
+    {
+      "input": "\"0x10\"",
+      "annotation": "int",
+      "upstream": {
+        "raises": true,
+        "type": "int",
+        "error_type": "ValidationError"
+      }
+    },
+    {
+      "input": "\"0x10\"",
+      "annotation": "float",
+      "upstream": {
+        "raises": true,
+        "type": "float",
+        "error_type": "ValidationError"
+      }
+    },
+    {
+      "input": ",1",
+      "annotation": "float",
+      "upstream": {
+        "raises": true,
+        "type": "float",
+        "error_type": "ValidationError"
+      }
+    },
+    {
+      "input": ",1",
+      "annotation": "int",
+      "upstream": {
+        "raises": true,
+        "type": "int",
+        "error_type": "ValidationError"
+      }
+    },
+    {
+      "input": "1,",
+      "annotation": "float",
+      "upstream": {
+        "raises": true,
+        "type": "float",
+        "error_type": "ValidationError"
+      }
+    },
+    {
+      "input": "1,",
+      "annotation": "int",
+      "upstream": {
+        "raises": true,
+        "type": "int",
+        "error_type": "ValidationError"
+      }
+    },
+    {
+      "input": "+1e+10",
+      "annotation": "float",
+      "upstream": {
+        "type": "float",
+        "value_hex": "0x1.2a05f20000000p+33",
+        "raises": false
+      }
+    },
+    {
+      "input": "+1e+10",
+      "annotation": "int",
+      "upstream": {
+        "type": "int",
+        "value": 10000000000,
+        "raises": false
+      }
+    },
+    {
+      "input": "(5)",
+      "annotation": "float",
+      "upstream": {
+        "type": "float",
+        "value_hex": "0x1.4000000000000p+2",
+        "raises": false
+      }
+    },
+    {
+      "input": "(5)",
+      "annotation": "int",
+      "upstream": {
+        "type": "int",
+        "value": 5,
+        "raises": false
+      }
+    },
+    {
+      "input": "(-2)",
+      "annotation": "float",
+      "upstream": {
+        "type": "float",
+        "value_hex": "-0x1.0000000000000p+1",
+        "raises": false
+      }
+    },
+    {
+      "input": "(-2)",
+      "annotation": "int",
+      "upstream": {
+        "type": "int",
+        "value": -2,
+        "raises": false
+      }
+    },
+    {
+      "input": "0o17",
+      "annotation": "float",
+      "upstream": {
+        "type": "float",
+        "value_hex": "0x1.e000000000000p+3",
+        "raises": false
+      }
+    },
+    {
+      "input": "0o17",
+      "annotation": "int",
+      "upstream": {
+        "type": "int",
+        "value": 15,
+        "raises": false
+      }
+    },
+    {
+      "input": "0O17",
+      "annotation": "float",
+      "upstream": {
+        "type": "float",
+        "value_hex": "0x1.e000000000000p+3",
+        "raises": false
+      }
+    },
+    {
+      "input": "0O17",
+      "annotation": "int",
+      "upstream": {
+        "type": "int",
+        "value": 15,
+        "raises": false
+      }
+    },
+    {
+      "input": "-0o17",
+      "annotation": "float",
+      "upstream": {
+        "type": "float",
+        "value_hex": "-0x1.e000000000000p+3",
+        "raises": false
+      }
+    },
+    {
+      "input": "-0o17",
+      "annotation": "int",
+      "upstream": {
+        "type": "int",
+        "value": -15,
+        "raises": false
+      }
+    },
+    {
+      "input": "-0O17",
+      "annotation": "float",
+      "upstream": {
+        "type": "float",
+        "value_hex": "-0x1.e000000000000p+3",
+        "raises": false
+      }
+    },
+    {
+      "input": "-0O17",
+      "annotation": "int",
+      "upstream": {
+        "type": "int",
+        "value": -15,
+        "raises": false
+      }
+    },
+    {
+      "input": "\"0x10\"",
+      "annotation": "int",
+      "upstream": {
+        "raises": true,
+        "type": "int",
+        "error_type": "ValidationError"
+      }
+    },
+    {
+      "input": "\"0x10\"",
+      "annotation": "float",
+      "upstream": {
+        "raises": true,
+        "type": "float",
+        "error_type": "ValidationError"
+      }
+    },
+    {
+      "input": "\"0b101\"",
+      "annotation": "int",
+      "upstream": {
+        "raises": true,
+        "type": "int",
+        "error_type": "ValidationError"
+      }
+    },
+    {
+      "input": "\"0b101\"",
+      "annotation": "float",
+      "upstream": {
+        "raises": true,
+        "type": "float",
+        "error_type": "ValidationError"
+      }
+    },
+    {
+      "input": "\"0o17\"",
+      "annotation": "int",
+      "upstream": {
+        "raises": true,
+        "type": "int",
+        "error_type": "ValidationError"
+      }
+    },
+    {
+      "input": "\"0o17\"",
+      "annotation": "float",
+      "upstream": {
+        "raises": true,
+        "type": "float",
+        "error_type": "ValidationError"
+      }
+    }
+  ]
+}

@@ -1,5 +1,5 @@
 defmodule Dspy.AdapterSelectionTest do
-  use ExUnit.Case, async: true
+  use ExUnit.Case, async: false
 
   defmodule SimpleSig do
     use Dspy.Signature
