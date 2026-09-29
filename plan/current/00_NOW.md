@@ -62,6 +62,7 @@ Version numbers show the milestone: M1 = v0.4.x, M2 = v0.5.x, … M6 = v0.9.x (d
 | v0.3.47 | Extras security: `httpoison` replaced by `req`, removing 4 more advisories |
 | v0.3.48 | Evaluation you can trust the numbers of: failures count into the score, runs stop after 10 errors, true/false metrics finally count, bad input raises instead of lying |
 | **v0.4.0** | **M1 opens** — evaluation results you can keep: a proper result struct you can still read the old way, upstream's score percentage, and saving results as CSV or JSON |
+| **v0.4.1** | Python-compatible metrics: `answer_exact_match` (with `frac` and answer lists), `answer_passage_match`, and a public `normalize_text` that matches Python exactly |
 
 ## Incident 2026-09-28 (fixed)
 - The automatic checks on GitHub (CI) had been **red since v0.3.42** without anyone noticing: one test file didn't compile on the older Elixir version CI uses (1.19), so CI ran no tests at all. Locally (Elixir 1.20) everything was green.
@@ -81,8 +82,11 @@ Version numbers show the milestone: M1 = v0.4.x, M2 = v0.5.x, … M6 = v0.9.x (d
   header that would have crashed saving any run containing a failure; column order decided by
   the VM's atom table; two silent data-loss bugs; and the two writers disagreeing with each
   other. None reached a release.
-- **In progress:** M1-b (metrics) → v0.4.1. **Contracted and validated behind it:** M1-c
-  (majority), M1-d (LM-judged metrics), M1-e (Dataset/DataLoader).
+- **Shipped since:** M1-b (metrics) as **v0.4.1**. **In progress:** M1-c (majority) → v0.4.2.
+  **Contracted and validated behind it:** M1-d (LM-judged metrics), M1-e (Dataset/DataLoader).
+- **M2 groundwork done:** upstream's documented save path is JSON, not pickle — so saving and
+  reloading a program is reachable. Only *whole-program* save is pickle, which we declare
+  not-applicable (our "whole program" is our code plus a state file).
 - **Known, declared:** saving CSV from a QA run whose examples share an `answer` field raises if
   any example failed. That is upstream behaviour; unlike upstream we leave no partial file.
 
