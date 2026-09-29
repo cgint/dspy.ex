@@ -125,6 +125,13 @@ false claim. Corollaries: a full-suite run taken **while a mutation is applied i
 restore first, then measure; every reported test count must state which state the tree was in;
 and an unexplained failure count is a **stop-and-report**, never a footnote.
 
+**Never use `mix run --no-halt` for a script** (2026-09-29). `--no-halt` keeps the VM alive after
+the script finishes, so the command never returns and any pipeline after it (`| grep`, `| tee`)
+never completes. Use plain `mix run <file>.exs`. Observed: a worker hung **24 minutes** on
+`mix run --no-halt` for a three-line probe. Same family as the `ExUnit.run()` hang below — the
+process is perfectly healthy, it is simply never going to exit, which is why no error ever
+appears and nobody notices.
+
 **Never call `ExUnit.run()` inside a file you launch with `mix test`** (2026-09-28). `mix test`
 already starts and runs ExUnit; the explicit second run blocks forever, and `--timeout` does not
 help because the hang is outside any test case. Either put the module in a real file under
