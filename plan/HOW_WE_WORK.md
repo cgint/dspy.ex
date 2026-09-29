@@ -51,6 +51,17 @@ parity for no reason. Check the implementation and run upstream **before** rulin
 ruling is a claim like any other. (The real deviation was hiding underneath: Python counts `True`
 and `1` as the same vote, we don't.)
 
+**Extracting a shared function needs TWO mutation directions** (2026-09-29, Greta). Breaking the
+shared module and watching every path go red proves only that **the shared module is tested** —
+if the tests all exercise one caller, the other callers could be bypassing it entirely and
+nothing would go green. You must **also revert each call site individually**, and each revert
+must fail *that path's* tests specifically. Both directions, or the extraction is unproven. (The
+lead's original requirement asked only for the first direction.)
+
+**A verification tool that lives in scratch space is not a standard** (2026-09-29). Commit the
+mutation harness next to the generator it verifies. One slice left its harness in a gitignored
+handoff directory, so the "standard" could not be re-run by anyone else.
+
 **A mutation must fail the test it targets, and fail it for the reason it claims** (2026-09-29).
 A RED sweep line is not proof by itself. Observed: a revert-mutation reddened most of the suite
 by breaking an unrelated guard, while leaving the clause it claimed to revert in place — so it
@@ -93,6 +104,12 @@ against it.
 and the lead is often blocked awaiting *you* — a deadlock in which neither side's tokens move.
 Report, then stop or continue with work that does not depend on the answer; the lead comes to
 you. Use `herdr_prompt_agent.sh`, which preflights instead of trapping.
+
+**Report TWO numbers from a mutation sweep: applied and defined** (2026-09-29). A harness that
+silently returns `None` for a pattern prints `NOT-APPLICABLE` and that mutation **vanishes** — it
+is neither RED nor a survivor, and the count still looks perfect. Observed: a report claimed
+"10/10 killed" for a list of **twelve**. Always reconcile the count in the log against the number
+of patterns *defined in the script*; a zero-survivor sweep means nothing until those two agree.
 
 **Mutation-test with a SCRIPT, not by hand** (2026-09-29). Hand-mutating one row at a time asks
 "did this test go red?"; a script asks the question that matters — **"which of my claimed
