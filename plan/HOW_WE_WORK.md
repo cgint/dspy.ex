@@ -105,6 +105,22 @@ and the lead is often blocked awaiting *you* — a deadlock in which neither sid
 Report, then stop or continue with work that does not depend on the answer; the lead comes to
 you. Use `herdr_prompt_agent.sh`, which preflights instead of trapping.
 
+**The harness must FAIL on a vanished mutation, not just report it** (2026-09-29, Britta). A
+standard that depends on someone carefully comparing two numbers is weaker than one that cannot
+produce a false pass: make `NOT-APPLICABLE > 0` a **hard failure, exit 1**. Stronger than the
+"report both numbers" rule below, and it supersedes it in practice.
+
+**Audit the harness itself — a false zero can hide inside the tool built to find false zeros**
+(2026-09-29). Observed, self-found: the runner passed only 2 of 3 test files, silently skipping
+the one covering two call sites — **which is why their per-caller reverts looked green** — and it
+misparsed ExUnit's `N/M passed` line, counting crashed runs as green. A reviewer can catch a
+report that says "10 of 12"; only someone *reading the harness* can catch a runner that omits a
+test file. Read it.
+
+**Re-stamp the stability gate on the FINAL tree** (2026-09-29). A 20× run taken before a fix
+round proves nothing about the code after it. Confidence that the root cause is closed is
+reasoning, and reasoning about flakes is exactly what fails.
+
 **Report TWO numbers from a mutation sweep: applied and defined** (2026-09-29). A harness that
 silently returns `None` for a pattern prints `NOT-APPLICABLE` and that mutation **vanishes** — it
 is neither RED nor a survivor, and the count still looks perfect. Observed: a report claimed
