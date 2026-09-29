@@ -1,0 +1,22 @@
+[
+  ["Paris", ["Paris—France"]],
+  ["France", ["«France»"]],
+  ["great", ["great👍"]],
+  ["👍", ["great👍"]],
+  ["cafe", ["café au lait"]],
+  ["café", ["cafe au lait"]],
+  ["café", ["café au lait"]],
+  ["the", ["anything at all"]],
+  ["!!!", ["x"]],
+  ["the", [""]],
+  ["東京", ["東京 タワー"]],
+  ["東京", ["東京タワー"]],
+  ["οδος", ["ΟΔΟΣ ΑΘΗΝΩΝ"]],
+  ["x", ["a x"]],
+  ["tab", ["a\ttab\nhere"]],
+  ["state of art", ["the state-of-the-art model"]],
+  ["½", ["cup ½ full"]],
+  ["Ⅻ", ["chapter ⅻ"]],
+  ["a", ["á la"]],
+  ["Ångström", ["one Ångström unit"]]
+]

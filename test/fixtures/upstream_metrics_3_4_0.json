@@ -1,0 +1,425 @@
+{
+  "_meta": {
+    "source": "dspy==3.4.0",
+    "date": "2026-09-29T00:29:15.583967+00:00",
+    "description": "Golden fixtures for upstream dspy metrics"
+  },
+  "normalize_text": {
+    "the banana theater": "banana theater",
+    "the": "",
+    "a": "",
+    "an": "",
+    "the cat": "cat",
+    "  spaces  ": "spaces",
+    "\t\nnewlines\t": "newlines",
+    "caf\u00e9": "cafe\u0301",
+    "cafe\u0301": "cafe\u0301",
+    "Stra\u00dfe": "stra\u00dfe",
+    "\u2014": "\u2014",
+    "\u201c \u201d": "\u201c \u201d",
+    "!": "",
+    "word!word": "wordword",
+    "\"": "",
+    "word\"word": "wordword",
+    "#": "",
+    "word#word": "wordword",
+    "$": "",
+    "word$word": "wordword",
+    "%": "",
+    "word%word": "wordword",
+    "&": "",
+    "word&word": "wordword",
+    "'": "",
+    "word'word": "wordword",
+    "(": "",
+    "word(word": "wordword",
+    ")": "",
+    "word)word": "wordword",
+    "*": "",
+    "word*word": "wordword",
+    "+": "",
+    "word+word": "wordword",
+    ",": "",
+    "word,word": "wordword",
+    "-": "",
+    "word-word": "wordword",
+    ".": "",
+    "word.word": "wordword",
+    "/": "",
+    "word/word": "wordword",
+    ":": "",
+    "word:word": "wordword",
+    ";": "",
+    "word;word": "wordword",
+    "<": "",
+    "word<word": "wordword",
+    "=": "",
+    "word=word": "wordword",
+    ">": "",
+    "word>word": "wordword",
+    "?": "",
+    "word?word": "wordword",
+    "@": "",
+    "word@word": "wordword",
+    "[": "",
+    "word[word": "wordword",
+    "\\": "",
+    "word\\word": "wordword",
+    "]": "",
+    "word]word": "wordword",
+    "^": "",
+    "word^word": "wordword",
+    "_": "",
+    "word_word": "wordword",
+    "`": "",
+    "word`word": "wordword",
+    "{": "",
+    "word{word": "wordword",
+    "|": "",
+    "word|word": "wordword",
+    "}": "",
+    "word}word": "wordword",
+    "~": "",
+    "word~word": "wordword",
+    "": "",
+    " ": "",
+    "!!!": "",
+    "...": "",
+    "The": "",
+    "THE": "",
+    "a the an": "",
+    " the ": "",
+    "theory": "theory",
+    "atheist": "atheist",
+    "an_apple": "anapple",
+    "the_end": "theend",
+    "_the_": "",
+    "the's": "thes",
+    "don't": "dont",
+    "it's": "its",
+    "a-b": "ab",
+    "state-of-the-art": "stateoftheart",
+    "\u00e9": "e\u0301",
+    "\u00e1": "\u0301",
+    "\u00c1": "\u0301",
+    "\u00e0 la carte": "\u0300 la carte",
+    "caf\u00e9 a": "cafe\u0301",
+    "a caf\u00e9": "cafe\u0301",
+    "r\u00e9sum\u00e9": "re\u0301sume\u0301",
+    "na\u00efve": "nai\u0308ve",
+    "\u00fcber": "u\u0308ber",
+    "stra\u00dfe": "stra\u00dfe",
+    "\u1e9e": "\u00df",
+    "\u039f\u0394\u039f\u03a3": "\u03bf\u03b4\u03bf\u03c2",
+    "\u0130stanbul": "i\u0307stanbul",
+    "\u01c5": "\u01c6",
+    "\ufb01": "\ufb01",
+    "\u00bd": "\u00bd",
+    "\u2460": "\u2460",
+    "\u216b": "\u217b",
+    "\u24b6": "\u24d0",
+    "a\u00a0b": "b",
+    "a\tb\nc": "b c",
+    "a\u2003b": "b",
+    "a\u3000b": "b",
+    "a\u001cb": "b",
+    "a\u200bb": "\u200bb",
+    "a\u0085b": "b",
+    "a\u2028b": "b",
+    "\u201cquoted\u201d": "\u201cquoted\u201d",
+    "\u2014dash\u2014": "\u2014dash\u2014",
+    "\u00bfqu\u00e9?": "\u00bfque\u0301",
+    "\u00a1hola!": "\u00a1hola",
+    "\u6771\u4eac the \u5927\u962a": "\u6771\u4eac \u5927\u962a",
+    "the\u6771\u4eac": "the\u6771\u4eac",
+    "\u6771\u4eacthe": "\u6771\u4eacthe",
+    "a1": "a1",
+    "1 a 2": "1 2",
+    "\ud83d\udc4d the \ud83d\udc4e": "\ud83d\udc4d \ud83d\udc4e",
+    "\u0301": "\u0301",
+    "a\u0301": "\u0301",
+    "the\u0301": "\u0301",
+    "\u0301the": "\u0301",
+    "\u00c5ngstr\u00f6m the": "\u030angstro\u0308m",
+    "a\u0308": "\u0308",
+    "\ufb00 the": "\ufb00",
+    "The,  Eiffel  Tower!": "eiffel tower",
+    "  multiple   spaces  ": "multiple spaces",
+    "\t\n": "",
+    "\u03a4\u0397\u03a3 \u038c\u0394\u039f\u038e": "\u03c4\u03b7\u03c2 \u03bf\u0301\u03b4\u03bf\u03c5\u0301",
+    "\u0388\u039d\u0391\u03a3 \u039c\u038e\u0398\u039f\u03a3.": "\u03b5\u0301\u03bd\u03b1\u03c2 \u03bc\u03c5\u0301\u03b8\u03bf\u03c2",
+    "\u03a3": "\u03c3",
+    "\u0391\u03a3 \u0392\u03a3": "\u03b1\u03c2 \u03b2\u03c2",
+    "\u03c3": "\u03c3",
+    "\u0391\u03a3-\u0392\u03a3": "\u03b1\u03c2\u03b2\u03c2",
+    "\u1f48\u03b4\u03c5\u03c3\u03c3\u03b5\u03cd\u03c2": "\u03bf\u0313\u03b4\u03c5\u03c3\u03c3\u03b5\u03c5\u0301\u03c2"
+  },
+  "f1": {
+    "the cat cat | cat": 0.6666666666666666,
+    "no overlap | at all": 0,
+    "  |  ": 0,
+    "cat dog | cat bird": 0.5,
+    "Eiffel Tower is in Paris | Paris": 0.33333333333333337,
+    "cat cat dog | cat cat bird": 0.6666666666666666,
+    "a\tb\nc | a b c": 1.0,
+    "a b c | a\tb\nc": 1.0
+  },
+  "f1_list": {
+    "answer | ['ans', 'answer']": 1.0,
+    "cat dog | ['cat bird', 'cat dog']": 1.0,
+    "cat dog | ['cat bird', 'nope']": 0.5,
+    " | ['']": 0,
+    "Eiffel Tower is in Paris | ['Paris', 'Louvre']": 0.33333333333333337
+  },
+  "answer_passage_match": {
+    "case_0": {
+      "case": {
+        "ans": "multi token",
+        "ctx": [
+          "some multi token passage"
+        ]
+      },
+      "expected": true
+    },
+    "case_1": {
+      "case": {
+        "ans": "art",
+        "ctx": [
+          "we have a party"
+        ]
+      },
+      "expected": false
+    },
+    "case_2": {
+      "case": {
+        "ans": "Paris.",
+        "ctx": [
+          "He lives in Paris."
+        ]
+      },
+      "expected": true
+    },
+    "case_3": {
+      "case": {
+        "ans": "ans",
+        "ctx": []
+      },
+      "expected": false
+    },
+    "case_4": {
+      "case": {
+        "ans": [
+          "first",
+          "second",
+          "third"
+        ],
+        "ctx": [
+          "this has a third answer"
+        ]
+      },
+      "expected": true
+    },
+    "case_5": {
+      "case": {
+        "ans": "ans",
+        "ctx": "bare string context"
+      },
+      "expected": false
+    },
+    "case_6": {
+      "case": {
+        "ans": "Eiffel Tower",
+        "ctx": [
+          "This is the eiffel a tower building."
+        ]
+      },
+      "expected": true
+    },
+    "case_7": {
+      "case": {
+        "ans": "Paris",
+        "ctx": [
+          "Paris\u2014France"
+        ]
+      },
+      "expected": true
+    },
+    "case_8": {
+      "case": {
+        "ans": "France",
+        "ctx": [
+          "\u00abFrance\u00bb"
+        ]
+      },
+      "expected": true
+    },
+    "case_9": {
+      "case": {
+        "ans": "great",
+        "ctx": [
+          "great\ud83d\udc4d"
+        ]
+      },
+      "expected": true
+    },
+    "case_10": {
+      "case": {
+        "ans": "\ud83d\udc4d",
+        "ctx": [
+          "great\ud83d\udc4d"
+        ]
+      },
+      "expected": true
+    },
+    "case_11": {
+      "case": {
+        "ans": "cafe",
+        "ctx": [
+          "caf\u00e9 au lait"
+        ]
+      },
+      "expected": false
+    },
+    "case_12": {
+      "case": {
+        "ans": "caf\u00e9",
+        "ctx": [
+          "cafe au lait"
+        ]
+      },
+      "expected": false
+    },
+    "case_13": {
+      "case": {
+        "ans": "caf\u00e9",
+        "ctx": [
+          "caf\u00e9 au lait"
+        ]
+      },
+      "expected": true
+    },
+    "case_14": {
+      "case": {
+        "ans": "the",
+        "ctx": [
+          "anything at all"
+        ]
+      },
+      "expected": true
+    },
+    "case_15": {
+      "case": {
+        "ans": "!!!",
+        "ctx": [
+          "x"
+        ]
+      },
+      "expected": true
+    },
+    "case_16": {
+      "case": {
+        "ans": "the",
+        "ctx": [
+          ""
+        ]
+      },
+      "expected": true
+    },
+    "case_17": {
+      "case": {
+        "ans": "\u6771\u4eac",
+        "ctx": [
+          "\u6771\u4eac \u30bf\u30ef\u30fc"
+        ]
+      },
+      "expected": true
+    },
+    "case_18": {
+      "case": {
+        "ans": "\u6771\u4eac",
+        "ctx": [
+          "\u6771\u4eac\u30bf\u30ef\u30fc"
+        ]
+      },
+      "expected": false
+    },
+    "case_19": {
+      "case": {
+        "ans": "\u03bf\u03b4\u03bf\u03c2",
+        "ctx": [
+          "\u039f\u0394\u039f\u03a3 \u0391\u0398\u0397\u039d\u03a9\u039d"
+        ]
+      },
+      "expected": true
+    },
+    "case_20": {
+      "case": {
+        "ans": "x",
+        "ctx": [
+          "a\u00a0x"
+        ]
+      },
+      "expected": true
+    },
+    "case_21": {
+      "case": {
+        "ans": "tab",
+        "ctx": [
+          "a\ttab\nhere"
+        ]
+      },
+      "expected": true
+    },
+    "case_22": {
+      "case": {
+        "ans": "state of art",
+        "ctx": [
+          "the state-of-the-art model"
+        ]
+      },
+      "expected": false
+    },
+    "case_23": {
+      "case": {
+        "ans": "\u00bd",
+        "ctx": [
+          "cup \u00bd full"
+        ]
+      },
+      "expected": true
+    },
+    "case_24": {
+      "case": {
+        "ans": "\u216b",
+        "ctx": [
+          "chapter \u217b"
+        ]
+      },
+      "expected": true
+    },
+    "case_25": {
+      "case": {
+        "ans": "a",
+        "ctx": [
+          "\u00e1 la"
+        ]
+      },
+      "expected": true
+    },
+    "case_26": {
+      "case": {
+        "ans": "\u00c5ngstr\u00f6m",
+        "ctx": [
+          "one \u00c5ngstr\u00f6m unit"
+        ]
+      },
+      "expected": true
+    }
+  },
+  "answer_exact_match_tests": {
+    "2 | 2": true,
+    "['2', 'two'] | 2": true,
+    "2 | 3": false,
+    "['2', 'two'] | two": true
+  }
+}

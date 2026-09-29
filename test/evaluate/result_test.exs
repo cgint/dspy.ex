@@ -44,7 +44,9 @@ defmodule DspyEvaluateResultTest do
   end
 
   # 3 of 4 examples expect "4" (the mock's answer) and pass; the last expects
-  # something else and fails. The metric compares prediction vs expected.
+  # something else and fails. The metric is the real upstream port
+  # `Dspy.Metrics.answer_exact_match/2` (F9 switch-over, SS5 row 19): EM of
+  # "4" vs "4" after normalize_text → true; "WRONG" vs "4" → false.
   defp four_examples_fixture do
     testset = [
       Example.new(%{question: "Q0", answer: "4"}),
@@ -55,9 +57,7 @@ defmodule DspyEvaluateResultTest do
 
     program = Dspy.Predict.new(TestQA)
 
-    metric = fn example, prediction ->
-      if example.attrs.answer == prediction.attrs.answer, do: 1.0, else: 0.0
-    end
+    metric = &Dspy.Metrics.answer_exact_match/2
 
     {program, testset, metric}
   end

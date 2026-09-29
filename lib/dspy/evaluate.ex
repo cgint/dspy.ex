@@ -82,7 +82,12 @@ defmodule Dspy.Evaluate do
       in the child) instead of the one-line message
     - `:save_as_csv` - path to write the CSV result
     - `:save_as_json` - path to write the JSON result
-    - `:metric_name` - column name for the score (default: fn name or "metric")
+    - `:metric_name` - column name for the score (default: fn name or "metric").
+      Anonymous fns AND captured-with-opts partial applications
+      (`&Dspy.Metrics.answer_exact_match(&1, &2, frac: 0.5)`) have no
+      recoverable function name in Elixir (SS7: a compiled closure reports
+      a generated `"-fun-"` name via `Function.info/2`), so pass
+      `metric_name: "answer_exact_match"` for that idiom.
 
   ## Returns
 
@@ -610,8 +615,14 @@ defmodule Dspy.Evaluate do
 
   # The metric column name (upstream `metric.__name__`, proposal A2): the
   # function name for named fns (`&Mod.fun/2` via `Function.info/2`), else
-  # `"metric"`. Anonymous fns get generated names containing "-fun-" — we
-  # detect these and fall back to `"metric"`.
+  # `"metric"`. Anonymous fns AND captured-with-opts partial applications
+  # (`&Mod.fun(&1, &2, opts)`) both carry a generated `"-fun-"` name — a
+  # compiled closure does NOT retain a recoverable reference to the wrapped
+  # module function (no `Function.refunwrapping`-style reflection exists in
+  # Elixir/OTP; verified SS7: `&Dspy.Metrics.answer_exact_match(&1, &2,
+  # frac: 0.5)` reports `{:name, :"-__FILE__/1-fun-0-"}`), so both fall back
+  # to `"metric"`. Name such a metric by passing the `:metric_name` opt.
+  # Pinned by test/metrics_evaluate_test.exs row 15b.
   defp metric_column_name(metric_fn) do
     case safe_function_name(metric_fn) do
       {:name, name} when is_atom(name) ->

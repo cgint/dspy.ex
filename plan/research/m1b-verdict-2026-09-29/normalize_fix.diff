@@ -1,0 +1,10 @@
+555c555
+<     |> String.downcase()
+---
+>     |> String.downcase(:greek)
+557,558c557,558
+<     |> String.replace(~r/\b(a|an|the)\b/u, " ")
+<     |> String.replace(~r/\s+/u, " ")
+---
+>     |> String.replace(~r/(?<![\p{L}\p{N}_])(a|an|the)(?![\p{L}\p{N}_])/u, " ")
+>     |> String.replace(~r/[\s\x{1c}-\x{1f}]+/u, " ")

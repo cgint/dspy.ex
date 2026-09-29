@@ -51,12 +51,28 @@ found two unpinned rows; one automated sweep of 14 mutations found **five**, inc
 entire tokenizer that could be replaced by `String.split/1` with nothing failing. Correct code
 that no test protects becomes incorrect the first time someone refactors it.
 
+**When a fix round rewrites the mutation patterns, add a mutation that REVERTS THE FIX**
+(2026-09-29, Greta). "The old mutations still fail" only shows the *patterns* were updated to
+match the moved code. Only a mutation that undoes the fix itself shows the **fix is pinned**.
+Observed: after a fix round, none of the 14 mutations undid any of the new fixes, so the Greek
+lowercase, combining-mark and control-character corrections could all have regressed with
+nothing going red — a **false zero**, which is the one failure a zero-survivor sweep cannot
+detect about itself. One revert-mutation per fix closed it: 17 mutations, 0 survivors.
+Corollary: a worker may update a mutation's *search text*, never its *intent*, and the author of
+the mutations is the one who confirms that.
+
 **A generated fixture can silently record an error as an expected value** (2026-09-29). When the
 oracle comes from a generator rather than hand-written cases, the generator is load-bearing: one
 fixture row had captured a **Python error message** as its expected value because the generator
 called the wrong upstream function, and the test quietly skipped it. Re-run the generator and
 diff it against the committed fixture as part of review; assert that every expected value is of
 the type the row claims.
+
+**A "green" claim must be re-verified after a handoff, not trusted** (2026-09-29). A worker
+reported "format check passes"; the controller's own gate run found the file unformatted (one
+line-wrap) and the metrics tests red-by-format. Every acceptance gate — suite, format, compile,
+consumer contract, mutation harness — is run BY THE CONTROLLER at close-out, with logs, and the
+worker's PASS lines in the report are input to that run, not its substitute.
 
 **A tool that fails twice with the same error is broken tooling, not bad luck** (2026-09-29).
 A *schema* rejection is the same category as a dead launcher: the arguments are wrong and will be

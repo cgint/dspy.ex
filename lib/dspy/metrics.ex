@@ -33,6 +33,248 @@ defmodule Dspy.Metrics do
         }
 
   @doc """
+  Upstream 3.4.0 `EM` metric.
+  """
+  @spec em(String.t(), [String.t()]) :: boolean()
+  def em(pred, answers) when is_binary(pred) and is_list(answers) do
+    if answers == [] do
+      raise ArgumentError, message: "answers must be a non-empty list"
+    end
+
+    Enum.any?(answers, fn ans -> pairwise_em(pred, ans) end)
+  end
+
+  @doc """
+  Upstream 3.4.0 `F1` metric.
+  """
+  @spec f1(String.t(), [String.t()]) :: float()
+  def f1(pred, answers) when is_binary(pred) and is_list(answers) do
+    if answers == [] do
+      raise ArgumentError, message: "answers must be a non-empty list"
+    end
+
+    Enum.map(answers, fn ans -> pairwise_f1(pred, ans) end)
+    |> Enum.max()
+  end
+
+  @doc """
+  Port of upstream 3.4.0 `answer_exact_match` (`dspy/evaluate/metrics.py:285-317`).
+
+  Reads `:answer` from the example (a binary, or a non-empty list of binaries —
+  a binary is treated as a single-answer list) and from the prediction (must be
+  a binary). Returns exactly `true` or `false`:
+
+  - `frac >= 1.0` (default `frac: 1.0`) → `em/2`;
+  - `frac < 1.0` → `f1/2 >= frac` (inclusive). Note the pinned upstream quirk
+    (F3): `frac: 0.0` is always `true`.
+
+  Declared deviation from upstream (F4, ruled): there is **no `trace`
+  parameter**; `frac` is an option, so `&Dspy.Metrics.answer_exact_match/2`
+  is usable as an Evaluate metric.
+
+  Every bad input raises `ArgumentError` naming the offending field — a
+  missing field is never defaulted to `""` (A4).
+
+  ## Examples
+
+      iex> example = Dspy.Example.new(%{answer: ["Eiffel Tower", "Louvre"]})
+      iex> pred = Dspy.Prediction.new(%{answer: "The Eiffel Tower"})
+      iex> Dspy.Metrics.answer_exact_match(example, pred, frac: 1.0)
+      true
+      iex> Dspy.Metrics.answer_exact_match(example, pred, frac: 0.5)
+      true
+  """
+  @spec answer_exact_match(Example.t(), Prediction.t(), keyword()) :: boolean()
+  def answer_exact_match(example, prediction, opts \\ []) do
+    frac = valid_frac!(opts)
+    answers = example_answers!(fetch_field!(example, "example"))
+    pred_answer = prediction_answer!(fetch_field!(prediction, "prediction"))
+
+    if frac >= 1.0 do
+      em(pred_answer, answers)
+    else
+      f1(pred_answer, answers) >= frac
+    end
+  end
+
+  @doc """
+  Port of upstream 3.4.0 `answer_passage_match` (`dspy/evaluate/metrics.py:259-270,320-348`).
+
+  Reads `:answer` from the example (a binary, or a non-empty list of binaries —
+  same validation as `answer_exact_match/2,3`) and `:context` from the
+  prediction, which MUST be a list of binaries. Returns exactly `true` or
+  `false`:
+
+  - `true` iff some answer's DPR-token list appears as a **contiguous token
+    run** in some passage's DPR-token list, after `normalize_text/1` on both
+    sides;
+  - `false` for an empty context list (not an error).
+
+  Matching is token-run based — never substring (`String.contains?`) based
+  (A6). A bare string `:context` raises `ArgumentError` naming `:context`
+  (F5, ruled: Elixir binaries are not enumerable — upstream would iterate
+  its characters; declared in `docs/COMPATIBILITY.md`).
+
+  ## Examples
+
+      iex> example = Dspy.Example.new(%{answer: "Eiffel Tower"})
+      iex> pred = Dspy.Prediction.new(%{context: ["The Eiffel Tower is in Paris.", "..."]})
+      iex> Dspy.Metrics.answer_passage_match(example, pred)
+      true
+  """
+  @spec answer_passage_match(Example.t(), Prediction.t()) :: boolean()
+  def answer_passage_match(example, prediction) do
+    answers = example_answers!(fetch_field!(example, "example"))
+    context = context_passages!(fetch_context!(prediction, "prediction"))
+
+    answer_tokens = Enum.map(answers, fn ans -> ans |> normalize_text() |> dpr_tokens() end)
+
+    Enum.any?(context, fn passage ->
+      passage_tokens = passage |> normalize_text() |> dpr_tokens()
+      Enum.any?(answer_tokens, fn run -> contains_token_run?(passage_tokens, run) end)
+    end)
+  end
+
+  # A4: no silent `""` default — a missing :context field raises, naming the struct.
+  defp fetch_context!(%{attrs: attrs}, label) do
+    case Map.fetch(attrs, :context) do
+      {:ok, value} -> value
+      :error -> raise ArgumentError, "#{label}[:context] is missing"
+    end
+  end
+
+  defp context_passages!(context) when is_list(context) do
+    unless Enum.all?(context, &is_binary/1) do
+      raise ArgumentError,
+            "prediction[:context] must be a list of binaries (passages), got: #{inspect(context)}"
+    end
+
+    context
+  end
+
+  defp context_passages!(context) do
+    # F5 (ruled): a bare string context is an error, not a character stream —
+    # Elixir binaries are not enumerable (upstream would iterate characters).
+    raise ArgumentError,
+          "prediction[:context] must be a list of binaries (passages), got: #{inspect(context)}"
+  end
+
+  # Upstream DPR tokens (`dpr.py:151-206,231-236`): NFD-normalize, scan with
+  # `SimpleTokenizer`'s `ALPHA_NUM | NON_WS`, lowercase each match.
+  #
+  # Two notes on the form below:
+  #
+  #   * The NFD result is lowercased before the scan: the local type checker
+  #     types `:unicode.characters_to_nfd_binary/1` `dynamic()`, and default
+  #     case mapping is per-codepoint and stable across the L/N/M/Z/C classes
+  #     in the token regex, so tokenizing the lowercased text yields exactly
+  #     the same token sequence as lowercasing each match (the per-match
+  #     downcase is kept, mirroring upstream `DPR_normalize`).
+  #   * `Regex.scan/2` is called in call form (not pipe) because this
+  #     checker mis-types a piped argument.
+  defp dpr_tokens(text) when is_binary(text) do
+    nfd = :unicode.characters_to_nfd_binary(text)
+    lower = String.downcase(nfd)
+
+    Regex.scan(~r/[\p{L}\p{N}\p{M}]+|[^\p{Z}\p{C}]/u, lower)
+    |> Enum.map(fn [match] -> String.downcase(match) end)
+  end
+
+  # True iff `run` appears as a contiguous slice of `haystack` (upstream
+  # `has_answer`, `dpr.py:198-206` — whitespace-span bookkeeping dropped,
+  # we only need the token sequence).
+  defp contains_token_run?(_haystack, []) do
+    # Mirrors upstream: an empty answer run matches at any position.
+    true
+  end
+
+  defp contains_token_run?(haystack, run) when is_list(haystack) and is_list(run) do
+    n = length(run)
+
+    if length(haystack) < n do
+      false
+    else
+      Enum.reduce_while(0..(length(haystack) - n), false, fn i, acc ->
+        if Enum.slice(haystack, i, n) == run do
+          {:halt, true}
+        else
+          {:cont, acc}
+        end
+      end)
+    end
+  end
+
+  # A4: no silent `""` default — a missing :answer field raises, naming the struct.
+  defp fetch_field!(%{attrs: attrs}, label) do
+    case Map.fetch(attrs, :answer) do
+      {:ok, value} -> value
+      :error -> raise ArgumentError, "#{label}[:answer] is missing"
+    end
+  end
+
+  defp example_answers!(value) when is_binary(value), do: [value]
+
+  defp example_answers!(list) when is_list(list) do
+    if list != [] and Enum.all?(list, fn entry -> is_binary(entry) end) do
+      list
+    else
+      raise ArgumentError,
+            "example[:answer] must be a binary or a non-empty list of binaries, got: #{inspect(list)}"
+    end
+  end
+
+  defp example_answers!(value) do
+    raise ArgumentError,
+          "example[:answer] must be a binary or a non-empty list of binaries, got: #{inspect(value)}"
+  end
+
+  defp prediction_answer!(value) do
+    case value do
+      binary when is_binary(binary) -> binary
+      _ -> raise ArgumentError, "prediction[:answer] must be a binary, got: #{inspect(value)}"
+    end
+  end
+
+  defp valid_frac!(opts) do
+    case Keyword.get(opts, :frac, 1.0) do
+      frac when is_number(frac) -> frac
+      other -> raise ArgumentError, "frac must be a number, got: #{inspect(other)}"
+    end
+  end
+
+  defp pairwise_em(pred, ans) do
+    normalize_text(pred) == normalize_text(ans)
+  end
+
+  defp pairwise_f1(pred, ans) do
+    pred_tokens = pred |> normalize_text() |> String.split()
+    ans_tokens = ans |> normalize_text() |> String.split()
+
+    if length(pred_tokens) == 0 and length(ans_tokens) == 0 do
+      0.0
+    else
+      pred_freq = Enum.frequencies(pred_tokens)
+      ans_freq = Enum.frequencies(ans_tokens)
+
+      common_tokens = Map.keys(pred_freq) |> Enum.filter(&Map.has_key?(ans_freq, &1))
+
+      num_same =
+        Enum.reduce(common_tokens, 0, fn token, acc ->
+          acc + min(Map.get(pred_freq, token), Map.get(ans_freq, token))
+        end)
+
+      if num_same == 0 do
+        0.0
+      else
+        precision = 1.0 * num_same / length(pred_tokens)
+        recall = 1.0 * num_same / length(ans_tokens)
+
+        2 * precision * recall / (precision + recall)
+      end
+    end
+  end
+
+  @doc """
   Exact match metric - returns 1.0 if answers match exactly, 0.0 otherwise.
 
   ## Parameters
@@ -52,7 +294,7 @@ defmodule Dspy.Metrics do
     truth = get_field_value(example, field)
     pred = get_field_value(prediction, field)
 
-    if normalize_text(truth) == normalize_text(pred), do: 1.0, else: 0.0
+    if legacy_normalize(truth) == legacy_normalize(pred), do: 1.0, else: 0.0
   end
 
   @doc """
@@ -119,8 +361,8 @@ defmodule Dspy.Metrics do
   """
   @spec contains(Example.t(), Prediction.t(), atom()) :: number()
   def contains(example, prediction, field \\ :answer) do
-    truth = get_field_value(example, field) |> normalize_text()
-    pred = get_field_value(prediction, field) |> normalize_text()
+    truth = get_field_value(example, field) |> legacy_normalize()
+    pred = get_field_value(prediction, field) |> legacy_normalize()
 
     if String.contains?(pred, truth), do: 1.0, else: 0.0
   end
@@ -133,8 +375,8 @@ defmodule Dspy.Metrics do
   """
   @spec substring_match(Example.t(), Prediction.t(), atom()) :: number()
   def substring_match(example, prediction, field \\ :answer) do
-    truth = get_field_value(example, field) |> normalize_text()
-    pred = get_field_value(prediction, field) |> normalize_text()
+    truth = get_field_value(example, field) |> legacy_normalize()
+    pred = get_field_value(prediction, field) |> legacy_normalize()
 
     if String.length(truth) == 0 and String.length(pred) == 0 do
       1.0
@@ -224,14 +466,14 @@ defmodule Dspy.Metrics do
         # Apply transformations
         processed_example =
           if normalize do
-            update_field(example, field, &normalize_text/1)
+            update_field(example, field, &legacy_normalize/1)
           else
             example
           end
 
         processed_prediction =
           if normalize do
-            update_field(prediction, field, &normalize_text/1)
+            update_field(prediction, field, &legacy_normalize/1)
           else
             prediction
           end
@@ -304,7 +546,20 @@ defmodule Dspy.Metrics do
     %{prediction | attrs: Map.put(attrs, field, new_value)}
   end
 
-  defp normalize_text(text) when is_binary(text) do
+  @doc """
+  Equal to DSPy 3.4.0 `dspy.evaluate.normalize_text` for every binary; it will never be improved — a better normaliser gets a new name.
+  """
+  @spec normalize_text(String.t()) :: String.t()
+  def normalize_text(text) when is_binary(text) do
+    :unicode.characters_to_nfd_binary(text)
+    |> String.downcase(:greek)
+    |> String.replace(~r/[!"#$%&'()*+,\-.\/:;<=>?@\[\\\]^_`{|}~]/u, "")
+    |> String.replace(~r/(?<![\p{L}\p{N}_])(a|an|the)(?![\p{L}\p{N}_])/u, " ")
+    |> String.replace(~r/[\s\x{1c}-\x{1f}]+/u, " ")
+    |> String.trim()
+  end
+
+  defp legacy_normalize(text) when is_binary(text) do
     text
     |> String.downcase()
     |> String.replace(~r/[^\w\s]/, "")
@@ -312,11 +567,11 @@ defmodule Dspy.Metrics do
     |> String.trim()
   end
 
-  defp normalize_text(value), do: value |> to_string() |> normalize_text()
+  defp legacy_normalize(value), do: value |> to_string() |> legacy_normalize()
 
   defp tokenize(text) when is_binary(text) do
     text
-    |> normalize_text()
+    |> legacy_normalize()
     |> String.split()
     |> Enum.reject(&(&1 == ""))
   end

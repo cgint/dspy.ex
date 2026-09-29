@@ -99,9 +99,9 @@ defmodule DspyEvaluateSaveResultsTest do
 
     program = Dspy.Predict.new(TestQA)
 
-    metric = fn example, prediction ->
-      if example.attrs.answer == prediction.attrs.answer, do: 1.0, else: 0.0
-    end
+    # F9 switch-over (SS5 row 19): the real upstream port metric — its column
+    # name is "answer_exact_match" (upstream `metric.__name__`).
+    metric = &Dspy.Metrics.answer_exact_match/2
 
     tmp_dir =
       Path.join(
@@ -131,9 +131,10 @@ defmodule DspyEvaluateSaveResultsTest do
     assert Map.has_key?(first_row, "pred_answer"),
            "expected pred_answer key, got: #{inspect(Map.keys(first_row))}"
 
-    # The metric is an anonymous fn, so the column should be "metric".
-    assert Map.has_key?(first_row, "metric"),
-           "expected 'metric' column, got: #{inspect(Map.keys(first_row))}"
+    # The metric is `&Dspy.Metrics.answer_exact_match/2`, so the column should
+    # be "answer_exact_match" (upstream `metric.__name__`).
+    assert Map.has_key?(first_row, "answer_exact_match"),
+           "expected 'answer_exact_match' column, got: #{inspect(Map.keys(first_row))}"
   end
 
   # ----------------------------------------------------------------
