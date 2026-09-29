@@ -39,3 +39,4 @@ RecursiveLanguageModels.txt
 .codegiant/
 ._cg_tmp*
 cg-task-result-*.md
+__pycache__/

@@ -78,6 +78,14 @@ codebase falls back atom-to-string. Before calling a fix done, ask: **what other
 path accept** — string keys, atom keys, `nil`, absent, struct vs map — and does the fix handle all
 of them? Put that question in the worker brief.
 
+**Check every COMPATIBILITY claim against the golden fixture, not memory** (2026-09-29). Where a
+slice has a generated oracle, each sentence asserting "we accept X" or "upstream rejects Y" is a
+claim the fixture can settle — so settle it. Observed: one section contained **three** false
+statements, including one where the *code was right and the text was wrong* (the worse direction,
+since a reader trusts the doc), and one that generalised an upstream behaviour from a single
+unrepresentative sample. Three wrong claims in one section is not three slips; it is a section
+written from recollection.
+
 **Never state a fact about upstream you have not read** (2026-09-29). A shipping
 `COMPATIBILITY.md` entry claimed upstream accepted unpacked positional args; its actual signature
 takes one argument. A document whose entire purpose is describing how we differ from upstream
