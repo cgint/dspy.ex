@@ -51,6 +51,27 @@ parity for no reason. Check the implementation and run upstream **before** rulin
 ruling is a claim like any other. (The real deviation was hiding underneath: Python counts `True`
 and `1` as the same vote, we don't.)
 
+**A mutation must fail the test it targets, and fail it for the reason it claims** (2026-09-29).
+A RED sweep line is not proof by itself. Observed: a revert-mutation reddened most of the suite
+by breaking an unrelated guard, while leaving the clause it claimed to revert in place — so it
+**would still have gone red with its target test deleted**. A mutation that fails for the wrong
+reason proves nothing while looking exactly like proof. When a sweep goes red, check *which*
+tests failed and whether they are the ones that row exists to pin. A broad mutation that reddens
+half the suite tells you nothing about any particular row.
+
+**Fix every shape the code path accepts, not the one in the bug report** (2026-09-29). Five fix
+rounds in a row each introduced a defect of their own, and the diagnosis was the same every time:
+the fix handled only the shape the finding happened to show. A fix for absent-vs-nil was reported
+with atom keys, so it used `Map.has_key?` and broke string-keyed input — while the rest of the
+codebase falls back atom-to-string. Before calling a fix done, ask: **what other shapes does this
+path accept** — string keys, atom keys, `nil`, absent, struct vs map — and does the fix handle all
+of them? Put that question in the worker brief.
+
+**Never state a fact about upstream you have not read** (2026-09-29). A shipping
+`COMPATIBILITY.md` entry claimed upstream accepted unpacked positional args; its actual signature
+takes one argument. A document whose entire purpose is describing how we differ from upstream
+must not invent upstream. Cite the file and line.
+
 **An unpinned behaviour is a coin flip** (2026-09-29). Two findings in one review: one where the
 code was **right** and no test said so, one where it was **wrong** and no test said so. Both
 looked identical from the outside — a green suite. You discover which one you had when someone
