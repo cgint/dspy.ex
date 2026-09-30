@@ -1,0 +1,34 @@
+Generating train split: 0 examples [00:00, ? examples/s]Generating train split: 2 examples [00:00, 417.72 examples/s]
+csv numbers: OK [{'q': 'x', 'n': 2, 'f': 1.5, 'b': True}, {'q': 'y', 'n': 3, 'f': 2.0, 'b': False}]
+Generating train split: 0 examples [00:00, ? examples/s]Generating train split: 2 examples [00:00, 1044.92 examples/s]
+csv empty cell + quoted empty: OK [{'q': 'x', 'a': None}, {'q': 'y', 'a': None}]
+Generating train split: 0 examples [00:00, ? examples/s]Generating train split: 2 examples [00:00, 939.06 examples/s]
+csv short row: OK [{'q': 'x', 'a': None}, {'q': 'y', 'a': 2.0}]
+Generating train split: 0 examples [00:00, ? examples/s]Generating train split: 1 examples [00:00, 389.66 examples/s]
+csv long row: OK [{'q': 1, 'a': 'EXTRA', '__index_level_0__': 'x'}]
+Generating train split: 0 examples [00:00, ? examples/s]Generating train split: 2 examples [00:00, 1001.15 examples/s]
+csv blank line: OK [{'q': 'x', 'a': 1}, {'q': 'y', 'a': 2}]
+Generating train split: 0 examples [00:00, ? examples/s]Generating train split: 1 examples [00:00, 546.77 examples/s]
+csv dup header: OK [{'a': 1, 'a.1': 2}]
+Generating train split: 0 examples [00:00, ? examples/s]Generating train split: 1 examples [00:00, 463.61 examples/s]
+csv BOM: OK [{'q': 'x', 'a': 1}]
+Generating train split: 0 examples [00:00, ? examples/s]Generating train split: 1 examples [00:00, 621.19 examples/s]
+csv CRLF + embedded newline: OK [{'q': 'l1\nl2', 'a': 'say "hi"'}]
+Generating train split: 0 examples [00:00, ? examples/s]Generating train split: 1 examples [00:00, 750.73 examples/s]
+csv fields subset: OK [{'a': 1, 'q': 'x'}]
+Generating train split: 0 examples [00:00, ? examples/s]Generating train split: 1 examples [00:00, 887.31 examples/s]
+csv unknown field: RAISE KeyError: 'nope'
+Generating train split: 0 examples [00:00, ? examples/s]Generating train split: 1 examples [00:00, 726.79 examples/s]
+csv whitespace: OK [{'q': ' x ', 'a': ' y '}]
+Generating train split: 0 examples [00:00, ? examples/s]Generating train split: 2 examples [00:00, 1191.06 examples/s]
+json array: OK [{'q': 'x', 'a': 1}, {'q': 'y', 'a': 2}]
+Generating train split: 0 examples [00:00, ? examples/s]Generating train split: 2 examples [00:00, 2695.57 examples/s]
+jsonl: OK [{'q': 'x', 'a': 1}, {'q': 'y', 'a': 2}]
+Generating train split: 0 examples [00:00, ? examples/s]Generating train split: 2 examples [00:00, 2769.43 examples/s]
+jsonl union keys: OK [{'q': 'x', 'a': 1, 'b': None}, {'q': 'y', 'a': None, 'b': True}]
+Generating train split: 0 examples [00:00, ? examples/s]Generating train split: 1 examples [00:00, 1173.89 examples/s]
+jsonl nested: OK [{'q': 'x', 'm': {'k': [1, 2]}}]
+jsonl non-object line: RAISE TypeError: 'str' object is not a mapping
+Generating train split: 0 examples [00:00, ? examples/s]Generating train split: 1 examples [00:00, 977.24 examples/s]
+json null: OK [{'q': 'x', 'a': None}]
+train_test_split seed 0: {'train': [7, 8, 1, 5, 3, 4, 2], 'test': [0, 9, 6]}

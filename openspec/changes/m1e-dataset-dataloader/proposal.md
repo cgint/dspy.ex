@@ -1,6 +1,6 @@
 # M1-e — Dataset and DataLoader (local CSV / JSON only)
 
-Status: **DRAFT (Greta 2026-09-28)** — needs Horst's calls on E1–E9, then the team card and both signatures. Paper only.
+Status: **DRAFT, REFRESHED (Greta 2026-09-30), ALL DECISIONS RULED (Horst 2026-09-30).** Needs the team card and both signatures. Paper only. **Blocked on H15** (string-key audit: P1, P2, T4), which lands after M1-d and before M1-e. Order: M1-d → H15 → M1-e → H16.
 Queue: `PARITY_QUEUE.md` §M1 rows **U003** (Dataset) and **U002** (DataLoader, local files only). `from_huggingface`, `from_pandas`, `from_parquet`, `from_rm` stay in the M7+ pool.
 Base: `main` after the M1-a fix round. NimbleCSV is already a dependency (M1-a). **Carries the M1 exit example** (last row), so it needs M1-d merged first or the row moves to whichever of the two lands last.
 
@@ -8,10 +8,52 @@ Reference, anchored to DSPy **3.4.0** (`../dspy-3.4.0`, tag `3.4.0`):
 - `dspy/datasets/dataset.py`: constructor `:13-32` (`train_seed=0`, `eval_seed=0` shared by dev **and** test `:25-27`, sizes `None` = all, `do_shuffle = True` `:30`); `reset_seeds` (`None` keeps the old value) `:34-56`; `train`/`dev`/`test` lazily computed and cached `:58-77`; `_shuffle_and_sample` = `random.Random(seed).shuffle`, then `[:size]`, then one `Example` per row with a random `dspy_uuid` and `dspy_split` `:79-103`; `prepare_by_seed` `:105-139`.
 - `dspy/datasets/dataloader.py`: `from_csv` `:63-76` and `from_json` `:91-104` (both through HF `datasets.load_dataset`, fields default to all columns, `with_inputs(*input_keys)`); `sample` = global `random.sample` `:138-150`; `train_test_split` = **global** `random.seed(random_state)` then `random.shuffle`, `int(len * frac)` truncation, validation errors `:152-198`.
 - CPython 3.11 `random.Random.shuffle` / `_randbelow_with_getrandbits` / `sample` (read from the interpreter, `inspect.getsource`).
-- **Oracle:** `tests/datasets/test_dataset.py` — 3 tests: `reset_seeds` accepts zero `:39-48`, keeps omitted values `:51-61`, `input_keys` via a CSV subclass (pandas, marked `extra`) `:64-74`. Nothing tests the loaders. So loader behaviour below comes from a **probe of upstream 3.4.0** (`scratchpad/ck_loaders.py`, run 2026-09-28; the generator in E1 re-runs it for the golden file).
+- **Oracle:** `tests/datasets/test_dataset.py` — 3 tests: `reset_seeds` accepts zero `:39-48`, keeps omitted values `:51-61`, `input_keys` via a CSV subclass (pandas, marked `extra`) `:64-74`. Nothing tests the loaders. So loader behaviour below comes from a **probe of upstream 3.4.0**, now committed at `plan/research/m1e-refresh-2026-09-30/ck_loaders.py` with its output `ck_loaders.out` (first run 2026-09-28 from a scratchpad file that did **not** survive the session — re-created and re-run 2026-09-30, all 17 loader observations and the `train_test_split` result identical). It is the seed for the committed generator (R6).
 
 ## Why
 The M1 exit example starts with "load a CSV with DataLoader", and every tutorial starts from a `Dataset` split. Seeded splits are how results get compared between runs — and between Python and Elixir.
+
+## Refresh 2026-09-30 — what changed since this contract was written
+
+M1-e's loaders **manufacture string-keyed data at scale**. Since 2026-09-28 three separate defects came from exactly that shape (M1-a BB2: string keys did not collide; M1-c BD1: a fix handled atom keys only; and the two below). So this refresh re-checks every shipped consumer against **loader-shaped input**, measured at `b20a8c5`, not read from contracts. Evidence scripts: `plan/research/m1e-refresh-2026-09-30/`.
+
+### P1, P2 — prerequisites: two live bugs in shipped code, one class (atom-only field lookup on `attrs`)
+- **P1 (M1-b metrics, shipped since v0.4.1).** `Dspy.Metrics.answer_exact_match/2,3` and `answer_passage_match/2` read fields with `Map.fetch(attrs, :answer)` / `(:context)` (`fetch_field!/2`, `fetch_context!/2` in `lib/dspy/metrics.ex`). A string-keyed example — every example `from_csv`/`from_json` will ever produce — raises `"example[:answer] is missing"`, although `Access.get(example, :answer)` returns the value. In `Evaluate` every loaded example therefore scores `failure_score` and the run aborts at `max_errors`. **Loud, not silent.** My M1-b contract never listed the string-key shape.
+- **P2 (demo rendering, shipped long before M1).** `Dspy.Signature.format_example/3` (`lib/dspy/signature.ex:470-480`) reads demo fields with `Map.get(example.attrs || example, field.name, "")` — atom-only **with a silent `""` default**. It is used by the **Default adapter and the JSONAdapter** (4 of 5 consumers). A string-keyed demo is rendered with **empty values**; nothing raises. `ChatAdapter` is correct (it uses `Dspy.Example.get/2`). Probe: `demo_probe*.exs` — atom-keyed demo in the prompt `true`; string-keyed `false` for Default and JSON, `true` for Chat. **Silent** — `LabeledFewShot`/`BootstrapFewShot` over a loaded trainset would optimise with empty demos and report nothing.
+- **Scope:** 27 `Map.get/fetch/has_key?` calls on `attrs` in `lib/`; 15 are inside `example.ex`/`prediction.ex` (where the fallback is implemented); **~12 call sites** to audit (`trainset.ex` 4, `metrics.ex` 4, `ensemble.ex` 2, `signature.ex` 1, `multi_chain_comparison.ex` 1), plus pattern-matched `%{attrs: %{answer: _}}` heads (not counted). → **T3**: one audit slice before M1-e.
+
+### R1 — key type, stated as a contract rule
+Loaders emit **string keys only** (upstream keys are strings; no atoms from file data — B2). No mixing: a loaded example never carries both `"k"` and `:k`. Every shipped consumer must be **tested with loader output**, not with hand-built atom-keyed fixtures — acceptance rows 24–30 (the consumer matrix).
+
+### R2 — read/write coherence, made concrete against the shipped `save_as_csv`/`save_as_json`
+Measured (`rt_probe.exs`): an `Evaluate` over string-keyed examples containing a comma, quotes, a newline, a `nil` and a `""`, with one failing example, saved and re-parsed under A4's load rules:
+
+| Value / shape | CSV round trip | JSON round trip |
+|---|---|---|
+| comma, `"` escape, embedded newline | identical | identical |
+| metric `1.0` | `"1.0"` (a string — E2) | `1.0` |
+| `nil` | `nil` | `nil` |
+| `""` | **`nil`** — CSV cannot tell `""` from missing | `""` |
+| a key present in other rows but absent in this one (a failed row has no prediction keys) | **present, `nil`** — CSV has no "absent" | **present, `nil`** — A4's union-of-keys rule (upstream parity) |
+
+So "identical data" is not literally achievable; the contract states the exact equivalence instead (row 20a/20b). "If load and save disagree, one of them is wrong" is decided by those rows: every difference must be one of the three declared losses above, nothing else.
+
+### R3 — the CSV value-type ruling (E2) re-examined against M1-b
+- **Holds for the standard metrics.** A CSV label `"2"` against an LM answer `"2"`: `answer_exact_match` matches — once P1 is fixed. Upstream's pandas inference would have made the label the integer `2`, and upstream's own `answer_exact_match` raises `"Invalid answer type"` on it (`metrics.py:312-317`). Strings are what make the standard metric work.
+- **JSON keeps JSON types** — a JSON label `2` makes `answer_exact_match` raise `ArgumentError` in ours and `ValueError` upstream. Parity; declared; row 29.
+- **New concern, not covered by E2's reasoning:** a user-written metric `example["answer"] == pred.answer` with a **typed** output field (`:integer`) compares `"2"` with `2` → `false` → the example **silently scores 0**. Upstream's inferred integer would compare equal. E2 fixes one silent failure and leaves this one. → **T1**.
+
+### R4 — seeded sampling (A2 stands; new evidence)
+A2's CPython-MT19937 design (E1, ruled) is unchanged. New: **shipped code already samples the B2 way** — **6 `:rand.seed(:exsss, …)` calls** followed by `Enum.shuffle`/`Enum.random` (`lib/dspy/evaluate.ex:908`, `lib/dspy/trainset.ex:103,144,184`, `lib/dspy/teleprompt/bootstrap_few_shot.ex:234,365`), each result depending on the Elixir release and each **mutating the caller's own `:rand` state**; plus **4 unseeded** `Enum.shuffle`/`Enum.random` calls (`trainset.ex:187,377,385,391`). M1-e must not add another (row 4 pins that). And `Dspy.Trainset` (`split/2`, `sample/3`, …) already overlaps `DataLoader.train_test_split/2`/`sample/3`; only `trainset.ex` itself and one test reference it. → **T2**.
+
+### R5 — today's rules applied to the acceptance map
+Every row now names the **shapes** it covers; every mutation was checked for "does it change the result on at least one input, for the reason it claims". Harness requirements (R7) carry the standard as it stands after H12.
+
+### R6 — COMPATIBILITY settled against a generated oracle, not memory
+A committed generator `plan/research/upstream_golden/gen_m1e_golden.py` (seeded from `ck_loaders.py`) writes `test/fixtures/upstream_m1e_3_4_0.json`: every A4 CSV and JSON row (input file content → upstream result) **and** the MT19937 / `shuffle` / `sample` / `train_test_split` vectors of rows 1–3, 8, 21. Every loader claim in COMPATIBILITY cites a fixture row. The review re-runs the generator and diffs.
+
+### R7 — mutation harness, as the standard now stands
+`plan/research/upstream_golden/mutate_m1e.py`, committed: originals held in memory and restored in `try/finally`; **SIGTERM and SIGHUP handlers** that raise `SystemExit` (the H12 gap, so `finally` runs on a pane close); `NOT-APPLICABLE` is a hard failure (exit 1); a base-green check before any mutation; a debris pre-flight; **per-caller reverts** wherever a shared helper exists — `Dspy.Random` is shared by `Dataset.train/1`, `sample/3` and `train_test_split/2`, and one row→Example builder should be shared by `from_csv` and `from_json`, so breaking the helper must redden every caller and reverting one caller must redden only that caller.
 
 ## (a) Contract
 
@@ -118,35 +160,45 @@ Coherence: `from_json(file written by save_as_json)` returns the same rows, keys
 ### A7. Non-goals
 `from_huggingface`, `from_pandas`, `from_parquet`, `from_rm` (M7+ pool); string or bytes seeds (CPython hashes them with SHA-512); the `counts=` argument of `sample`; a dedup concept for examples (upstream's own TODO).
 
-## (c) Acceptance map
-Tiers: **[T]** ported upstream test · **[G]** golden from running CPython / upstream 3.4.0 · **[–]** contract behaviour.
+## (c) Acceptance map (refreshed 2026-09-30)
+Tiers: **[T]** ported upstream test · **[G]** golden from the committed generator (R6) · **[–]** contract behaviour. **Shapes** = the input shapes the row must cover; a row that covers fewer is incomplete. **Rows 24–30 must use loader output** — files written to disk and read with `from_csv`/`from_json` — never hand-built atom-keyed examples.
 
-| # | Tier | Scenario | Mutation that must turn it RED |
-|---|---|---|---|
-| 1 | G | **Generator:** first five `uint32` for seeds `0, 1, 42, 2023, 2**32, 2**64+3, −5` equal CPython's (seed 0 starts `3626764237`) | wrong `init_by_array` word order, or no `abs` |
-| 2 | G | **Shuffle:** permutations for those seeds × n in `{0, 1, 2, 10, 100, 1000}` equal CPython's; seed 0, n 10 → `[7,8,1,5,3,4,2,0,9,6]` | **`Enum.shuffle` after `:rand.seed(:exsss, seed)`**; `bit_length(n - 1)`; loop running up instead of down |
-| 3 | G | **Sample:** `sample(0..9, 3, seed: 0)` → `[6,9,0]` (pool branch); `sample(0..99, 3, seed: 0)` → `[49,97,53]` (set branch); plus golden cases at `k = 6` around the `setsize` boundary | one branch only |
-| 4 | – | **No process state:** the caller's `:rand` state (`:rand.export_seed/0`) is identical before and after `train/1`, `sample/3` and `train_test_split/2` | seeding via `:rand.seed/2` |
-| 5 | T | `reset_seeds` accepts zero for every key (`test_reset_seeds_accepts_zero`) | none natural in Elixir: `0` is truthy, so `\|\|` keeps it (this upstream test guards a *Python* bug). Ported as the oracle; the Elixir trap is row 5b |
-| 5b | – | `reset_seeds(ds, train_size: nil)` **keeps** the old size (upstream: `None` means keep) | `Keyword.get(opts, :train_size, ds.train_size)` — an explicit `nil` then resets to "all" |
-| 6 | T | `reset_seeds(train_seed: 1)` keeps every other value, including `eval_seed` for dev **and** test (`test_reset_seeds_keeps_existing_values_when_omitted`) | reset every omitted key to its default |
-| 7 | – | `dev/1` and `test/1` use the same `eval_seed`: with `eval_seed: 7` and identical rows they return identical orders | a separate `test_seed` defaulting to 0 (needs the non-zero seed to show) |
-| 8 | G | `train/1` with `train_seed: 0`, `train_size: 7` over rows 0..9 → ids `[7,8,1,5,3,4,2]` — the same as upstream `train_test_split(random_state=0)` (probe) | sampling before shuffling |
-| 9 | – | Sizes: `nil` → all; `0` → `[]`; larger than the split → all; negative → `ArgumentError` | Python-style negative slicing |
-| 10 | – | `shuffle: false` keeps row order | flag ignored |
-| 11 | T | `input_keys: ["content", "question"]` → every example's inputs are exactly those keys (`test_input_keys`, without pandas) | `input_keys` ignored |
-| 12 | – | `train/1` called twice returns `==` lists (no random uuid) | adding `dspy_uuid` |
-| 13 | – | `prepare_by_seed` with 5 seeds, `dev_size: 10` → 5 eval slices of 2 disjoint examples, 5 train sets of `train_size`; too little dev data → `ArgumentError` | eval slices not offset (all equal) |
-| 14 | G | **CSV rows of A4, one test each:** BOM stripped; blank line skipped; CRLF+LF; embedded newline and `""` escape; empty and quoted-empty → `nil`; short row → `nil`s; whitespace kept; `fields:` subset order; unknown field raises | per row: BOM kept; `[""]` kept as a row; `""` kept as `""`; `String.trim` |
-| 15 | – | **Long row → `ArgumentError` naming the line** (E3) | accept and drop the extra field |
-| 16 | – | **Duplicate header → `ArgumentError` naming the column** (E4) | last duplicate wins |
-| 17 | – | **Values stay strings:** `"2"`, `"1.5"`, `"True"` come back as those strings (E2) | any type inference |
-| 18 | – | **Keys are strings, and no atom is created:** after loading a CSV whose header is a never-seen name built at runtime, `String.to_existing_atom(that_name)` still raises `ArgumentError`. (Not `atom_count`: code loading changes it, which would make the test flaky.) | `String.to_atom` on headers |
-| 19 | G | **JSON rows of A4:** array; JSONL; union of keys with `nil`; nested kept; `null` → `nil`; non-object record raises naming its index | per row |
-| 20 | – | **Round trip with M1-a:** rows with non-empty string values → `save_as_csv` → `from_csv` gives the same pairs; → `save_as_json` → `from_json` gives the same rows with JSON types | loader and saver disagree on line endings or quoting |
-| 21 | – | `train_test_split`: float `0.75` over 10 → 7/3 (truncation of 7.5; rounding would give 8); int `3` → 3/7; `train_size + test_size > n` → `ArgumentError`; `train_size: 1.0` → `ArgumentError` (upstream: a float must be strictly between 0 and 1) | rounding instead of truncating |
-| 22 | – | **M1 exit example (public entry):** `from_csv` → `Dataset` → `evaluate` a ChainOfThought program with `SemanticF1.metric/1`, `max_errors: 2`, one failing example, `save_as_json` → `failures == 1`, `failure_score` counted, a `%Dspy.Evaluate.Result{}`, and the JSON file re-loads with `from_json` | – |
-| 23 | – | Full suite + consumer canary green; `git diff test/` additions only | – |
+| # | Tier | Scenario | Shapes | Mutation that must turn it RED (and why it shows) |
+|---|---|---|---|---|
+| 1 | G | Generator: first five `uint32` equal CPython's (seed 0 starts `3626764237`) | seeds `0, 1, 42, 2023, 2**32, 2**64+3, −5`: zero, small, multi-word, negative | wrong `init_by_array` word order (shows at `2**32`, `2**64+3`); no `abs` (shows at `−5`) |
+| 2 | G | Shuffle permutations equal CPython's; seed 0, n 10 → `[7,8,1,5,3,4,2,0,9,6]` | n ∈ `{0, 1, 2, 10, 100, 1000}`, including powers of two | `Enum.shuffle` after `:rand.seed` (no CPython permutation); `bit_length(n − 1)` (shows at n = 2 and powers of two); loop running upward |
+| 3 | G | Sample equals CPython's: `sample(0..9, 3, seed: 0)` → `[6,9,0]`, `sample(0..99, 3, seed: 0)` → `[49,97,53]` | pool branch; set branch; k = 6 around the `setsize` boundary | one branch only (the other branch's rows fail) |
+| 4 | – | The caller's `:rand` state (`:rand.export_seed/0`) is identical before and after `train/1`, `sample/3`, `train_test_split/2` | caller **seeded** beforehand; caller **never seeded** (`:undefined`) | seeding via `:rand.seed/2` (changes the state in both shapes) |
+| 5 | T | `reset_seeds` accepts zero for every key (`test_reset_seeds_accepts_zero`) | all six keys | none natural in Elixir (`0` is truthy; this upstream test guards a *Python* bug) — ported as the oracle; row 5b holds the Elixir trap |
+| 5b | – | `reset_seeds(ds, train_size: nil)` keeps the old size | explicit `nil`; key absent | `Keyword.get(opts, :train_size, ds.train_size)` (explicit `nil` then means "all") |
+| 6 | T | `reset_seeds(train_seed: 1)` keeps every other value, both eval seeds included | one key given | resetting omitted keys to defaults |
+| 7 | – | dev and test share `eval_seed`: with `eval_seed: 7` and identical rows, identical orders | non-zero seed | a separate `test_seed` defaulting to 0 (only visible with a non-zero seed) |
+| 8 | G | `train/1`, `train_seed: 0`, `train_size: 7` over rows 0..9 → `[7,8,1,5,3,4,2]`, equal to upstream `train_test_split(random_state=0)` | – | sampling before shuffling |
+| 9 | – | Sizes | `nil` → all; `0` → `[]`; larger → all; negative → `ArgumentError` | Python-style negative slicing |
+| 10 | – | `shuffle: false` keeps row order | – | flag ignored |
+| 11 | T | `input_keys` → inputs are exactly those keys (`test_input_keys`, without pandas) | key names given as strings **and** as atoms, against string-keyed rows | `input_keys` ignored; atom key names not matched to string attrs |
+| 12 | – | `train/1` twice → `==` lists | – | adding a random `dspy_uuid` |
+| 13 | – | `prepare_by_seed` → 5 disjoint eval slices, 5 train sets; too little dev data → `ArgumentError` | – | eval slices not offset |
+| 14 | G | **CSV rows of A4**, one test each, expected values from the fixture | BOM; blank line; CRLF and LF; embedded newline and `""` escape; empty and quoted-empty cell; short row; surrounding whitespace; `fields:` subset order; unknown field | per shape: BOM kept; `[""]` kept as a row; `""` kept as `""`; `String.trim`; subset in file order |
+| 15 | – | Long row → `ArgumentError` naming the line (E3) | extra field in row 2 and in the last row | accepting and dropping the extra field |
+| 16 | – | Duplicate header → `ArgumentError` naming the column (E4) | – | last duplicate wins |
+| 17 | – | Values stay strings (E2) | `"2"`, `"1.5"`, `"True"`, `"0x10"` | any type inference |
+| 18 | – | String keys, no atom created: a never-seen header name built at runtime still makes `String.to_existing_atom/1` raise afterwards | CSV header; JSON key; nested JSON key | `String.to_atom` on keys |
+| 19 | G | **JSON rows of A4**, expected values from the fixture | array; JSONL; union of keys → `nil`; nested kept; `null`; non-object record raises naming its index | per shape |
+| 20a | – | **CSV round trip with the shipped `save_as_csv`** (R2): `Evaluate` over **loaded** string-keyed examples containing a comma, quotes, a newline, a `nil` and a `""`, with one failing example → `save_as_csv` → `from_csv`. For every saved row `r` and loaded row `l`: `keys(l)` = the header, and `l[k] == c(r[k])` with `c(binary) = binary`, `c(nil) = nil`, `c("") = nil`, `c(number) = to_string(number)`, `c(absent) = nil`. **No other difference is allowed.** | quoting ×3; `nil`; `""`; absent key (failed row); number (metric) | loader and saver disagree on quoting or line endings; `""` loaded as `""` (a fourth difference); a number re-typed on load |
+| 20b | – | **JSON round trip with the shipped `save_as_json`**: same data. `l[k] == r[k]` for every key of `r`; a key absent from `r` but present in another row → `nil` (union rule, upstream parity); `""` stays `""`; numbers stay numbers | same shapes as 20a | union rule dropped; `""` turned into `nil`; numbers turned into strings |
+| 21 | – | `train_test_split`: `0.75` over 10 → 7/3 (truncation); int `3` → 3/7; sizes exceeding n → `ArgumentError`; `train_size: 1.0` → `ArgumentError` | float; int; overflow; 1.0 | rounding instead of truncating (shows at 0.75 × 10) |
+| 22 | – | **M1 exit example:** `from_csv` → `Dataset` → `evaluate` a ChainOfThought with `SemanticF1.metric/1`, `max_errors: 2`, one failing example, `save_as_json`, re-load with `from_json` — needs **M1-d and H15** | loader output end to end | – |
+| 24 | – | **Consumer: metrics (P1).** A CSV with string answers → `Evaluate` with `&Dspy.Metrics.answer_exact_match/2` → `scores` equal to the same data built with atom keys | string vs atom keys, same values | a metric reading `Map.fetch(attrs, :answer)` (every loaded example fails) |
+| 25 | – | **Consumer: demos (P2).** A CSV trainset → `LabeledFewShot.compile` → the Predict request contains every demo field value, and equals the atom-keyed equivalent, **for Default, JSONAdapter and ChatAdapter** | 3 adapters × string keys | `format_example` reading `Map.get(attrs, field.name, "")` (Default and JSON red, Chat green — the per-adapter asymmetry proves each adapter is covered) |
+| 26 | – | **Consumer: save writers.** Loaded examples whose `"answer"` collides with the prediction's `:answer` → saved rows carry `example_answer`/`pred_answer`, no duplicate column, both CSV and JSON | string example × atom prediction | collision compared by term instead of `to_string` |
+| 27 | – | **Consumer: `majority`** with loader-shaped completions (string-keyed maps from `from_json`) → per **T4** | string-keyed maps | per T4 |
+| 28 | – | **Consumer: M1-d judges** (once M1-d lands) — `SemanticF1.metric/1` on a loaded example scores equal to the atom-keyed one | string vs atom keys | a judge reading `Map.fetch(attrs, :response)` |
+| 29 | – | **JSON numeric label**: `from_json` with `{"answer": 2}` + `answer_exact_match` → `ArgumentError` (upstream `ValueError`), declared | integer label; float label | silently turning labels into strings |
+| 30 | – | **T1 (ruled yes):** `from_csv(path, types: %{"answer" => :integer})` → integers via the H12 `NumberParser`; `"80%"` in a typed column → `ArgumentError` naming line and column; untyped columns stay strings | typed / untyped; strict reject | a lenient parse (`Integer.parse` prefix) accepting `"80%"` |
+| 31 | – | **R6:** the committed generator re-runs and its fixture equals the committed one (apart from metadata) | – | – |
+| 32 | – | **R7:** the committed harness: 0 survivors, 0 `NOT-APPLICABLE`; run twice with an edit in between (the second run tests the edit); SIGTERM and SIGHUP restore the tree | – | – |
+| 33 | – | Full suite + consumer canary green; `git diff test/` additions only | – | – |
 
 ## (d) Pre-mortem
 1. **`:rand.seed(:exsss, seed)` + `Enum.shuffle`.** Deterministic on the worker's machine, so any "same seed → same order" test passes — and it mutates the caller's RNG. → Row 2 (golden CPython permutations, which `Enum.shuffle` cannot match) and row 4.
@@ -156,6 +208,10 @@ Tiers: **[T]** ported upstream test · **[G]** golden from running CPython / ups
 5. **`String.to_atom` on headers** "so examples look like the ones in the tests". → Row 18.
 6. **Copies upstream's `dspy_uuid`**, breaking equality between two calls. → Row 12.
 7. **O(n²) shuffle** by swapping in a list. Row 2 at n = 1000 still passes, so this is a performance guard only: an `:array`/tuple-based swap is expected, and Clemens checks it.
+8. **Consumers tested with hand-built atom-keyed examples** (how P1 and P2 shipped). → Rows 24–28 must read loader output from disk.
+9. **Round-trip test compares with `==` after normalising both sides** (for example `""`→`nil` on both), which hides a fourth, undeclared loss. → Rows 20a/20b state the exact per-value map; nothing may be normalised outside it.
+10. **Row→Example builder shared by CSV and JSON, reverted once in the harness** → one caller's rows go untested. → R7 per-caller reverts.
+11. **A `:rand` fallback "for `seed: nil`"** re-introduces caller-state mutation. → Row 4 includes the unseeded shape.
 
 ## (e) Echo-back
 The A1 signatures verbatim; A2's generator steps in own words, including why `n` and not `n − 1`; the A4 CSV table rows marked "no" and why; one sentence per A5 invariant.
@@ -171,6 +227,11 @@ The A1 signatures verbatim; A2's generator steps in own words, including why `n`
 - **E8 — `sample` included.** It shares the generator and costs one function. Can be split off if you want M1-e smaller.
 - **E9 — M1 exit example lives here (row 22)** and needs M1-d. If M1-e lands first, row 22 moves to M1-d.
 
+- **T1 — Typed labels from CSV (new, R3).** E2 leaves a silent 0 for user metrics that compare a typed output (`:integer`) with a string label. Options: (a) opt-in `types: %{"col" => :integer | :float}` on `from_csv`, parsed with the H12 strict `NumberParser`, raising on a bad cell (row 30); (b) keep strings and only document the trap. **Recommend (a)** — small, strict, opt-in, reuses shipped code; the default stays E2.
+- **T2 — `Dspy.Trainset` and the 10 `:rand` sites (new, R4).** Recommend: M1-e ships `Dspy.Random` only for its own functions; a separate follow-up slice migrates `evaluate.ex`, `trainset.ex`, `bootstrap_few_shot.ex` to it (changes seeded results in those modules → COMPATIBILITY note), and decides whether `Dspy.Trainset.split/sample` are deprecated in favour of DataLoader. Not in M1-e scope.
+- **T3 — String-key audit slice before M1-e (P1, P2).** Fix `metrics.ex` `fetch_field!/fetch_context!` (loud) and `signature.ex:480` (silent `""`) to read through `Dspy.Example.get`/Access, and audit the ~12 call sites, each with a string-keyed test. **Recommend: its own slice, merged before M1-e starts**, because P2 already affects anyone passing string-keyed demos today (for example demos loaded by M2-a).
+- **T4 — `majority` with string-keyed maps.** Currently atom-only, declared (M1-c). Loader output makes string-keyed completions normal. Recommend: accept string keys via the same lookup as T3, and keep "both `"k"` and `:k` present" raising. Needs your call because it reverses a declared M1-c boundary.
+
 ### RULED 2026-09-28 (Horst)
 **Governing principle** (now in `plan/HOW_WE_WORK.md`): *we match upstream, except where upstream silently corrupts or loses data — there we raise, and we declare it.* Raising is stricter than upstream, not friendlier, so it does not weaken the parity rule of P-OUT and B1. The test for each case: is upstream making a design choice (match it), or losing the user's data (raise)?
 
@@ -180,7 +241,17 @@ The A1 signatures verbatim; A2's generator steps in own words, including why `n`
 - **E4 — RULED WITH GRETA: a duplicate column name raises, naming the column.** Upstream renames it `a.1`, so data lands under a key nobody asked for. Our save never writes one.
 - **E5 — AGREED: drop `dspy_uuid`; record the split in `Example.metadata["dspy_split"]`; declare it** in `docs/COMPATIBILITY.md`. A random field upstream never reads makes two identical loads compare unequal and would leak into `labels`, metrics and saved files.
 - The four deviations E2–E5 go into `docs/COMPATIBILITY.md` with the upstream probe evidence, under the governing principle.
-- **Still OPEN:** E6 (negative sizes raise), E7 (`seed: nil` → a fresh `:crypto` seed, never the caller's `:rand` state), E8 (`sample` included), E9 (the M1 exit example lives here if M1-e lands after M1-d).
+- E6–E9: ruled 2026-09-30, see below.
+
+### RULED 2026-09-30 (Horst)
+- **T3 — YES, booked as queue H15**, its own slice. **Order: M1-d → H15 → M1-e**; one lib-editing team at a time, so H15 does not interrupt M1-d, and it lands before M1-e with no exceptions. Scope: P1, P2 and the ~12 other call sites, with **every shape fixed through one canonical accessor** (the `Prediction.fetch/2` / `Example.get/2` atom→string fallback), not 12 separate fixes. Rows 24, 25 and 28 depend on H15.
+- **T4 — YES, folded into H15.** This reverses the M1-c atom-only boundary. H15 updates the COMPATIBILITY entry and removes the now-wrong atom-keys hint. Row 27: `majority` over string-keyed maps from `from_json` gives the same result as atom-keyed maps; a map carrying both `"k"` and `:k` still raises.
+- **T1 — YES:** opt-in `types:` on `from_csv`, using the H12 strict `NumberParser` (row 30); E2 stays the default. **In addition, declare the pitfall prominently in `docs/COMPATIBILITY.md` AND in the `from_csv` docstring:** a user metric comparing a typed `:integer`/`:number` output with a CSV string label **scores 0 silently**, where upstream would compare equal; name `types:` as the remedy. Acceptance: a doctest/docs check that the `from_csv` docstring names both the pitfall and `types:`.
+- **T2 — YES, a separate slice after M1-e, booked as queue H16.** It is a real bug: the seeded `:rand` calls silently change the caller's random state. M1-e must not add another (row 4).
+- **E6 — AGREED:** negative sizes raise; deviation declared (dropping from the end is data loss).
+- **E7 — AGREED:** `seed: nil` → a fresh `:crypto.strong_rand_bytes/1` seed, never the caller's `:rand` state.
+- **E8 — AGREED:** `sample` stays in.
+- **E9 — Row 22 stays in M1-e.** It moves with whichever of M1-d and M1-e lands second, and M1-d lands first.
 
 ## (b) Team card — Horst.
 
