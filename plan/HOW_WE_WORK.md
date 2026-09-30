@@ -190,6 +190,13 @@ call in a loop, sending **69M → 107M tokens** between two checks and compactin
 mid-loop, with nothing progressing. Looping silently is the expensive failure; stopping early and
 asking is the cheap one.
 
+**Before booking a queue id, grep that it is free** (2026-09-30). Two people book into
+`PARITY_QUEUE.md` concurrently, so an id chosen from memory collides. Observed **twice**, both by
+the lead: a duplicate H2, and later duplicate H12 *and* H13 — which meant the "H13" put to the user
+as a decision was a different item from the H13 at the top of the queue. An ambiguous id in a user
+decision is a communication failure, not a typo. Run
+`grep -oE "^\| H[0-9]+ \|" plan/current/PARITY_QUEUE.md | sort | uniq -c` before and after booking.
+
 **Take every date in a durable document from `date` or `git log` — never from memory**
 (2026-09-29). Multiple agents independently wrote **2026-10-01**, a date that had not happened,
 into release notes, compatibility docs, queue rows and signed contracts — 19 occurrences, two of
