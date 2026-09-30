@@ -238,7 +238,7 @@ The queue should be regenerated from milestones once M1..M7 are agreed. Mapping 
 | S025 | B4 | configure_cache | partial | H | M | 3.0.0 | 1.50 | N | lib/dspy/lm/cache.ex:9 | only boolean Dspy.configure(cache:) exists; no disk cache, size limit, memory_max_entries, restrict_pickle/saf |
 | S026 | B4 | disable_litellm_logging | na | L | S | <=2.6 |  | N | - | dspy.ex has no LiteLLM dependency (HTTP via req_llm); Elixir Logger owns levels |
 | S027 | B4 | enable_litellm_logging | na | L | S | <=2.6 |  | N | - | same as S026: LiteLLM does not exist in the Elixir port |
-| S028 | B4 | inspect_history | done | M | S | <=2.6 |  | N | lib/dspy.ex:170 | Dspy.inspect_history/1 + history/1 over global History GenServer (simpler than Python: no per-LM history) |
+| S028 | B4 | inspect_history | **partial** (corrected 2026-09-30, was done) | M | S | <=2.6 |  | N | lib/dspy.ex:170 | Dspy.inspect_history/1 + history/1 over global History GenServer. **Downgraded:** entries carry neither `messages` nor `outputs`, so it cannot show what a program actually sent and received — which is the whole point of the function. Found in the M2-b contract review (Greta, H3). Fixed by M2-b. |
 | S029 | B4 | ColBERTv2 | partial | L | L | <=2.6 | 0.25 | Y | lib/dspy/retrieve.ex:239 | deliberate stub returning {:error}; v2 GET/POST request functions and ColBERTv2RetrieverLocal/RerankerLocal un |
 | S072 | B4 | streamify | missing | M | L | <=2.6 | 0.50 | N | - | no program-level streaming wrapper; only low-level ReqLLM.stream_text exists (integration test only) |
 | U020 | B4 | StatusMessage | missing | L | S | 3.0.0 | 1.00 | N | - | no streaming message types at all |
