@@ -63,6 +63,8 @@ Version numbers show the milestone: M1 = v0.4.x, M2 = v0.5.x, … M6 = v0.9.x (d
 | v0.3.48 | Evaluation you can trust the numbers of: failures count into the score, runs stop after 10 errors, true/false metrics finally count, bad input raises instead of lying |
 | **v0.4.0** | **M1 opens** — evaluation results you can keep: a proper result struct you can still read the old way, upstream's score percentage, and saving results as CSV or JSON |
 | **v0.4.1** | Python-compatible metrics: `answer_exact_match` (with `frac` and answer lists), `answer_passage_match`, and a public `normalize_text` that matches Python exactly |
+| **v0.4.2** | `Dspy.majority` — pick the most common answer across several completions, ties going to the earliest, as Python does |
+| **v0.4.3** | **Bug fix:** an LM answering `"80%"` for a number field used to be read as 80 and could score a *perfect* 1.0. Now it's a parse failure, matching Python. Also fixed a suite-wide flaky test |
 
 ## Incident 2026-09-28 (fixed)
 - The automatic checks on GitHub (CI) had been **red since v0.3.42** without anyone noticing: one test file didn't compile on the older Elixir version CI uses (1.19), so CI ran no tests at all. Locally (Elixir 1.20) everything was green.
@@ -82,7 +84,11 @@ Version numbers show the milestone: M1 = v0.4.x, M2 = v0.5.x, … M6 = v0.9.x (d
   header that would have crashed saving any run containing a failure; column order decided by
   the VM's atom table; two silent data-loss bugs; and the two writers disagreeing with each
   other. None reached a release.
-- **Shipped since:** M1-b (metrics) as **v0.4.1**. **In progress:** M1-c (majority) → v0.4.2.
+- **Shipped since:** M1-b as **v0.4.1**, M1-c as **v0.4.2**, the strict-parsing fix as **v0.4.3**.
+- **In progress (2026-09-30):** M1-d (LM-judged metrics) → v0.4.4. Built and verified; the outside
+  review blocked it with five findings, three of them repeats of rules already written down.
+  **Currently stalled: the home-llm worker launcher cannot discover its model** (the model server
+  is up and lists it; Pi's discovery returns nothing). Escalated to you.
   **Contracted and validated behind it:** M1-d (LM-judged metrics), M1-e (Dataset/DataLoader).
 - **M2 groundwork done:** upstream's documented save path is JSON, not pickle — so saving and
   reloading a program is reachable. Only *whole-program* save is pickle, which we declare
@@ -119,7 +125,19 @@ How it was proven, because this one was blocked twice before it passed:
 - SEC-2 findings (Horst decided): extras' `hackney` has 4 advisories (1 high) with **no fix reachable** — `httpoison` pins old hackney; `cowlib` has 2 advisories with no fix at all upstream. Decision: replace `httpoison` in extras with `req` (already our core HTTP client) as its own slice; cowlib waits for upstream. Core library is clean.
 - Newest Elixir (1.20) in CI: fails on 169 compiler warnings (new type checks) → own cleanup slice before adding it to CI.
 
-## 6. Waiting for you — **nothing** (2026-09-28)
+## 6. Waiting for you (2026-09-30)
+
+1. **M2-b — how `inspect_history` works.** Python stores history on the module object; Elixir
+   modules are immutable values. Recommendation **C**: history travels with the call
+   (`inspect_history(result)`, `Dspy.with_history(fn)`). The faithful option would leak memory in
+   the way your apps use the library (one `Predict` per request). Full options paper:
+   `openspec/changes/m2b-module-history/proposal.md`.
+2. **H18 — legacy metrics give wrong answers a perfect score** (was mislabelled "H13"). Two
+   answers in a non-Latin script both become empty and "match": 東京 vs 大阪 scores 1.0.
+   Recommendation: option 1 + 1b. Package: `plan/research/decisions/2026-09-29-h13-legacy-metrics.md`.
+3. **The home-llm worker launcher** — see §4 above. Fix discovery, or allow a temporary other model.
+
+### Earlier (2026-09-28) — nothing was waiting then
 
 All open questions are closed. You handed the last three to me with "infer how Python
 would behave and take it from there", so I settled them by running a probe against
