@@ -1,6 +1,6 @@
 # dspy.ex — where we are (plain overview)
 
-Updated 2026-09-28 by Horst. Details for the team: `PLAN.md`.
+Updated 2026-09-30 by Horst. Details for the team: `PLAN.md`.
 
 ## 1. What we are building
 An Elixir version of Python DSPy that **behaves like Python DSPy 3.4.0** (the newest release, Sept 2026). Pure Elixir, no Python inside.
@@ -16,7 +16,12 @@ Python DSPy 3.4.0 has **160 public features**. Of those, 10 are Python-only (we 
 | partial | 27 | exists, but options or behaviors are missing |
 | missing | 91 | not there |
 
-**→ 32 of 150 done (21%); about 30% if partials count half.**
+**→ 32 of 150 done (21%); about 30% if partials count half.** *(measured 2026-09-26)*
+- **Honest caveat (2026-09-30):** this count has **not been re-measured** since. Five releases have
+  shipped since (v0.4.0–v0.4.3 plus M1-d in progress), each moving specific items from missing or
+  partial toward done — and one item (`dspy.inspect_history`) was *downgraded* from done to partial
+  when Greta found it records neither messages nor outputs. In chat I had been quoting "~39 of 150";
+  that was **an estimate, not a count**. A proper re-count is booked for the end of M1.
 - *Correction 2026-09-26:* first reported as 37 (25%). Greta found 5 core features (`configure`, `Example`, `Module`, `Prediction`, `Signature`) rated done although some of their options are missing → now partial.
 - **Core is strong, breadth is weak:** the important everyday features (signatures, Predict, ChainOfThought, adapters, LM calls) are done or partial — none missing; several still lack some options. Most of the 91 missing are less-used extras (special optimizers, metrics, helpers).
 - **By DSPy release:** of features that existed in DSPy 2.6 we have 28 of 79; of those added in 3.0–3.4 only 9 of 81. The newer DSPy gets, the further behind we are.
@@ -89,7 +94,7 @@ Version numbers show the milestone: M1 = v0.4.x, M2 = v0.5.x, … M6 = v0.9.x (d
   review blocked it with five findings, three of them repeats of rules already written down.
   **Currently stalled: the home-llm worker launcher cannot discover its model** (the model server
   is up and lists it; Pi's discovery returns nothing). Escalated to you.
-  **Contracted and validated behind it:** M1-d (LM-judged metrics), M1-e (Dataset/DataLoader).
+  **Contracted and validated behind it:** M1-e (Dataset/DataLoader), blocked first on H15 (string-key audit).
 - **M2 groundwork done:** upstream's documented save path is JSON, not pickle — so saving and
   reloading a program is reachable. Only *whole-program* save is pickle, which we declare
   not-applicable (our "whole program" is our code plus a state file).
