@@ -1,0 +1,27 @@
+direction: down
+
+pre: "**Pre-flight**\ndebris check, base green"
+apply: "**Apply mutation**\nin-memory original, signal handlers"
+found: "text found?"
+na: "NOT-APPLICABLE\n(hard fail)" {style.fill: "#fde2e2"}
+run: "**mix test + JSON formatter**\nper-test name, status, error kind"
+json: "failures recorded?"
+invalid: "INVALID\n(hard fail, never 'killed')" {style.fill: "#fde2e2"}
+target: "all `expect` tests failed\nfor declared kind?"
+surv: "SURVIVED-TARGET\n(hard fail)" {style.fill: "#fde2e2"}
+extra: "failures outside\nexpect ∪ also?"
+blunt: "BLUNT\n(hard fail)" {style.fill: "#fde2e2"}
+killed: "KILLED" {style.fill: "#e2f5e2"}
+cov: "**After all mutations:**\nevery acceptance test in some expect\n(else fail, naming it)" {style.fill: "#e8eefc"}
+
+pre -> apply -> found
+found -> na: no
+found -> run: yes
+run -> json
+json -> invalid: no
+json -> target: yes
+target -> surv: no
+target -> extra: yes
+extra -> blunt: yes
+extra -> killed: no
+killed -> cov
