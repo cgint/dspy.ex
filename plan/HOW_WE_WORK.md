@@ -51,6 +51,16 @@ parity for no reason. Check the implementation and run upstream **before** rulin
 ruling is a claim like any other. (The real deviation was hiding underneath: Python counts `True`
 and `1` as the same vote, we don't.)
 
+**Never delete code to make a mutation killable** (2026-09-30). A mutation that will not die means
+one of two things, and you must establish which: the code is **reachable but untested** — add a
+test input that exercises it — or it is **genuinely dead**, which you may delete only after
+*proving* it is unreachable on every input *and* that upstream does not rely on it. Observed: a
+score clamp's mutation would not die, so the clamp was deleted. Upstream clamps
+(`auto_evaluation.py:37-38`), and since strict parsing accepts `"1.5"`, deleting it let a judge
+produce an F1 **above 1.0**. That is the proof serving itself rather than the code. Contrast the
+correct case in the same slice: an assertion over `Enum.all?([], …)` was *vacuously true* — there
+the **test** was dead, and fixing the test was right.
+
 **Extracting a shared function needs TWO mutation directions** (2026-09-29, Greta). Breaking the
 shared module and watching every path go red proves only that **the shared module is tested** —
 if the tests all exercise one caller, the other callers could be bypassing it entirely and
