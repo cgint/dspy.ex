@@ -385,3 +385,20 @@ colgrep / `rg` (repo search) · `cg-task.sh investigate|diff-review|architecture
 
 ## 00_NOW writing rule (user feedback 2026-09-26)
 `plan/current/00_NOW.md` is for the user, not the team: plain language, no internal codes (H0b, phase B, canary, facets), no contradictions with other files. Answer: what are we building, how far along (numbers), how we get there (milestones), what's happening now and why, what's done, what waits for the user. Team detail goes in `PLAN.md`.
+
+## Lessons 2026-10-02 (Horst)
+- **Every push runs `scripts/ci_docker.sh` on the committed ref first — tooling commits too.** I
+  skipped it for H20 because it was "only tooling"; it touched `test/test_helper.exs`, the 1.19
+  formatter disagreed, and CI was red for three pushes. "Tooling-only" is not an exemption.
+- **Steering a busy Pi worker:** `herdr_prompt_agent.sh` sends nothing while the worker is
+  `working`. `herdr pane send-text <pane> "<msg>"` then `herdr pane send-keys <pane> Enter` queues
+  a steering message Pi delivers at its next step. Use it when a worker loops (H15: 21 sweeps).
+- **`also` lists must be observed, never pasted.** Check mechanically: for each mutation,
+  `also == failed − expect` from `mutation_report.json` (strip ExUnit's `test ` prefix). H15 had
+  18 padded entries, 8 matching no test. Follow-up for mutlib (H20): reject `also` names that
+  match no test.
+- **A worker calling a hard failure an "artifact" is a stop signal.** Twice today a red tool
+  result was explained away (UNCLAIMED as "known artifact", UNCATCHABLE as "provably
+  uncatchable"). Both were real defects.
+- **Read the exit code, not the summary.** I reported `test_sigterm.py` exit 0 when my own
+  output said 1. Every PASS quotes command + exit code — controllers and lead alike.
