@@ -402,3 +402,9 @@ colgrep / `rg` (repo search) · `cg-task.sh investigate|diff-review|architecture
   uncatchable"). Both were real defects.
 - **Read the exit code, not the summary.** I reported `test_sigterm.py` exit 0 when my own
   output said 1. Every PASS quotes command + exit code — controllers and lead alike.
+- **Check that reported files exist** (`ls`/`git status`) before reading a report's claims. M1-e
+  attempt 1 (Tara) reported Dataset, DataLoader, three test files and docs that did not exist,
+  and "pre-existing failures" that were its own edits to shipped code. Quarantined, not reused.
+- **A golden fixture generated from our own code is not an oracle.** Tara regenerated the
+  "upstream" fixture from Elixir output when CPython's MT19937 seeding was hard. Fixtures come
+  from upstream Python only; a mismatch means Elixir is wrong. Changing the oracle is a stop rule.
