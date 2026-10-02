@@ -1,8 +1,8 @@
 # M1-e — Dataset and DataLoader (local CSV / JSON only)
 
-Status: **DRAFT, REFRESHED (Greta 2026-09-30), ALL DECISIONS RULED (Horst 2026-09-30).** Needs the team card and both signatures. Paper only. **Blocked on H15** (string-key audit: P1, P2, T4), which lands after M1-d and before M1-e. Order: M1-d → H15 → M1-e → H16.
+Status: **DRAFT, REFRESHED TWICE (Greta 2026-09-30; post-H15 2026-10-02). E1–E9, T1–T4 ruled (Horst); new rulings Q1–Q3 needed.** Needs the team card and both signatures. Paper only. **Unblocked:** M1-d shipped v0.4.4, H15 shipped v0.4.5 (`1870d80`). Order now: M1-e → H16.
 Queue: `PARITY_QUEUE.md` §M1 rows **U003** (Dataset) and **U002** (DataLoader, local files only). `from_huggingface`, `from_pandas`, `from_parquet`, `from_rm` stay in the M7+ pool.
-Base: `main` after the M1-a fix round. NimbleCSV is already a dependency (M1-a). **Carries the M1 exit example** (last row), so it needs M1-d merged first or the row moves to whichever of the two lands last.
+Base: `main` at `3789ca3` (v0.4.5 + HOW_WE_WORK lessons). NimbleCSV is already a dependency (M1-a). **Carries the M1 exit example** (row 22); M1-d has landed, so the row stays here.
 
 Reference, anchored to DSPy **3.4.0** (`../dspy-3.4.0`, tag `3.4.0`):
 - `dspy/datasets/dataset.py`: constructor `:13-32` (`train_seed=0`, `eval_seed=0` shared by dev **and** test `:25-27`, sizes `None` = all, `do_shuffle = True` `:30`); `reset_seeds` (`None` keeps the old value) `:34-56`; `train`/`dev`/`test` lazily computed and cached `:58-77`; `_shuffle_and_sample` = `random.Random(seed).shuffle`, then `[:size]`, then one `Example` per row with a random `dspy_uuid` and `dspy_split` `:79-103`; `prepare_by_seed` `:105-139`.
@@ -13,7 +13,30 @@ Reference, anchored to DSPy **3.4.0** (`../dspy-3.4.0`, tag `3.4.0`):
 ## Why
 The M1 exit example starts with "load a CSV with DataLoader", and every tutorial starts from a `Dataset` split. Seeded splits are how results get compared between runs — and between Python and Elixir.
 
-## Refresh 2026-09-30 — what changed since this contract was written
+## Refresh 2026-10-02 — after H15 (read this before the 2026-09-30 refresh below)
+
+**What H15 changed, and what that means here.** Verified on `3789ca3`:
+- **P1 and P2 are fixed** (v0.4.5). Every read of a user-supplied `attrs` field now goes through one internal accessor, `Dspy.Attrs`: an atom key finds the atom key first, then its string form. `Example.get/fetch`, `Prediction.get/fetch`, the metrics, demo rendering (Default, JSON and Chat), `Trainset`, `Ensemble`, `MultiChainComparison` and `majority` (T4) all use it.
+- **Rows 24, 25, 27 and 28 change role.** They stop being "the bug fix" and become **regression pins on loader output**. H15 proved each site with hand-built string-keyed fixtures; M1-e proves that **what the loaders actually emit**, read back from disk, reaches those sites. Their mutations now target `Dspy.Attrs` and the H15 call sites (Q2).
+- **Probe today** (`scratchpad m1e_probe.exs`, CapLM fake): a loader-shaped `Example.new(%{"question" => …, "answer" => …})`
+  - `with_inputs([:question])` and `with_inputs(["question"])` both give `inputs = %{"question" => …}`. Input names are normalised to strings (`example.ex:212`), so **row 11's atom-name case already works** and is pinned rather than built.
+  - `Predict` forward with the string-keyed inputs → `{:ok, …}`, with the question present in the prompt.
+  - `Evaluate` with `answer_exact_match` → **100.0**.
+  - **Nothing in the consumer chain needs an M1-e workaround.**
+- **Rows that assumed atom keys or worked around the old bug:**
+  - row 11's "atom key names not matched to string attrs" mutation now targets shipped code (`normalize_input_key!`), so it is declared as such (MD7b);
+  - row 25's old asymmetry note ("Chat green") still holds for the `format_fields` revert, but the shared-accessor break now reddens Chat as well. Both are declared;
+  - the 2026-09-30 P1/P2 paragraphs and the T3 "~12 sites" scope are **history**, kept only for the record.
+- **Wording fix:** `Dspy.Example` has **no `labels/1`** (verified). E5's rationale is corrected to "would leak into `inputs`/keys, metrics and saved files".
+- **New rule for M1-e's own code:** any read of an example field by a fixed key in the new modules (`Dataset`, `DataLoader`) goes through `Dspy.Attrs` or `Example.get/fetch`, never `Map.get(attrs, :k)`. This is pinned statically by row 35. Upstream keys are strings, so the H15 class must not re-enter through the slice that produces string keys at scale.
+
+**What the mechanical checks (H20) change here:**
+- **C2:** the harness is `plan/research/upstream_golden/mutate_m1e.py` **on `plan/research/harness/mutlib.py`**. Every acceptance row is a test named `row N…:`, claimed by a declared `Mutation(expect=…, kind=…)`; the section "(c2) Declared mutations" below is normative. An unclaimed row fails the run (C3a). `kind: any` is **not** allowed in this slice.
+- **`also` lists are observed, not written ahead** (HOW_WE_WORK, lesson 2026-10-02): start each one empty, run the harness, and copy in exactly the failures it reports outside `expect`. The review checks `also == failed − expect` mechanically.
+- **The harness report goes to `plan/research/pi_handoffs/m1e/logs/`, not the repo root.** H15's harness left `mutation_report.json` there.
+- **C5, `deviations.json`** (a required artifact per slice, ruled 2026-09-30): `test/fixtures/m1e_deviations.json` lists every fixture case where ours differs from upstream on purpose, as `{case_id, upstream, ours, reason}` (E2, E3, E4, E6 and the E5 uuid). Row 34 asserts that this set **equals** the set of fixture cases where our observed result differs from upstream's. The generator (R6) must give every case a stable `case_id` (Q3).
+
+## Refresh 2026-09-30 — what changed since this contract was written (P1/P2/T3 parts: history, fixed by H15)
 
 M1-e's loaders **manufacture string-keyed data at scale**. Since 2026-09-28 three separate defects came from exactly that shape (M1-a BB2: string keys did not collide; M1-c BD1: a fix handled atom keys only; and the two below). So this refresh re-checks every shipped consumer against **loader-shaped input**, measured at `b20a8c5`, not read from contracts. Evidence scripts: `plan/research/m1e-refresh-2026-09-30/`.
 
@@ -52,8 +75,12 @@ Every row now names the **shapes** it covers; every mutation was checked for "do
 ### R6 — COMPATIBILITY settled against a generated oracle, not memory
 A committed generator `plan/research/upstream_golden/gen_m1e_golden.py` (seeded from `ck_loaders.py`) writes `test/fixtures/upstream_m1e_3_4_0.json`: every A4 CSV and JSON row (input file content → upstream result) **and** the MT19937 / `shuffle` / `sample` / `train_test_split` vectors of rows 1–3, 8, 21. Every loader claim in COMPATIBILITY cites a fixture row. The review re-runs the generator and diffs.
 
-### R7 — mutation harness, as the standard now stands
-`plan/research/upstream_golden/mutate_m1e.py`, committed: originals held in memory and restored in `try/finally`; **SIGTERM and SIGHUP handlers** that raise `SystemExit` (the H12 gap, so `finally` runs on a pane close); `NOT-APPLICABLE` is a hard failure (exit 1); a base-green check before any mutation; a debris pre-flight; **per-caller reverts** wherever a shared helper exists — `Dspy.Random` is shared by `Dataset.train/1`, `sample/3` and `train_test_split/2`, and one row→Example builder should be shared by `from_csv` and `from_json`, so breaking the helper must redden every caller and reverting one caller must redden only that caller.
+### R7 — mutation harness (superseded 2026-10-02 by C2, see the post-H15 refresh)
+`mutate_m1e.py` on `mutlib.py`. The library supplies, so the slice does not hand-write them: in-memory restore, the SIGTERM/SIGHUP handlers, the debris pre-flight, the base-green check, and the NOT-APPLICABLE/AMBIGUOUS/INVALID hard failures. Still the slice's job: **per-caller reverts** wherever a shared helper exists, and **breaking each shared helper**:
+- `Dspy.Random` is shared by `Dataset.train/1`, `DataLoader.sample/3` and `train_test_split/2`;
+- one row→Example builder is shared by `from_csv` and `from_json`.
+
+Breaking a helper must redden every caller's row, and reverting one caller must redden only that caller's row.
 
 ## (a) Contract
 
@@ -160,45 +187,125 @@ Coherence: `from_json(file written by save_as_json)` returns the same rows, keys
 ### A7. Non-goals
 `from_huggingface`, `from_pandas`, `from_parquet`, `from_rm` (M7+ pool); string or bytes seeds (CPython hashes them with SHA-512); the `counts=` argument of `sample`; a dedup concept for examples (upstream's own TODO).
 
-## (c) Acceptance map (refreshed 2026-09-30)
-Tiers: **[T]** ported upstream test · **[G]** golden from the committed generator (R6) · **[–]** contract behaviour. **Shapes** = the input shapes the row must cover; a row that covers fewer is incomplete. **Rows 24–30 must use loader output** — files written to disk and read with `from_csv`/`from_json` — never hand-built atom-keyed examples.
+## (c) Acceptance map (refreshed 2026-10-02, C2 form)
+**Tiers:** **[T]** ported upstream test · **[G]** golden from the committed generator (R6) · **[–]** contract behaviour.
+**Shapes** = the input shapes a row must cover; a row that covers fewer is incomplete.
+**Rows 20–30 use loader output:** files written to disk and read with `from_csv`/`from_json`, never hand-built examples.
+**Claimed by** = the mutation ids from (c2) that have this row in `expect`.
 
-| # | Tier | Scenario | Shapes | Mutation that must turn it RED (and why it shows) |
+Test file: `test/dspy/dataset_dataloader_test.exs` = `acceptance_files`. Rows 31–33 and 35 are static checks, listed in `exempt` with the reasons printed.
+
+| # | Tier | Row (test name prefix `row N:`) | Shapes | Claimed by |
 |---|---|---|---|---|
-| 1 | G | Generator: first five `uint32` equal CPython's (seed 0 starts `3626764237`) | seeds `0, 1, 42, 2023, 2**32, 2**64+3, −5`: zero, small, multi-word, negative | wrong `init_by_array` word order (shows at `2**32`, `2**64+3`); no `abs` (shows at `−5`) |
-| 2 | G | Shuffle permutations equal CPython's; seed 0, n 10 → `[7,8,1,5,3,4,2,0,9,6]` | n ∈ `{0, 1, 2, 10, 100, 1000}`, including powers of two | `Enum.shuffle` after `:rand.seed` (no CPython permutation); `bit_length(n − 1)` (shows at n = 2 and powers of two); loop running upward |
-| 3 | G | Sample equals CPython's: `sample(0..9, 3, seed: 0)` → `[6,9,0]`, `sample(0..99, 3, seed: 0)` → `[49,97,53]` | pool branch; set branch; k = 6 around the `setsize` boundary | one branch only (the other branch's rows fail) |
-| 4 | – | The caller's `:rand` state (`:rand.export_seed/0`) is identical before and after `train/1`, `sample/3`, `train_test_split/2` | caller **seeded** beforehand; caller **never seeded** (`:undefined`) | seeding via `:rand.seed/2` (changes the state in both shapes) |
-| 5 | T | `reset_seeds` accepts zero for every key (`test_reset_seeds_accepts_zero`) | all six keys | none natural in Elixir (`0` is truthy; this upstream test guards a *Python* bug) — ported as the oracle; row 5b holds the Elixir trap |
-| 5b | – | `reset_seeds(ds, train_size: nil)` keeps the old size | explicit `nil`; key absent | `Keyword.get(opts, :train_size, ds.train_size)` (explicit `nil` then means "all") |
-| 6 | T | `reset_seeds(train_seed: 1)` keeps every other value, both eval seeds included | one key given | resetting omitted keys to defaults |
-| 7 | – | dev and test share `eval_seed`: with `eval_seed: 7` and identical rows, identical orders | non-zero seed | a separate `test_seed` defaulting to 0 (only visible with a non-zero seed) |
-| 8 | G | `train/1`, `train_seed: 0`, `train_size: 7` over rows 0..9 → `[7,8,1,5,3,4,2]`, equal to upstream `train_test_split(random_state=0)` | – | sampling before shuffling |
-| 9 | – | Sizes | `nil` → all; `0` → `[]`; larger → all; negative → `ArgumentError` | Python-style negative slicing |
-| 10 | – | `shuffle: false` keeps row order | – | flag ignored |
-| 11 | T | `input_keys` → inputs are exactly those keys (`test_input_keys`, without pandas) | key names given as strings **and** as atoms, against string-keyed rows | `input_keys` ignored; atom key names not matched to string attrs |
-| 12 | – | `train/1` twice → `==` lists | – | adding a random `dspy_uuid` |
-| 13 | – | `prepare_by_seed` → 5 disjoint eval slices, 5 train sets; too little dev data → `ArgumentError` | – | eval slices not offset |
-| 14 | G | **CSV rows of A4**, one test each, expected values from the fixture | BOM; blank line; CRLF and LF; embedded newline and `""` escape; empty and quoted-empty cell; short row; surrounding whitespace; `fields:` subset order; unknown field | per shape: BOM kept; `[""]` kept as a row; `""` kept as `""`; `String.trim`; subset in file order |
-| 15 | – | Long row → `ArgumentError` naming the line (E3) | extra field in row 2 and in the last row | accepting and dropping the extra field |
-| 16 | – | Duplicate header → `ArgumentError` naming the column (E4) | – | last duplicate wins |
-| 17 | – | Values stay strings (E2) | `"2"`, `"1.5"`, `"True"`, `"0x10"` | any type inference |
-| 18 | – | String keys, no atom created: a never-seen header name built at runtime still makes `String.to_existing_atom/1` raise afterwards | CSV header; JSON key; nested JSON key | `String.to_atom` on keys |
-| 19 | G | **JSON rows of A4**, expected values from the fixture | array; JSONL; union of keys → `nil`; nested kept; `null`; non-object record raises naming its index | per shape |
-| 20a | – | **CSV round trip with the shipped `save_as_csv`** (R2): `Evaluate` over **loaded** string-keyed examples containing a comma, quotes, a newline, a `nil` and a `""`, with one failing example → `save_as_csv` → `from_csv`. For every saved row `r` and loaded row `l`: `keys(l)` = the header, and `l[k] == c(r[k])` with `c(binary) = binary`, `c(nil) = nil`, `c("") = nil`, `c(number) = to_string(number)`, `c(absent) = nil`. **No other difference is allowed.** | quoting ×3; `nil`; `""`; absent key (failed row); number (metric) | loader and saver disagree on quoting or line endings; `""` loaded as `""` (a fourth difference); a number re-typed on load |
-| 20b | – | **JSON round trip with the shipped `save_as_json`**: same data. `l[k] == r[k]` for every key of `r`; a key absent from `r` but present in another row → `nil` (union rule, upstream parity); `""` stays `""`; numbers stay numbers | same shapes as 20a | union rule dropped; `""` turned into `nil`; numbers turned into strings |
-| 21 | – | `train_test_split`: `0.75` over 10 → 7/3 (truncation); int `3` → 3/7; sizes exceeding n → `ArgumentError`; `train_size: 1.0` → `ArgumentError` | float; int; overflow; 1.0 | rounding instead of truncating (shows at 0.75 × 10) |
-| 22 | – | **M1 exit example:** `from_csv` → `Dataset` → `evaluate` a ChainOfThought with `SemanticF1.metric/1`, `max_errors: 2`, one failing example, `save_as_json`, re-load with `from_json` — needs **M1-d and H15** | loader output end to end | – |
-| 24 | – | **Consumer: metrics (P1).** A CSV with string answers → `Evaluate` with `&Dspy.Metrics.answer_exact_match/2` → `scores` equal to the same data built with atom keys | string vs atom keys, same values | a metric reading `Map.fetch(attrs, :answer)` (every loaded example fails) |
-| 25 | – | **Consumer: demos (P2).** A CSV trainset → `LabeledFewShot.compile` → the Predict request contains every demo field value, and equals the atom-keyed equivalent, **for Default, JSONAdapter and ChatAdapter** | 3 adapters × string keys | `format_example` reading `Map.get(attrs, field.name, "")` (Default and JSON red, Chat green — the per-adapter asymmetry proves each adapter is covered) |
-| 26 | – | **Consumer: save writers.** Loaded examples whose `"answer"` collides with the prediction's `:answer` → saved rows carry `example_answer`/`pred_answer`, no duplicate column, both CSV and JSON | string example × atom prediction | collision compared by term instead of `to_string` |
-| 27 | – | **Consumer: `majority`** with loader-shaped completions (string-keyed maps from `from_json`) → per **T4** | string-keyed maps | per T4 |
-| 28 | – | **Consumer: M1-d judges** (once M1-d lands) — `SemanticF1.metric/1` on a loaded example scores equal to the atom-keyed one | string vs atom keys | a judge reading `Map.fetch(attrs, :response)` |
-| 29 | – | **JSON numeric label**: `from_json` with `{"answer": 2}` + `answer_exact_match` → `ArgumentError` (upstream `ValueError`), declared | integer label; float label | silently turning labels into strings |
-| 30 | – | **T1 (ruled yes):** `from_csv(path, types: %{"answer" => :integer})` → integers via the H12 `NumberParser`; `"80%"` in a typed column → `ArgumentError` naming line and column; untyped columns stay strings | typed / untyped; strict reject | a lenient parse (`Integer.parse` prefix) accepting `"80%"` |
-| 31 | – | **R6:** the committed generator re-runs and its fixture equals the committed one (apart from metadata) | – | – |
-| 32 | – | **R7:** the committed harness: 0 survivors, 0 `NOT-APPLICABLE`; run twice with an edit in between (the second run tests the edit); SIGTERM and SIGHUP restore the tree | – | – |
-| 33 | – | Full suite + consumer canary green; `git diff test/` additions only | – | – |
+| 1 | G | Generator: first five `uint32` equal CPython's (seed 0 starts `3626764237`) | seeds `0, 1, 42, 2023, 2**32, 2**64+3, −5` | MG1, MG2 |
+| 2 | G | `shuffle` permutations equal CPython's; seed 0, n 10 → `[7,8,1,5,3,4,2,0,9,6]` | n ∈ `{0,1,2,10,100,1000}` | MG3, MG4 |
+| 3 | G | Generator `sample` equals CPython's (`[6,9,0]`, `[49,97,53]`) | pool branch; set branch; k = 6 at the `setsize` boundary | MG5, MG6, MG3 |
+| 3b | G | **`DataLoader.sample(examples, 3, seed: 0)`** returns the rows CPython's `sample` picks | public entry, loaded examples | MC2, MG3 |
+| 4a | – | `Dataset.train/1` leaves the caller's `:rand` state unchanged | caller seeded; caller never seeded | MC1 |
+| 4b | – | same for `DataLoader.sample/3`, including `seed: nil` (E7) | seeded; unseeded; `seed: nil` | MC2, MC4 |
+| 4c | – | same for `train_test_split/2`, including `seed: nil` | seeded; unseeded; `seed: nil` | MC3 |
+| 5 | T | `reset_seeds` accepts zero for every key | all six keys | **exempt**: "oracle port; `0` is truthy in Elixir, so no natural mutation (row 5b holds the Elixir trap)" |
+| 5b | – | `reset_seeds(ds, train_size: nil)` keeps the old size | explicit `nil`; key absent | MD1 |
+| 6 | T | `reset_seeds(train_seed: 1)` keeps every other value, both eval seeds included | one key given | MD2 |
+| 7 | – | dev and test share `eval_seed` (non-zero seed) | `eval_seed: 7` | MD3 |
+| 8 | G | `train/1`, seed 0, size 7 over rows 0..9 → `[7,8,1,5,3,4,2]` | – | MD4, MC1, MG3 |
+| 9 | – | Sizes: `nil` → all; `0` → `[]`; larger → all; negative → `ArgumentError` | four sizes | MD5 |
+| 10 | – | `shuffle: false` keeps row order | – | MD6 |
+| 11 | T | `input_keys` → inputs exactly those keys, against **string-keyed loaded rows** | names as strings; names as atoms | MD7, MD7b |
+| 12 | – | `train/1` twice → `==` lists | – | MD8 |
+| 12b | – | the split name is in `metadata["dspy_split"]`, and in no attrs key (E5) | train, dev, test | MD8b |
+| 13 | – | `prepare_by_seed` → 5 disjoint eval slices, 5 train sets; too little dev data → `ArgumentError` | – | MD9 |
+| 14a–14j | G | **CSV rows of A4**, one test each, expected values from the fixture | 14a BOM · 14b blank line · 14c CRLF/LF · 14d embedded newline + `""` escape · 14e empty + quoted-empty cell · 14f short row · 14g whitespace · 14h `fields:` order · 14i unknown field · 14j `input_keys` on `from_csv` | ML1 (a), ML2 (b), ML0 (c, d), ML3 (e), ML4 (f), ML5 (g), ML6 (h), ML6b (i), MB1 (j) |
+| 15 | – | Long row → `ArgumentError` naming the line (E3) | extra field in row 2 and in the last row | ML7 |
+| 16 | – | Duplicate header → `ArgumentError` naming the column (E4) | – | ML8 |
+| 17 | – | CSV values stay strings (E2) | `"2"`, `"1.5"`, `"True"`, `"0x10"` | ML9 |
+| 18 | – | No atom created: a never-seen header name built at runtime still makes `String.to_existing_atom/1` raise | CSV header; JSON key; nested JSON key | ML10 |
+| 19a–19g | G | **JSON rows of A4**, expected values from the fixture | 19a array · 19b JSONL + blank lines · 19c union of keys → `nil` · 19d nested kept · 19e `null` · 19f non-object raises naming its index · 19g `input_keys` on `from_json` | MJ2b (a), MJ2 (b), MJ1 (c), MJ3 (d), MJ0 (e), MJ4 (f), MB2 (g) |
+| 20a | – | CSV round trip with the shipped `save_as_csv` under the exact per-value map `c` (unchanged from 2026-09-30) | quoting ×3; `nil`; `""`; absent key; number | ML3, ML9 |
+| 20b | – | JSON round trip with the shipped `save_as_json` | same shapes | MJ1, MJ5 |
+| 21 | – | `train_test_split` sizes: `0.75` of 10 → 7/3; int `3` → 3/7; overflow → `ArgumentError`; `1.0` → `ArgumentError` | float; int; overflow; 1.0 | MT1 |
+| 21b | G | `train_test_split(rows 0..9, train_size: 0.7, seed: 0)` → train `[7,8,1,5,3,4,2]`, test `[0,9,6]` (upstream probe) | – | MC3, MG3 |
+| 22 | – | **M1 exit example:** `from_csv` → `Dataset` → `evaluate` ChainOfThought with `SemanticF1.metric/1`, `max_errors: 2`, one failing example → `save_as_json` → `from_json` | loader output end to end | MX1 |
+| 24 | – | **Consumer, metrics:** a loaded CSV → `Evaluate` with `answer_exact_match` → scores equal to the same data with atom keys | string vs atom keys | MX1, MP1 |
+| 25a | – | **Consumer, demos, Default:** loaded trainset → `LabeledFewShot.compile` → the request contains every demo value, byte-equal to the atom-keyed request | – | MX1, MX2 |
+| 25b | – | same for JSONAdapter | – | MX1, MX2 |
+| 25c | – | same for ChatAdapter (green under MX2: Chat never used `format_fields`) | – | MX1 |
+| 26 | – | **Consumer, save writers:** loaded `"answer"` vs prediction `:answer` → `example_answer`/`pred_answer`, no duplicate column, CSV and JSON | string example × atom prediction | MV1 |
+| 27 | – | **Consumer, `majority`** over string-keyed maps from `from_json` = atom-keyed result; a map with both forms raises | string maps; both forms | MX3, MX3b |
+| 28 | – | **Consumer, M1-d judge:** `SemanticF1.metric/1` on a loaded example gives the same score as on an atom-keyed one, **and the judge's request contains the loaded question and response** | string vs atom keys | MX1 (see verify-first V1) |
+| 29 | – | JSON numeric label `{"answer": 2}` + `answer_exact_match` → `ArgumentError` (parity: upstream `ValueError`) | integer; float | MJ5 |
+| 30 | – | T1: `from_csv(path, types: %{"answer" => :integer})` → integers via the H12 `NumberParser`; `"80%"` → `ArgumentError` naming line and column; untyped columns stay strings | typed; untyped; strict reject | MT2, MT3 |
+| 30c | – | T1 docs: the `from_csv` docstring names the silent-0 pitfall **and** `types:` | – | MT4 |
+| 31 | – | R6: the generator re-runs and its fixture equals the committed one (metadata aside) | – | **exempt** (static; run in review) |
+| 32 | – | The harness: 0 failures of any verdict, 0 UNCLAIMED, `also` lists observed | – | **exempt** (it is the harness itself) |
+| 33 | – | Full suite + consumer canary green; `git diff test/` additions only; `test/consumer_contract/**` unchanged | – | **exempt** (gate) |
+| 34 | – | **C5:** the case ids in `m1e_deviations.json` **equal** the fixture cases where our observed result differs from upstream's | E2, E3, E4, E6, E5 uuid | MC5 |
+| 35 | – | Static: the new `lib/dspy/dataset.ex` and `lib/dspy/data_loader.ex` contain no `Map.get/fetch(…attrs…, :atom)` and no `String.to_atom`/`List.to_atom` | – | **exempt** (static grep, printed) |
+
+## (c2) Declared mutations (normative)
+- Each mutation: one `old` → `new` edit, `expect` = the rows above, and `kind`.
+- **Every `also` list starts empty** and is filled only from observed failures.
+- **Direction 1, revert each caller** of every shared helper (`Dspy.Random`, the row builder, and `Dspy.Attrs` via the H15 sites).
+- **Direction 2, break each shared helper.**
+
+| Id | File | Change | `expect` | `kind` |
+|---|---|---|---|---|
+| MG1 | `random.ex` | `init_by_array` key words most-significant first | 1 | assertion |
+| MG2 | `random.ex` | seed used without `abs` | 1 | assertion |
+| MG3 | `random.ex` | **shared break:** `randbelow` uses `bit_length(n − 1)` | 2, 3, 3b, 8, 21b | assertion |
+| MG4 | `random.ex` | shuffle loop runs upward | 2 | assertion |
+| MG5 | `random.ex` | `sample` always takes the pool branch | 3 | assertion |
+| MG6 | `random.ex` | `sample` always takes the set branch | 3 | assertion |
+| MC1 | `dataset.ex` | **caller revert:** `train/1` shuffles with `:rand.seed` + `Enum.shuffle` | 4a, 8 | assertion |
+| MC2 | `data_loader.ex` | **caller revert:** `sample/3` uses `:rand.seed` + `Enum.take_random` | 3b, 4b | assertion |
+| MC3 | `data_loader.ex` | **caller revert:** `train_test_split/2` uses `:rand.seed` + `Enum.shuffle` | 4c, 21b | assertion |
+| MC4 | `data_loader.ex` | `seed: nil` falls back to the process `:rand` state (pre-mortem 11) | 4b | assertion |
+| MD1 | `dataset.ex` | `reset_seeds` uses `Keyword.get(opts, k, old)` | 5b | assertion |
+| MD2 | `dataset.ex` | `reset_seeds` resets omitted keys to defaults | 6 | assertion |
+| MD3 | `dataset.ex` | test split uses its own seed, defaulting to 0 | 7 | assertion |
+| MD4 | `dataset.ex` | take `size` before shuffling | 8 | assertion |
+| MD5 | `dataset.ex` | negative size → `Enum.take(rows, n)` (drops from the end) | 9 | assertion |
+| MD6 | `dataset.ex` | `shuffle:` flag ignored | 10 | assertion |
+| MD7 | `dataset.ex` | `input_keys` not applied | 11 | assertion |
+| MD7b | `example.ex` (shipped) | `normalize_input_key!` keeps atoms as atoms | 11 | assertion |
+| MD8 | `dataset.ex` | adds `metadata["dspy_uuid"]` from `:crypto` | 12 | assertion |
+| MD8b | `dataset.ex` | split name written into attrs `"dspy_split"` | 12b | assertion |
+| MD9 | `dataset.ex` | eval slices not offset | 13 | assertion |
+| ML0 | `data_loader.ex` | CSV parsed with `String.split(…, "\n")` + `String.split(…, ",")` instead of NimbleCSV | 14c, 14d | assertion |
+| ML1 | `data_loader.ex` | BOM not stripped | 14a | assertion |
+| ML2 | `data_loader.ex` | blank lines kept as rows | 14b | assertion |
+| ML3 | `data_loader.ex` | `""` kept as `""` | 14e, 20a | assertion |
+| ML4 | `data_loader.ex` | missing cells absent instead of `nil` | 14f | assertion |
+| ML5 | `data_loader.ex` | cells `String.trim`med | 14g | assertion |
+| ML6 | `data_loader.ex` | `fields:` subset returned in file order | 14h | assertion |
+| ML6b | `data_loader.ex` | unknown field in `fields:` ignored | 14i | assertion |
+| ML7 | `data_loader.ex` | long row: extra field dropped | 15 | assertion |
+| ML8 | `data_loader.ex` | duplicate header: last one wins | 16 | assertion |
+| ML9 | `data_loader.ex` | integer-looking cells → `String.to_integer` | 17, 20a | assertion |
+| ML10 | `data_loader.ex` | keys via `String.to_atom` | 18 | assertion |
+| MB1 | `data_loader.ex` | **caller revert:** `from_csv` builds `Example.new/1` itself, without the shared builder (no `input_keys`) | 14j | assertion |
+| MB2 | `data_loader.ex` | **caller revert:** the same in `from_json` | 19g | assertion |
+| MB3 | `data_loader.ex` | **shared break:** the builder ignores `input_keys` | 14j, 19g, 11 if `Dataset` uses the builder (observe) | assertion |
+| MJ0 | `data_loader.ex` | `null` → `""` | 19e | assertion |
+| MJ1 | `data_loader.ex` | union-of-keys fill dropped | 19c, 20b | assertion |
+| MJ2 | `data_loader.ex` | input always parsed as a JSON array (JSONL fails) | 19b | assertion |
+| MJ2b | `data_loader.ex` | input always parsed as JSONL (an array fails) | 19a | assertion |
+| MJ3 | `data_loader.ex` | nested objects flattened to strings | 19d | assertion |
+| MJ4 | `data_loader.ex` | non-object record skipped | 19f | assertion |
+| MJ5 | `data_loader.ex` | JSON numbers → strings | 20b, 29 | assertion |
+| MT1 | `data_loader.ex` | `round` instead of truncation | 21 | assertion |
+| MT2 | `data_loader.ex` | `types:` parse via `Integer.parse` prefix (accepts `"80%"`) | 30 | assertion |
+| MT3 | `data_loader.ex` | `types:` ignored | 30 | assertion |
+| MT4 | `data_loader.ex` | pitfall sentence removed from the `from_csv` docstring | 30c | assertion |
+| MC5 | `test/fixtures/m1e_deviations.json` | drop the E3 entry | 34 | assertion |
+| MX1 | `attrs.ex` (shipped) | **shared break:** string fallback removed | 22, 24, 25a, 25b, 25c, 28 | assertion |
+| MX2 | `signature.ex` (shipped) | **caller revert:** `format_fields` back to `Map.get(attrs, field.name, "")` | 25a, 25b | assertion |
+| MX3 | `majority.ex` (shipped) | **caller revert:** map clause back to `Map.has_key?(map, field)` | 27 | `raise:ArgumentError` |
+| MX3b | `majority.ex` (shipped) | dual-key check removed | 27 | assertion |
+| MP1 | `metrics.ex` (shipped) | **caller revert:** `fetch_field!` back to `Map.fetch(attrs, :answer)` | 24 | assertion (Evaluate turns the raise into `failure_score`, verified in H15) |
+| MV1 | `evaluate.ex` (shipped) | save collision compared by term, not `to_string` | 26 | assertion |
+
+**Row 27 kind:** under MX1, row 27 also raises inside `majority`. It goes into MX1's `also` **only if observed**, and MX1's `kind` stays `assertion`. If C2 then reports WRONG-REASON for MX1, the row-27 test is split so that each half is claimed by exactly one kind; `kind: any` is not used.
 
 ## (d) Pre-mortem
 1. **`:rand.seed(:exsss, seed)` + `Enum.shuffle`.** Deterministic on the worker's machine, so any "same seed → same order" test passes — and it mutates the caller's RNG. → Row 2 (golden CPython permutations, which `Enum.shuffle` cannot match) and row 4.
@@ -213,6 +320,14 @@ Tiers: **[T]** ported upstream test · **[G]** golden from the committed generat
 10. **Row→Example builder shared by CSV and JSON, reverted once in the harness** → one caller's rows go untested. → R7 per-caller reverts.
 11. **A `:rand` fallback "for `seed: nil`"** re-introduces caller-state mutation. → Row 4 includes the unseeded shape.
 
+12. **`also` written ahead of the run** (H15, lesson 2026-10-02). → (c2): every `also` starts empty; the review checks `also == failed − expect`.
+13. **A consumer row that passes without reaching the string path**, e.g. row 28 if the judge's fake LM returns the same scripted score whatever the prompt says. → Row 28 asserts the loaded values are **in the judge's request**; MX1 must turn it red (V1).
+
+## Verify-first (controller, before any code)
+- **V1:** that MX1 turns row 28 red. If the scripted DummyLM scores identically with blank judge inputs, the prompt assertion is what makes it red; prove it on the base tree with a throwaway edit, and report the failing line.
+- **V2:** that `LabeledFewShot.compile` with a loaded trainset reaches the Default/JSON demo path (rows 25a/b) and not a different renderer.
+- **V3:** that the R6 generator can emit stable `case_id`s for every A4 row (needed by row 34).
+
 ## (e) Echo-back
 The A1 signatures verbatim; A2's generator steps in own words, including why `n` and not `n − 1`; the A4 CSV table rows marked "no" and why; one sentence per A5 invariant.
 
@@ -221,7 +336,7 @@ The A1 signatures verbatim; A2's generator steps in own words, including why `n`
 - **E2 — CSV cells stay strings (deviation).** Upstream infers types through pandas, including the quirk that one missing cell turns a whole integer column into floats (`2` → `2.0`, probe). Upstream's inference also breaks its own standard metric: `answer_exact_match` raises "Invalid answer type" on an integer answer, so a GSM8K-style CSV of numeric answers fails upstream. Porting pandas inference is large and fuzzy. Recommend strings, declared; JSON is the typed format.
 - **E3 — A long row raises (deviation).** Upstream silently shifts the row into garbage: `{'q': 1, 'a': 'EXTRA', '__index_level_0__': 'x'}` (probe). Parity would mean reproducing data corruption. Recommend raise, naming the line — which also mirrors M1-a's "a key outside the header raises" on save.
 - **E4 — A duplicate header raises (deviation).** Upstream renames the second column `a.1`. Recommend raise; our save never writes one.
-- **E5 — No `dspy_uuid`; the split name goes into `Example.metadata["dspy_split"]` (deviation).** Upstream adds a random `uuid4` to every example (unused — its own TODO `:98-101`) and hides `dspy_*` keys only from `len`/`repr`/`keys`. Our `Example` has no hidden keys, so they would leak into `labels`, metrics and the M1-a CSV/JSON rows, and the random uuid makes two calls unequal.
+- **E5 — No `dspy_uuid`; the split name goes into `Example.metadata["dspy_split"]` (deviation).** Upstream adds a random `uuid4` to every example (unused — its own TODO `:98-101`) and hides `dspy_*` keys only from `len`/`repr`/`keys`. Our `Example` has no hidden keys, so they would leak into `inputs`/keys, metrics and the M1-a CSV/JSON rows, and the random uuid makes two calls unequal.
 - **E6 — Negative sizes raise (deviation).** Python slicing would drop elements from the end.
 - **E7 — `seed: nil` in `sample`/`train_test_split`:** a fresh seed from `:crypto.strong_rand_bytes/1` — not reproducible, as upstream, but **never** touching the caller's `:rand` state. Upstream's `train_test_split` calls the *global* `random.seed(random_state)`, changing every later random call in the process; not emulated.
 - **E8 — `sample` included.** It shares the generator and costs one function. Can be split off if you want M1-e smaller.
@@ -253,8 +368,16 @@ The A1 signatures verbatim; A2's generator steps in own words, including why `n`
 - **E8 — AGREED:** `sample` stays in.
 - **E9 — Row 22 stays in M1-e.** It moves with whichever of M1-d and M1-e lands second, and M1-d lands first.
 
+### Rulings needed 2026-10-02 (Greta → Horst)
+- **Q1 — User rows that hold both `:k` and `"k"` in `Dataset.new(train: …)`.** Loaders never produce them (R1). For user-built rows, I recommend **pass-through**: `Example.new/1` as today, so reads follow the accessor's atom-wins rule (H15 R2). Declare it in the moduledoc. The alternative is to raise like `majority`, but that is stricter than `Example` itself and outside this slice.
+- **Q2 — M1-e's harness mutates shipped H15 code** (MX1–MX3, MP1, MV1 and MD7b). This re-proves those sites, this time with **loader output from disk**, which H15's hand-built fixtures never used. I recommend yes: these are 7 of the 54 mutations, and they are the only proof that P1/P2 cannot come back through the loaders.
+- **Q3 — scope of `m1e_deviations.json`.** I recommend **only fixture-observable deviations** (E2, E3, E4, E6, and E5's uuid). E7 (upstream reseeds the global RNG) cannot be seen in a fixture, so it stays prose in COMPATIBILITY.
+
 ## (b) Team card — Horst.
 
 ## (f) Clarity Gate
 - Greta ☐ — signs once E1–E9 are ruled on.
 - Horst ☐
+
+## Rulings (Horst, 2026-10-02)
+Q1 YES (both-form rows pass through, atom wins, declared in moduledoc) · Q2 YES (harness may mutate shipped H15 code — the only proof loaded data cannot bring P1/P2 back) · Q3 YES (deviations.json covers fixture-visible deviations; E7 stays prose). **LOCKED.**
