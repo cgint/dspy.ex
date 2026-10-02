@@ -48,16 +48,11 @@ defmodule Dspy.Prediction do
   Get an attribute from the prediction.
 
   When `key` is an atom, this also checks for the string version of the key
-  (useful when predictions are created/loaded from JSON).
+  Delegates to the canonical `Dspy.Attrs` accessor (H15); when both the
+  atom and the string form exist, the atom key wins.
   """
-  def get(%__MODULE__{} = prediction, key, default \\ nil) do
-    attrs = prediction.attrs
-
-    case existing_key(attrs, key) do
-      nil -> default
-      actual_key -> Map.get(attrs, actual_key, default)
-    end
-  end
+  def get(%__MODULE__{} = prediction, key, default \\ nil),
+    do: Dspy.Attrs.get(prediction, key, default)
 
   @doc """
   Put an attribute in the prediction.
@@ -81,7 +76,7 @@ defmodule Dspy.Prediction do
   def delete(%__MODULE__{} = prediction, key) do
     attrs = prediction.attrs
 
-    case existing_key(attrs, key) do
+    case Dspy.Attrs.resolve_key(attrs, key) do
       nil ->
         prediction
 
@@ -200,23 +195,9 @@ defmodule Dspy.Prediction do
     {current_value, new_prediction}
   end
 
-  defp existing_key(attrs, key) when is_atom(key) do
-    cond do
-      Map.has_key?(attrs, key) -> key
-      Map.has_key?(attrs, Atom.to_string(key)) -> Atom.to_string(key)
-      true -> nil
-    end
-  end
-
-  defp existing_key(attrs, key) when is_binary(key) do
-    if Map.has_key?(attrs, key), do: key, else: nil
-  end
-
-  defp existing_key(_attrs, _key), do: nil
-
-  defp key_for_put(attrs, key) when is_atom(key) do
-    existing_key(attrs, key) || key
-  end
+  # H15: the atom→string resolution rule now lives in the canonical
+  # Dspy.Attrs accessor; key_for_put resolves the stored key through it.
+  defp key_for_put(attrs, key) when is_atom(key), do: Dspy.Attrs.resolve_key(attrs, key) || key
 
   defp key_for_put(_attrs, key), do: key
 

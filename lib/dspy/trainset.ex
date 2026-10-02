@@ -204,7 +204,8 @@ defmodule Dspy.Trainset do
     groups =
       trainset
       |> Enum.group_by(fn example ->
-        Map.get(example.attrs, field, Map.get(example.attrs, to_string(field), nil))
+        # H15 (S5): canonical accessor replaces the hand-rolled copy.
+        Dspy.Attrs.get(example, field)
       end)
       |> Enum.sort_by(fn {label, _examples} -> label end)
 
@@ -254,7 +255,8 @@ defmodule Dspy.Trainset do
       # Check field requirements
       fields_ok =
         Enum.all?(required_fields, fn field ->
-          value = Map.get(example.attrs, field, Map.get(example.attrs, to_string(field), ""))
+          # H15 (S6): canonical accessor replaces the hand-rolled copy.
+          value = Dspy.Attrs.get(example.attrs, field, "")
           value != nil and value != ""
         end)
 
@@ -411,7 +413,8 @@ defmodule Dspy.Trainset do
     scored_examples =
       trainset
       |> Enum.map(fn example ->
-        difficulty = Map.get(example.attrs, difficulty_field, 0.5)
+        # H15 (S7): canonical accessor — a string "difficulty" is now read.
+        difficulty = Dspy.Attrs.get(example, difficulty_field, 0.5)
         {example, difficulty}
       end)
       |> Enum.sort_by(&elem(&1, 1), :desc)
@@ -437,7 +440,8 @@ defmodule Dspy.Trainset do
     scored_examples =
       trainset
       |> Enum.map(fn example ->
-        uncertainty = Map.get(example.attrs, uncertainty_field, 0.5)
+        # H15 (S8): canonical accessor — a string "uncertainty" is now read.
+        uncertainty = Dspy.Attrs.get(example, uncertainty_field, 0.5)
         {example, uncertainty}
       end)
       |> Enum.sort_by(&elem(&1, 1), :desc)

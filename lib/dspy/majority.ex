@@ -166,42 +166,45 @@ defmodule Dspy.Majority do
   # (identity normaliser: nil means "ignore this completion"); only an
   # ABSENT key raises. Mirrors upstream: completion[field] with an identity
   # normaliser keeps None, and the default normaliser raises on it there too.
-  # The completion is a plain map (not a %Dspy.Prediction{} struct) and the
-  # string form of the field is present: the caller almost certainly meant an
-  # atom key. The map/struct shape is narrowed by the caller before this
-  # runs, so is_map/1 is guaranteed here (Elixir sees the type as always-map).
+  # H15 (S11, T4): string-keyed maps now vote through the canonical accessor;
+  # the old "maps must use atom keys" hint is gone. A map holding BOTH
+  # forms raises, naming both keys (ruling R2).
   defp value_of(completion, field) do
     case present_value_for(completion, field) do
       {:ok, value} ->
         value
 
       {:missing, _} ->
-        hint =
-          if not is_struct(completion, Dspy.Prediction) and
-               Map.has_key?(completion, to_string(field)) do
-            " (maps must use atom keys, e.g. %{answer: \"2\"} — a string key like " <>
-              inspect(to_string(field)) <> " is present but will not match)"
-          else
-            ""
-          end
-
-        raise ArgumentError,
-              "Dspy.majority/2: completion #{inspect(completion)} is missing field #{inspect(field)}#{hint}"
+        raise ArgumentError, missing_field_error(completion, field)
     end
   end
 
+  # H15 (S11): the shared error-text builder. MR11c proves it is pinned by
+  # restoring the old atom-keys hint here; the message must not change.
+  defp missing_field_error(completion, field) do
+    "Dspy.majority/2: completion #{inspect(completion)} is missing field #{inspect(field)}"
+  end
+
   defp present_value_for(%Prediction{} = prediction, field) do
-    case Prediction.fetch(prediction, field) do
+    case Dspy.Attrs.fetch(prediction, field) do
       {:ok, value} -> {:ok, value}
       :error -> {:missing, nil}
     end
   end
 
   defp present_value_for(map, field) when is_map(map) do
-    if Map.has_key?(map, field) do
-      {:ok, Map.get(map, field)}
-    else
-      {:missing, nil}
+    # A map holding both the atom AND the string form is ambiguous: raise,
+    # naming both keys (R2). A map holding only the string form (the common
+    # loaded-data case) is NOT dual — the string key simply matches.
+    if is_atom(field) and Map.has_key?(map, field) and Map.has_key?(map, to_string(field)) do
+      raise ArgumentError,
+            "Dspy.majority/2: completion #{inspect(map)} holds both #{inspect(field)} and " <>
+              inspect(to_string(field)) <> " — pass exactly one form"
+    end
+
+    case Dspy.Attrs.fetch(map, field) do
+      {:ok, value} -> {:ok, value}
+      :error -> {:missing, nil}
     end
   end
 

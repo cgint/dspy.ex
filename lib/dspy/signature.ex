@@ -477,7 +477,11 @@ defmodule Dspy.Signature do
   defp format_fields(example, fields) do
     fields
     |> Enum.map(fn field ->
-      value = Map.get(example.attrs || example, field.name, "")
+      # H15 (S3): the canonical accessor renders string-keyed demo values too;
+      # the "" default keeps atom-keyed prompts byte-identical (MR3b pins it).
+      # Plain-map demos (R3) remain out of scope: a bare map with no :attrs
+      # raises, exactly as today.
+      value = Dspy.Attrs.get(example, field.name, "")
       value = format_field_value(value)
       "#{String.capitalize(Atom.to_string(field.name))}: #{value}"
     end)

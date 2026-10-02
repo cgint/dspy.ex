@@ -1,4 +1,5 @@
 ExUnit.start(exclude: [integration: true, network: true])
+
 if System.get_env("DSPY_MUT_REPORT") do
   Code.require_file("plan/research/harness/mut_formatter.exs", Path.expand("..", __DIR__))
   ExUnit.configure(formatters: [ExUnit.CLIFormatter, MutFormatter])

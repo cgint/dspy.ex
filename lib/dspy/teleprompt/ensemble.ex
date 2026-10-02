@@ -190,7 +190,8 @@ defmodule Dspy.Teleprompt.Ensemble.Program do
   defp confidence_based_combination(predictions) do
     predictions
     |> Enum.max_by(fn pred ->
-      Map.get(pred.attrs, :confidence, 0.5)
+      # H15 (S9): canonical accessor — a string "confidence" is now read.
+      Dspy.Attrs.get(pred, :confidence, 0.5)
     end)
   end
 end

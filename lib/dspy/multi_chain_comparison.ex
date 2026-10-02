@@ -102,8 +102,9 @@ defmodule Dspy.MultiChainComparison do
     "«I'm trying to #{first_line(rationale)} I'm not sure but my prediction is #{first_line(answer)}»"
   end
 
-  defp get(%Dspy.Prediction{attrs: attrs}, key), do: Map.get(attrs, key)
-  defp get(map, key) when is_map(map), do: Map.get(map, key, Map.get(map, to_string(key)))
+  # H15 (S10): both clause shapes use the canonical accessor, so a string-keyed
+  # Prediction's rationale/answer are no longer dropped.
+  defp get(source, key), do: Dspy.Attrs.get(source, key)
 
   defp first_line(nil), do: ""
 

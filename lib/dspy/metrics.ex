@@ -136,8 +136,9 @@ defmodule Dspy.Metrics do
   end
 
   # A4: no silent `""` default — a missing :context field raises, naming the struct.
+  # H15: routed through the canonical Dspy.Attrs accessor (string-key fallback).
   defp fetch_context!(%{attrs: attrs}, label) do
-    case Map.fetch(attrs, :context) do
+    case Dspy.Attrs.fetch(attrs, :context) do
       {:ok, value} -> value
       :error -> raise ArgumentError, "#{label}[:context] is missing"
     end
@@ -205,8 +206,10 @@ defmodule Dspy.Metrics do
   end
 
   # A4: no silent `""` default — a missing :answer field raises, naming the struct.
+  # H15: routed through the canonical Dspy.Attrs accessor (string-key fallback);
+  # a key missing in BOTH forms still raises the same message (MR3c pins this).
   defp fetch_field!(%{attrs: attrs}, label) do
-    case Map.fetch(attrs, :answer) do
+    case Dspy.Attrs.fetch(attrs, :answer) do
       {:ok, value} -> value
       :error -> raise ArgumentError, "#{label}[:answer] is missing"
     end
@@ -522,19 +525,11 @@ defmodule Dspy.Metrics do
 
   # Private helper functions
 
-  defp get_field_value(%Example{attrs: attrs}, field) do
-    Map.get(attrs, field, Map.get(attrs, to_string(field), ""))
-  end
-
-  defp get_field_value(%Prediction{attrs: attrs}, field) do
-    Map.get(attrs, field, Map.get(attrs, to_string(field), ""))
-  end
-
-  defp get_field_value(map, field) when is_map(map) do
-    Map.get(map, field, Map.get(map, to_string(field), ""))
-  end
-
-  defp get_field_value(value, _field), do: to_string(value)
+  # H15: the three private copies of the atom→string fallback are deleted and
+  # routed through the canonical Dspy.Attrs accessor. (The old
+  # `get_field_value(value, _field), do: to_string(value)` clause is
+  # unreachable: every caller passes an Example/Prediction/map.)
+  defp get_field_value(source, field), do: Dspy.Attrs.get(source, field, "")
 
   defp update_field(%Example{attrs: attrs} = example, field, transform_fn) do
     new_value = get_field_value(example, field) |> transform_fn.()

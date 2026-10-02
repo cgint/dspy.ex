@@ -215,7 +215,8 @@ dspy.predict.aggregation.majority helper. Behaviour is bit-for-bit
 upstream for every binary/atom vote except the three items below.
 
 - **(C1) List-only input.** `Dspy.majority/2` takes a LIST of completions
-  (maps with atom keys or `%Dspy.Prediction{}` structs). Passing a
+  (maps with atom or string keys, or `%Dspy.Prediction{}` structs; since
+  v0.4.5 a map holding both `:k` and `"k"` raises, naming both). Passing a
   `%Dspy.Prediction{}` directly raises `ArgumentError` pointing at the list
   form. Upstream's signature is
   `majority(prediction_or_completions, normalize=default_normalize, field=None)`
