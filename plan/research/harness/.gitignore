@@ -1,0 +1,8 @@
+selftest/_build/
+selftest/deps/
+erl_crash.dump
+*_report.json
+.r*_report.json
+*.jsonl
+.probe_*
+_proof_run_*.log
