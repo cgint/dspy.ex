@@ -1,0 +1,184 @@
+{
+  "_meta": {
+    "source": "dspy==3.4.0",
+    "generated": "2026-10-02T14:29:57.472186+00:00",
+    "module": "dspy.evaluate.auto_evaluation",
+    "description": "M1-d golden: the four auto-evaluation judge signatures (instruction = class __doc__, fields in declaration order). Upstream float -> :number and str -> :string on the Elixir side."
+  },
+  "SemanticRecallPrecision": {
+    "instruction": "Compare a system's response to the ground truth to compute its recall and precision. If asked to reason, enumerate key ideas in each response, and whether they are present in the other response.",
+    "fields": [
+      {
+        "name": "question",
+        "type": "str",
+        "desc": "${question}",
+        "is_input": true
+      },
+      {
+        "name": "ground_truth",
+        "type": "str",
+        "desc": "${ground_truth}",
+        "is_input": true
+      },
+      {
+        "name": "system_response",
+        "type": "str",
+        "desc": "${system_response}",
+        "is_input": true
+      },
+      {
+        "name": "recall",
+        "type": "float",
+        "desc": "fraction (out of 1.0) of ground truth covered by the system response",
+        "is_input": false
+      },
+      {
+        "name": "precision",
+        "type": "float",
+        "desc": "fraction (out of 1.0) of system response covered by the ground truth",
+        "is_input": false
+      }
+    ]
+  },
+  "DecompositionalSemanticRecallPrecision": {
+    "instruction": "Compare a system's response to the ground truth to compute recall and precision of key ideas. You will first enumerate key ideas in each response, discuss their overlap, and then report recall and precision.",
+    "fields": [
+      {
+        "name": "question",
+        "type": "str",
+        "desc": "${question}",
+        "is_input": true
+      },
+      {
+        "name": "ground_truth",
+        "type": "str",
+        "desc": "${ground_truth}",
+        "is_input": true
+      },
+      {
+        "name": "system_response",
+        "type": "str",
+        "desc": "${system_response}",
+        "is_input": true
+      },
+      {
+        "name": "ground_truth_key_ideas",
+        "type": "str",
+        "desc": "enumeration of key ideas in the ground truth",
+        "is_input": false
+      },
+      {
+        "name": "system_response_key_ideas",
+        "type": "str",
+        "desc": "enumeration of key ideas in the system response",
+        "is_input": false
+      },
+      {
+        "name": "discussion",
+        "type": "str",
+        "desc": "discussion of the overlap between ground truth and system response",
+        "is_input": false
+      },
+      {
+        "name": "recall",
+        "type": "float",
+        "desc": "fraction (out of 1.0) of ground truth covered by the system response",
+        "is_input": false
+      },
+      {
+        "name": "precision",
+        "type": "float",
+        "desc": "fraction (out of 1.0) of system response covered by the ground truth",
+        "is_input": false
+      }
+    ]
+  },
+  "AnswerCompleteness": {
+    "instruction": "Estimate the completeness of a system's responses, against the ground truth. You will first enumerate key ideas in each response, discuss their overlap, and then report completeness.",
+    "fields": [
+      {
+        "name": "question",
+        "type": "str",
+        "desc": "${question}",
+        "is_input": true
+      },
+      {
+        "name": "ground_truth",
+        "type": "str",
+        "desc": "${ground_truth}",
+        "is_input": true
+      },
+      {
+        "name": "system_response",
+        "type": "str",
+        "desc": "${system_response}",
+        "is_input": true
+      },
+      {
+        "name": "ground_truth_key_ideas",
+        "type": "str",
+        "desc": "enumeration of key ideas in the ground truth",
+        "is_input": false
+      },
+      {
+        "name": "system_response_key_ideas",
+        "type": "str",
+        "desc": "enumeration of key ideas in the system response",
+        "is_input": false
+      },
+      {
+        "name": "discussion",
+        "type": "str",
+        "desc": "discussion of the overlap between ground truth and system response",
+        "is_input": false
+      },
+      {
+        "name": "completeness",
+        "type": "float",
+        "desc": "fraction (out of 1.0) of ground truth covered by the system response",
+        "is_input": false
+      }
+    ]
+  },
+  "AnswerGroundedness": {
+    "instruction": "Estimate the groundedness of a system's responses, against real retrieved documents written by people. You will first enumerate whatever non-trivial or check-worthy claims are made in the system response, and then discuss the extent to which some or all of them can be deduced from the retrieved context and basic commonsense.",
+    "fields": [
+      {
+        "name": "question",
+        "type": "str",
+        "desc": "${question}",
+        "is_input": true
+      },
+      {
+        "name": "retrieved_context",
+        "type": "str",
+        "desc": "${retrieved_context}",
+        "is_input": true
+      },
+      {
+        "name": "system_response",
+        "type": "str",
+        "desc": "${system_response}",
+        "is_input": true
+      },
+      {
+        "name": "system_response_claims",
+        "type": "str",
+        "desc": "enumeration of non-trivial or check-worthy claims in the system response",
+        "is_input": false
+      },
+      {
+        "name": "discussion",
+        "type": "str",
+        "desc": "discussion of how supported the claims are by the retrieved context",
+        "is_input": false
+      },
+      {
+        "name": "groundedness",
+        "type": "float",
+        "desc": "fraction (out of 1.0) of system response supported by the retrieved context",
+        "is_input": false
+      }
+    ]
+  }
+}

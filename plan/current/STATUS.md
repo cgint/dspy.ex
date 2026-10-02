@@ -379,3 +379,4 @@ Notes:
 - NOW: H0 (process context) in rework under controller Judith; H0b (crash/timeout) in groundwork; then P4 save/load, P5 inspect_history.
 - H0 `Dspy.Context` (13 spawn sites) → `v0.3.44`. Team Judith/Benjamin/Clara; outside verdict Greta PASS-WITH-FIXES (vacuous crash tests fixed); Horst re-ran restore mutation (12/15 RED → 15 GREEN, checksum OK).
   - Note: controller reported format ✓ but final test/context/context_test.exs was unformatted; Horst ran mix format (whitespace only) before release.
+- M1-d LM-judged metrics (SemanticF1, CompleteAndGrounded, threshold_metric, JudgeError) → `v0.4.4` (2026-10-02). Frieda built; Greta BLOCK (5 findings, 3 repeats of written rules); Lene fix round; Greta PASS (re-broke harness); Horst fixed one vacuous assert in dummy_lm_test, ran 812/0, ci_docker, canary.
