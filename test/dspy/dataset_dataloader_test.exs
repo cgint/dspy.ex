@@ -1160,8 +1160,8 @@ defmodule Dspy.DatasetDataLoaderTest do
     # demos must come from the loaded, string-keyed data).
     assert loaded_prompt =~ ~r/Example 1:/
     assert loaded_prompt =~ ~r/Example 2:/
-    assert String.count(loaded_prompt, "Q#") == 2
-    assert String.count(loaded_prompt, "A#") == 2
+    assert length(String.split(loaded_prompt, "Q#")) - 1 == 2
+    assert length(String.split(loaded_prompt, "A#")) - 1 == 2
 
     assert loaded_prompt == atom_prompt
   end
