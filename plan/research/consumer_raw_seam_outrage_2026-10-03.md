@@ -122,7 +122,8 @@ be a `data:...;base64` URI (raw base64 or container-external file paths →
 
 **Scope decision (user, 2026-10-03):** acceptance bar = dspy.ex properly
 supports **one image per forward**. Both real-model e2e shapes above pass;
-multi-image-on-judge is tracked as a backend upgrade, not a dspy.ex gap.
+multi-image-on-judge was a backend upgrade, not a dspy.ex gap — now resolved
+(build 10507, see 2026-10-04 entries below).
 
 **2026-10-04:** llama.cpp on sparky is being updated (user). Re-verification
 after the rebuild: (1) raw probe — 2-image request to sparky:8081 must show
@@ -131,6 +132,16 @@ prompt_tokens scaling past the 1-image count (was 224 → now must reach the
 `image_input_real_multimage.exs` pointed at the judge (E2E_MODEL +
 E2E_BASE_URL env overrides). When both pass, multi-image per forward is
 valid on both test endpoints.
+
+**2026-10-04 (VERIFIED CLOSED):** sparky:8081 now runs llama.cpp build
+10507 (commit 95c409c13), which contains the #27348 fix. Independent
+re-verification by the lead: raw probe prompt_tokens now scale per image
+(1→219, 2→413, 3→607; before the fix 2 images gave 224 = 1 image); the
+dspy.ex e2e `image_input_real_multimage.exs` run with
+`E2E_MODEL=qwen36-35b-judge-sparky-direct` → ALL PASS (3 pages, list
+field, single forward, in order: [Red, Blue, Green]). Multi-image per
+forward is now valid on **both** test endpoints; the per-page shape remains
+the universal fallback.
 
 **Open:** consumer-side migration (replace `do_real_lm_request` with
 `Dspy.Predict.forward` + `:image` fields) is now possible but not started;
