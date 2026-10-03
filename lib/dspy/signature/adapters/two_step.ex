@@ -53,7 +53,7 @@ defmodule Dspy.Signature.Adapters.TwoStep do
          {:ok, extraction_request0} <-
            AdapterPipeline.format_request(
              extractor_signature,
-             %{text: text},
+             %{text: AdapterPipeline.sanitize_prompt(text)},
              [],
              adapter: extraction_adapter
            ),
@@ -226,6 +226,9 @@ defmodule Dspy.Signature.Adapters.TwoStep do
     "Task inputs:\n" <> render_pairs(signature.input_fields, inputs)
   end
 
+  defp all_images?(list) when is_list(list),
+    do: list != [] and Enum.all?(list, &match?(%Dspy.Image{}, &1))
+
   defp render_pairs(fields, data) when is_list(fields) and is_map(data) do
     fields
     |> Enum.map(fn %{name: name} ->
@@ -234,15 +237,27 @@ defmodule Dspy.Signature.Adapters.TwoStep do
       value_text =
         case value do
           :__missing__ -> ""
-          %Dspy.Attachments{} -> "<attachments>"
-          binary when is_binary(binary) -> binary
-          other -> inspect(other, pretty: false, limit: 100, sort_maps: true)
+          other -> render_pair_value(other)
         end
 
       "#{name}: #{value_text}"
     end)
     |> Enum.join("\n")
   end
+
+  defp render_pair_value(%Dspy.Attachments{}), do: "<attachments>"
+  defp render_pair_value(%Dspy.Image{}), do: Dspy.Signature.AdapterPipeline.image_ref_token()
+
+  defp render_pair_value(list) when is_list(list) do
+    if all_images?(list) do
+      Enum.join(List.duplicate(Dspy.Signature.AdapterPipeline.image_ref_token(), length(list)), " ")
+    else
+      inspect(list, pretty: false, limit: 100, sort_maps: true)
+    end
+  end
+
+  defp render_pair_value(binary) when is_binary(binary), do: binary
+  defp render_pair_value(other), do: inspect(other, pretty: false, limit: 100, sort_maps: true)
 
   defp fetch_input(map, name) when is_map(map) and is_atom(name) do
     cond do
@@ -251,4 +266,5 @@ defmodule Dspy.Signature.Adapters.TwoStep do
       true -> :__missing__
     end
   end
+
 end

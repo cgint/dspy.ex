@@ -90,7 +90,7 @@ defmodule Dspy.Signature.Adapter.Pipeline do
 
     with {:ok, request0} <-
            AdapterPipeline.format_request(signature, inputs, demos, adapter: adapter),
-         {:ok, request} <- merge_attachments(signature, inputs, request0),
+         {:ok, request} <- merge_media_parts(signature, inputs, request0),
          {:ok, base_prompt} <- AdapterPipeline.primary_prompt_text(request) do
       callbacks =
         Callbacks.emit(callbacks, :format_end, meta, %{request: request_summary(request)})
@@ -526,17 +526,33 @@ defmodule Dspy.Signature.Adapter.Pipeline do
     Application.get_env(:dspy, :predict_retry_sleep_ms, 1000)
   end
 
-  defp merge_attachments(%Signature{} = signature, inputs, request)
+  defp all_images?(list) when is_list(list),
+    do: list != [] and Enum.all?(list, &match?(%Dspy.Image{}, &1))
+
+  defp merge_media_parts(%Signature{} = signature, inputs, request)
        when is_map(inputs) and is_map(request) do
-    attachments = extract_attachments(signature, inputs)
-    AdapterPipeline.merge_attachments(request, attachments)
+    {image_parts, attachment_parts} = extract_media_parts(signature, inputs)
+    AdapterPipeline.merge_media(request, attachment_parts, image_parts)
   end
 
-  defp extract_attachments(%Signature{} = signature, inputs) when is_map(inputs) do
-    Enum.flat_map(signature.input_fields, fn %{name: name} ->
+  defp extract_media_parts(%Signature{} = signature, inputs) when is_map(inputs) do
+    Enum.reduce(signature.input_fields, {[], []}, fn %{name: name}, {images, attachments} ->
       case fetch_input(inputs, name) do
-        {:ok, %Dspy.Attachments{} = a} -> Dspy.Attachments.to_message_parts(a)
-        _ -> []
+        {:ok, %Dspy.Attachments{} = a} ->
+          {images, attachments ++ Dspy.Attachments.to_message_parts(a)}
+
+        {:ok, %Dspy.Image{} = image} ->
+          {images ++ Dspy.Image.format(image), attachments}
+
+        {:ok, list} when is_list(list) ->
+          if all_images?(list) do
+            {images ++ Enum.flat_map(list, &Dspy.Image.format/1), attachments}
+          else
+            {images, attachments}
+          end
+
+        _ ->
+          {images, attachments}
       end
     end)
   end
@@ -547,6 +563,7 @@ defmodule Dspy.Signature.Adapter.Pipeline do
       :error -> Map.fetch(inputs, Atom.to_string(name))
     end
   end
+
 
   defp extract_usage(%{usage: usage}), do: usage
   defp extract_usage(%{"usage" => usage}), do: usage

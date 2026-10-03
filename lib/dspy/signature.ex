@@ -175,6 +175,9 @@ defmodule Dspy.Signature do
     end
   end
 
+  defp all_images?(list) when is_list(list),
+    do: list != [] and Enum.all?(list, &match?(%Dspy.Image{}, &1))
+
   defp validate_input_values(input_fields, inputs)
        when is_list(input_fields) and is_map(inputs) do
     input_fields
@@ -185,6 +188,22 @@ defmodule Dspy.Signature do
           # merged into request parts later, even when the signature field is
           # declared as :string for Python-DSPy-style ergonomics.
           {:cont, :ok}
+
+        {:ok, %Dspy.Image{}} ->
+          # Images are an intentional multimodal input escape hatch (parity with
+          # Python's dspy.Image). They are merged into request parts later, even
+          # when the signature field is declared as :string.
+          {:cont, :ok}
+
+        {:ok, value} when is_list(value) ->
+          if all_images?(value) do
+            {:cont, :ok}
+          else
+            case validate_field_value(value, field) do
+              {:ok, _typed_value} -> {:cont, :ok}
+              {:error, reason} -> {:halt, {:error, {:invalid_input_value, field.name, reason}}}
+            end
+          end
 
         {:ok, value} ->
           case validate_field_value(value, field) do
@@ -204,6 +223,7 @@ defmodule Dspy.Signature do
       :error -> Map.fetch(inputs, Atom.to_string(name))
     end
   end
+
 
   @doc """
   Parse outputs according to the signature.

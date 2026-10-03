@@ -111,6 +111,9 @@ defmodule Dspy.Signature.Adapters.ChatAdapter do
     "Inputs:\n" <> render_field_sections(signature.input_fields, inputs)
   end
 
+  defp all_images?(list) when is_list(list),
+    do: list != [] and Enum.all?(list, &match?(%Dspy.Image{}, &1))
+
   defp render_field_sections(fields, data) when is_list(fields) and is_map(data) do
     fields
     |> Enum.map(fn %{name: name} ->
@@ -119,14 +122,26 @@ defmodule Dspy.Signature.Adapters.ChatAdapter do
       value_str =
         case value do
           :__missing__ -> ""
-          %Dspy.Attachments{} -> "<attachments>"
-          other -> format_value_for_prompt(other)
+          other -> render_value_for_prompt(other)
         end
 
       marker_header(Atom.to_string(name)) <> "\n" <> value_str
     end)
     |> Enum.join("\n\n")
   end
+
+  defp render_value_for_prompt(%Dspy.Attachments{}), do: "<attachments>"
+  defp render_value_for_prompt(%Dspy.Image{}), do: Dspy.Signature.AdapterPipeline.image_ref_token()
+
+  defp render_value_for_prompt(list) when is_list(list) do
+    if all_images?(list) do
+      Enum.join(List.duplicate(Dspy.Signature.AdapterPipeline.image_ref_token(), length(list)), " ")
+    else
+      format_value_for_prompt(list)
+    end
+  end
+
+  defp render_value_for_prompt(value), do: format_value_for_prompt(value)
 
   defp fetch_map_key(map, atom_key) when is_map(map) and is_atom(atom_key) do
     cond do
@@ -135,6 +150,7 @@ defmodule Dspy.Signature.Adapters.ChatAdapter do
       true -> :__missing__
     end
   end
+
 
   defp format_value_for_prompt(value) when is_binary(value), do: value
 

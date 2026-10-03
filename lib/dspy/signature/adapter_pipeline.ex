@@ -1,4 +1,6 @@
 defmodule Dspy.Signature.AdapterPipeline do
+  require Logger
+
   @moduledoc """
   Shared utilities for adapter-aware signature prediction modules.
 
@@ -14,6 +16,30 @@ defmodule Dspy.Signature.AdapterPipeline do
   """
 
   alias Dspy.Signature
+
+  # Internal sentinel rendered into prompt text at each image input position.
+  # It is consumed by `merge_media/3` (which splices the real `image_url`
+  # content parts at these positions) and never reaches the wire: backends
+  # such as sglang/Qwen-VL crash on literal image tokens in the prompt text
+  # ("More 'IMAGE' tokens found than corresponding data provided").
+  # Printable (no NUL/control bytes) so JSON logging/transport is safe; the
+  # `<<...>>` shape mirrors upstream Python DSPy's custom-type identifiers.
+  @image_ref "<<DSPY-IMAGE-REF>>"
+
+  @doc false
+  @spec image_ref_token() :: String.t()
+  def image_ref_token, do: @image_ref
+
+  @doc """
+  Strip internal image-ref sentinels from rendered prompt text.
+
+  Used on request paths that bypass `merge_media/3` (e.g. the TwoStep
+  extraction request built from the model's main answer) so the internal
+  token can never reach the wire.
+  """
+  @spec sanitize_prompt(String.t()) :: String.t()
+  def sanitize_prompt(text) when is_binary(text),
+    do: String.replace(text, image_ref_token(), "")
 
   @type adapter :: module()
 
@@ -80,7 +106,9 @@ defmodule Dspy.Signature.AdapterPipeline do
 
   This reproduces the existing Predict/CoT behavior:
   - prompt template via `Signature.to_prompt/3` (with adapter-driven instructions)
-  - placeholder substitution for input fields (including `<attachments>` marker)
+  - placeholder substitution for input fields (including `<attachments>` markers
+    and `image_ref_token/0` sentinels for image inputs, which are spliced into
+    `image_url` content parts by `merge_media/3` before the request is sent)
   """
   @spec legacy_prompt(Signature.t(), map(), list(), adapter(), keyword()) :: String.t()
   def legacy_prompt(%Signature{} = signature, inputs, demos, adapter, opts \\ [])
@@ -88,6 +116,9 @@ defmodule Dspy.Signature.AdapterPipeline do
     prompt_template = Signature.to_prompt(signature, demos, adapter: adapter)
     fill_inputs(prompt_template, signature, inputs)
   end
+
+  defp all_images?(list) when is_list(list),
+    do: list != [] and Enum.all?(list, &match?(%Dspy.Image{}, &1))
 
   defp fill_inputs(prompt_template, %Signature{} = signature, inputs)
        when is_binary(prompt_template) and is_map(inputs) do
@@ -99,14 +130,31 @@ defmodule Dspy.Signature.AdapterPipeline do
         :error ->
           acc
 
-        {:ok, %Dspy.Attachments{}} ->
-          String.replace(acc, "#{field_name}: #{placeholder}", "#{field_name}: <attachments>")
-
         {:ok, value} ->
-          formatted = format_input_value(value)
-          String.replace(acc, "#{field_name}: #{placeholder}", "#{field_name}: #{formatted}")
+          replace_input_value(acc, field_name, placeholder, value)
       end
     end)
+  end
+
+  defp replace_input_value(acc, field_name, placeholder, %Dspy.Attachments{}) do
+    String.replace(acc, "#{field_name}: #{placeholder}", "#{field_name}: <attachments>")
+  end
+
+  defp replace_input_value(acc, field_name, placeholder, %Dspy.Image{}) do
+    String.replace(acc, "#{field_name}: #{placeholder}", "#{field_name}: #{image_ref_token()}")
+  end
+
+  defp replace_input_value(acc, field_name, placeholder, list) when is_list(list) do
+    if all_images?(list) do
+      markers = Enum.join(List.duplicate(image_ref_token(), length(list)), " ")
+      String.replace(acc, "#{field_name}: #{placeholder}", "#{field_name}: #{markers}")
+    else
+      String.replace(acc, "#{field_name}: #{placeholder}", "#{field_name}: #{format_input_value(list)}")
+    end
+  end
+
+  defp replace_input_value(acc, field_name, placeholder, value) do
+    String.replace(acc, "#{field_name}: #{placeholder}", "#{field_name}: #{format_input_value(value)}")
   end
 
   defp fetch_input(inputs, name) when is_map(inputs) and is_atom(name) do
@@ -116,6 +164,7 @@ defmodule Dspy.Signature.AdapterPipeline do
     end
   end
 
+
   defp format_input_value(value) when is_binary(value), do: value
 
   defp format_input_value(value) do
@@ -123,32 +172,41 @@ defmodule Dspy.Signature.AdapterPipeline do
   end
 
   @doc """
-  Merge attachment parts into the request deterministically.
+  Merge media content parts into the request deterministically.
 
-  The attachment parts are appended to the *final user message*.
+  Image parts are spliced inline at the positions of the `image_ref_token/0`
+  sentinels rendered into the prompt text (one sentinel per image, in
+  field/list order), matching the upstream DSPy wire shape: text and
+  `image_url` parts interleaved at field positions, with no marker tokens
+  left in the text. Attachment (`input_file`) parts are appended after the
+  last content part, as before.
 
-  - If the user message `content` is a string, it is converted into a multipart
-    list with an initial `%{"type" => "text", "text" => prompt}` part.
-  - If the content is already a list of parts, attachments are appended.
-
-  Returns `{:error, ...}` for unsupported shapes.
-
-  Note: For compatibility with `Dspy.LM.generate/2`, this function ensures the
-  request contains an atom-keyed `:messages` list even if the adapter returned
-  `%{"messages" => ...}`.
+  Content that carries no sentinels (e.g. hand-built `messages:` overrides)
+  falls back to the historical append-at-end behavior for image parts.
   """
-  @spec merge_attachments(Dspy.LM.request(), [map()]) ::
+  @spec merge_media(Dspy.LM.request(), [map()], [map()]) ::
           {:ok, Dspy.LM.request()} | {:error, term()}
-  def merge_attachments(request, attachment_parts)
-      when is_map(request) and is_list(attachment_parts) do
-    if attachment_parts == [] do
+  def merge_media(request, attachment_parts, image_parts)
+      when is_map(request) and is_list(attachment_parts) and is_list(image_parts) do
+    if attachment_parts == [] and image_parts == [] do
       {:ok, normalize_messages_key(request)}
     else
       with {:ok, {messages, idx}} <- find_target_user_message(request),
-           {:ok, updated_messages} <- merge_parts_into_messages(messages, idx, attachment_parts) do
+           {:ok, updated_messages} <-
+             merge_media_into_messages(messages, idx, attachment_parts, image_parts) do
         {:ok, request |> normalize_messages_key() |> Map.put(:messages, updated_messages)}
       end
     end
+  end
+
+  @doc """
+  Backwards-compatible attachment merge: appends `input_file`-style parts to
+  the end of the target user message content.
+  """
+  @spec merge_attachments(Dspy.LM.request(), [map()]) ::
+          {:ok, Dspy.LM.request()} | {:error, term()}
+  def merge_attachments(request, attachment_parts) do
+    merge_media(request, attachment_parts, [])
   end
 
   defp find_target_user_message(request) when is_map(request) do
@@ -174,24 +232,23 @@ defmodule Dspy.Signature.AdapterPipeline do
     end
   end
 
-  defp merge_parts_into_messages(messages, idx, attachment_parts)
-       when is_list(messages) and is_integer(idx) and is_list(attachment_parts) do
+  defp merge_media_into_messages(messages, idx, attachment_parts, image_parts)
+       when is_list(messages) and is_integer(idx) and is_list(attachment_parts) and
+              is_list(image_parts) do
     msg = Enum.at(messages, idx)
-
-    content =
-      case msg do
-        %{content: c} -> c
-        %{"content" => c} -> c
-        _ -> nil
-      end
+    content = message_content(msg)
 
     new_content =
       cond do
         is_binary(content) ->
-          [%{"type" => "text", "text" => content}] ++ attachment_parts
+          content
+          |> interleave_image_parts(image_parts)
+          |> then(& &1 ++ attachment_parts)
 
         is_list(content) ->
-          content ++ attachment_parts
+          content
+          |> interleave_image_parts_in_list(image_parts)
+          |> then(& &1 ++ attachment_parts)
 
         true ->
           {:error, {:unsupported_user_message_content, content}}
@@ -202,21 +259,98 @@ defmodule Dspy.Signature.AdapterPipeline do
         err
 
       updated ->
-        updated_msg =
-          cond do
-            is_map(msg) and Map.has_key?(msg, :content) ->
-              Map.put(msg, :content, updated)
-
-            is_map(msg) and Map.has_key?(msg, "content") ->
-              Map.put(msg, "content", updated)
-
-            is_map(msg) ->
-              Map.put(msg, :content, updated)
-          end
-
-        {:ok, List.replace_at(messages, idx, updated_msg)}
+        {:ok, replace_at(messages, idx, put_content(msg, updated))}
     end
   end
+
+  # Split a prompt text at the image sentinels and interleave the image parts
+  # at those positions. Without sentinels the text is returned unchanged as a
+  # single text part and the image parts are appended (historical behavior).
+  defp interleave_image_parts(text, image_parts) when is_binary(text) and is_list(image_parts) do
+    chunks = String.split(text, image_ref_token(), global: true)
+
+    cond do
+      # Expected: one chunk per part boundary (length = parts + 1).
+      length(chunks) == length(image_parts) + 1 and image_parts != [] ->
+        interleave_chunks(chunks, image_parts)
+
+      length(chunks) == 1 ->
+        # No sentinels: fallback, append parts after the text.
+        [%{"type" => "text", "text" => text}] ++ image_parts
+
+      true ->
+        # Sentinel count mismatch (e.g. the literal sentinel appeared in user
+        # text without matching image values): strip leftovers, keep it safe.
+        Logger.warning(
+          "Dspy image splice mismatch: #{length(chunks) - 1} sentinel(s) in prompt text but " <>
+            "#{length(image_parts)} image part(s); stripped the sentinels and appended the " <>
+            "image part(s) at the end. Check the :image input fields of the signature."
+        )
+
+        clean = String.replace(text, image_ref_token(), "")
+        [%{"type" => "text", "text" => clean}] ++ image_parts
+    end
+  end
+
+  defp interleave_image_parts_in_list(content, image_parts) when is_list(content) do
+    if Enum.any?(content, &text_part_contains_ref?/1) do
+      content
+      |> Enum.map(fn part ->
+        if text_part_contains_ref?(part) do
+          text = part["text"] || part[:text]
+          interleave_image_parts(text, image_parts)
+        else
+          part
+        end
+      end)
+      |> List.flatten()
+    else
+      content ++ image_parts
+    end
+  end
+
+  defp text_part_contains_ref?(%{"type" => "text", "text" => text}) when is_binary(text),
+    do: String.contains?(text, image_ref_token())
+
+  defp text_part_contains_ref?(%{type: "text", text: text}) when is_binary(text),
+    do: String.contains?(text, image_ref_token())
+
+  defp text_part_contains_ref?(_), do: false
+
+  defp interleave_chunks(chunks, parts) when is_list(chunks) and is_list(parts) do
+    parts
+    |> Enum.with_index()
+    |> Enum.reduce(keep_text_part(Enum.at(chunks, 0)), fn {part, i}, acc ->
+      acc ++ [part] ++ keep_text_part(Enum.at(chunks, i + 1))
+    end)
+  end
+
+  defp keep_text_part(text) when is_binary(text) do
+    if String.trim(text) == "", do: [], else: [%{"type" => "text", "text" => text}]
+  end
+
+  defp message_content(msg) do
+    case msg do
+      %{content: c} -> c
+      %{"content" => c} -> c
+      _ -> nil
+    end
+  end
+
+  defp put_content(msg, updated) do
+    cond do
+      is_map(msg) and Map.has_key?(msg, :content) ->
+        Map.put(msg, :content, updated)
+
+      is_map(msg) and Map.has_key?(msg, "content") ->
+        Map.put(msg, "content", updated)
+
+      true ->
+        Map.put(msg, :content, updated)
+    end
+  end
+
+  defp replace_at(list, idx, value), do: List.replace_at(list, idx, value)
 
   @doc """
   Extract the primary prompt text from a request.
