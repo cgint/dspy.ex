@@ -161,18 +161,7 @@ defmodule Dspy.Prediction do
 
   @impl Access
   def fetch(%__MODULE__{} = prediction, key) do
-    attrs = prediction.attrs
-
-    case Map.fetch(attrs, key) do
-      {:ok, value} ->
-        {:ok, value}
-
-      :error when is_atom(key) ->
-        Map.fetch(attrs, Atom.to_string(key))
-
-      :error ->
-        :error
-    end
+    Dspy.Attrs.fetch(prediction, key)
   end
 
   @impl Access

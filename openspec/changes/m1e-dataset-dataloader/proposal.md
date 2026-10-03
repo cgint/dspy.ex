@@ -253,6 +253,7 @@ Test file: `test/dspy/dataset_dataloader_test.exs` = `acceptance_files`. Rows 31
 | MG1 | `random.ex` | `init_by_array` key words most-significant first | 1 | assertion |
 | MG2 | `random.ex` | seed used without `abs` | 1 | assertion |
 | MG3 | `random.ex` | **shared break:** `randbelow` uses `bit_length(n − 1)` | 2, 3, 3b, 8, 21b | assertion |
+| MG3b | `random.ex` | the same edit as MG3; `randbelow(1)` asks for 0 bits and `getrandbits/2` raises (added 2026-10-03: mutlib `kind` is per mutation) | `sample k=n returns a permutation` | `raise:FunctionClauseError` (the name observed in the run) |
 | MG4 | `random.ex` | shuffle loop runs upward | 2 | assertion |
 | MG5 | `random.ex` | `sample` always takes the pool branch | 3 | assertion |
 | MG6 | `random.ex` | `sample` always takes the set branch | 3 | assertion |
@@ -301,14 +302,19 @@ Test file: `test/dspy/dataset_dataloader_test.exs` = `acceptance_files`. Rows 31
 | MT3 | `data_loader.ex` | `types:` ignored | 30 | assertion |
 | MT4 | `data_loader.ex` | pitfall sentence removed from the `from_csv` docstring | 30c | assertion |
 | MC5 | `test/fixtures/m1e_deviations.json` | drop the E3 entry | 34 | assertion |
-| MX1 | `attrs.ex` (shipped) | **shared break:** string fallback removed | 22, 24, 25a, 25b, 25c, 28 | assertion |
+| MX1 | `attrs.ex` (shipped) | **shared break:** string fallback removed | 22, 25a, 25b, 25c (rows 24, 27, 28 fail by `ArgumentError` → MX1b) | assertion |
+| MX1b | `attrs.ex` (shipped) | the same edit as MX1; under it rows 24, 27 and 28 fail by `ArgumentError`, not assertion (added 2026-10-03, the MG3b pattern) | 24, 27, 28 | `raise:ArgumentError` |
+| MF1 | `example.ex` (shipped) | `Example.fetch/2` (Access) back to an atom-only `Map.fetch(example.attrs, key)`. This is **not** the pre-fix copy, which had a string fallback; it is a break of the caller. Added 2026-10-03 with the H15 follow-up that made `Example.fetch/2` and `Prediction.fetch/2` delegate to `Dspy.Attrs.fetch` | 28 | `raise:ArgumentError` |
+| MF2 | `prediction.ex` (shipped) | the same for `Prediction.fetch/2` | 28 | `raise:ArgumentError` |
 | MX2 | `signature.ex` (shipped) | **caller revert:** `format_fields` back to `Map.get(attrs, field.name, "")` | 25a, 25b | assertion |
 | MX3 | `majority.ex` (shipped) | **caller revert:** map clause back to `Map.has_key?(map, field)` | 27 | `raise:ArgumentError` |
 | MX3b | `majority.ex` (shipped) | dual-key check removed | 27 | assertion |
 | MP1 | `metrics.ex` (shipped) | **caller revert:** `fetch_field!` back to `Map.fetch(attrs, :answer)` | 24 | assertion (Evaluate turns the raise into `failure_score`, verified in H15) |
 | MV1 | `evaluate.ex` (shipped) | save collision compared by term, not `to_string` | 26 | assertion |
 
-**Count (2026-10-03): 57 IDs.** Phase 2 = 49 (MG1–MG7, MC1–MC4, MD1–MD9 with MD2b, MD7b, MD8b and MD9b, ML0–ML10 with ML6b, MB1–MB3, MJ0–MJ4 with MJ2b, MT1–MT4). Phase 3 = 8 (MJ5, MC5, MX1, MX2, MX3, MX3b, MP1, MV1). **Exempt:** rows 5, 31–33 and 35 only. Non-row Random edge tests may stay exempt as "not a contract row", but a test that some mutation kills must be in that mutation's `expect`, never exempted.
+**Count (2026-10-03, after phase 3): 61 IDs.** Phase 2 = 50 (the 49 plus MG3b). Phase 3 = 11 (MJ5, MC5, MX1, MX1b, MX2, MX3, MX3b, MP1, MV1, MF1, MF2; MX1b, MF1 and MF2 were added in phase 3). **Exempt:** rows 5, 31–33 and 35 only. Non-row Random edge tests may stay exempt as "not a contract row", but a test that some mutation kills must be in that mutation's `expect`, never exempted and never only in `also`.
+
+**Row 34 must compute, not list (clarified 2026-10-03).** The generator records, for every loader case, its **input text** and upstream's **outcome** (value, or `{"raises": <type>}`), and the same for the two Dataset cases E5 (uuid present) and E6 (negative size). Row 34 runs our code on each input, collects the `fixture_case`s where our outcome ≠ upstream's, and asserts that set equals the `fixture_case` set of `m1e_deviations.json`. A hard-coded list of expected ids is not acceptable.
 
 **Row 27 kind:** under MX1, row 27 also raises inside `majority`. It goes into MX1's `also` **only if observed**, and MX1's `kind` stays `assertion`. If C2 then reports WRONG-REASON for MX1, the row-27 test is split so that each half is claimed by exactly one kind; `kind: any` is not used.
 

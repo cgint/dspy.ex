@@ -1,0 +1,37 @@
+[
+  {
+    "case_id": "m1e_e2",
+    "fixture_case": "csv/numbers",
+    "upstream": "pandas infers cell types per column (\"2\" -> 2, \"True\" -> True; one missing cell turns an integer column into floats 2 -> 2.0)",
+    "ours": "every CSV cell stays a string; JSON is the typed format",
+    "reason": "E2: upstream's type inference silently corrupts (one missing cell turns a whole integer column into floats) and breaks upstream's own answer_exact_match on numeric answers; declared deviation, governed principle 2026-09-28"
+  },
+  {
+    "case_id": "m1e_e3",
+    "fixture_case": "csv/long_row",
+    "upstream": "a row with more fields than the header is silently shifted into garbage ({'q': 1, 'a': 'EXTRA', '__index_level_0__': 'x'})",
+    "ours": "raises ArgumentError naming the line",
+    "reason": "E3: parity would mean reproducing data corruption; raising is stricter than upstream, not friendlier"
+  },
+  {
+    "case_id": "m1e_e4",
+    "fixture_case": "csv/dup_header",
+    "upstream": "a duplicate header column is silently renamed (the second becomes a.1)",
+    "ours": "raises ArgumentError naming the column",
+    "reason": "E4: upstream renames to a key nobody asked for, so data lands under the wrong name; our save never writes a duplicate header"
+  },
+  {
+    "case_id": "m1e_e5",
+    "fixture_case": "dataset/train",
+    "upstream": "every example gets a random dspy_uuid field (unused upstream; its own TODO) and dspy_* keys are hidden only from len/repr/keys",
+    "ours": "no dspy_uuid; the split name is recorded in Example.metadata[\"dspy_split\"]",
+    "reason": "E5: a random field makes two identical loads compare unequal and, without hidden keys, would leak into inputs/keys, metrics and saved files"
+  },
+  {
+    "case_id": "m1e_e6",
+    "fixture_case": "dataset/train_size_negative",
+    "upstream": "a negative size slices off elements from the end (Python slicing semantics)",
+    "ours": "raises ArgumentError",
+    "reason": "E6: dropping elements from the end is silent data loss; a negative size is a caller error"
+  }
+]

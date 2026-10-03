@@ -14,17 +14,21 @@ implements exactly the phase-2 slice of that table:
                              MT1, MT2, MT3, MT4, MB1, MB2, MB3, MC2, MC3,
                              MC4 (caller reverts + seed fallback)
   phase 2 (shipped H15)    : MD7b (example.ex, expect row 11)
+  phase 3 (consumer rows) : MJ5 (data_loader.ex), MC5 (dataset.ex),
+                             MX1, MX1b, MX2, MX3, MX3b (attrs.ex + data_loader.ex),
+                             MP1 (majority.ex), MV1 (evaluate.ex),
+                             MF1, MF2 (example.ex + prediction.ex)
 
-The `CONTRACT_IDS` set below is a LITERAL copy of the phase-2 scope. `main`
+The `CONTRACT_IDS` set below is a LITERAL copy of the phase-2 + phase-3
+scope. `main`
 FAILS (exit 1) if the set of defined mutation IDs differs from it. This is
 the check that would have caught the 2026-10-06 first attempt, which
 repurposed the MD1–MD4 / MC1 / MB2 IDs for other edits and exempted 33
 tests the contract assigns mutations to.
 
-The consumer-row mutations (MC5, MX1, MX2, MX3, MX3b, MP1, MV1) target test
-rows 20a/b, 22, 24–29, 34 that do not exist in this tree yet (phase 3, per
-handoff-phase2.md rulings 4 and Greta's scope ruling). They are NOT in
-CONTRACT_IDS and must NOT be defined in this harness.
+The consumer-row mutations (MC5, MX1, MX1b, MX2, MX3, MX3b, MP1, MV1, MF1,
+MF2) target test rows 20a/b, 22, 24–29, 34 (phase 3, per handoff-phase2.md
+rulings 4 and Greta's scope ruling) and ARE defined in this harness (phase 3).
 
 Every `also` list starts EMPTY and is filled only from observed failures
 (H15 lesson 2026-10-02); the review checks `also == failed − expect`
@@ -47,6 +51,10 @@ TARGET_LIB = REPO / "lib" / "dspy" / "random.ex"
 TARGET_LOADER = REPO / "lib" / "dspy" / "data_loader.ex"
 TARGET_DATASET = REPO / "lib" / "dspy" / "dataset.ex"
 TARGET_EXAMPLE = REPO / "lib" / "dspy" / "example.ex"
+TARGET_ATTRS = REPO / "lib" / "dspy" / "attrs.ex"
+TARGET_METRICS = REPO / "lib" / "dspy" / "metrics.ex"
+TARGET_MAJORITY = REPO / "lib" / "dspy" / "majority.ex"
+TARGET_EVALUATE = REPO / "lib" / "dspy" / "evaluate.ex"
 
 TESTS = REPO / "test" / "dspy" / "random_test.exs"
 TESTS_PHASE2 = REPO / "test" / "dspy" / "dataset_dataloader_test.exs"
@@ -115,6 +123,23 @@ P2_ROW30 = "row 30: from_csv types: parses integer and float columns via the H12
 P2_ROW30RAISE = "row 30: a bad typed cell raises ArgumentError naming line and column"
 P2_ROW30UNTYPE = "row 30: untyped columns stay strings even when types: is given for others"
 P2_ROW30C = "row 30c: the from_csv docstring names the silent-0 pitfall and types:"
+
+# ---------------------------------------------------------------------------
+# Phase-3 test names (consumer rows)
+# ---------------------------------------------------------------------------
+
+P3_ROW20A = "row 20a: CSV round trip through the shipped save_as_csv keeps the declared per-value map"
+P3_ROW20B = "row 20b: JSON round trip through the shipped save_as_json keeps JSON types"
+P3_ROW22 = "row 22: M1 exit example — from_csv, Dataset, evaluate ChainOfThought with SemanticF1, save_as_json, from_json"
+P3_ROW24 = "row 24: metrics — a loaded CSV scores equal to the same data with atom keys"
+P3_ROW25A = "row 25a: demos, Default adapter — a loaded trainset's request contains every demo value, byte-equal to the atom-keyed request"
+P3_ROW25B = "row 25b: demos, JSONAdapter — a loaded trainset's request contains every demo value, byte-equal to the atom-keyed request"
+P3_ROW25C = "row 25c: demos, ChatAdapter — a loaded trainset's request contains every demo value, byte-equal to the atom-keyed request"
+P3_ROW26 = 'row 26: save writers — a loaded "answer" vs prediction :answer yields example_answer/pred_answer, no duplicate column, CSV and JSON'
+P3_ROW27 = "row 27: majority over string-keyed maps from from_json equals the atom-keyed result; a map with both forms raises"
+P3_ROW28 = "row 28: M1-d judge — SemanticF1.metric/1 on a loaded example gives the same score as on an atom-keyed one, and the judge's request contains the loaded question and response"
+P3_ROW29 = 'row 29: JSON numeric label {"answer": 2} + answer_exact_match raises ArgumentError (parity: upstream ValueError)'
+P3_ROW34 = "row 34: C5 — the case ids in m1e_deviations.json equal the fixture cases where our observed result differs from upstream's"
 
 # ---------------------------------------------------------------------------
 # MJ2b helper: full-function replacement
@@ -217,7 +242,7 @@ MUTATIONS_PHASE1 = [
         old="def randbelow(state, n) when is_integer(n) and n > 0 do\n    do_randbelow(state, n, bit_length(n))\n  end",
         new="def randbelow(state, n) when is_integer(n) and n > 0 do\n    do_randbelow(state, n, bit_length(n - 1))\n  end",
         expect=[T_SHUFFLE, T_SAMPLE, "randrange step 1 matches CPython"],
-        also=["sample k=n returns a permutation", T_RANDBELOW, P2_ROW13, P2_ROW21B, P2_ROW3B2, P2_ROW8],
+        also=["randbelow matches CPython randrange (step 1)", "row 13: prepare_by_seed gives 5 disjoint eval slices and 5 train sets", "row 21b: train_test_split(rows 0..9, 0.7, seed: 0) matches upstream", "row 3b: DataLoader.sample seed 1 and seed 2 match the fixture", "row 8: train/1 seed 0, size 7 over rows 0..9 returns the CPython permutation", "sample k=n returns a permutation"],
         kind="assertion",
         why="shared break: randbelow uses bit_length(n - 1) (contract (c2) MG3)",
     ),
@@ -227,7 +252,7 @@ MUTATIONS_PHASE1 = [
         old="def randbelow(state, n) when is_integer(n) and n > 0 do\n    do_randbelow(state, n, bit_length(n))\n  end",
         new="def randbelow(state, n) when is_integer(n) and n > 0 do\n    do_randbelow(state, n, bit_length(n - 1))\n  end",
         expect=["sample k=n returns a permutation"],
-        also=[T_SHUFFLE, T_SAMPLE, "randrange step 1 matches CPython", T_RANDBELOW, P2_ROW13, P2_ROW21B, P2_ROW3B2, P2_ROW8],
+        also=["randbelow matches CPython randrange (step 1)", "randrange step 1 matches CPython", "row 13: prepare_by_seed gives 5 disjoint eval slices and 5 train sets", "row 21b: train_test_split(rows 0..9, 0.7, seed: 0) matches upstream", "row 3b: DataLoader.sample seed 1 and seed 2 match the fixture", "row 8: train/1 seed 0, size 7 over rows 0..9 returns the CPython permutation", "sample matches CPython for all fixture vectors", "shuffle matches CPython for n=0,1,2,10,100,1000"],
         kind="raise:FunctionClauseError",
         why="shared break, raise path (contract MG3b)",
     ),
@@ -237,7 +262,7 @@ MUTATIONS_PHASE1 = [
         old="      do_shuffle(state, list, len - 1)\n    end\n  end\n\n  defp do_shuffle(state, list, 0), do: {state, list}\n\n  defp do_shuffle(state, list, i) do\n    {state, j} = randbelow(state, i + 1)\n    do_shuffle(state, swap(list, i, j), i - 1)\n  end",
         new="      do_shuffle_upward(state, list, 1)\n    end\n  end\n\n  defp do_shuffle_upward(state, list, i) when i >= length(list), do: {state, list}\n\n  defp do_shuffle_upward(state, list, i) do\n    {state, j} = randbelow(state, i + 1)\n    do_shuffle_upward(state, swap(list, i, j), i + 1)\n  end",
         expect=[T_SHUFFLE],
-        also=[P2_ROW13, P2_ROW21B, P2_ROW8],
+        also=["row 13: prepare_by_seed gives 5 disjoint eval slices and 5 train sets", "row 21b: train_test_split(rows 0..9, 0.7, seed: 0) matches upstream", "row 8: train/1 seed 0, size 7 over rows 0..9 returns the CPython permutation"],
         kind="assertion",
         why="shuffle loop runs upward (contract (c2) MG4)",
     ),
@@ -257,7 +282,7 @@ MUTATIONS_PHASE1 = [
         old="    if n <= setsize(k) do\n      sample_pool(state, population, k, n)\n    else\n      sample_set(state, population, k, n)\n    end",
         new="    if n <= setsize(k)\n      do\n        sample_pool(state, population, k, n)\n      else\n        sample_set(state, population, k, n)\n    end\n    if true\n      do\n        sample_set(state, population, k, n)\n      else\n        _ = sample_pool(state, population, k, n)\n    end",
         expect=[T_SAMPLE],
-        also=[P2_ROW3B, P2_ROW3B2, T_BOUNDARY_21_K5, T_BOUNDARY_85_K6],
+        also=["row 3b: DataLoader.sample seed 1 and seed 2 match the fixture", "row 3b: DataLoader.sample(examples, 3, seed: 0) returns the rows CPython's sample picks", "sample fixture n=21 k=5 seed 2 pins the pool branch at the boundary", "sample fixture n=85 k=6 seed 5 pins the set branch (divergence)"],
         kind="assertion",
         why="sample always takes the set branch (contract (c2) MG6)",
     ),
@@ -267,7 +292,7 @@ MUTATIONS_PHASE1 = [
         old="    if n <= setsize(k) do\n      sample_pool(state, population, k, n)\n    else\n      sample_set(state, population, k, n)\n    end",
         new="    if n < setsize(k) do\n      sample_pool(state, population, k, n)\n    else\n      sample_set(state, population, k, n)\n    end",
         expect=[T_BOUNDARY_21_K5, T_BOUNDARY_85_K6],
-        also=[T_SAMPLE],
+        also=["sample matches CPython for all fixture vectors"],
         kind="assertion",
         why="sample branch off-by-one: n < setsize (contract (c2) MG7, added 2026-10-06)",
     ),
@@ -284,7 +309,7 @@ MUTATIONS_DATASET = [
         old="    ordered =\n      if ds.shuffle do\n        {state, _} = Dspy.Random.seed(seed)\n        {_state, shuffled} = Dspy.Random.shuffle(state, rows)\n        shuffled\n      else\n        rows\n      end",
         new="    :rand.seed(:exsss, {seed, 1, 2})\n    ordered = Enum.shuffle(rows) # MUTATION MC1: :rand + Enum.shuffle",
         expect=[P2_ROW4A, P2_ROW4A2, P2_ROW8],
-        also=[P2_ROW10, P2_ROW11, P2_ROW13, P2_ROW6, P2_ROW7],
+        also=["row 10: shuffle: false keeps row order", "row 11: input_keys as strings and as atoms both give inputs with those keys, on loaded rows", "row 13: prepare_by_seed gives 5 disjoint eval slices and 5 train sets", "row 6: reset_seeds(train_seed: 1) keeps train_size, dev/test seeds and sizes", "row 7: dev and test with identical rows and eval_seed: 7 return the same order"],
         kind="assertion",
         why="caller revert: train/1 shuffles with :rand.seed + Enum.shuffle (contract (c2) MC1)",
     ),
@@ -334,7 +359,7 @@ MUTATIONS_DATASET = [
         old="    limited = take_limited(ordered, size)\n    Enum.map(limited, fn row -> build_example(row, name, ds) end)",
         new="    limited = take_limited(rows, size)\n    _ = ordered\n    Enum.map(limited, fn row -> build_example(row, name, ds) end)",
         expect=[P2_ROW8],
-        also=[P2_ROW13, P2_ROW6, P2_ROW7],
+        also=["row 13: prepare_by_seed gives 5 disjoint eval slices and 5 train sets", "row 6: reset_seeds(train_seed: 1) keeps train_size, dev/test seeds and sizes", "row 7: dev and test with identical rows and eval_seed: 7 return the same order"],
         kind="assertion",
         why="take size before shuffling (contract (c2) MD4)",
     ),
@@ -374,7 +399,7 @@ MUTATIONS_DATASET = [
         old="  defp build_example(%Dspy.Example{} = example, name, ds) do\n    example = %{example | metadata: put_split_name(example.metadata || %{}, name)}\n    apply_input_keys(example, ds.input_keys)\n  end",
         new='  defp build_example(%Dspy.Example{} = example, name, ds) do\n    attrs = Map.merge(example.attrs, %{"dspy_uuid" => :crypto.strong_rand_bytes(4) |> Base.encode16(case: :lower)})\n    example = %{example | attrs: attrs, metadata: put_split_name(example.metadata || %{}, name)}\n    apply_input_keys(example, ds.input_keys)\n  end',
         expect=[P2_ROW12],
-        also=[P2_ROW12B, P2_ROW7, P2_ROW6],
+        also=['row 12b: the split name is in metadata["dspy_split"] and in no attrs key', "row 6: reset_seeds(train_seed: 1) keeps train_size, dev/test seeds and sizes", "row 7: dev and test with identical rows and eval_seed: 7 return the same order"],
         kind="assertion",
         why='adds attrs["dspy_uuid"] from :crypto (contract (c2) MD8)',
     ),
@@ -420,8 +445,8 @@ MUTATIONS_LOADER = [
         file=TARGET_LOADER,
         old='    result =\n      case NimbleCSV.RFC4180.parse_string(content, skip_headers: false) do\n        {:ok, rows} ->\n          rows\n\n        {:error, reason} ->\n          raise ArgumentError,\n                "Dspy.DataLoader.from_csv/2: #{path}: invalid CSV: #{inspect(reason)}"\n\n        rows when is_list(rows) ->\n          rows\n      end\n\n    rows = if is_list(result), do: result, else: Enum.to_list(result)',
         new='      rows =\n        content\n        |> String.split("\\n", trim: true)\n        |> Enum.map(&String.split(&1, ","))',
-        expect=[P2_ROW14C, P2_ROW14D],
-        also=[P2_ROW14E],
+        expect=[P2_ROW14C, P2_ROW14D, P3_ROW20A],
+        also=["row 14e: an empty cell and a quoted empty cell both read as nil", "row 34: C5 — the case ids in m1e_deviations.json equal the fixture cases where our observed result differs from upstream's"],
         kind="assertion",
         why="CSV parsed with String.split instead of NimbleCSV (contract (c2) ML0)",
     ),
@@ -431,7 +456,7 @@ MUTATIONS_LOADER = [
         old="    content = strip_bom(content)\n",
         new="    # MUTATION ML1: BOM not stripped\n    if false, do: strip_bom(content)\n    content = content\n",
         expect=[P2_ROW14A],
-        also=[],
+        also=["row 34: C5 — the case ids in m1e_deviations.json equal the fixture cases where our observed result differs from upstream's"],
         kind="assertion",
         why="BOM not stripped (contract (c2) ML1)",
     ),
@@ -441,7 +466,7 @@ MUTATIONS_LOADER = [
         old='    |> Enum.reject(fn row -> row == [""] end)\n',
         new="    # MUTATION ML2: blank lines no longer rejected\n",
         expect=[P2_ROW14B],
-        also=[],
+        also=["row 34: C5 — the case ids in m1e_deviations.json equal the fixture cases where our observed result differs from upstream's"],
         kind="assertion",
         why="blank lines kept as rows (contract (c2) ML2)",
     ),
@@ -450,8 +475,8 @@ MUTATIONS_LOADER = [
         file=TARGET_LOADER,
         old='      # Normalize empty strings to nil (E2: empty cells read as nil).\n      filled = Enum.map(filled, fn cell -> if cell == "", do: nil, else: cell end)\n',
         new='      filled = filled # MUTATION ML3: "" kept as ""\n',
-        expect=[P2_ROW14E],
-        also=[],
+        expect=[P2_ROW14E, P3_ROW20A],
+        also=["row 34: C5 — the case ids in m1e_deviations.json equal the fixture cases where our observed result differs from upstream's"],
         kind="assertion",
         why='"" kept as "" (contract (c2) ML3)',
     ),
@@ -461,7 +486,7 @@ MUTATIONS_LOADER = [
         old="      filled = pad_row(cells, length(header))\n",
         new="      if length(cells) < length(header) do\n        raise ArgumentError,\n              \"Dspy.DataLoader.from_csv/2: #{path} line #{line}: short row (MUTATION ML4)\"\n      end\n      _ = pad_row(cells, length(header))\n      filled = cells\n",
         expect=[P2_ROW14F],
-        also=[],
+        also=["row 34: C5 — the case ids in m1e_deviations.json equal the fixture cases where our observed result differs from upstream's"],
         kind="raise:Elixir.ArgumentError",
         why="short rows raise instead of being padded (contract (c2) ML4)",
     ),
@@ -471,7 +496,7 @@ MUTATIONS_LOADER = [
         old='      # Normalize empty strings to nil (E2: empty cells read as nil).\n      filled = Enum.map(filled, fn cell -> if cell == "", do: nil, else: cell end)\n',
         new='      filled =\n        Enum.map(filled, fn cell ->\n          if cell == "", do: nil, else: String.trim(cell)\n        end)\n',
         expect=[P2_ROW14G],
-        also=[P2_ROW14F],
+        also=["row 14f: a short row's missing cells are nil", "row 34: C5 — the case ids in m1e_deviations.json equal the fixture cases where our observed result differs from upstream's"],
         kind="assertion",
         why="cells String.trimmed (contract (c2) ML5)",
     ),
@@ -481,7 +506,7 @@ MUTATIONS_LOADER = [
         old='      # Ruling 3: take each field\'s cell by its header index, not zip with the\n      # full row (which pairs selected names with cells in header order).\n      header_index = Map.new(Enum.with_index(header, 0))\n\n      base =\n        Enum.map(columns, fn column ->\n          idx = Map.fetch!(header_index, column)\n          {column, Enum.at(filled, idx)}\n        end)',
         new='      base = Enum.zip(columns, filled) # MUTATION ML6: fields in file order',
         expect=[P2_ROW14H],
-        also=[],
+        also=["row 34: C5 — the case ids in m1e_deviations.json equal the fixture cases where our observed result differs from upstream's"],
         kind="assertion",
         why="fields: subset returned in file order (contract (c2) ML6)",
     ),
@@ -520,8 +545,8 @@ MUTATIONS_LOADER = [
         file=TARGET_LOADER,
         old='      # Ruling 3: take each field\'s cell by its header index, not zip with the\n      # full row (which pairs selected names with cells in header order).\n      header_index = Map.new(Enum.with_index(header, 0))\n\n      base =\n        Enum.map(columns, fn column ->\n          idx = Map.fetch!(header_index, column)\n          {column, Enum.at(filled, idx)}\n        end)',
         new='      # MUTATION ML9: integer-looking cells -> String.to_integer\n      header_index = Map.new(Enum.with_index(header, 0))\n\n      base =\n        Enum.map(columns, fn column ->\n          idx = Map.fetch!(header_index, column)\n          cell = Enum.at(filled, idx)\n          int = String.to_integer(cell)\n          {column, int}\n        end)',
-        expect=[P2_ROW17],
-        also=[P2_ROW11, P2_ROW14A, P2_ROW14B, P2_ROW14C, P2_ROW14D, P2_ROW14E, P2_ROW14F, P2_ROW14G, P2_ROW14H, P2_ROW14J, P2_ROW15B, P2_ROW18, P2_ROW30, P2_ROW30RAISE, P2_ROW30UNTYPE],
+        expect=[P2_ROW17, P3_ROW20A],
+        also=["row 11: input_keys as strings and as atoms both give inputs with those keys, on loaded rows", "row 14a: a leading UTF-8 BOM is stripped", "row 14b: a blank line is skipped", "row 14c: CRLF line endings are accepted", "row 14d: an embedded newline and a double-quote escape survive", "row 14e: an empty cell and a quoted empty cell both read as nil", "row 14f: a short row's missing cells are nil", "row 14g: surrounding whitespace is kept", "row 14h: fields: subset is returned in the given order", "row 14j: input_keys on from_csv", "row 15: a long row in the last position raises too", "row 18: a never-seen header name still makes String.to_existing_atom/1 raise", "row 22: M1 exit example — from_csv, Dataset, evaluate ChainOfThought with SemanticF1, save_as_json, from_json", "row 24: metrics — a loaded CSV scores equal to the same data with atom keys", "row 25a: demos, Default adapter — a loaded trainset's request contains every demo value, byte-equal to the atom-keyed request", "row 25b: demos, JSONAdapter — a loaded trainset's request contains every demo value, byte-equal to the atom-keyed request", "row 25c: demos, ChatAdapter — a loaded trainset's request contains every demo value, byte-equal to the atom-keyed request", 'row 26: save writers — a loaded "answer" vs prediction :answer yields example_answer/pred_answer, no duplicate column, CSV and JSON', "row 28: M1-d judge — SemanticF1.metric/1 on a loaded example gives the same score as on an atom-keyed one, and the judge's request contains the loaded question and response", "row 30: a bad typed cell raises ArgumentError naming line and column", "row 30: from_csv types: parses integer and float columns via the H12 NumberParser", "row 30: untyped columns stay strings even when types: is given for others", "row 34: C5 — the case ids in m1e_deviations.json equal the fixture cases where our observed result differs from upstream's"],
         kind="raise:Elixir.ArgumentError",
         why="integer-looking cells -> String.to_integer (contract (c2) ML9)",
     ),
@@ -531,7 +556,7 @@ MUTATIONS_LOADER = [
         old='      # Ruling 3: take each field\'s cell by its header index, not zip with the\n      # full row (which pairs selected names with cells in header order).\n      header_index = Map.new(Enum.with_index(header, 0))\n\n      base =\n        Enum.map(columns, fn column ->\n          idx = Map.fetch!(header_index, column)\n          {column, Enum.at(filled, idx)}\n        end)',
         new='      # MUTATION ML10: keys via String.to_atom\n      header_index = Map.new(Enum.with_index(header, 0))\n\n      base =\n        Enum.map(columns, fn column ->\n          idx = Map.fetch!(header_index, column)\n          {String.to_atom(column), Enum.at(filled, idx)}\n        end)',
         expect=[P2_ROW18],
-        also=[P2_ROW11, P2_ROW14A, P2_ROW14B, P2_ROW14C, P2_ROW14D, P2_ROW14E, P2_ROW14F, P2_ROW14G, P2_ROW14H, P2_ROW14J, P2_ROW17, P2_ROW30, P2_ROW30RAISE, P2_ROW30UNTYPE],
+        also=["row 11: input_keys as strings and as atoms both give inputs with those keys, on loaded rows", "row 14a: a leading UTF-8 BOM is stripped", "row 14b: a blank line is skipped", "row 14c: CRLF line endings are accepted", "row 14d: an embedded newline and a double-quote escape survive", "row 14e: an empty cell and a quoted empty cell both read as nil", "row 14f: a short row's missing cells are nil", "row 14g: surrounding whitespace is kept", "row 14h: fields: subset is returned in the given order", "row 14j: input_keys on from_csv", "row 17: CSV values stay strings even when they look like numbers or booleans", "row 20a: CSV round trip through the shipped save_as_csv keeps the declared per-value map", "row 24: metrics — a loaded CSV scores equal to the same data with atom keys", "row 25a: demos, Default adapter — a loaded trainset's request contains every demo value, byte-equal to the atom-keyed request", "row 25b: demos, JSONAdapter — a loaded trainset's request contains every demo value, byte-equal to the atom-keyed request", "row 25c: demos, ChatAdapter — a loaded trainset's request contains every demo value, byte-equal to the atom-keyed request", 'row 26: save writers — a loaded "answer" vs prediction :answer yields example_answer/pred_answer, no duplicate column, CSV and JSON', "row 28: M1-d judge — SemanticF1.metric/1 on a loaded example gives the same score as on an atom-keyed one, and the judge's request contains the loaded question and response", "row 30: a bad typed cell raises ArgumentError naming line and column", "row 30: from_csv types: parses integer and float columns via the H12 NumberParser", "row 30: untyped columns stay strings even when types: is given for others", "row 34: C5 — the case ids in m1e_deviations.json equal the fixture cases where our observed result differs from upstream's"],
         kind="assertion",
         why="keys via String.to_atom (contract (c2) ML10)",
     ),
@@ -541,7 +566,7 @@ MUTATIONS_LOADER = [
         old="  defp build_example(row_map, input_keys) when is_map(row_map) do\n    example = Example.new(row_map)\n    if input_keys == [], do: example, else: Example.with_inputs(example, input_keys)\n  end",
         new="  defp build_example(row_map, _input_keys) when is_map(row_map) do\n    Example.new(row_map) # MUTATION MB1: no input_keys\n  end",
         expect=[P2_ROW14J],
-        also=[P2_ROW19G],
+        also=["row 19g: input_keys on from_json"],
         kind="assertion",
         why="caller revert: from_csv without shared builder input_keys (contract (c2) MB1)",
     ),
@@ -571,7 +596,7 @@ MUTATIONS_LOADER = [
         old="      base = Enum.map(resolved, fn column -> {column, Map.get(record, column, nil)} end)",
         new='      base = Enum.map(resolved, fn column ->\n        v = Map.get(record, column, nil)\n        filled = if is_nil(v), do: "", else: v\n        {column, filled}\n      end)',
         expect=[P2_ROW19E],
-        also=[P2_ROW19C],
+        also=["row 19c: keys missing in some records are filled with nil (union of keys)", "row 20b: JSON round trip through the shipped save_as_json keeps JSON types", "row 34: C5 — the case ids in m1e_deviations.json equal the fixture cases where our observed result differs from upstream's"],
         kind="assertion",
         why='null -> "" (contract (c2) MJ0)',
     ),
@@ -580,8 +605,8 @@ MUTATIONS_LOADER = [
         file=TARGET_LOADER,
         old="    records = decode_json_records!(content, path)\n    columns = union_keys(records)\n    resolved = resolve_fields!(columns, fields, path)\n\n    Enum.map(records, fn record ->\n      base = Enum.map(resolved, fn column -> {column, Map.get(record, column, nil)} end)\n      build_example(Map.new(base), input_keys)\n    end)",
         new="    records = decode_json_records!(content, path)\n    columns = union_keys(records)\n    resolved = resolve_fields!(columns, fields, path)\n\n    # MUTATION MJ1: union-of-keys fill dropped\n    Enum.map(records, fn record ->\n      base = Enum.filter(Map.to_list(record), fn {column, _} -> column in resolved end)\n      build_example(Map.new(base), input_keys)\n    end)",
-        expect=[P2_ROW19C],
-        also=[],
+        expect=[P2_ROW19C, P3_ROW20B],
+        also=["row 34: C5 — the case ids in m1e_deviations.json equal the fixture cases where our observed result differs from upstream's"],
         kind="assertion",
         why="union-of-keys fill dropped (contract (c2) MJ1)",
     ),
@@ -591,7 +616,7 @@ MUTATIONS_LOADER = [
         old=MJ2B_OLD,
         new="  defp decode_json_records!(content, path) do\n    # MUTATION MJ2: always JSON array (JSONL fails)\n    case Jason.decode(content) do\n      {:ok, list} when is_list(list) ->\n        list\n      {:ok, other} ->\n        raise ArgumentError,\n              \"Dspy.DataLoader.from_json/2: #{path}: top-level JSON must be an array of objects, got #{inspect(other)}\"\n      {:error, reason} ->\n        raise ArgumentError,\n              \"Dspy.DataLoader.from_json/2: #{path}: invalid JSON: #{inspect(reason)}\"\n    end\n  end",
         expect=[P2_ROW19B],
-        also=[P2_ROW18, P2_ROW19C, P2_ROW19D, P2_ROW19E, P2_ROW19G, P2_ROW21, P2_ROW21B, P2_ROW3B, P2_ROW3B2, P2_ROW4B, P2_ROW4C],
+        also=["row 18: a never-seen header name still makes String.to_existing_atom/1 raise", "row 19c: keys missing in some records are filled with nil (union of keys)", "row 19d: nested objects and lists are kept with string keys", "row 19e: JSON null reads as nil", "row 19g: input_keys on from_json", "row 21: train_test_split sizes — 0.75 of 10 -> 7/3; int 3 -> 3/7; overflow raises; 1.0 raises", "row 21b: train_test_split(rows 0..9, 0.7, seed: 0) matches upstream", 'row 29: JSON numeric label {"answer": 2} + answer_exact_match raises ArgumentError (parity: upstream ValueError)', "row 34: C5 — the case ids in m1e_deviations.json equal the fixture cases where our observed result differs from upstream's", "row 3b: DataLoader.sample seed 1 and seed 2 match the fixture", "row 3b: DataLoader.sample(examples, 3, seed: 0) returns the rows CPython's sample picks", "row 4b: DataLoader.sample/3 leaves the caller's :rand state unchanged (seeded, unseeded, seed: nil)", "row 4c: train_test_split/2 leaves the caller's :rand state unchanged (seeded, unseeded, seed: nil)"],
         kind="raise:Elixir.ArgumentError",
         why="input always parsed as JSON array (JSONL fails) (contract (c2) MJ2)",
     ),
@@ -601,7 +626,7 @@ MUTATIONS_LOADER = [
         old=MJ2B_OLD,
         new=MJ2B_NEW,
         expect=[P2_ROW19A],
-        also=[],
+        also=["row 20b: JSON round trip through the shipped save_as_json keeps JSON types", "row 22: M1 exit example — from_csv, Dataset, evaluate ChainOfThought with SemanticF1, save_as_json, from_json", 'row 26: save writers — a loaded "answer" vs prediction :answer yields example_answer/pred_answer, no duplicate column, CSV and JSON', "row 27: majority over string-keyed maps from from_json equals the atom-keyed result; a map with both forms raises", "row 34: C5 — the case ids in m1e_deviations.json equal the fixture cases where our observed result differs from upstream's"],
         kind="raise:Elixir.ArgumentError",
         why="input always parsed as JSONL (an array fails) (contract (c2) MJ2b)",
     ),
@@ -611,7 +636,7 @@ MUTATIONS_LOADER = [
         old="      base = Enum.map(resolved, fn column -> {column, Map.get(record, column, nil)} end)",
         new="      base = Enum.map(resolved, fn column ->\n        v = Map.get(record, column, nil)\n        flat = if is_map(v) or is_list(v), do: inspect(v), else: v # MUTATION MJ3\n        {column, flat}\n      end)",
         expect=[P2_ROW19D],
-        also=[],
+        also=["row 34: C5 — the case ids in m1e_deviations.json equal the fixture cases where our observed result differs from upstream's"],
         kind="assertion",
         why="nested objects flattened to strings (contract (c2) MJ3)",
     ),
@@ -621,7 +646,7 @@ MUTATIONS_LOADER = [
         old='        content\n        |> String.split("\\n")\n        |> Enum.with_index(1)\n        |> Enum.reject(fn {line, _i} -> String.trim(line) == "" end)\n        |> Enum.map(fn {line, i} ->',
         new='        content\n        |> String.split("\\n")\n        |> Enum.with_index(1)\n        |> Enum.reject(fn {line, _i} -> String.trim(line) == "" end)\n        |> Enum.reject(fn {line, _i} ->\n          case Jason.decode(line) do\n            {:ok, map} when is_map(map) -> false\n            _ -> true # MUTATION MJ4: non-object record skipped\n          end\n        end)\n        |> Enum.map(fn {line, i} ->',
         expect=[P2_ROW19F],
-        also=[],
+        also=["row 34: C5 — the case ids in m1e_deviations.json equal the fixture cases where our observed result differs from upstream's"],
         kind="assertion",
         why="non-object record skipped (contract (c2) MJ4)",
     ),
@@ -631,7 +656,7 @@ MUTATIONS_LOADER = [
         old="    trunc(n * size)",
         new="    round(n * size) # MUTATION MT1: round instead of truncation",
         expect=[P2_ROW21],
-        also=[P2_ROW21B],
+        also=["row 21b: train_test_split(rows 0..9, 0.7, seed: 0) matches upstream"],
         kind="assertion",
         why="round instead of truncation (contract (c2) MT1)",
     ),
@@ -651,7 +676,7 @@ MUTATIONS_LOADER = [
         old="    types = Keyword.get(opts, :types, %{})",
         new="    types = Keyword.get(opts, :types, %{})\n    types = Map.new(Enum.filter(Map.to_list(types), fn {_k, _v} -> false end)) # MUTATION MT3: types ignored",
         expect=[P2_ROW30, P2_ROW30UNTYPE],
-        also=[P2_ROW30RAISE],
+        also=["row 30: a bad typed cell raises ArgumentError naming line and column"],
         kind="assertion",
         why="types: ignored (contract (c2) MT3)",
     ),
@@ -714,6 +739,228 @@ MUTATIONS_SHIPPED = [
     ),
 ]
 
+
+# ---------------------------------------------------------------------------
+# Phase-3 mutations — consumer rows (M1-e phase 3)
+# ---------------------------------------------------------------------------
+
+MUTATIONS_PHASE3 = [
+    # MJ5: data_loader.ex from_json turns JSON numbers into strings.
+    # In decode_json_records!, after decoding each record, string-ify all
+    # numeric values so that an integer or float becomes to_string(v).
+    mutlib.Mutation(
+        id="MJ5",
+        file=TARGET_LOADER,
+        old='''  defp decode_json_records!(content, path) do
+    trimmed = String.trim_leading(content)
+
+    cond do
+      String.starts_with?(trimmed, "[") ->
+        case Jason.decode(content) do
+          {:ok, list} when is_list(list) ->
+            list
+
+          {:ok, other} ->
+            raise ArgumentError,
+                  "Dspy.DataLoader.from_json/2: #{path}: top-level JSON must be an array of objects, got #{inspect(other)}"
+
+          {:error, reason} ->
+            raise ArgumentError,
+                  "Dspy.DataLoader.from_json/2: #{path}: invalid JSON: #{inspect(reason)}"
+        end
+
+      true ->
+        content
+        |> String.split("\\n")
+        |> Enum.with_index(1)
+        |> Enum.reject(fn {line, _i} -> String.trim(line) == "" end)
+        |> Enum.map(fn {line, i} ->
+          case Jason.decode(line) do
+            {:ok, map} when is_map(map) ->
+              map
+
+            {:ok, other} ->
+              raise ArgumentError,
+                    "Dspy.DataLoader.from_json/2: #{path} line #{i}: record is not a JSON object (got #{inspect(other)})"
+
+            {:error, reason} ->
+              raise ArgumentError,
+                    "Dspy.DataLoader.from_json/2: #{path} line #{i}: invalid JSON: #{inspect(reason)}"
+          end
+        end)
+    end
+  end
+''',
+        new='''  defp mj5_stringify(record) do
+    if is_map(record) do
+      Map.new(record, fn {k, v} ->
+        sv = if is_number(v), do: to_string(v), else: v
+        {k, sv}
+      end)
+    else
+      record
+    end
+  end
+
+  defp decode_json_records!(content, path) do
+    trimmed = String.trim_leading(content)
+
+    cond do
+      String.starts_with?(trimmed, "[") ->
+        case Jason.decode(content) do
+          {:ok, list} when is_list(list) ->
+            # MUTATION MJ5: string-ify all top-level JSON numbers (array branch)
+            Enum.map(list, &mj5_stringify/1)
+
+          {:ok, other} ->
+            raise ArgumentError,
+                  "Dspy.DataLoader.from_json/2: #{path}: top-level JSON must be an array of objects, got #{inspect(other)}"
+
+          {:error, reason} ->
+            raise ArgumentError,
+                  "Dspy.DataLoader.from_json/2: #{path}: invalid JSON: #{inspect(reason)}"
+        end
+
+      true ->
+        content
+        |> String.split("\\n")
+        |> Enum.with_index(1)
+        |> Enum.reject(fn {line, _i} -> String.trim(line) == "" end)
+        |> Enum.map(fn {line, i} ->
+          case Jason.decode(line) do
+            {:ok, map} when is_map(map) ->
+              # MUTATION MJ5: string-ify all top-level JSON numbers (JSONL branch)
+              mj5_stringify(map)
+
+            {:ok, other} ->
+              raise ArgumentError,
+                    "Dspy.DataLoader.from_json/2: #{path} line #{i}: record is not a JSON object (got #{inspect(other)})"
+
+            {:error, reason} ->
+              raise ArgumentError,
+                    "Dspy.DataLoader.from_json/2: #{path} line #{i}: invalid JSON: #{inspect(reason)}"
+          end
+        end)
+    end
+  end
+''',
+        expect=[P3_ROW20B, P3_ROW29],
+        also=["row 19a: a JSON array of objects loads", "row 19b: JSON Lines with a blank line loads", "row 19c: keys missing in some records are filled with nil (union of keys)", "row 22: M1 exit example — from_csv, Dataset, evaluate ChainOfThought with SemanticF1, save_as_json, from_json", "row 34: C5 — the case ids in m1e_deviations.json equal the fixture cases where our observed result differs from upstream's"],
+        kind="assertion",
+        why="from_json turns JSON numbers into strings (contract (c2) MJ5)",
+    ),
+    # MC5: m1e_deviations.json drops the m1e_e3 entry.
+    mutlib.Mutation(
+        id="MC5",
+        file=REPO / "test" / "fixtures" / "m1e_deviations.json",
+        old='"case_id": "m1e_e3"',
+        new='"case_id": "m1e_e3_REMOVED"',
+        expect=[P3_ROW34],
+        also=[],
+        kind="assertion",
+        why="m1e_deviations.json drops the m1e_e3 entry (contract (c2) MC5)",
+    ),
+    # MX1: attrs.ex shared break.
+    mutlib.Mutation(
+        id="MX1",
+        file=TARGET_ATTRS,
+        old="  defp existing_key(attrs, key) when is_atom(key) do\n    cond do\n      Map.has_key?(attrs, key) -> key\n      Map.has_key?(attrs, Atom.to_string(key)) -> Atom.to_string(key)\n      true -> nil\n    end\n  end",
+        new="  defp existing_key(attrs, key) when is_atom(key) do\n    # MUTATION MX1: string fallback removed\n    if Map.has_key?(attrs, key), do: key, else: nil\n  end",
+        expect=[P3_ROW22, P3_ROW25A, P3_ROW25B, P3_ROW25C],
+        also=["row 24: metrics — a loaded CSV scores equal to the same data with atom keys", "row 27: majority over string-keyed maps from from_json equals the atom-keyed result; a map with both forms raises", "row 28: M1-d judge — SemanticF1.metric/1 on a loaded example gives the same score as on an atom-keyed one, and the judge's request contains the loaded question and response"],
+        kind="assertion",
+        why="attrs.ex shared break: string fallback removed (contract (c2) MX1)",
+    ),
+    # MX1b: same edit as MX1 (the MG3b pattern).
+    mutlib.Mutation(
+        id="MX1b",
+        file=TARGET_ATTRS,
+        old="  defp existing_key(attrs, key) when is_atom(key) do\n    cond do\n      Map.has_key?(attrs, key) -> key\n      Map.has_key?(attrs, Atom.to_string(key)) -> Atom.to_string(key)\n      true -> nil\n    end\n  end",
+        new="  defp existing_key(attrs, key) when is_atom(key) do\n    # MUTATION MX1: string fallback removed\n    if Map.has_key?(attrs, key), do: key, else: nil\n  end",
+        expect=[P3_ROW24, P3_ROW27, P3_ROW28],
+        also=["row 22: M1 exit example — from_csv, Dataset, evaluate ChainOfThought with SemanticF1, save_as_json, from_json", "row 25a: demos, Default adapter — a loaded trainset's request contains every demo value, byte-equal to the atom-keyed request", "row 25b: demos, JSONAdapter — a loaded trainset's request contains every demo value, byte-equal to the atom-keyed request", "row 25c: demos, ChatAdapter — a loaded trainset's request contains every demo value, byte-equal to the atom-keyed request"],
+        kind="raise:ArgumentError",
+        why="attrs.ex shared break, raise path: rows 24, 27, 28 fail by ArgumentError (contract (c2) MX1b)",
+    ),
+    # MX2: signature.ex caller revert.
+    mutlib.Mutation(
+        id="MX2",
+        file=REPO / "lib" / "dspy" / "signature.ex",
+        old="      value = Dspy.Attrs.get(example, field.name, \"\")",
+        new="      value = Map.get(Map.get(example, :attrs, %{}), field.name, \"\")  # MUTATION MX2: caller revert",
+        expect=[P3_ROW25A, P3_ROW25B],
+        also=[],
+        kind="assertion",
+        why="signature.ex caller revert: format_fields back to Map.get (contract (c2) MX2)",
+    ),
+    # MX3: majority.ex caller revert.
+    mutlib.Mutation(
+        id="MX3",
+        file=TARGET_MAJORITY,
+        old="    case Dspy.Attrs.fetch(map, field) do\n      {:ok, value} -> {:ok, value}\n      :error -> {:missing, nil}\n    end\n  end\n\n  defp to_prediction(%Prediction{} = prediction), do: prediction",
+        new="    if Map.has_key?(map, field) do\n      {:ok, Map.fetch!(map, field)} # MUTATION MX3: caller revert\n    else\n      {:missing, nil}\n    end\n  end\n\n  defp to_prediction(%Prediction{} = prediction), do: prediction",
+        expect=[P3_ROW27],
+        also=[],
+        kind="raise:Elixir.ArgumentError",
+        why="majority.ex caller revert: map clause back to Map.has_key? (contract (c2) MX3)",
+    ),
+    # MX3b: majority.ex dual-key check removed.
+    mutlib.Mutation(
+        id="MX3b",
+        file=TARGET_MAJORITY,
+        old="    if is_atom(field) and Map.has_key?(map, field) and Map.has_key?(map, to_string(field)) do\n      raise ArgumentError,\n            \"Dspy.majority/2: completion #{inspect(map)} holds both #{inspect(field)} and \" <>\n              inspect(to_string(field)) <> \" — pass exactly one form\"\n    end\n",
+        new="    # MUTATION MX3b: dual-key check removed\n",
+        expect=[P3_ROW27],
+        also=[],
+        kind="assertion",
+        why="majority.ex dual-key check removed (contract (c2) MX3b)",
+    ),
+    # MP1: metrics.ex caller revert.
+    mutlib.Mutation(
+        id="MP1",
+        file=TARGET_METRICS,
+        old="  defp fetch_field!(%{attrs: attrs}, label) do\n    case Dspy.Attrs.fetch(attrs, :answer) do\n      {:ok, value} -> value\n      :error -> raise ArgumentError, \"#{label}[:answer] is missing\"\n    end\n  end",
+        new="  defp fetch_field!(%{attrs: attrs}, label) do\n    case Map.fetch(attrs, :answer) do # MUTATION MP1: caller revert\n      {:ok, value} -> value\n      :error -> raise ArgumentError, \"#{label}[:answer] is missing\"\n    end\n  end",
+        expect=[P3_ROW24],
+        also=[],
+        kind="raise:Elixir.ArgumentError",
+        why="metrics.ex caller revert: fetch_field! back to Map.fetch (contract (c2) MP1)",
+    ),
+    # MV1: evaluate.ex save collision compared by term.
+    mutlib.Mutation(
+        id="MV1",
+        file=TARGET_EVALUATE,
+        old="          if to_string(k) in pr_string_keys do\n            {\"example_\" <> to_string(k), :example, k}\n          else\n            {k, :example, k}\n          end",
+        new="          if k in pr_keys do # MUTATION MV1: term comparison\n            {\"example_\" <> to_string(k), :example, k}\n          else\n            {k, :example, k}\n          end",
+        expect=[P3_ROW26],
+        also=["row 20a: CSV round trip through the shipped save_as_csv keeps the declared per-value map", "row 20b: JSON round trip through the shipped save_as_json keeps JSON types", "row 22: M1 exit example — from_csv, Dataset, evaluate ChainOfThought with SemanticF1, save_as_json, from_json"],
+        kind="assertion",
+        why="evaluate.ex save collision compared by term, not to_string (contract (c2) MV1)",
+    ),
+    # MF1: example.ex caller break — atom-only Map.fetch.
+    mutlib.Mutation(
+        id="MF1",
+        file=TARGET_EXAMPLE,
+        old="  def fetch(%__MODULE__{} = example, key) do\n    Dspy.Attrs.fetch(example, key)\n  end",
+        new="  def fetch(%__MODULE__{} = example, key) do\n    # MUTATION MF1: atom-only Map.fetch (caller break)\n    attrs = example.attrs\n\n    case Map.fetch(attrs, key) do\n      {:ok, value} -> {:ok, value}\n      :error -> :error\n    end\n  end",
+        expect=[P3_ROW28],
+        also=[],
+        kind="raise:Elixir.ArgumentError",
+        why="example.ex caller break: fetch/2 is an atom-only Map.fetch, not a revert (the pre-fix copy had a string fallback) (contract (c2) MF1)",
+    ),
+    # MF2: prediction.ex caller break — atom-only Map.fetch.
+    mutlib.Mutation(
+        id="MF2",
+        file=REPO / "lib" / "dspy" / "prediction.ex",
+        old="  def fetch(%__MODULE__{} = prediction, key) do\n    Dspy.Attrs.fetch(prediction, key)\n  end",
+        new="  def fetch(%__MODULE__{} = prediction, key) do\n    # MUTATION MF2: atom-only Map.fetch (caller break)\n    attrs = prediction.attrs\n\n    case Map.fetch(attrs, key) do\n      {:ok, value} -> {:ok, value}\n      :error -> :error\n    end\n  end",
+        expect=[P3_ROW28],
+        also=[],
+        kind="raise:Elixir.ArgumentError",
+        why="prediction.ex caller break: fetch/2 is an atom-only Map.fetch, not a revert (contract (c2) MF2)",
+    ),
+]
+
 # ---------------------------------------------------------------------------
 # Contract (c2) scope bookkeeping
 # ---------------------------------------------------------------------------
@@ -728,13 +975,14 @@ CONTRACT_IDS = {
     "MT1", "MT2", "MT3", "MT4",
     "MB1", "MB2", "MB3",
     "MD7b",
+    "MC5", "MX1", "MX1b", "MX2", "MX3", "MX3b", "MP1", "MV1", "MF1", "MF2",
 }
 
-CONTRACT_NOT_IN_PHASE2 = {"MC5", "MX1", "MX2", "MX3", "MX3b", "MP1", "MV1"}
+CONTRACT_NOT_IN_PHASE2 = set()
 
 
 def main() -> int:
-    all_mutations = MUTATIONS_PHASE1 + MUTATIONS_DATASET + MUTATIONS_LOADER + MUTATIONS_SHIPPED
+    all_mutations = MUTATIONS_PHASE1 + MUTATIONS_DATASET + MUTATIONS_LOADER + MUTATIONS_SHIPPED + MUTATIONS_PHASE3
     defined_ids = [m.id for m in all_mutations]
 
     missing = CONTRACT_IDS - set(defined_ids)
@@ -796,7 +1044,7 @@ def main() -> int:
         root=REPO,
         exempt=all_exempt,
         report_path=REPO / "plan" / "research" / "pi_handoffs" / "m1e"
-        / "mutation_report_phase2.json",
+        / "mutation_report_phase3.json",
         base_green=True,
     )
     return harness.run()

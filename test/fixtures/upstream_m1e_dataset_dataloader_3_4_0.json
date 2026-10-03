@@ -2,7 +2,7 @@
   "_meta": {
     "source": "CPython 3.12.12 + dspy 3.4.0b1 (datasets.load_dataset-backed loaders)",
     "python": "3.12.12 (main, Feb 12 2026, 00:42:34) [Clang 21.1.4 ]",
-    "generated": "2026-10-03T00:14:00.270824+00:00",
+    "generated": "2026-10-03T17:08:48.883034+00:00",
     "description": "M1-e phase 2 golden: CPython random vectors and upstream DSPy 3.4.0 DataLoader loader outputs. Every value computed at generation time; see gen_m1e_dataset_dataloader_golden.py."
   },
   "sample": {
@@ -158,140 +158,174 @@
     }
   },
   "csv": {
-    "numbers": [
-      {
-        "q": "x",
-        "n": 2,
-        "f": 1.5,
-        "b": true
-      },
-      {
-        "q": "y",
-        "n": 3,
-        "f": 2.0,
-        "b": false
-      }
-    ],
-    "empty_cell_plus_quoted_empty": [
-      {
-        "q": "x",
-        "a": null
-      },
-      {
-        "q": "y",
-        "a": null
-      }
-    ],
-    "short_row": [
-      {
-        "q": "x",
-        "a": null
-      },
-      {
-        "q": "y",
-        "a": 2.0
-      }
-    ],
-    "long_row": [
-      {
-        "q": 1,
-        "a": "EXTRA",
-        "__index_level_0__": "x"
-      }
-    ],
-    "blank_line": [
-      {
-        "q": "x",
-        "a": 1
-      },
-      {
-        "q": "y",
-        "a": 2
-      }
-    ],
-    "dup_header": [
-      {
-        "a": 1,
-        "a.1": 2
-      }
-    ],
-    "bom": [
-      {
-        "q": "x",
-        "a": 1
-      }
-    ],
-    "crlf_plus_embedded_newline": [
-      {
-        "q": "l1\nl2",
-        "a": "say \"hi\""
-      }
-    ],
-    "fields_subset_order": [
-      {
-        "a": 1,
-        "q": "x"
-      }
-    ],
-    "whitespace": [
-      {
-        "q": " x ",
-        "a": " y "
-      }
-    ],
-    "unknown_field": "RAISE:KeyError"
+    "numbers": {
+      "value": [
+        {
+          "q": "x",
+          "n": 2,
+          "f": 1.5,
+          "b": true
+        },
+        {
+          "q": "y",
+          "n": 3,
+          "f": 2.0,
+          "b": false
+        }
+      ]
+    },
+    "empty_cell_plus_quoted_empty": {
+      "value": [
+        {
+          "q": "x",
+          "a": null
+        },
+        {
+          "q": "y",
+          "a": null
+        }
+      ]
+    },
+    "short_row": {
+      "value": [
+        {
+          "q": "x",
+          "a": null
+        },
+        {
+          "q": "y",
+          "a": "z"
+        }
+      ]
+    },
+    "long_row": {
+      "value": [
+        {
+          "q": 1,
+          "a": "EXTRA",
+          "__index_level_0__": "x"
+        }
+      ]
+    },
+    "blank_line": {
+      "value": [
+        {
+          "q": "x",
+          "a": "y"
+        },
+        {
+          "q": "z",
+          "a": "w"
+        }
+      ]
+    },
+    "dup_header": {
+      "value": [
+        {
+          "a": 1,
+          "a.1": 2
+        }
+      ]
+    },
+    "bom": {
+      "value": [
+        {
+          "q": "x",
+          "a": "y"
+        }
+      ]
+    },
+    "crlf_plus_embedded_newline": {
+      "value": [
+        {
+          "q": "l1\nl2",
+          "a": "say \"hi\""
+        }
+      ]
+    },
+    "fields_subset_order": {
+      "value": [
+        {
+          "a": "y",
+          "q": "x"
+        }
+      ]
+    },
+    "whitespace": {
+      "value": [
+        {
+          "q": " x ",
+          "a": " y "
+        }
+      ]
+    },
+    "unknown_field": {
+      "raises": "KeyError"
+    }
   },
   "json": {
-    "array": [
-      {
-        "q": "x",
-        "a": 1
-      },
-      {
-        "q": "y",
-        "a": 2
-      }
-    ],
-    "jsonl": [
-      {
-        "q": "x",
-        "a": 1
-      },
-      {
-        "q": "y",
-        "a": 2
-      }
-    ],
-    "jsonl_union_keys": [
-      {
-        "q": "x",
-        "a": 1,
-        "b": null
-      },
-      {
-        "q": "y",
-        "a": null,
-        "b": true
-      }
-    ],
-    "jsonl_nested": [
-      {
-        "q": "x",
-        "m": {
-          "k": [
-            1,
-            2
-          ]
+    "array": {
+      "value": [
+        {
+          "q": "x",
+          "a": 1
+        },
+        {
+          "q": "y",
+          "a": 2
         }
-      }
-    ],
-    "jsonl_non_object": "RAISE:DatasetGenerationError",
-    "json_null": [
-      {
-        "q": "x",
-        "a": null
-      }
-    ]
+      ]
+    },
+    "jsonl": {
+      "value": [
+        {
+          "q": "x",
+          "a": 1
+        },
+        {
+          "q": "y",
+          "a": 2
+        }
+      ]
+    },
+    "jsonl_union_keys": {
+      "value": [
+        {
+          "q": "x",
+          "a": 1,
+          "b": null
+        },
+        {
+          "q": "y",
+          "a": null,
+          "b": true
+        }
+      ]
+    },
+    "jsonl_nested": {
+      "value": [
+        {
+          "q": "x",
+          "m": {
+            "k": [
+              1,
+              2
+            ]
+          }
+        }
+      ]
+    },
+    "jsonl_non_object": {
+      "raises": "DatasetGenerationError"
+    },
+    "json_null": {
+      "value": [
+        {
+          "q": "x",
+          "a": null
+        }
+      ]
+    }
   },
   "train_test_split": {
     "n10_frac07_seed0": {
@@ -357,6 +391,414 @@
         "1",
         "2"
       ]
+    }
+  },
+  "loader_inputs": {
+    "csv": {
+      "numbers": {
+        "text": "q,n,f,b\nx,2,1.5,True\ny,3,2.0,False\n",
+        "options": {},
+        "upstream": {
+          "value": [
+            {
+              "q": "x",
+              "n": 2,
+              "f": 1.5,
+              "b": true
+            },
+            {
+              "q": "y",
+              "n": 3,
+              "f": 2.0,
+              "b": false
+            }
+          ]
+        }
+      },
+      "empty_cell_plus_quoted_empty": {
+        "text": "q,a\nx,\ny,\"\"\n",
+        "options": {},
+        "upstream": {
+          "value": [
+            {
+              "q": "x",
+              "a": null
+            },
+            {
+              "q": "y",
+              "a": null
+            }
+          ]
+        }
+      },
+      "short_row": {
+        "text": "q,a\nx\ny,z\n",
+        "options": {},
+        "upstream": {
+          "value": [
+            {
+              "q": "x",
+              "a": null
+            },
+            {
+              "q": "y",
+              "a": "z"
+            }
+          ]
+        }
+      },
+      "long_row": {
+        "text": "q,a\nx,1,EXTRA\n",
+        "options": {},
+        "upstream": {
+          "value": [
+            {
+              "q": 1,
+              "a": "EXTRA",
+              "__index_level_0__": "x"
+            }
+          ]
+        }
+      },
+      "blank_line": {
+        "text": "q,a\nx,y\n\nz,w\n",
+        "options": {},
+        "upstream": {
+          "value": [
+            {
+              "q": "x",
+              "a": "y"
+            },
+            {
+              "q": "z",
+              "a": "w"
+            }
+          ]
+        }
+      },
+      "dup_header": {
+        "text": "a,a\n1,2\n",
+        "options": {},
+        "upstream": {
+          "value": [
+            {
+              "a": 1,
+              "a.1": 2
+            }
+          ]
+        }
+      },
+      "bom": {
+        "text": "\ufeffq,a\nx,y\n",
+        "options": {},
+        "upstream": {
+          "value": [
+            {
+              "q": "x",
+              "a": "y"
+            }
+          ]
+        }
+      },
+      "crlf_plus_embedded_newline": {
+        "text": "q,a\r\n\"l1\nl2\",\"say \"\"hi\"\"\"\r\n",
+        "options": {},
+        "upstream": {
+          "value": [
+            {
+              "q": "l1\nl2",
+              "a": "say \"hi\""
+            }
+          ]
+        }
+      },
+      "fields_subset_order": {
+        "text": "q,a,z\nx,y,9\n",
+        "options": {
+          "fields": [
+            "a",
+            "q"
+          ]
+        },
+        "upstream": {
+          "value": [
+            {
+              "a": "y",
+              "q": "x"
+            }
+          ]
+        }
+      },
+      "whitespace": {
+        "text": "q,a\n x , y \n",
+        "options": {},
+        "upstream": {
+          "value": [
+            {
+              "q": " x ",
+              "a": " y "
+            }
+          ]
+        }
+      },
+      "unknown_field": {
+        "text": "q,a\nx,1\n",
+        "options": {
+          "fields": [
+            "nope"
+          ]
+        },
+        "upstream": {
+          "raises": "KeyError"
+        }
+      }
+    },
+    "json": {
+      "array": {
+        "text": "[{\"q\": \"x\", \"a\": 1}, {\"q\": \"y\", \"a\": 2}]",
+        "options": {},
+        "upstream": {
+          "value": [
+            {
+              "q": "x",
+              "a": 1
+            },
+            {
+              "q": "y",
+              "a": 2
+            }
+          ]
+        }
+      },
+      "jsonl": {
+        "text": "{\"q\":\"x\",\"a\":1}\n{\"q\":\"y\",\"a\":2}\n",
+        "options": {},
+        "upstream": {
+          "value": [
+            {
+              "q": "x",
+              "a": 1
+            },
+            {
+              "q": "y",
+              "a": 2
+            }
+          ]
+        }
+      },
+      "jsonl_union_keys": {
+        "text": "{\"q\":\"x\",\"a\":1}\n{\"q\":\"y\",\"b\":true}\n",
+        "options": {},
+        "upstream": {
+          "value": [
+            {
+              "q": "x",
+              "a": 1,
+              "b": null
+            },
+            {
+              "q": "y",
+              "a": null,
+              "b": true
+            }
+          ]
+        }
+      },
+      "jsonl_nested": {
+        "text": "{\"q\":\"x\",\"m\":{\"k\":[1,2]}}\n",
+        "options": {},
+        "upstream": {
+          "value": [
+            {
+              "q": "x",
+              "m": {
+                "k": [
+                  1,
+                  2
+                ]
+              }
+            }
+          ]
+        }
+      },
+      "jsonl_non_object": {
+        "text": "{\"q\":\"x\"}\n[1,2]\n",
+        "options": {},
+        "upstream": {
+          "raises": "DatasetGenerationError"
+        }
+      },
+      "json_null": {
+        "text": "{\"q\":\"x\",\"a\":null}\n",
+        "options": {},
+        "upstream": {
+          "value": [
+            {
+              "q": "x",
+              "a": null
+            }
+          ]
+        }
+      }
+    }
+  },
+  "dataset": {
+    "train": {
+      "inputs": [
+        {
+          "v": 0
+        },
+        {
+          "v": 1
+        },
+        {
+          "v": 2
+        },
+        {
+          "v": 3
+        },
+        {
+          "v": 4
+        },
+        {
+          "v": 5
+        },
+        {
+          "v": 6
+        },
+        {
+          "v": 7
+        },
+        {
+          "v": 8
+        },
+        {
+          "v": 9
+        }
+      ],
+      "upstream": {
+        "value": [
+          {
+            "v": 7,
+            "dspy_uuid": "UUID",
+            "dspy_split": "train"
+          },
+          {
+            "v": 8,
+            "dspy_uuid": "UUID",
+            "dspy_split": "train"
+          },
+          {
+            "v": 1,
+            "dspy_uuid": "UUID",
+            "dspy_split": "train"
+          },
+          {
+            "v": 5,
+            "dspy_uuid": "UUID",
+            "dspy_split": "train"
+          },
+          {
+            "v": 3,
+            "dspy_uuid": "UUID",
+            "dspy_split": "train"
+          },
+          {
+            "v": 4,
+            "dspy_uuid": "UUID",
+            "dspy_split": "train"
+          },
+          {
+            "v": 2,
+            "dspy_uuid": "UUID",
+            "dspy_split": "train"
+          }
+        ]
+      }
+    },
+    "train_size_negative": {
+      "inputs": [
+        {
+          "v": 0
+        },
+        {
+          "v": 1
+        },
+        {
+          "v": 2
+        },
+        {
+          "v": 3
+        },
+        {
+          "v": 4
+        },
+        {
+          "v": 5
+        },
+        {
+          "v": 6
+        },
+        {
+          "v": 7
+        },
+        {
+          "v": 8
+        },
+        {
+          "v": 9
+        }
+      ],
+      "train_size": -1,
+      "upstream": {
+        "value": [
+          {
+            "v": 7,
+            "dspy_uuid": "UUID",
+            "dspy_split": "train"
+          },
+          {
+            "v": 8,
+            "dspy_uuid": "UUID",
+            "dspy_split": "train"
+          },
+          {
+            "v": 1,
+            "dspy_uuid": "UUID",
+            "dspy_split": "train"
+          },
+          {
+            "v": 5,
+            "dspy_uuid": "UUID",
+            "dspy_split": "train"
+          },
+          {
+            "v": 3,
+            "dspy_uuid": "UUID",
+            "dspy_split": "train"
+          },
+          {
+            "v": 4,
+            "dspy_uuid": "UUID",
+            "dspy_split": "train"
+          },
+          {
+            "v": 2,
+            "dspy_uuid": "UUID",
+            "dspy_split": "train"
+          },
+          {
+            "v": 0,
+            "dspy_uuid": "UUID",
+            "dspy_split": "train"
+          },
+          {
+            "v": 9,
+            "dspy_uuid": "UUID",
+            "dspy_split": "train"
+          }
+        ]
+      }
     }
   }
 }

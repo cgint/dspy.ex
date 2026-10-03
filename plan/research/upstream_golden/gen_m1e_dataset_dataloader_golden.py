@@ -105,6 +105,35 @@ def csv_raw_cells(text):
     return [[None if c == "" else c for c in row] for row in rows]
 
 
+def outcome_of(fn):
+    """Run an upstream loader/dataset call and record its outcome as
+    JSON-serialisable data.
+
+    A normal outcome becomes {"value": <the rows/values>}; a raised outcome
+    becomes {"raises": <the exception class name>} (e.g. "KeyError").
+    Row order in the value is load order (dicts keep insertion order).
+    """
+    try:
+        return {"value": fn()}
+    except Exception as e:  # noqa: BLE001
+        return {"raises": type(e).__name__}
+
+
+def normalize_dataset_rows(examples):
+    """dataset.train examples as plain dicts; dspy_uuid normalised to the
+    literal "UUID" (it is a fresh random value every run, so the fixture must
+    not carry it) while dspy_split is kept as a structural field. Upstream's
+    dict() protocol HIDES dspy_* keys, so use keys(include_dspy=True) — the
+    dspy_uuid present here is exactly the E5 deviation."""
+    rows = []
+    for e in examples:
+        row = {k: e[k] for k in e.keys(include_dspy=True)}
+        if "dspy_uuid" in row:
+            row["dspy_uuid"] = "UUID"
+        rows.append(row)
+    return rows
+
+
 def main():
     from dspy import Example
     from dspy.datasets.dataloader import DataLoader
@@ -119,43 +148,59 @@ def main():
             f.write(text)
         return p
 
-    def rows(fn):
-        return [dict(ex) for ex in fn()]
+    def rows(examples):
+        return [dict(ex) for ex in examples]
+
+    # (c2) row 34: the deviation file is computed by row 34 from this
+    # `loader_inputs` table — every loader case's INPUT (the exact text fed
+    # to the loader, plus the options) and UPSTREAM'S OUTCOME (its value, or
+    # {"raises": type}). Nothing here is transcribed by hand.
+    csv_input_cases = {
+        "numbers": ("q,n,f,b\nx,2,1.5,True\ny,3,2.0,False\n", {}),
+        "empty_cell_plus_quoted_empty": ('q,a\nx,\ny,""\n', {}),
+        "short_row": ("q,a\nx\ny,z\n", {}),
+        "long_row": ("q,a\nx,1,EXTRA\n", {}),
+        "blank_line": ("q,a\nx,y\n\nz,w\n", {}),
+        "dup_header": ("a,a\n1,2\n", {}),
+        "bom": ("\ufeffq,a\nx,y\n", {}),
+        "crlf_plus_embedded_newline": ('q,a\r\n"l1\nl2","say ""hi"""\r\n', {}),
+        "fields_subset_order": ("q,a,z\nx,y,9\n", {"fields": ["a", "q"]}),
+        "whitespace": ("q,a\n x , y \n", {}),
+        # Unknown field: upstream raises KeyError('nope'); Elixir raises
+        # ArgumentError naming it (declared parity of the raise, different
+        # exception type — recorded as the upstream exception name).
+        "unknown_field": ("q,a\nx,1\n", {"fields": ["nope"]}),
+    }
+    json_input_cases = {
+        "array": (json.dumps([{"q": "x", "a": 1}, {"q": "y", "a": 2}]), {}),
+        "jsonl": ('{"q":"x","a":1}\n{"q":"y","a":2}\n', {}),
+        "jsonl_union_keys": ('{"q":"x","a":1}\n{"q":"y","b":true}\n', {}),
+        "jsonl_nested": ('{"q":"x","m":{"k":[1,2]}}\n', {}),
+        "jsonl_non_object": ('{"q":"x"}\n[1,2]\n', {}),
+        "json_null": ('{"q":"x","a":null}\n', {}),
+    }
 
     csv_cases = {}
-    csv_cases["numbers"] = rows(lambda: dl.from_csv(w("a.csv", "q,n,f,b\nx,2,1.5,True\ny,3,2.0,False\n")))
-    csv_cases["empty_cell_plus_quoted_empty"] = rows(lambda: dl.from_csv(w("b.csv", 'q,a\nx,\ny,""\n')))
-    csv_cases["short_row"] = rows(lambda: dl.from_csv(w("c.csv", "q,a\nx\ny,2\n")))
-    csv_cases["long_row"] = rows(lambda: dl.from_csv(w("d.csv", "q,a\nx,1,EXTRA\n")))
-    csv_cases["blank_line"] = rows(lambda: dl.from_csv(w("e.csv", "q,a\nx,1\n\ny,2\n")))
-    csv_cases["dup_header"] = rows(lambda: dl.from_csv(w("f.csv", "a,a\n1,2\n")))
-    csv_cases["bom"] = rows(lambda: dl.from_csv(w("g.csv", "\ufeffq,a\nx,1\n")))
-    csv_cases["crlf_plus_embedded_newline"] = rows(
-        lambda: dl.from_csv(w("h.csv", 'q,a\r\n"l1\nl2","say ""hi"""\r\n'))
-    )
-    csv_cases["fields_subset_order"] = rows(lambda: dl.from_csv(w("i.csv", "q,a,z\nx,1,9\n"), fields=["a", "q"]))
-    csv_cases["whitespace"] = rows(lambda: dl.from_csv(w("k.csv", "q,a\n x , y \n")))
-
-    # Unknown field: upstream raises KeyError('nope'); Elixir raises
-    # ArgumentError naming it (declared parity of the raise, different
-    # exception type — recorded as the upstream exception name).
-    try:
-        dl.from_csv(w("j.csv", "q,a\nx,1\n"), fields=["nope"])
-        csv_cases["unknown_field"] = "OK"
-    except Exception as e:  # noqa: BLE001
-        csv_cases["unknown_field"] = "RAISE:" + type(e).__name__
+    csv_loader_inputs = {}
+    for name, (text, opts) in csv_input_cases.items():
+        outcome = outcome_of(lambda: rows(dl.from_csv(w(name, text), **opts)))
+        csv_loader_inputs[name] = {
+            "text": text,
+            "options": opts,
+            "upstream": outcome,
+        }
+        csv_cases[name] = outcome
 
     json_cases = {}
-    json_cases["array"] = rows(lambda: dl.from_json(w("a.json", json.dumps([{"q": "x", "a": 1}, {"q": "y", "a": 2}]))))
-    json_cases["jsonl"] = rows(lambda: dl.from_json(w("b.jsonl", '{"q":"x","a":1}\n{"q":"y","a":2}\n')))
-    json_cases["jsonl_union_keys"] = rows(lambda: dl.from_json(w("c.jsonl", '{"q":"x","a":1}\n{"q":"y","b":true}\n')))
-    json_cases["jsonl_nested"] = rows(lambda: dl.from_json(w("d.jsonl", '{"q":"x","m":{"k":[1,2]}}\n')))
-    try:
-        dl.from_json(w("e.jsonl", '{"q":"x"}\n[1,2]\n'))
-        json_cases["jsonl_non_object"] = "OK"
-    except Exception as e:  # noqa: BLE001
-        json_cases["jsonl_non_object"] = "RAISE:" + type(e).__name__
-    json_cases["json_null"] = rows(lambda: dl.from_json(w("f.jsonl", '{"q":"x","a":null}\n')))
+    json_loader_inputs = {}
+    for name, (text, opts) in json_input_cases.items():
+        outcome = outcome_of(lambda: rows(dl.from_json(w(name, text), **opts)))
+        json_loader_inputs[name] = {
+            "text": text,
+            "options": opts,
+            "upstream": outcome,
+        }
+        json_cases[name] = outcome
 
     # --- Ruling 6: CALL upstream for train, dev, prepare_by_seed ---
 
@@ -247,6 +292,31 @@ def main():
         # Ruling 6: CALL upstream's DataLoader.train_test_split with a
         # list[Example], not a file path.
         "train_test_split": train_test_split,
+        # (c2) row 34: per-loader-case inputs + upstream outcomes, so row 34
+        # COMPUTES its deviation set instead of asserting a hand-written one.
+        "loader_inputs": {"csv": csv_loader_inputs, "json": json_loader_inputs},
+        # (c2) row 34: the two Dataset cases E5/E6 (not covered by the golden
+        # rows above). The inputs are split rows the Dataset is constructed
+        # from; `upstream` is what upstream's `dataset.train` does with them
+        # (E5: every example gets a random dspy_uuid4 — recorded with the
+        # uuid value normalised to the literal "UUID" so the fixture stays
+        # deterministic; E6: a negative size slices off elements from the end,
+        # Python slicing semantics).
+        "dataset": {
+            "train": {
+                "inputs": [{"v": i} for i in range(10)],
+                "upstream": {"value": normalize_dataset_rows(ds8.train)},
+            },
+            "train_size_negative": {
+                "inputs": [{"v": i} for i in range(10)],
+                "train_size": -1,
+                "upstream": outcome_of(
+                    lambda: normalize_dataset_rows(
+                        ValDataset10(train_size=-1).train
+                    )
+                ),
+            },
+        },
     }
     OUT.parent.mkdir(parents=True, exist_ok=True)
     OUT.write_text(json.dumps(fixture, indent=2) + "\n")
@@ -259,6 +329,10 @@ def main():
     )
     print(f"  csv numbers (upstream, typed) = {fixture['csv']['numbers']}")
     print(f"  json union keys (upstream) = {fixture['json']['jsonl_union_keys']}")
+    print(
+        f"  dataset E5/E6 outcomes = "
+        f"{fixture['dataset']['train']['upstream']} / {fixture['dataset']['train_size_negative']['upstream']}"
+    )
     print(f"  shared_eval_seed seed7 n20 = {fixture['shared_eval_seed']['seed7_n20']}")
     print(f"  prepare_by_seed dev = {fixture['prepare_by_seed']['dev_seed2023_n50']}")
 

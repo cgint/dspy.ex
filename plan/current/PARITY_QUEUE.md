@@ -44,9 +44,9 @@ After this you can …measure your program reliably: failed examples count again
 | U006 | CompleteAndGrounded | missing | M | M | 1.00 | <=2.6 | - | N | - | no Elixir equivalent | done 2026-10-02 v0.4.4 (M1-d) |
 | U009 | SemanticF1 | missing | M | M | 1.00 | <=2.6 | - | N | - | no Elixir equivalent | done 2026-10-02 v0.4.4 (M1-d) |
 | U012 | normalize_text | partial | L | S | 1.00 | <=2.6 | - | N | - | make public; upstream API is dspy.evaluate.normalize_text | todo |
-| U003 | Dataset | missing | M | M | 1.00 | <=2.6 | U002 | N | - | No Dataset base (train/dev/test, shuffle_and_sample, prepare_by_seed, reset_seeds) | blocked (H15 must land first; contract `openspec/changes/m1e-dataset-dataloader/`) |
+| U003 | Dataset | missing | M | M | 1.00 | <=2.6 | U002 | N | - | No Dataset base (train/dev/test, shuffle_and_sample, prepare_by_seed, reset_seeds) | **done 2026-10-03 v0.4.6 (M1-e)** |
 | U008 | EvaluationResult | missing | M | M | 1.00 | 3.1.0 | S031 | N (was Y; struct + Access keeps old reads, checked 2026-09-26) | - | struct with Access + all current keys | todo |
-| U002 | DataLoader | missing | H | L | 0.75 | <=2.6 | DEP:datasets;DEP:pandas | N | - | No dataset loaders (from_huggingface/from_csv/from_json/from_pandas/from_rm) | blocked (H15 must land first; contract `openspec/changes/m1e-dataset-dataloader/`) |
+| U002 | DataLoader | missing | H | L | 0.75 | <=2.6 | DEP:datasets;DEP:pandas | N | - | No dataset loaders (from_huggingface/from_csv/from_json/from_pandas/from_rm) | **partial 2026-10-03 v0.4.6 (M1-e):** from_csv/from_json/from_list, sample, train_test_split done; from_huggingface / from_pandas / from_rm not ported (need Python-ecosystem equivalents — out of M1-e scope) |
 
 ## M2 — Programs you can save, inspect, reuse
 After this you can …optimize a program once, save it, load it later or elsewhere and get the same behaviour, and see exactly which LM calls one program made.

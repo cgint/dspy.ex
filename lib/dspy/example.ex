@@ -157,18 +157,7 @@ defmodule Dspy.Example do
 
   @impl Access
   def fetch(%__MODULE__{} = example, key) do
-    attrs = example.attrs
-
-    case Map.fetch(attrs, key) do
-      {:ok, value} ->
-        {:ok, value}
-
-      :error when is_atom(key) ->
-        Map.fetch(attrs, Atom.to_string(key))
-
-      :error ->
-        :error
-    end
+    Dspy.Attrs.fetch(example, key)
   end
 
   @impl Access
