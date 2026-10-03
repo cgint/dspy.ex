@@ -256,22 +256,25 @@ Test file: `test/dspy/dataset_dataloader_test.exs` = `acceptance_files`. Rows 31
 | MG4 | `random.ex` | shuffle loop runs upward | 2 | assertion |
 | MG5 | `random.ex` | `sample` always takes the pool branch | 3 | assertion |
 | MG6 | `random.ex` | `sample` always takes the set branch | 3 | assertion |
+| MG7 | `random.ex` | `sample` branch boundary `n <= setsize(k)` → `n < setsize(k)` (phase 1; pinned by n=85 k=6 seed 5 and n=21 k=5 seed 2) | 3 | assertion |
 | MC1 | `dataset.ex` | **caller revert:** `train/1` shuffles with `:rand.seed` + `Enum.shuffle` | 4a, 8 | assertion |
 | MC2 | `data_loader.ex` | **caller revert:** `sample/3` uses `:rand.seed` + `Enum.take_random` | 3b, 4b | assertion |
 | MC3 | `data_loader.ex` | **caller revert:** `train_test_split/2` uses `:rand.seed` + `Enum.shuffle` | 4c, 21b | assertion |
 | MC4 | `data_loader.ex` | `seed: nil` falls back to the process `:rand` state (pre-mortem 11) | 4b | assertion |
 | MD1 | `dataset.ex` | `reset_seeds` uses `Keyword.get(opts, k, old)` | 5b | assertion |
-| MD2 | `dataset.ex` | `reset_seeds` resets omitted keys to defaults | 6 | assertion |
+| MD2 | `dataset.ex` | `reset_seeds` resets an **omitted** key: the `dev_size` block becomes `%{ds \| dev_size: Keyword.get(opts, :dev_size)}` (corrected 2026-10-03: mutating the *given* key's branch is a no-op) | 6 | assertion |
+| MD2b | `dataset.ex` | the same on the `eval_seed` block: `%{ds \| eval_seed: Keyword.get(opts, :eval_seed, 0)}` (row 6 also asserts dev/test orders unchanged) | 6 | assertion |
 | MD3 | `dataset.ex` | test split uses its own seed, defaulting to 0 | 7 | assertion |
 | MD4 | `dataset.ex` | take `size` before shuffling | 8 | assertion |
 | MD5 | `dataset.ex` | negative size → `Enum.take(rows, n)` (drops from the end) | 9 | assertion |
 | MD6 | `dataset.ex` | `shuffle:` flag ignored | 10 | assertion |
 | MD7 | `dataset.ex` | `input_keys` not applied | 11 | assertion |
-| MD7b | `example.ex` (shipped) | `normalize_input_key!` keeps atoms as atoms | 11 | assertion |
+| MD7b | `example.ex` (shipped) | `normalize_input_key!` for atoms returns `Atom.to_string(key) <> " "` (corrected 2026-10-03: "keeps atoms as atoms" is equivalent, because `input_keys/1` maps every key through `to_string`) | 11 | assertion |
 | MD8 | `dataset.ex` | adds `metadata["dspy_uuid"]` from `:crypto` | 12 | assertion |
 | MD8b | `dataset.ex` | split name written into attrs `"dspy_split"` | 12b | assertion |
-| MD9 | `dataset.ex` | eval slices not offset | 13 | assertion |
-| ML0 | `data_loader.ex` | CSV parsed with `String.split(…, "\n")` + `String.split(…, ",")` instead of NimbleCSV | 14c, 14d | assertion |
+| MD9 | `dataset.ex` | eval slices not offset | 13 (slices) | assertion |
+| MD9b | `dataset.ex` | the dev-data length check in `prepare_by_seed` becomes `if true do` (added 2026-10-03; the raise half of row 13 had no mutation) | 13 (too little dev data raises) | assertion |
+| ML0 | `data_loader.ex` | CSV parsed with `String.split(content, "\n", trim: true)` + `String.split(&1, ",")` instead of NimbleCSV, **with no CRLF normalisation** (clarified 2026-10-03: a `\r\n` replace makes row 14c unkillable) | 14c, 14d | assertion |
 | ML1 | `data_loader.ex` | BOM not stripped | 14a | assertion |
 | ML2 | `data_loader.ex` | blank lines kept as rows | 14b | assertion |
 | ML3 | `data_loader.ex` | `""` kept as `""` | 14e, 20a | assertion |
@@ -294,7 +297,7 @@ Test file: `test/dspy/dataset_dataloader_test.exs` = `acceptance_files`. Rows 31
 | MJ4 | `data_loader.ex` | non-object record skipped | 19f | assertion |
 | MJ5 | `data_loader.ex` | JSON numbers → strings | 20b, 29 | assertion |
 | MT1 | `data_loader.ex` | `round` instead of truncation | 21 | assertion |
-| MT2 | `data_loader.ex` | `types:` parse via `Integer.parse` prefix (accepts `"80%"`) | 30 | assertion |
+| MT2 | `data_loader.ex` | `types:` parse via `Integer.parse` prefix: `case (case Integer.parse(value \|\| "") do {int, _rest} -> {:ok, int}; :error -> :error end) do` (accepts `"80%"`; `to_string(value)` vs `value \|\| ""` is equivalent and not acceptable) | 30 | assertion |
 | MT3 | `data_loader.ex` | `types:` ignored | 30 | assertion |
 | MT4 | `data_loader.ex` | pitfall sentence removed from the `from_csv` docstring | 30c | assertion |
 | MC5 | `test/fixtures/m1e_deviations.json` | drop the E3 entry | 34 | assertion |
@@ -304,6 +307,8 @@ Test file: `test/dspy/dataset_dataloader_test.exs` = `acceptance_files`. Rows 31
 | MX3b | `majority.ex` (shipped) | dual-key check removed | 27 | assertion |
 | MP1 | `metrics.ex` (shipped) | **caller revert:** `fetch_field!` back to `Map.fetch(attrs, :answer)` | 24 | assertion (Evaluate turns the raise into `failure_score`, verified in H15) |
 | MV1 | `evaluate.ex` (shipped) | save collision compared by term, not `to_string` | 26 | assertion |
+
+**Count (2026-10-03): 57 IDs.** Phase 2 = 49 (MG1–MG7, MC1–MC4, MD1–MD9 with MD2b, MD7b, MD8b and MD9b, ML0–ML10 with ML6b, MB1–MB3, MJ0–MJ4 with MJ2b, MT1–MT4). Phase 3 = 8 (MJ5, MC5, MX1, MX2, MX3, MX3b, MP1, MV1). **Exempt:** rows 5, 31–33 and 35 only. Non-row Random edge tests may stay exempt as "not a contract row", but a test that some mutation kills must be in that mutation's `expect`, never exempted.
 
 **Row 27 kind:** under MX1, row 27 also raises inside `majority`. It goes into MX1's `also` **only if observed**, and MX1's `kind` stays `assertion`. If C2 then reports WRONG-REASON for MX1, the row-27 test is split so that each half is claimed by exactly one kind; `kind: any` is not used.
 
@@ -370,7 +375,7 @@ The A1 signatures verbatim; A2's generator steps in own words, including why `n`
 
 ### Rulings needed 2026-10-02 (Greta → Horst)
 - **Q1 — User rows that hold both `:k` and `"k"` in `Dataset.new(train: …)`.** Loaders never produce them (R1). For user-built rows, I recommend **pass-through**: `Example.new/1` as today, so reads follow the accessor's atom-wins rule (H15 R2). Declare it in the moduledoc. The alternative is to raise like `majority`, but that is stricter than `Example` itself and outside this slice.
-- **Q2 — M1-e's harness mutates shipped H15 code** (MX1–MX3, MP1, MV1 and MD7b). This re-proves those sites, this time with **loader output from disk**, which H15's hand-built fixtures never used. I recommend yes: these are 7 of the 54 mutations, and they are the only proof that P1/P2 cannot come back through the loaders.
+- **Q2 — M1-e's harness mutates shipped H15 code** (MX1–MX3, MP1, MV1 and MD7b). This re-proves those sites, this time with **loader output from disk**, which H15's hand-built fixtures never used. I recommend yes: these are 7 of the 57 mutations, and they are the only proof that P1/P2 cannot come back through the loaders.
 - **Q3 — scope of `m1e_deviations.json`.** I recommend **only fixture-observable deviations** (E2, E3, E4, E6, and E5's uuid). E7 (upstream reseeds the global RNG) cannot be seen in a fixture, so it stays prose in COMPATIBILITY.
 
 ## (b) Team card — Horst.

@@ -1,0 +1,362 @@
+{
+  "_meta": {
+    "source": "CPython 3.12.12 + dspy 3.4.0b1 (datasets.load_dataset-backed loaders)",
+    "python": "3.12.12 (main, Feb 12 2026, 00:42:34) [Clang 21.1.4 ]",
+    "generated": "2026-10-03T00:14:00.270824+00:00",
+    "description": "M1-e phase 2 golden: CPython random vectors and upstream DSPy 3.4.0 DataLoader loader outputs. Every value computed at generation time; see gen_m1e_dataset_dataloader_golden.py."
+  },
+  "sample": {
+    "n10_k3_seed0": [
+      6,
+      9,
+      0
+    ],
+    "n10_k3_seed1": [
+      2,
+      1,
+      4
+    ],
+    "n10_k3_seed2": [
+      0,
+      1,
+      8
+    ],
+    "n8_k2_seed1": [
+      2,
+      4
+    ],
+    "n5_k2_seed3": [
+      1,
+      4
+    ]
+  },
+  "shared_eval_seed": {
+    "seed7_n20": [
+      17,
+      15,
+      11,
+      18,
+      7,
+      6
+    ]
+  },
+  "dataset_train": {
+    "seed0_size7_n10": [
+      7,
+      8,
+      1,
+      5,
+      3,
+      4,
+      2
+    ]
+  },
+  "prepare_by_seed": {
+    "dev_seed2023_n50": [
+      23,
+      42,
+      45,
+      12,
+      5,
+      29,
+      25,
+      18,
+      3,
+      9,
+      46,
+      0,
+      13,
+      48,
+      8,
+      27,
+      47,
+      16,
+      10,
+      17,
+      43,
+      15,
+      26,
+      30,
+      31,
+      22,
+      4,
+      35,
+      2,
+      32,
+      41,
+      1,
+      37,
+      14,
+      11,
+      38,
+      33,
+      34,
+      19,
+      7,
+      6,
+      40,
+      21,
+      36,
+      39,
+      20,
+      49,
+      28,
+      44,
+      24
+    ],
+    "train": {
+      "1": [
+        53,
+        37,
+        65,
+        51,
+        4,
+        20,
+        38,
+        9
+      ],
+      "2": [
+        0,
+        76,
+        61,
+        63,
+        1,
+        71,
+        2,
+        6
+      ],
+      "3": [
+        35,
+        41,
+        45,
+        4,
+        76,
+        12,
+        0,
+        64
+      ],
+      "4": [
+        73,
+        86,
+        82,
+        23,
+        1,
+        42,
+        57,
+        40
+      ],
+      "5": [
+        91,
+        2,
+        30,
+        33,
+        58,
+        68,
+        85,
+        7
+      ]
+    }
+  },
+  "csv": {
+    "numbers": [
+      {
+        "q": "x",
+        "n": 2,
+        "f": 1.5,
+        "b": true
+      },
+      {
+        "q": "y",
+        "n": 3,
+        "f": 2.0,
+        "b": false
+      }
+    ],
+    "empty_cell_plus_quoted_empty": [
+      {
+        "q": "x",
+        "a": null
+      },
+      {
+        "q": "y",
+        "a": null
+      }
+    ],
+    "short_row": [
+      {
+        "q": "x",
+        "a": null
+      },
+      {
+        "q": "y",
+        "a": 2.0
+      }
+    ],
+    "long_row": [
+      {
+        "q": 1,
+        "a": "EXTRA",
+        "__index_level_0__": "x"
+      }
+    ],
+    "blank_line": [
+      {
+        "q": "x",
+        "a": 1
+      },
+      {
+        "q": "y",
+        "a": 2
+      }
+    ],
+    "dup_header": [
+      {
+        "a": 1,
+        "a.1": 2
+      }
+    ],
+    "bom": [
+      {
+        "q": "x",
+        "a": 1
+      }
+    ],
+    "crlf_plus_embedded_newline": [
+      {
+        "q": "l1\nl2",
+        "a": "say \"hi\""
+      }
+    ],
+    "fields_subset_order": [
+      {
+        "a": 1,
+        "q": "x"
+      }
+    ],
+    "whitespace": [
+      {
+        "q": " x ",
+        "a": " y "
+      }
+    ],
+    "unknown_field": "RAISE:KeyError"
+  },
+  "json": {
+    "array": [
+      {
+        "q": "x",
+        "a": 1
+      },
+      {
+        "q": "y",
+        "a": 2
+      }
+    ],
+    "jsonl": [
+      {
+        "q": "x",
+        "a": 1
+      },
+      {
+        "q": "y",
+        "a": 2
+      }
+    ],
+    "jsonl_union_keys": [
+      {
+        "q": "x",
+        "a": 1,
+        "b": null
+      },
+      {
+        "q": "y",
+        "a": null,
+        "b": true
+      }
+    ],
+    "jsonl_nested": [
+      {
+        "q": "x",
+        "m": {
+          "k": [
+            1,
+            2
+          ]
+        }
+      }
+    ],
+    "jsonl_non_object": "RAISE:DatasetGenerationError",
+    "json_null": [
+      {
+        "q": "x",
+        "a": null
+      }
+    ]
+  },
+  "train_test_split": {
+    "n10_frac07_seed0": {
+      "train": [
+        "7",
+        "8",
+        "1",
+        "5",
+        "3",
+        "4",
+        "2"
+      ],
+      "test": [
+        "0",
+        "9",
+        "6"
+      ]
+    },
+    "n10_frac075_seed0": {
+      "train": [
+        "7",
+        "8",
+        "1",
+        "5",
+        "3",
+        "4",
+        "2"
+      ],
+      "test": [
+        "0",
+        "9",
+        "6"
+      ]
+    },
+    "n10_frac05_seed0": {
+      "train": [
+        "7",
+        "8",
+        "1",
+        "5",
+        "3"
+      ],
+      "test": [
+        "4",
+        "2",
+        "0",
+        "9",
+        "6"
+      ]
+    },
+    "n10_int5_seed1": {
+      "train": [
+        "6",
+        "8",
+        "9",
+        "7",
+        "5"
+      ],
+      "test": [
+        "3",
+        "0",
+        "4",
+        "1",
+        "2"
+      ]
+    }
+  }
+}
