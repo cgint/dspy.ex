@@ -16,6 +16,9 @@ erl_crash.dump
 # Also ignore archive artifacts (built via "mix archive.build").
 *.ez
 
+# pi-rlm tool session state (transient)
+/.pi-rlm/
+
 # Ignore package tarball (built via "mix hex.build").
 dspy-*.tar
 

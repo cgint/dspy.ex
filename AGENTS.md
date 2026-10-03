@@ -85,6 +85,7 @@ Persisted learnings from experimenting in this repo:
 - Avoid handoffs for tiny edits (single-line/single-file obvious changes).
 - If you run handoffs concurrently (batch scripts), expect possible provider/rate-limit failures; be ready to rerun only the failed handoffs.
 - Post-handoff rule of thumb: **review first**. If follow-up edits are needed, prefer a second handoff; if the driver makes fixups anyway, explicitly record what was changed and why.
+- **Handoff artifacts are temporary** (user rule, 2026-10-04): handoff briefs, reports, POC scratch dirs, and tool session state (e.g. `.pi-rlm/`) are NOT durable repo content and are not committed. On acceptance, persist only what the task itself produced (decisions go to `plan/`/`agent/` docs, code to its proper place), then delete the transient artifacts. An untracked pile of handoff files in `git status` is a mess to clean, not a state to live in.
 
 ### Continuity rule: persist handoff learnings
 
