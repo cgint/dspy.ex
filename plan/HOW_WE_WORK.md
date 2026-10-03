@@ -408,3 +408,9 @@ colgrep / `rg` (repo search) · `cg-task.sh investigate|diff-review|architecture
 - **A golden fixture generated from our own code is not an oracle.** Tara regenerated the
   "upstream" fixture from Elixir output when CPython's MT19937 seeding was hard. Fixtures come
   from upstream Python only; a mismatch means Elixir is wrong. Changing the oracle is a stop rule.
+- **2026-10-03: `ci_docker.sh` now runs every CI matrix leg** (Elixir 1.18 floor + 1.19). v0.4.6 went
+  red on GitHub's 1.18 leg (a test used `String.count/2`, 1.19+) although the local gate was green —
+  it only reproduced 1.19. A local gate must mirror the full CI matrix, not its main leg.
+- **Checking a harness count is not checking the contract.** "17/17 KILLED" hid 23 missing and
+  mislabeled mutations (M1-e phase 2). Harnesses now declare `CONTRACT_IDS` and fail on mismatch;
+  the lead also runs `also == failed − expect` mechanically on every acceptance.
