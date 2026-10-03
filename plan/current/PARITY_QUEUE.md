@@ -37,15 +37,15 @@ After this you can …measure your program reliably: failed examples count again
 
 | id | symbol | status | V | E | score | introduced | deps | breaking | old P | gap | queue status |
 |---|---|---|---|---|---|---|---|---|---|---|---|
-| S044 | majority | missing | H | S | 3.00 | <=2.6 | - | N | - | No Dspy.majority; ensemble :majority_vote is a different teleprompter mechanism | todo |
-| S031 | Evaluate | partial | H | S | 3.00 | <=2.6 | U008 | N | - | [reclassified done->partial] missing display_table/max_errors/failure_score/save_as_csv+js | todo |
-| U010 | answer_exact_match | partial | H | S | 3.00 | <=2.6 | U011 U012 | N | - | add frac param + list-of-answers dispatch | todo |
-| U011 | answer_passage_match | missing | M | S | 2.00 | <=2.6 | U012 | N | - | no Elixir equivalent | todo |
+| S044 | majority | missing | H | S | 3.00 | <=2.6 | - | N | - | No Dspy.majority; ensemble :majority_vote is a different teleprompter mechanism | done 2026-09-29 v0.4.2 (M1-c) |
+| S031 | Evaluate | partial | H | S | 3.00 | <=2.6 | U008 | N | - | [reclassified done->partial] missing display_table/max_errors/failure_score/save_as_csv+js | done 2026-09-29 v0.4.0 (M1-a; failure_score/max_errors since v0.3.48) |
+| U010 | answer_exact_match | partial | H | S | 3.00 | <=2.6 | U011 U012 | N | - | add frac param + list-of-answers dispatch | done v0.4.1 (M1-b) |
+| U011 | answer_passage_match | missing | M | S | 2.00 | <=2.6 | U012 | N | - | no Elixir equivalent | done v0.4.1 (M1-b) |
 | U006 | CompleteAndGrounded | missing | M | M | 1.00 | <=2.6 | - | N | - | no Elixir equivalent | done 2026-10-02 v0.4.4 (M1-d) |
 | U009 | SemanticF1 | missing | M | M | 1.00 | <=2.6 | - | N | - | no Elixir equivalent | done 2026-10-02 v0.4.4 (M1-d) |
-| U012 | normalize_text | partial | L | S | 1.00 | <=2.6 | - | N | - | make public; upstream API is dspy.evaluate.normalize_text | todo |
+| U012 | normalize_text | partial | L | S | 1.00 | <=2.6 | - | N | - | make public; upstream API is dspy.evaluate.normalize_text | done v0.4.1 (M1-b) |
 | U003 | Dataset | missing | M | M | 1.00 | <=2.6 | U002 | N | - | No Dataset base (train/dev/test, shuffle_and_sample, prepare_by_seed, reset_seeds) | **done 2026-10-03 v0.4.6 (M1-e)** |
-| U008 | EvaluationResult | missing | M | M | 1.00 | 3.1.0 | S031 | N (was Y; struct + Access keeps old reads, checked 2026-09-26) | - | struct with Access + all current keys | todo |
+| U008 | EvaluationResult | missing | M | M | 1.00 | 3.1.0 | S031 | N (was Y; struct + Access keeps old reads, checked 2026-09-26) | - | struct with Access + all current keys | done 2026-09-29 v0.4.0 (M1-a) |
 | U002 | DataLoader | missing | H | L | 0.75 | <=2.6 | DEP:datasets;DEP:pandas | N | - | No dataset loaders (from_huggingface/from_csv/from_json/from_pandas/from_rm) | **partial 2026-10-03 v0.4.6 (M1-e):** from_csv/from_json/from_list, sample, train_test_split done; from_huggingface / from_pandas / from_rm not ported (need Python-ecosystem equivalents — out of M1-e scope) |
 
 ## M2 — Programs you can save, inspect, reuse
