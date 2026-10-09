@@ -118,7 +118,7 @@ After this you can …build tool-using agents that also take images or audio, re
 | S008 | Code | partial | M | S | 2.00 | 3.0.0 | S018 | N | - | untested :code field type; no language param; not a content-part Type | todo |
 | S017 | TwoStepAdapter | partial | M | S | 2.00 | 3.0.0 | S005 | N | - | extraction LM/adapter from settings, not constructor; extractor is JSONAdapter not chat | todo |
 | S007 | ChatAdapter | partial | H | M | 1.50 | <=2.6 | S005,S015,S016 | N | - | no assistant tool_calls / tool-role history rendering; no fallback flag | todo |
-| S011 | Image | missing | H | M | 1.50 | <=2.6 | S018 | N | - | no image input type; Attachments has image mime-types but file parts only | todo |
+| S011 | Image | done | H | M | 1.50 | <=2.6 | S018 | N | - | done: Dspy.Image + :image field (0d7b0d1); :image now declared+validatable, docs everywhere | done 2026-10-10 v0.4.7 (align-image-input-with-python) |
 | S061 | Retrieve | partial | H | M | 1.50 | <=2.6 | S059;U032 | N | - | No dspy.Retrieve Parameter (k, callbacks) wrapping settings.rm; dspy.ex Dspy.Retrieve is a | todo |
 | S043 | Refine | partial | H | M | 1.50 | 3.0.0 | S038 | N | - | No OfferFeedback advice loop; no temperature-1.0/rollout_id per attempt; no fail_count | todo |
 | S042 | ReActV2 | missing | H | M | 1.50 | 3.3.0 | S041 | N | - | No Dspy.ReActV2; multi_tool_name/args batch execution unported | todo |
