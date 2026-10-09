@@ -65,6 +65,7 @@ Optional/experimental modules (Phoenix LiveView UI, “godmode” coordinator, G
   - typed structured outputs via `schema:` (JSON Schema/JSV; returns typed structs; opt-in `max_output_retries`)
 - `Dspy.Refine` loop (retry until a metric threshold is met)
 - Attachments request shape via `%Dspy.Attachments{}` (multimodal `messages[].content` parts)
+- `:image` signature field with `%Dspy.Image{}` values (inline `image_url` splicing at field position; single image or non-empty list; see `examples/playground/image_input_offline.exs`)
 - Tools: ReAct loop + tool logging callbacks
 - Retrieval + RAG (embeddings-backed; offline-proven with mocks)
 - Teleprompters (parameter-based; no dynamic modules; Predict-like programs):
@@ -99,6 +100,11 @@ Offline (no network) teleprompt + parameter persistence demos:
 
 Optional local inference (manual; may download weights):
 - `mix run examples/bumblebee_predict_local.exs`
+
+Image input demos (first-class `:image` field / `%Dspy.Image{}`):
+- `mix run examples/playground/image_input_offline.exs`
+- `mix run examples/playground/image_input_real_multimage.exs`
+- `mix run examples/playground/image_input_real_per_page.exs`
 
 ## Quick start (offline, deterministic)
 

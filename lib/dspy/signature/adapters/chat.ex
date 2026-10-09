@@ -131,11 +131,16 @@ defmodule Dspy.Signature.Adapters.ChatAdapter do
   end
 
   defp render_value_for_prompt(%Dspy.Attachments{}), do: "<attachments>"
-  defp render_value_for_prompt(%Dspy.Image{}), do: Dspy.Signature.AdapterPipeline.image_ref_token()
+
+  defp render_value_for_prompt(%Dspy.Image{}),
+    do: Dspy.Signature.AdapterPipeline.image_ref_token()
 
   defp render_value_for_prompt(list) when is_list(list) do
     if all_images?(list) do
-      Enum.join(List.duplicate(Dspy.Signature.AdapterPipeline.image_ref_token(), length(list)), " ")
+      Enum.join(
+        List.duplicate(Dspy.Signature.AdapterPipeline.image_ref_token(), length(list)),
+        " "
+      )
     else
       format_value_for_prompt(list)
     end
@@ -150,7 +155,6 @@ defmodule Dspy.Signature.Adapters.ChatAdapter do
       true -> :__missing__
     end
   end
-
 
   defp format_value_for_prompt(value) when is_binary(value), do: value
 

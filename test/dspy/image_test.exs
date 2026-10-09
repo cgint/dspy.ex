@@ -55,10 +55,17 @@ defmodule Dspy.ImageTest do
     end
 
     test "missing local file raises" do
-      missing = Path.join(System.tmp_dir!(), "dspy_image_test_missing_#{System.unique_integer([:positive])}.png")
-      assert_raise ArgumentError, ~r/Could not determine MIME type|Unrecognized image source/, fn ->
-        Dspy.Image.new(missing)
-      end
+      missing =
+        Path.join(
+          System.tmp_dir!(),
+          "dspy_image_test_missing_#{System.unique_integer([:positive])}.png"
+        )
+
+      assert_raise ArgumentError,
+                   ~r/Could not determine MIME type|Unrecognized image source/,
+                   fn ->
+                     Dspy.Image.new(missing)
+                   end
     end
 
     test "unrecognized source strings raise" do
@@ -72,6 +79,7 @@ defmodule Dspy.ImageTest do
       # ErlangError on these; new/2 must convert that into the documented
       # ArgumentError pointing at new_data/2.
       raw_png = "\x89PNG\r\n\x1a\n\x00\x00\x00\x0dIHDR\x00"
+
       assert_raise ArgumentError, ~r/Unrecognized image source.*new_data/s, fn ->
         Dspy.Image.new(raw_png)
       end

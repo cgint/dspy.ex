@@ -189,20 +189,39 @@ defmodule Dspy.Signature do
           # declared as :string for Python-DSPy-style ergonomics.
           {:cont, :ok}
 
-        {:ok, %Dspy.Image{}} ->
-          # Images are an intentional multimodal input escape hatch (parity with
-          # Python's dspy.Image). They are merged into request parts later, even
-          # when the signature field is declared as :string.
-          {:cont, :ok}
-
-        {:ok, value} when is_list(value) ->
-          if all_images?(value) do
-            {:cont, :ok}
-          else
-            case validate_field_value(value, field) do
-              {:ok, _typed_value} -> {:cont, :ok}
+        {:ok, image} when is_struct(image, Dspy.Image) ->
+          # Escape hatch: non-:image fields (typically :string) still accept
+          # %Dspy.Image{}; a :image field is validated as a declared type.
+          if field.type == :image do
+            case validate_field_value(image, field) do
+              {:ok, _} -> {:cont, :ok}
               {:error, reason} -> {:halt, {:error, {:invalid_input_value, field.name, reason}}}
             end
+          else
+            {:cont, :ok}
+          end
+
+        {:ok, value} when is_list(value) ->
+          case field.type do
+            :image ->
+              if all_images?(value) do
+                {:cont, :ok}
+              else
+                {:halt, {:error, {:invalid_input_value, field.name, :invalid_image}}}
+              end
+
+            _ ->
+              if all_images?(value) do
+                {:cont, :ok}
+              else
+                case validate_field_value(value, field) do
+                  {:ok, _typed_value} ->
+                    {:cont, :ok}
+
+                  {:error, reason} ->
+                    {:halt, {:error, {:invalid_input_value, field.name, reason}}}
+                end
+              end
           end
 
         {:ok, value} ->
@@ -223,7 +242,6 @@ defmodule Dspy.Signature do
       :error -> Map.fetch(inputs, Atom.to_string(name))
     end
   end
-
 
   @doc """
   Parse outputs according to the signature.
@@ -647,6 +665,19 @@ defmodule Dspy.Signature do
   # lockstep. Do NOT re-implement the logic inline here.
   defp validate_field_type(value, type) do
     case type do
+      :image when is_struct(value, Dspy.Image) ->
+        {:ok, value}
+
+      :image when is_list(value) and value != [] ->
+        if Enum.all?(value, &match?(%Dspy.Image{}, &1)) do
+          {:ok, value}
+        else
+          {:error, :invalid_image}
+        end
+
+      :image ->
+        {:error, :invalid_image}
+
       :string ->
         cond do
           is_binary(value) -> {:ok, value}
@@ -925,6 +956,7 @@ defmodule Dspy.Signature do
   defp normalize_type("boolean"), do: :boolean
   defp normalize_type("json"), do: :json
   defp normalize_type("code"), do: :code
+  defp normalize_type("image"), do: :image
   defp normalize_type("tool"), do: :tool
   defp normalize_type("tools"), do: :tools
   defp normalize_type("tool_calls"), do: :tool_calls

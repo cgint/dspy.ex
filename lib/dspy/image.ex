@@ -123,7 +123,8 @@ defmodule Dspy.Image do
   information.
   """
   @spec new_data(binary(), String.t()) :: t()
-  def new_data(bytes, mime_type) when is_binary(bytes) and is_binary(mime_type) and mime_type != "" do
+  def new_data(bytes, mime_type)
+      when is_binary(bytes) and is_binary(mime_type) and mime_type != "" do
     %__MODULE__{url: "data:#{mime_type};base64,#{Base.encode64(bytes, chunk_size: 76)}"}
   end
 

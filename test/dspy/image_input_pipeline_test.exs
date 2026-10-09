@@ -55,7 +55,9 @@ defmodule Dspy.ImageInputPipelineTest do
 
       content =
         Agent.get_and_update(lm.script, fn
-          {[], n} -> {{:error, {:script_exhausted, n}}, {[], n}}
+          {[], n} ->
+            {{:error, {:script_exhausted, n}}, {[], n}}
+
           {contents, n} ->
             [head | tail] = contents
             {head, {tail, n + 1}}
@@ -199,12 +201,12 @@ defmodule Dspy.ImageInputPipelineTest do
       end)
 
     assert types == [
-           "text",
-           "image_url",
-           "text",
-           "image_url",
-           "image_url",
-           "text"
+             "text",
+             "image_url",
+             "text",
+             "image_url",
+             "image_url",
+             "text"
            ]
   end
 

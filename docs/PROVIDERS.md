@@ -144,6 +144,7 @@ Core modules (e.g. `Dspy.Predict`) call LMs with a **request map**:
 - a **list of parts** (multimodal), e.g.
   - `%{"type" => "text", "text" => "..."}`
   - `%{"type" => "input_file", "file_path" => "..."}`
+  - `%{"type" => "image_url", "image_url" => %{"url" => "data:image/png;base64,..."}}` (emitted for a `:image` signature field holding `%Dspy.Image{}` values; spliced inline at the field position)
 
 ## Attachments safety (local file reads)
 

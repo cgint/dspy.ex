@@ -564,7 +564,6 @@ defmodule Dspy.Signature.Adapter.Pipeline do
     end
   end
 
-
   defp extract_usage(%{usage: usage}), do: usage
   defp extract_usage(%{"usage" => usage}), do: usage
   defp extract_usage(_), do: nil

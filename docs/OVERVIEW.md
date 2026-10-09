@@ -279,7 +279,13 @@ Related (composition proof):
 - PDF attachment + JSON-structured output + Q&A: `test/acceptance/simplest_contracts_acceptance_test.exs`
 - Image attachment + transcription + postprocess: `test/acceptance/simplest_transcription_acceptance_test.exs`
 
-### 6) Retrieval + RAG (embeddings-backed, offline)
+### 6) Image input (inline `image_url` splicing)
+
+Declare a `:image` signature field (via `input_field(:img, :image, "...")` or the arrow string `"img: image -> answer: string"`) and pass a `%Dspy.Image{}` value (single, or a non-empty list of `%Dspy.Image{}`). `Dspy.Signature.validate_inputs/2` accepts only `%Dspy.Image{}` values on `:image` fields (anything else, including `[]`, is rejected with `:invalid_image`). At request build time the adapter pipeline splices ordered `image_url` content parts at the field position in the user message `content` — the first-class, prompt-position image mechanism (sibling to `%Dspy.Attachments{}`, which appends opaque `input_file` parts).
+
+Proof: `test/dspy/image_input_pipeline_test.exs`
+
+### 7) Retrieval + RAG (embeddings-backed, offline)
 
 A minimal Retrieval-Augmented Generation flow can be run deterministically by:
 - generating embeddings via `req_llm` (mocked in tests)
@@ -292,7 +298,7 @@ Proof:
 
 Guide: `docs/RETRIEVE_RAG.md`
 
-### 7) Evaluate (golden path)
+### 8) Evaluate (golden path)
 
 A simple `Predict → Evaluate` loop runs deterministically (when you set `num_threads: 1` and use a mock LM).
 
@@ -313,7 +319,7 @@ Proof:
 - `test/evaluate_golden_path_test.exs`
 - `test/evaluate_detailed_results_test.exs`
 
-### 8) Teleprompters/optimizers (parameter-based; no dynamic modules)
+### 9) Teleprompters/optimizers (parameter-based; no dynamic modules)
 
 These teleprompters optimize **Predict-like programs** by updating optimizable parameters (e.g. `"predict.instructions"`, `"predict.examples"`). In practice this includes `%Dspy.Predict{}` and `%Dspy.ChainOfThought{}` (when the program exposes those parameters). They **do not** generate new runtime modules.
 

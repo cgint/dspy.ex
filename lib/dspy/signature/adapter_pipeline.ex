@@ -149,12 +149,20 @@ defmodule Dspy.Signature.AdapterPipeline do
       markers = Enum.join(List.duplicate(image_ref_token(), length(list)), " ")
       String.replace(acc, "#{field_name}: #{placeholder}", "#{field_name}: #{markers}")
     else
-      String.replace(acc, "#{field_name}: #{placeholder}", "#{field_name}: #{format_input_value(list)}")
+      String.replace(
+        acc,
+        "#{field_name}: #{placeholder}",
+        "#{field_name}: #{format_input_value(list)}"
+      )
     end
   end
 
   defp replace_input_value(acc, field_name, placeholder, value) do
-    String.replace(acc, "#{field_name}: #{placeholder}", "#{field_name}: #{format_input_value(value)}")
+    String.replace(
+      acc,
+      "#{field_name}: #{placeholder}",
+      "#{field_name}: #{format_input_value(value)}"
+    )
   end
 
   defp fetch_input(inputs, name) when is_map(inputs) and is_atom(name) do
@@ -163,7 +171,6 @@ defmodule Dspy.Signature.AdapterPipeline do
       :error -> Map.fetch(inputs, Atom.to_string(name))
     end
   end
-
 
   defp format_input_value(value) when is_binary(value), do: value
 
@@ -243,12 +250,12 @@ defmodule Dspy.Signature.AdapterPipeline do
         is_binary(content) ->
           content
           |> interleave_image_parts(image_parts)
-          |> then(& &1 ++ attachment_parts)
+          |> then(&(&1 ++ attachment_parts))
 
         is_list(content) ->
           content
           |> interleave_image_parts_in_list(image_parts)
-          |> then(& &1 ++ attachment_parts)
+          |> then(&(&1 ++ attachment_parts))
 
         true ->
           {:error, {:unsupported_user_message_content, content}}

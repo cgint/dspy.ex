@@ -250,7 +250,10 @@ defmodule Dspy.Signature.Adapters.TwoStep do
 
   defp render_pair_value(list) when is_list(list) do
     if all_images?(list) do
-      Enum.join(List.duplicate(Dspy.Signature.AdapterPipeline.image_ref_token(), length(list)), " ")
+      Enum.join(
+        List.duplicate(Dspy.Signature.AdapterPipeline.image_ref_token(), length(list)),
+        " "
+      )
     else
       inspect(list, pretty: false, limit: 100, sort_maps: true)
     end
@@ -266,5 +269,4 @@ defmodule Dspy.Signature.Adapters.TwoStep do
       true -> :__missing__
     end
   end
-
 end

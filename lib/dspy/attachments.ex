@@ -10,6 +10,9 @@ defmodule Dspy.Attachments do
 
   The intent is to support the `dspy-intro` workflow `simplest_dspy_with_attachments.py`
   in an offline/deterministic manner.
+
+  This module is for opaque file attachments (`input_file` parts). For prompt images
+  spliced inline at field position, use a `:image` signature field with `%Dspy.Image{}`.
   """
 
   defstruct [:items]

@@ -72,7 +72,10 @@ defmodule Dspy.ImageMergeMediaTest do
 
   test "no sentinels: image parts fall back to append-at-end (raw-seam compat)" do
     assert {:ok, merged} =
-             AdapterPipeline.merge_media(user_request("plain text"), [], [img_part(1), img_part(2)])
+             AdapterPipeline.merge_media(user_request("plain text"), [], [
+               img_part(1),
+               img_part(2)
+             ])
 
     assert content_types(merged) == ["text", "image_url", "image_url"]
     assert full_text(merged) == "plain text"
