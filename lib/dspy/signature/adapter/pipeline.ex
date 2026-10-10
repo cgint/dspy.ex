@@ -239,7 +239,7 @@ defmodule Dspy.Signature.Adapter.Pipeline do
         end
 
       {:error, reason} ->
-        Logger.warning(
+        Logger.info(
           "dspy.adapter_exhausted kind=transport call_id=#{inspect(call_id)} attempts_used=#{max_retries + 1} last_reason=#{inspect(reason)}"
         )
 
@@ -305,7 +305,7 @@ defmodule Dspy.Signature.Adapter.Pipeline do
         end
 
       true ->
-        Logger.warning(
+        Logger.info(
           "dspy.adapter_exhausted kind=output call_id=#{inspect(call_id)} attempts_used=#{max_output_attempts} last_reason=#{inspect(reason)}"
         )
 
