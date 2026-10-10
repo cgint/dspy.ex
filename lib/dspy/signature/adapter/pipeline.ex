@@ -14,6 +14,7 @@ defmodule Dspy.Signature.Adapter.Pipeline do
   alias Dspy.Signature
   alias Dspy.Signature.Adapter.Callbacks
   alias Dspy.Signature.AdapterPipeline
+  require Logger
 
   @type opts :: [
           adapter: module() | nil,
@@ -55,6 +56,7 @@ defmodule Dspy.Signature.Adapter.Pipeline do
       end
 
     call_id = make_ref()
+    max_output_attempts = max_output_retries + 1
 
     do_run_attempt(
       signature,
@@ -65,7 +67,8 @@ defmodule Dspy.Signature.Adapter.Pipeline do
       call_id,
       1,
       max_retries,
-      max_output_retries
+      max_output_retries,
+      max_output_attempts
     )
   end
 
@@ -78,12 +81,14 @@ defmodule Dspy.Signature.Adapter.Pipeline do
          call_id,
          attempt,
          max_retries,
-         output_retries_left
+         output_retries_left,
+         max_output_attempts
        )
        when is_map(inputs) and is_list(demos) and is_atom(adapter) and is_list(callbacks) and
               is_integer(attempt) and attempt >= 1 and is_integer(max_retries) and
               max_retries >= 0 and
-              is_integer(output_retries_left) and output_retries_left >= 0 do
+              is_integer(output_retries_left) and output_retries_left >= 0 and
+              is_integer(max_output_attempts) and max_output_attempts >= 1 do
     meta = meta(call_id, attempt, adapter, signature)
 
     callbacks = Callbacks.emit(callbacks, :format_start, meta, %{inputs_keys: Map.keys(inputs)})
@@ -109,6 +114,7 @@ defmodule Dspy.Signature.Adapter.Pipeline do
         attempt,
         max_retries,
         output_retries_left,
+        max_output_attempts,
         request,
         base_request,
         base_prompt
@@ -126,16 +132,18 @@ defmodule Dspy.Signature.Adapter.Pipeline do
          attempt,
          max_retries,
          output_retries_left,
+         max_output_attempts,
          request,
          base_request,
          base_prompt
        )
-       when is_map(request) and is_map(base_request) and is_binary(base_prompt) do
+       when is_map(request) and is_map(base_request) and is_binary(base_prompt) and
+              is_integer(max_output_attempts) and max_output_attempts >= 1 do
     meta = meta(call_id, attempt, adapter, signature)
 
     callbacks = Callbacks.emit(callbacks, :call_start, meta, %{request: request_summary(request)})
 
-    case generate_with_retries(request, max_retries) do
+    case call_with_retry_log(request, max_retries, call_id) do
       {:ok, response} ->
         usage_raw = extract_usage(response)
 
@@ -179,6 +187,7 @@ defmodule Dspy.Signature.Adapter.Pipeline do
                     attempt,
                     max_retries,
                     output_retries_left,
+                    max_output_attempts,
                     base_request,
                     base_prompt,
                     response_text,
@@ -199,6 +208,7 @@ defmodule Dspy.Signature.Adapter.Pipeline do
                 attempt,
                 max_retries,
                 output_retries_left,
+                max_output_attempts,
                 base_request,
                 base_prompt,
                 response_text,
@@ -219,6 +229,7 @@ defmodule Dspy.Signature.Adapter.Pipeline do
                 attempt,
                 max_retries,
                 output_retries_left,
+                max_output_attempts,
                 base_request,
                 base_prompt,
                 response_text,
@@ -228,6 +239,10 @@ defmodule Dspy.Signature.Adapter.Pipeline do
         end
 
       {:error, reason} ->
+        Logger.warning(
+          "dspy.adapter_exhausted kind=transport call_id=#{inspect(call_id)} attempts_used=#{max_retries + 1} last_reason=#{inspect(reason)}"
+        )
+
         {:error, reason}
     end
   end
@@ -242,12 +257,14 @@ defmodule Dspy.Signature.Adapter.Pipeline do
          attempt,
          max_retries,
          output_retries_left,
+         max_output_attempts,
          base_request,
          base_prompt,
          response_text,
          reason
        )
-       when is_map(base_request) and is_binary(base_prompt) do
+       when is_map(base_request) and is_binary(base_prompt) and is_integer(max_output_attempts) and
+              max_output_attempts >= 1 do
     cond do
       output_retries_left > 0 and output_retryable_reason?(reason) ->
         retry_prompt = build_output_retry_prompt(base_prompt, signature, adapter, reason)
@@ -257,6 +274,10 @@ defmodule Dspy.Signature.Adapter.Pipeline do
           # Treat prompt replacement as the "format" phase for the next attempt.
           next_attempt = attempt + 1
           meta = meta(call_id, next_attempt, adapter, signature)
+
+          Logger.debug(
+            "dspy.adapter_retry kind=output call_id=#{inspect(call_id)} attempt=#{next_attempt}/#{max_output_attempts} reason=#{inspect(reason)}"
+          )
 
           callbacks =
             Callbacks.emit(callbacks, :format_start, meta, %{inputs_keys: Map.keys(inputs)})
@@ -276,6 +297,7 @@ defmodule Dspy.Signature.Adapter.Pipeline do
             next_attempt,
             max_retries,
             output_retries_left - 1,
+            max_output_attempts,
             retry_request,
             base_request,
             base_prompt
@@ -283,6 +305,10 @@ defmodule Dspy.Signature.Adapter.Pipeline do
         end
 
       true ->
+        Logger.warning(
+          "dspy.adapter_exhausted kind=output call_id=#{inspect(call_id)} attempts_used=#{max_output_attempts} last_reason=#{inspect(reason)}"
+        )
+
         {:error, output_parse_failure(reason, response_text)}
     end
   end
@@ -508,14 +534,26 @@ defmodule Dspy.Signature.Adapter.Pipeline do
   defp decode_tool_call_arguments(name, _args),
     do: {:error, {:invalid_tool_call_arguments, %{name: name}}}
 
-  defp generate_with_retries(request, retries) when is_map(request) and is_integer(retries) do
+  defp call_with_retry_log(request, max_retries, call_id)
+       when is_map(request) and is_integer(max_retries) and max_retries >= 0 do
+    max_attempts = max_retries + 1
+
+    do_call_with_retry_log(request, max_retries, max_attempts, call_id)
+  end
+
+  defp do_call_with_retry_log(request, retries, max_attempts, call_id)
+       when is_map(request) and is_integer(retries) and retries >= 0 do
     case Dspy.LM.generate(request) do
       {:ok, response} ->
         {:ok, response}
 
-      {:error, _reason} when retries > 0 ->
+      {:error, reason} when retries > 0 ->
+        Logger.debug(
+          "dspy.adapter_retry kind=transport call_id=#{inspect(call_id)} attempt=#{retries + 1}/#{max_attempts} reason=#{inspect(reason)}"
+        )
+
         Process.sleep(retry_sleep_ms())
-        generate_with_retries(request, retries - 1)
+        do_call_with_retry_log(request, retries - 1, max_attempts, call_id)
 
       {:error, _reason} = err ->
         err
