@@ -16,6 +16,10 @@ defmodule Dspy.Signature.Adapter.Pipeline do
   alias Dspy.Signature.AdapterPipeline
   require Logger
 
+  # Max characters of a non-exception retry/exhaustion reason rendered via
+  # inspect/1 in a log line. Keeps deep validation errors from bloating logs.
+  @reason_log_max_chars 300
+
   @type opts :: [
           adapter: module() | nil,
           callbacks: Callbacks.callbacks(),
@@ -240,7 +244,7 @@ defmodule Dspy.Signature.Adapter.Pipeline do
 
       {:error, reason} ->
         Logger.info(
-          "dspy.adapter_exhausted kind=transport call_id=#{inspect(call_id)} attempts_used=#{max_retries + 1} last_reason=#{inspect(reason)}"
+          "dspy.adapter_exhausted kind=transport call_id=#{inspect(call_id)} attempts_used=#{max_retries + 1} last_reason=#{format_reason(reason)}"
         )
 
         {:error, reason}
@@ -276,7 +280,7 @@ defmodule Dspy.Signature.Adapter.Pipeline do
           meta = meta(call_id, next_attempt, adapter, signature)
 
           Logger.debug(
-            "dspy.adapter_retry kind=output call_id=#{inspect(call_id)} attempt=#{next_attempt}/#{max_output_attempts} reason=#{inspect(reason)}"
+            "dspy.adapter_retry kind=output call_id=#{inspect(call_id)} attempt=#{next_attempt}/#{max_output_attempts} reason=#{format_reason(reason)}"
           )
 
           callbacks =
@@ -306,7 +310,7 @@ defmodule Dspy.Signature.Adapter.Pipeline do
 
       true ->
         Logger.info(
-          "dspy.adapter_exhausted kind=output call_id=#{inspect(call_id)} attempts_used=#{max_output_attempts} last_reason=#{inspect(reason)}"
+          "dspy.adapter_exhausted kind=output call_id=#{inspect(call_id)} attempts_used=#{max_output_attempts} last_reason=#{format_reason(reason)}"
         )
 
         {:error, output_parse_failure(reason, response_text)}
@@ -434,6 +438,19 @@ defmodule Dspy.Signature.Adapter.Pipeline do
     "- #{inspect(other)}"
   end
 
+  # Compact, log-safe rendering of a retry/exhaustion reason.
+  #
+  # Transport retries surface a `%ReqLLM.Error.API.Request{}` exception whose
+  # struct carries `request_body`/`response_body` (the full prompt + output
+  # contract) plus `headers` — none of which belongs in a log line. Use the
+  # exception's human-readable summary instead. Non-exception tuples (e.g.
+  # `{:output_validation_failed, ...}`) are rendered with `inspect/1` and
+  # truncated so a deep validation error can't bloat the line.
+  defp format_reason(reason) when is_exception(reason), do: Exception.message(reason)
+
+  defp format_reason(reason),
+    do: String.slice(inspect(reason), 0, @reason_log_max_chars)
+
   defp drop_tool_call_outputs(%Signature{} = signature) do
     filtered = Enum.reject(signature.output_fields, &(&1.type == :tool_calls))
     %{signature | output_fields: filtered}
@@ -549,7 +566,7 @@ defmodule Dspy.Signature.Adapter.Pipeline do
 
       {:error, reason} when retries > 0 ->
         Logger.debug(
-          "dspy.adapter_retry kind=transport call_id=#{inspect(call_id)} attempt=#{retries + 1}/#{max_attempts} reason=#{inspect(reason)}"
+          "dspy.adapter_retry kind=transport call_id=#{inspect(call_id)} attempt=#{retries + 1}/#{max_attempts} reason=#{format_reason(reason)}"
         )
 
         Process.sleep(retry_sleep_ms())

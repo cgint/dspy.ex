@@ -30,7 +30,14 @@ the terminal `{:error, ...}` returned to the caller.
 - Messages are stable and greppable: `dspy.adapter_retry` /
   `dspy.adapter_exhausted`, a `kind=` field (`transport`|`output`), `call_id`
   (the stable `make_ref` that spans both retry kinds for one call), a
-  kind-specific attempt counter, and `inspect(reason)` / `inspect(last_reason)`.
+  kind-specific attempt counter, and a **log-safe** reason.
+- Reasons are rendered by `format_reason/1`: a `%ReqLLM.Error.API.Request{}`
+  (or any exception) becomes its human-readable `Exception.message/1`
+  summary (e.g. `"API request failed: timeout"`), so the struct's
+  `request_body`/`response_body` (the full prompt + output contract) and
+  `headers` **never** reach a log line. Non-exception tuples are rendered via
+  `inspect/1` truncated to `@reason_log_max_chars` (300) so a deep validation
+  error can't bloat the line.
 - Thread `max_output_attempts` (computed once in `run/4`) through the
   internal call chain so both output log lines report a consistent total;
   fixes an off-by-one where output-exhaustion previously would have reported
@@ -52,5 +59,7 @@ the terminal `{:error, ...}` returned to the caller.
   is untouched — this is log-only.
 - **Tests:** existing behavior tests (`adapter_pipeline_edge_cases`,
   `typed_output_retry`, `untyped_output_retry_default_adapter`,
-  `max_output_retries_settings_default`) pin the return shapes; no test asserts
-  log output, so none need changing.
+  `max_output_retries_settings_default`) pin the return shapes; a new
+  `LeakyLM` test in `adapter_pipeline_edge_cases` proves a real
+  `%ReqLLM.Error.API.Request{}` with a secret `request_body` logs as
+  `"API request failed: timeout"` and **never** the body text.

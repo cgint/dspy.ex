@@ -39,6 +39,24 @@ line, because this is the operator-visible "this call is now failing" moment.
   `:info` level carrying `kind=output`, the `call_id`, the number of output
   attempts used, and the last failure reason
 
+### Requirement: Retry reasons are logged in a log-safe form
+The pipeline SHALL NOT write a transport error's `request_body` or
+`response_body` (the full prompt, output contract, or raw provider payload) or
+any transport `headers` into a retry/exhaustion log line.
+
+#### Scenario: A transport error logs its summary, not its body
+- **WHEN** a transport retry or exhaustion logs a `%ReqLLM.Error.API.Request{}`
+  reason that carries a `request_body`
+- **THEN** the log line SHALL contain the exception's human-readable summary
+  (e.g. `"API request failed: timeout"`) and SHALL NOT contain the
+  `request_body` or `response_body` content
+
+#### Scenario: A non-exception reason is bounded
+- **WHEN** a retry or exhaustion reason is a non-exception value (e.g.
+  `{:output_validation_failed, ...}`)
+- **THEN** it SHALL be rendered via `inspect/1` and truncated to a bounded
+  length so a deep error cannot bloat the log line
+
 ### Requirement: Retry logging does not change the observable contract
 The retry/exhaustion logging SHALL be a log-only change: it SHALL NOT alter
 `Pipeline.run/4`'s signature, any `{:ok, _}` / `{:error, _}` return shape, the

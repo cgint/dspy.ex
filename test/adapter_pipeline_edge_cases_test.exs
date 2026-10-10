@@ -58,6 +58,25 @@ defmodule Dspy.AdapterPipelineEdgeCasesTest do
     def supports?(_lm, _feature), do: true
   end
 
+  defmodule LeakyLM do
+    @behaviour Dspy.LM
+    defstruct []
+
+    @impl true
+    def generate(_lm, _request) do
+      {:error,
+       ReqLLM.Error.API.Request.exception(
+         reason: "timeout",
+         status: nil,
+         request_body: "TOP_SECRET_PROMPT_MARKER_8f3a91c2",
+         response_body: "TOP_SECRET_RESPONSE_MARKER_77aa11bb"
+       )}
+    end
+
+    @impl true
+    def supports?(_lm, _feature), do: true
+  end
+
   defmodule InvalidRequestAdapter do
     @behaviour Dspy.Signature.Adapter
 
@@ -168,6 +187,24 @@ defmodule Dspy.AdapterPipelineEdgeCasesTest do
     assert {:ok, pred} = Dspy.Module.forward(program, %{question: "q"})
     assert pred.attrs.answer == "ok"
     assert Agent.get(counter, & &1) == 3
+  end
+
+  test "transport retry/exhaustion logs carry the safe summary, never the request body" do
+    Dspy.configure(lm: %LeakyLM{})
+
+    program = Dspy.Predict.new(SimpleSig, max_retries: 1)
+
+    logs =
+      ExUnit.CaptureLog.capture_log(fn ->
+        result = Dspy.Module.forward(program, %{question: "q"})
+        assert match?({:error, %ReqLLM.Error.API.Request{}}, result)
+      end)
+
+    assert logs =~ "dspy.adapter_retry kind=transport"
+    assert logs =~ "dspy.adapter_exhausted kind=transport"
+    assert logs =~ "API request failed: timeout"
+    refute logs =~ "TOP_SECRET_PROMPT_MARKER_8f3a91c2"
+    refute logs =~ "TOP_SECRET_RESPONSE_MARKER_77aa11bb"
   end
 
   test "invalid native tool_calls are returned as explicit merge errors" do
