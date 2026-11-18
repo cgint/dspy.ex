@@ -88,7 +88,15 @@ defmodule Dspy.Signature.Adapters.JSONAdapter do
 
   defp field_schema!(field) do
     schema = %{"type" => primitive_json_type(field.type)}
-    if is_list(Map.get(field, :one_of)), do: Map.put(schema, "enum", field.one_of), else: schema
+
+    schema =
+      if is_list(Map.get(field, :one_of)), do: Map.put(schema, "enum", field.one_of), else: schema
+
+    # Untyped :json fields are free-form objects. They must be declared open:
+    # providers enforcing the contract natively (Gemini `responseJsonSchema`)
+    # otherwise treat a property-less object as `{}` and drop every key
+    # (this silently emptied Dspy.ReAct `next_tool_args`).
+    if field.type == :json, do: Map.put(schema, "additionalProperties", true), else: schema
   end
 
   defp primitive_json_type(:integer), do: "integer"
