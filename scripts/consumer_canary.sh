@@ -92,7 +92,11 @@ log_result() { # log_result <name> <status> <log-or-empty>
 # _build/, node_modules/, .elixir_ls/, .git/ never enter (not in the allowlist).
 canary_copy() {
   local root="$1" dest="$2"
-  [ ! -e "$dest" ] || rm -r "$dest"
+  rm -rf "$dest"
+  if [ -e "$dest" ] || [ -L "$dest" ]; then
+    echo "    COPY FAILED: cannot remove $dest" >&2
+    return 1
+  fi
   mkdir -p "$dest"
   local excludes=(
     --exclude="/.env*"
@@ -156,6 +160,7 @@ canary_copy() {
       echo "    rsync error: $rsync_err" >&2; rc=1
     fi
 
+    rm -rf "$dest/deps/dspy"
   fi
   if [ "$rc" -ne 0 ]; then
     echo "    COPY FAILED: one or more rsync items failed for $root" >&2
@@ -304,12 +309,16 @@ run_consumer() {
     return 0
   fi
 
-  local revision state
-  revision=$(git -C "$root" rev-parse HEAD 2>/dev/null || echo 'not a git checkout')
-  if [ "$revision" = 'not a git checkout' ]; then state=unknown
-  elif [ -n "$(git -C "$root" status --porcelain)" ]; then state=dirty
-  else state=clean; fi
-  echo "[$name] HEAD $revision ($state)"
+  local revision state git_root resolved_root
+  resolved_root=$(cd "$root" && pwd -P)
+  git_root=$(git -C "$root" rev-parse --show-toplevel 2>/dev/null || true)
+  if [ -n "$git_root" ] && [ "$(cd "$git_root" && pwd -P)" = "$resolved_root" ]; then
+    revision=$(git -C "$root" rev-parse HEAD)
+    if [ -n "$(git -C "$root" status --porcelain)" ]; then state=dirty; else state=clean; fi
+    echo "[$name] HEAD $revision ($state)"
+  else
+    echo "[$name] HEAD not a git checkout"
+  fi
   t_start=$(date +%s)
 
   echo "[$name] allowlist copy -> $dest (root: $root)"
