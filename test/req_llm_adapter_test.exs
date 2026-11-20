@@ -80,7 +80,7 @@ defmodule DspyReqLLMAdapterTest do
   end
 
   defmodule FailingGeneration do
-    def generate_object(_model, _input, _schema, _opts), do: {:error, :native_failed}
+    def generate_object(_model, _input, _schema, _opts), do: {:error, :timeout}
   end
 
   defmodule LeakyGeneration do
@@ -162,7 +162,7 @@ defmodule DspyReqLLMAdapterTest do
     end)
     |> then(fn log ->
       assert log =~ "native structured-output generation failed; falling back to text generation"
-      assert log =~ ":native_failed"
+      assert log =~ ":timeout"
     end)
   end
 

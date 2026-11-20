@@ -248,6 +248,13 @@ defmodule Dspy.AdapterPipelineEdgeCasesTest do
     refute String.contains?(logs, marker)
   end
 
+  test "log reasons suppress unrecognized tags including atoms" do
+    assert Dspy.LogReason.format({:output_decode_failed, "synthetic detail"}) ==
+             ":output_decode_failed"
+
+    assert Dspy.LogReason.format({:SYNTHETIC_REASON_TAG, 500}) == "unclassified error"
+  end
+
   test "invalid native tool_calls are returned as explicit merge errors" do
     Dspy.configure(
       lm: %CountingLM{
