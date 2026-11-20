@@ -158,6 +158,30 @@ defmodule Dspy.AdapterPipelineEdgeCasesTest do
              Dspy.Module.forward(program, %{question: "q"})
   end
 
+  test "transport and output exhaustion are visible only at debug" do
+    scenarios = [
+      {"transport", %LeakyLM{}, Dspy.Predict.new(SimpleSig, max_retries: 0)},
+      {"output", %CountingLM{pid: self(), content: "unparsed completion"},
+       Dspy.Predict.new(SimpleSig,
+         adapter: UnexpectedParseAdapter,
+         max_retries: 0,
+         max_output_retries: 0
+       )}
+    ]
+
+    for {kind, lm, program} <- scenarios do
+      Dspy.configure(lm: lm)
+      message = "dspy.adapter_exhausted kind=#{kind}"
+
+      forward = fn ->
+        assert {:error, _reason} = Dspy.Module.forward(program, %{question: "q"})
+      end
+
+      assert ExUnit.CaptureLog.capture_log([level: :debug], forward) =~ message
+      refute ExUnit.CaptureLog.capture_log([level: :info], forward) =~ message
+    end
+  end
+
   test "attachments require a user message target before LM call" do
     Dspy.configure(lm: %CountingLM{pid: self(), content: "Answer: ok"})
 
