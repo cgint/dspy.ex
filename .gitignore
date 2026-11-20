@@ -36,6 +36,9 @@ python_dspy_source/
 # Local notes (untracked scratch)
 RecursiveLanguageModels.txt
 
+# Local handoff/scratch artifacts (transient; never commit)
+agent/scratch/
+
 # Security scan results (generated artifacts)
 .scan-results/
 # Ignore Code Giant output directory
