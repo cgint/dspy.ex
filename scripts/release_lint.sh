@@ -27,7 +27,7 @@ echo
 
 echo "Checking docs/RELEASES.md contains a row for ${tag}…"
 release_row="| \`${tag}\` |"
-if rg -n -F "$release_row" docs/RELEASES.md >/dev/null; then
+if grep -Fq "$release_row" docs/RELEASES.md >/dev/null; then
   echo "OK: docs/RELEASES.md has ${tag}"
 else
   echo "ERROR: docs/RELEASES.md missing ${tag} row" >&2
@@ -38,7 +38,7 @@ echo
 
 echo "Checking plan/current/STATUS.md log mentions Cut tag ${tag}…"
 status_line="Cut tag \`${tag}\`"
-if rg -n -F "$status_line" plan/current/STATUS.md >/dev/null; then
+if grep -Fq "$status_line" plan/current/STATUS.md >/dev/null; then
   echo "OK: plan/current/STATUS.md mentions Cut tag ${tag}"
 else
   echo "WARN: plan/current/STATUS.md does not mention Cut tag ${tag} yet" >&2
