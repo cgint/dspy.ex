@@ -302,7 +302,8 @@ defmodule Dspy.Teleprompt.Ensemble do
     with {:ok, validated_trainset} <- validate_trainset(trainset),
          {:ok, {train_data, val_data}} <- split_data(teleprompt, validated_trainset),
          {:ok, ensemble_members} <- train_ensemble_members(teleprompt, program, train_data),
-         {:ok, member_weights} <- calculate_member_weights(teleprompt, ensemble_members, val_data),
+         {:ok, member_weights} <-
+           calculate_member_weights(teleprompt, ensemble_members, val_data),
          {:ok, ensemble_program} <-
            create_ensemble_program(teleprompt, ensemble_members, member_weights) do
       Dspy.Teleprompt.Util.log(teleprompt, "Ensemble compilation completed successfully")
