@@ -8,6 +8,7 @@ defmodule Dspy.Application do
   @impl true
   def start(_type, _args) do
     children = [
+      {Dspy.LM.Cache, []},
       {Dspy.Settings, []},
       {Dspy.LM.History, []}
     ]
