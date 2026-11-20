@@ -72,7 +72,7 @@ defmodule Dspy.Evaluate do
       i.e. 10). When the failure count reaches it (upstream `>=` boundary),
       pending item tasks are killed and `Dspy.Evaluate.MaxErrorsExceeded` is
       raised (H0b-2, D-U2/D2/E5).
-    - `:failure_score` - score given to a failed example (default: 0.0); it is
+    - `:failure_score` - numeric score given to a failed example (default: 0.0); it is
       included in the mean (H0b-2, D-U1)
     - `:timeout` - per-item timeout in ms (default: `:infinity`). A timed-out
       item is killed (`on_timeout: :kill_task`) and scored `failure_score`.
@@ -126,6 +126,11 @@ defmodule Dspy.Evaluate do
     return_all = Keyword.get(opts, :return_all, false)
     max_errors = Keyword.get(opts, :max_errors) || Dspy.Settings.get(:max_errors)
     failure_score = Keyword.get(opts, :failure_score, 0.0)
+
+    unless is_number(failure_score) do
+      raise ArgumentError, "failure_score must be a number"
+    end
+
     item_timeout = Keyword.get(opts, :timeout, :infinity)
     provide_traceback = Keyword.get(opts, :provide_traceback, false)
     display_table = Keyword.get(opts, :display_table, false)
