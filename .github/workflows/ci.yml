@@ -58,3 +58,43 @@ jobs:
 
       - name: Extras test
         run: cd extras/dspy_extras && mix test
+
+  gate:
+    name: ${{ matrix.name }}
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - name: Consumer contract
+            mix: true
+            command: mix test --only consumer_contract
+          - name: Offline examples
+            mix: true
+            command: scripts/verify_examples.sh
+          - name: Dependency audit
+            mix: true
+            command: mix hex.audit
+          - name: Release lint
+            mix: false
+            command: scripts/release_lint.sh
+
+    env:
+      MIX_ENV: test
+
+    steps:
+      - uses: actions/checkout@v5
+
+      - name: Set up BEAM
+        if: matrix.mix
+        uses: erlef/setup-beam@v1
+        with:
+          otp-version: '28.0'
+          elixir-version: '1.19.5'
+
+      - name: Core deps
+        if: matrix.mix
+        run: mix deps.get
+
+      - name: Run gate
+        run: ${{ matrix.command }}
