@@ -40,8 +40,8 @@ defmodule Dspy.MixProject do
       {:nimble_csv, "~> 1.2"},
 
       # LLM provider access (unified client; no provider maintenance in `dspy.ex`)
-      # Using main for google_thinking_budget / reasoning_effort fix (PR #418)
-      {:req_llm, github: "agentjido/req_llm"},
+      # Keep the revision already tested in mix.lock when consumers resolve dspy.ex.
+      {:req_llm, github: "agentjido/req_llm", ref: "66b40425a79d85a284dd99edbe1769d364c42066"},
 
       # Security floors (SEC-1, 2026-09-28): req/mint/hpax reach :dspy transitively
       # through req_llm/finch. These direct floors pin consumers to advisory-fixed

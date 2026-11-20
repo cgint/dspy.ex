@@ -31,6 +31,12 @@ locked, run `mix deps.update dspy jsv idna` for a git dependency on dspy.ex.
 If your app uses Swoosh and its lockfile pins a version below 1.30, include
 `swoosh` in the update so it can resolve idna 8.
 
+### Unreleased ReqLLM dependency pin
+
+dspy.ex now declares the ReqLLM revision already in its own lockfile
+(`66b4042`). Updating dspy.ex may move an application that resolved a
+different ReqLLM revision onto this tested commit.
+
 ### M1-a evaluate output options (fix round 2, 2026-09-29)
 
 M1-a adds the upstream `EvaluationResult` output options to
