@@ -14,6 +14,8 @@ dspy.ex requires JSV 0.28 or newer within the 0.x series and idna 8.x.
 JSV 0.28 supports idna 8, which fixes EEF-CVE-2026-117678. It also includes
 the fix for EEF-CVE-2026-117680. If your application has older versions
 locked, run `mix deps.update dspy jsv idna` for a git dependency on dspy.ex.
+If your app uses Swoosh and its lockfile pins a version below 1.30, include
+`swoosh` in the update so it can resolve idna 8.
 
 ### M1-a evaluate output options (fix round 2, 2026-09-29)
 
