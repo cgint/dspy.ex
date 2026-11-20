@@ -15,7 +15,7 @@
 #
 # Env:
 #   CANARY_CONSUMERS_ROOT  Root dir containing the consumer checkouts
-#                         (default: /Users/cgint/dev)
+#                         (default: $HOME/dev)
 #
 # Per consumer: ALLOWLIST-copy the consumer root into tmp/canary/<name>/ — only
 #   mix.exs, mix.lock, .formatter.exs, lib/, config/, test/, rel/, priv/ (WITHOUT
@@ -42,7 +42,7 @@ set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 REPO_ROOT="$(cd "$SCRIPT_DIR/.." && pwd)"
-CONSUMERS_ROOT="${CANARY_CONSUMERS_ROOT:-/Users/cgint/dev}"
+CONSUMERS_ROOT="${CANARY_CONSUMERS_ROOT:-$HOME/dev}"
 CANARY_DIR="$REPO_ROOT/tmp/canary"
 REWRITE_DIR="$CANARY_DIR/rewrites"
 ALL_CONSUMERS=(agent-coding-gui elix-live-chat third-eye-liveview finance-partner my-speech-google)
@@ -92,7 +92,7 @@ log_result() { # log_result <name> <status> <log-or-empty>
 # _build/, node_modules/, .elixir_ls/, .git/ never enter (not in the allowlist).
 canary_copy() {
   local root="$1" dest="$2"
-  rm -rf "$dest"
+  [ ! -e "$dest" ] || rm -r "$dest"
   mkdir -p "$dest"
   local excludes=(
     --exclude="/.env*"
@@ -155,7 +155,7 @@ canary_copy() {
     if ! rsync_err=$(rsync -a "${excludes[@]}" --exclude="dspy" "$root/deps/" "$dest/deps/" 2>&1); then
       echo "    rsync error: $rsync_err" >&2; rc=1
     fi
-    rm -rf "$dest/deps/dspy"
+
   fi
   if [ "$rc" -ne 0 ]; then
     echo "    COPY FAILED: one or more rsync items failed for $root" >&2
@@ -173,30 +173,17 @@ canary_copy() {
 }
 
 # rewrite_mix_exs <src-mix.exs> <name>
-# Replace the dspy dep line(s) with a path dep + override. Uses the Ruby regex
+# Replace the dspy dep line(s) with a path dep + override. Uses the Perl regex
 # engine (multiline mode) so both single-line and multi-line {:dspy, ...} forms
 # are handled. Exits non-zero if the rewrite is not detectably applied.
 rewrite_mix_exs() {
   local mix="$1" name="$2"
-  local ruby='
-    src = File.read(ARGV[0])
-    dst = ARGV[1]
-    dep = "{:dspy, path: \"" + ARGV[2] + "\", override: true}"
-    out = src.sub(%r/\{\s*:dspy\s*,[^{}]*?\}\s*,?/m, dep + ",")
-    unless out != src
-      warn "dspy dep not found in " + ARGV[0]
-      exit 1
-    end
-    if out !~ /\{\s*:dspy\s*,\s*path:\s*"/
-      warn "rewrite did not produce a path dep in " + ARGV[0]
-      exit 1
-    end
-    File.write(ARGV[1], out)
-  '
-  if ruby_out=$(ruby -e "$ruby" "$mix" "$REWRITE_DIR/$name" "$REPO_ROOT" 2>&1); then
-    :
-  else
-    echo "    REWRITE FAILED: $ruby_out" >&2
+  if ! DSPY_PATH="$REPO_ROOT" perl -0777 -pe '
+    BEGIN { $replacement = "{:dspy, path: \"$ENV{DSPY_PATH}\", override: true},"; }
+    $changed = s/\{\s*:dspy\s*,[^{}]*?\}\s*,?/$replacement/s;
+    END { exit 1 unless $changed }
+  ' "$mix" > "$REWRITE_DIR/$name"; then
+    echo "    REWRITE FAILED: dspy dep not found in $mix" >&2
     return 1
   fi
   cp "$REWRITE_DIR/$name" "$mix"
@@ -209,33 +196,9 @@ rewrite_mix_exs() {
 # Dependency warnings (e.g. └─ deps/...) are NOT included.
 extract_consumer_warnings() {
   local log="$1"
-  ruby -e '
-    lines = File.read(ARGV[0]).lines.map { |l| l.chomp }
-    entries = []
-    i = 0
-    while i < lines.length
-      l = lines[i]
-      if l =~ /└─\s+((?:lib|test)\/\S+?)(?::(\d+))?/ 
-        loc = Regexp.last_match(1)
-        line = Regexp.last_match(2) || ""
-        # Walk backwards to find the nearest preceding `warning:` line.
-        j = i - 1
-        msg = "(no message)"
-        while j >= 0
-          bl = lines[j]
-          if bl =~ /warning:\s*(.+)/ 
-            msg = Regexp.last_match(1).strip
-            break
-          end
-          # Stop at the previous └─ ref or a blank line followed by └─.
-          break if bl =~ /└─/ 
-          j -= 1
-        end
-        entries << "#{loc}#{line ? ":#{line}" : ""} :: #{msg}"
-      end
-      i += 1
-    end
-    puts entries
+  perl -ne '
+    if (/warning:\s*(.+)/) { $msg=$1; }
+    if (/└─\s+((?:lib|test)\/\S+)/) { print "$1 :: ", ($msg || "(no message)"), "\n"; $msg=""; }
   ' "$log"
 }
 
@@ -333,14 +296,20 @@ run_consumer() {
   local name="$1" root="$2"
   local dest="$CANARY_DIR/$name"
   local log="$CANARY_DIR/$name.log"
-  local t_start
+  local t_start test_failed=0
 
   if [ ! -f "$root/mix.exs" ]; then
-    echo "[$name] SKIP: no mix.exs at $root"
+    echo "[$name] FAIL: no mix.exs at $root"
     log_result "$name" "FAIL(no mix.exs)" ""
     return 0
   fi
 
+  local revision state
+  revision=$(git -C "$root" rev-parse HEAD 2>/dev/null || echo 'not a git checkout')
+  if [ "$revision" = 'not a git checkout' ]; then state=unknown
+  elif [ -n "$(git -C "$root" status --porcelain)" ]; then state=dirty
+  else state=clean; fi
+  echo "[$name] HEAD $revision ($state)"
   t_start=$(date +%s)
 
   echo "[$name] allowlist copy -> $dest (root: $root)"
@@ -374,20 +343,12 @@ run_consumer() {
   fi
 
   if [ "$RUN_TEST" -eq 1 ] && [ "$compile_ok" -eq 1 ]; then
-    # Exclude network/integration tags if the consumer defines them.
-    local tagdefs
-    tagdefs=$(grep -REoh 'excluded_tags: ?\[[^]]*\]|tags: ?\{[^}]*\}' "$dest/config" 2>/dev/null | head -n 10 || true)
-    local test_args=(MIX_ENV=test mix test)
-    for tag in network integration; do
-      if echo "$tagdefs" | grep -q "[:$tag]"; then
-        test_args+=("--exclude" "test.$tag")
-      fi
-    done
-    echo "[$name] ${test_args[*]} (report-only)"
-    if ( cd "$dest" && "${test_args[@]}" >>"$log" 2>&1 ); then
+    echo "[$name] MIX_ENV=test mix test --exclude network --exclude integration (report-only)"
+    if ( cd "$dest" && MIX_ENV=test mix test --exclude network --exclude integration >>"$log" 2>&1 ); then
       echo "[$name] TEST OK"
     else
       echo "[$name] TEST FAILED (report-only, not failing the canary; see $log)"
+      test_failed=1
     fi
   fi
 
@@ -395,7 +356,7 @@ run_consumer() {
   echo "[$name] done in ${dur}s (size: $(du -sh "$dest" 2>/dev/null | cut -f1))"
 
   if [ "$compile_ok" -eq 1 ]; then
-    log_result "$name" "PASS" "$log"
+    if [ "$test_failed" -eq 1 ]; then log_result "$name" "PASS (TEST FAILED, report-only)" "$log"; else log_result "$name" "PASS" "$log"; fi
   else
     # Classify: re-run with the ORIGINAL dep untouched to see if the failure is
     # pre-existing at the consumer's own pin.
@@ -431,7 +392,7 @@ for name in "${consumers[@]}"; do
   elif [ -d "$name" ]; then
     # allow an explicit path argument
     root="$(cd "$name" && pwd)"
-    run_consumer "$name" "$root"
+    run_consumer "$(basename "$root")" "$root"
   else
     echo "[$name] FAIL: consumer root not found: $root (set CANARY_CONSUMERS_ROOT?)"
     log_result "$name" "FAIL(not-found)" ""

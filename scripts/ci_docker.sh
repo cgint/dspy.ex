@@ -23,7 +23,7 @@ set -euo pipefail
 
 REF="${1:-HEAD}"
 ROOT="$(git rev-parse --show-toplevel)"
-CIYML="$ROOT/.github/workflows/ci.yml"
+CIYML="$REF:.github/workflows/ci.yml"
 SHA="$(git -C "$ROOT" rev-parse --short "$REF")"
 # Mount the real object store, not "$ROOT/.git". In a linked worktree `.git` is a
 # *file* pointing into the main repo's .git/worktrees/<name>, which is invisible
@@ -35,16 +35,17 @@ GITDIR="$(git -C "$ROOT" rev-parse --path-format=absolute --git-common-dir)"
 # Read the matrix entries straight from ci.yml (order = order in the file).
 # Emits one "elixir_version otp_version" line per matrix entry.
 parse_matrix() {
-  awk '
+  git -C "$ROOT" show "$CIYML" | awk '
     function trim(s) { sub(/^[ \t]+/, "", s); sub(/[ \t]+$/, "", s); return s }
     /matrix:/ { in_matrix = 1 }
     in_matrix && /^[ \t]*include:/ { in_inc = 1 }
     in_inc && /^[ \t]*-[ \t]*elixir:/ {
       el = $0; sub(/.*elixir:[ \t]*/, "", el); gsub(/["'\'']/, "", el); trim(el)
       getline; otp = $0; sub(/.*otp:[ \t]*/, "", otp); gsub(/["'\'']/, "", otp); trim(otp)
-      printf "%s %s\n", el, otp
+      getline; fmt = $0; sub(/.*check_format:[ \t]*/, "", fmt); fmt=trim(fmt)
+      printf "%s %s %s\n", trim(el), trim(otp), fmt
     }
-  ' "$CIYML"
+  '
 }
 
 hexpm_image() { # $1=elixir $2=otp -> hexpm/elixir:<elixir>-erlang-<otp>-ubuntu-noble-<date>
@@ -69,10 +70,6 @@ hexpm_image() { # $1=elixir $2=otp -> hexpm/elixir:<elixir>-erlang-<otp>-ubuntu-
 
 # The format check runs on the primary (non-floor) leg only, mirroring
 # ci.yml's `check_format: true` on the 1.19 entry.
-leg_check_format() { # $1=leg line "elixir otp"
-  case "$1" in *1.19*) echo true ;; *) echo false ;; esac
-}
-
 run_leg() { # $1=leg id $2=image $3=check_format
   local id="$1" image="$2" check_format="$3"
   echo
@@ -108,11 +105,12 @@ done < <(parse_matrix)
 
 echo "ci_docker: ref=$REF ($SHA) gitdir=$GITDIR"
 echo "ci_docker: matrix (from ci.yml):"
-for leg in "${LEGS[@]}"; do echo "  - elixir ${leg% *} / OTP ${leg#* }"; done
+for leg in "${LEGS[@]}"; do set -- $leg; echo "  - elixir $1 / OTP $2 check_format=$3"; done
 
 fail=0
 for leg in "${LEGS[@]}"; do
-  el="${leg% *}"; otp="${leg#* }"
+  set -- $leg
+  el="$1"; otp="$2"; check_format="$3"
   id="elixir-${el}-otp-${otp}"
   # bash 3.2 cannot do nested ${VAR_${id}}; use eval for the env-override lookup.
   # The id (from ci.yml versions) contains dots, so build a safe var name: e.g.
@@ -121,7 +119,7 @@ for leg in "${LEGS[@]}"; do
   image=""
   eval "image=\"\${${varname}:-}\""
   [ -n "$image" ] || image="$(hexpm_image "$el" "$otp")"
-  if ! run_leg "$id" "$image" "$(leg_check_format "$leg")"; then
+  if ! run_leg "$id" "$image" "$check_format"; then
     echo "ci_docker: LEG FAILED: $id"
     fail=1
   fi

@@ -93,15 +93,21 @@ print_success "Dependencies fetched"
 
 # 3. Check for unused dependencies
 print_status "Checking for unused dependencies..."
+unused_status=PASS
 if ! mix deps.unlock --check-unused; then
+    unused_status=WARN
     print_warning "Some dependencies might be unused"
 else
     print_success "No unused dependencies found"
 fi
 
 # 4. Format code
-print_status "Formatting code..."
-if ! mix format; then
+host_elixir=$(elixir --version | sed -n 's/^Elixir \([^ ]*\).*/\1/p')
+ci_elixir=$(awk '/- elixir:/ {v=$3; gsub(/[\047\042]/, "", v)} /check_format: true/ {print v; exit}' .github/workflows/ci.yml)
+echo "Formatter versions: host Elixir $host_elixir; CI Elixir $ci_elixir"
+[ "$host_elixir" = "$ci_elixir" ] || print_warning "Host and CI formatter versions differ"
+print_status "Checking formatting..."
+if ! mix format --check-formatted; then
     print_error "Formatting failed or has warnings"
     exit 1
 fi
@@ -148,9 +154,12 @@ fi
 print_success "All tests passed"
 
 # 9. Check test coverage (if ExCoveralls is available)
+coverage_status='SKIPPED (not installed)'
 print_status "Checking test coverage..."
 if mix help coveralls >/dev/null 2>&1; then
+    coverage_status=PASS
     if ! mix coveralls; then
+        coverage_status=WARN
         print_warning "Coverage check completed with warnings"
     else
         print_success "Coverage check passed"
@@ -160,8 +169,10 @@ else
 fi
 
 # 10. Check dialyzer types (if available)
+dialyzer_status='SKIPPED (not installed)'
 print_status "Running Dialyzer type checking..."
 if mix help dialyzer >/dev/null 2>&1; then
+    dialyzer_status=PASS
     if ! mix dialyzer; then
         print_error "Dialyzer type checking failed"
         exit 1
@@ -169,33 +180,6 @@ if mix help dialyzer >/dev/null 2>&1; then
     print_success "Type checking passed"
 else
     print_warning "Dialyzer not available, skipping type checking"
-fi
-
-# 11. Compile assets
-print_status "Compiling assets..."
-if [ -f "assets/package.json" ]; then
-    cd assets
-    if ! npm install; then
-        print_error "Failed to install npm dependencies"
-        exit 1
-    fi
-    if ! npm run build; then
-        print_error "Failed to build assets"
-        exit 1
-    fi
-    cd ..
-    print_success "Assets compiled"
-else
-    # Phoenix 1.7+ style
-    if mix help assets.deploy >/dev/null 2>&1; then
-        if ! mix assets.deploy; then
-            print_warning "Asset compilation had issues"
-        else
-            print_success "Assets compiled"
-        fi
-    else
-        print_warning "assets.deploy not available, skipping asset compilation"
-    fi
 fi
 
 # 12. Check for production-unsafe runtime calls
@@ -242,19 +226,14 @@ else
     print_success "No TODO/FIXME comments found"
 fi
 
-echo ""
-print_success "🎉 All precommit checks passed! Ready to commit."
-echo ""
-
-# Summary
 echo "Summary of checks:"
-echo "✅ Dependencies fetched and checked"
-echo "✅ Code formatted"
-echo "✅ Compilation successful"
-echo "✅ Static analysis passed"
-echo "✅ Security analysis passed"
-echo "✅ All tests passed"
-echo "✅ Coverage checked"
-echo "✅ Type checking passed"
-echo "✅ Assets compiled"
-echo "✅ Production-safe code verified"
+echo "Dependencies: PASS"
+echo "Unused dependencies: $unused_status"
+echo "Format: PASS"
+echo "Compile: PASS"
+echo "Credo: SKIPPED (disabled)"
+echo "Sobelow: SKIPPED (disabled)"
+echo "Tests: PASS"
+echo "Coverage: $coverage_status"
+echo "Dialyzer: $dialyzer_status"
+echo "Unsafe calls: PASS"
