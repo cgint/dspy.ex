@@ -31,7 +31,10 @@ defmodule Dspy.MixProject do
       {:jason, "~> 1.4"},
 
       # JSON Schema validation/casting for typed structured outputs.
-      {:jsv, "~> 0.16"},
+      # Keep consumer lockfiles off EEF-CVE-2026-117680 and EEF-CVE-2026-117678.
+      # JSV 0.28 is the first release that accepts the patched idna 8.
+      {:jsv, ">= 0.28.0 and < 1.0.0"},
+      {:idna, "~> 8.0"},
 
       # CSV encoding for `Dspy.Evaluate.Result` `save_as_csv` (M1-a, Horst-confirmed dep 2026-09-28).
       {:nimble_csv, "~> 1.2"},
