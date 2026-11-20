@@ -4,7 +4,7 @@ set -euo pipefail
 # Convenience wrapper for the common "ship-ready" verification combo.
 #
 # Default:
-# - ./precommit.sh  (formats + runs core checks)
+# - ./precommit.sh  (checks formatting + runs core checks)
 # - scripts/verify_all.sh (core + extras; format check)
 
 usage() {
