@@ -97,9 +97,12 @@ defmodule Dspy.MultiChainComparison do
 
   defp format_attempt(completion, last_key) do
     rationale = get(completion, :rationale) || get(completion, :reasoning) || ""
-    answer = get(completion, last_key)
+    answer = first_line(get(completion, last_key))
 
-    "«I'm trying to #{first_line(rationale)} I'm not sure but my prediction is #{first_line(answer)}»"
+    case first_line(rationale) do
+      "" -> "«My prediction is #{answer}»"
+      line -> "«I'm trying to #{line} I'm not sure but my prediction is #{answer}»"
+    end
   end
 
   # H15 (S10): both clause shapes use the canonical accessor, so a string-keyed
