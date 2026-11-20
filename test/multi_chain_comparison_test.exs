@@ -78,6 +78,18 @@ defmodule Dspy.MultiChainComparisonTest do
     assert Dspy.Settings.get(:temperature) == 0.1
   end
 
+  test "formats attempts without a rationale as answer-only" do
+    mcc = Dspy.MultiChainComparison.new("question -> answer", m: 2)
+    attempts = [%{answer: "41"}, %{"rationale" => " \t\n ", "answer" => "42\nnoise"}]
+
+    assert {:ok, _} = Dspy.call(mcc, %{question: "q", completions: attempts})
+    assert_receive {:request, request}
+    text = prompt_text(request)
+    assert text =~ "«My prediction is 41»"
+    assert text =~ "«My prediction is 42»"
+    refute text =~ "I'm trying to"
+  end
+
   test "wrong number of completions is an error, and no LM call happens" do
     mcc = Dspy.MultiChainComparison.new("question -> answer", m: 2)
 
