@@ -83,6 +83,17 @@ defmodule DspyReqLLMAdapterTest do
     def generate_object(_model, _input, _schema, _opts), do: {:error, :native_failed}
   end
 
+  defmodule LeakyGeneration do
+    def generate_object(_model, _input, _schema, _opts) do
+      {:error,
+       ReqLLM.Error.API.Request.exception(
+         status: 502,
+         reason: "SYNTHETIC_PROVIDER_ECHO_M1",
+         request_body: "SYNTHETIC_REQUEST_MARKER_M1"
+       )}
+    end
+  end
+
   defmodule EmptyTextGeneration do
     def generate_object(_model, _input, _schema, _opts), do: {:ok, :empty_object_resp}
   end
@@ -153,6 +164,26 @@ defmodule DspyReqLLMAdapterTest do
       assert log =~ "native structured-output generation failed; falling back to text generation"
       assert log =~ ":native_failed"
     end)
+  end
+
+  test "native object fallback logs the status without the provider payload" do
+    lm =
+      Dspy.LM.ReqLLM.new(
+        model: "google:gemini",
+        client_module: FakeReqLLM,
+        context_module: FakeContext,
+        response_module: FakeResponse,
+        generation_module: LeakyGeneration
+      )
+
+    log =
+      ExUnit.CaptureLog.capture_log(fn ->
+        assert {:ok, _response} =
+                 Dspy.LM.generate(lm, %{prompt: "q", output_contract: %{"type" => "object"}})
+      end)
+
+    assert log =~ "502"
+    refute String.contains?(log, "SYNTHETIC_")
   end
 
   test "ReqLLM adapter retries native operation failure through text generation once" do
