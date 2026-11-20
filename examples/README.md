@@ -29,6 +29,7 @@ These should run without network calls:
   - `mix run examples/offline/react_tool_logging_offline.exs`
 - Debug: settings defaults applied to request maps (offline):
   - `mix run examples/offline/request_defaults_offline.exs` (debugging/introspection; not a recommended config template)
+  - `mix run examples/offline/semantic_f1_evaluation_offline.exs report.json` (evaluate a CSV dataset and save per-example scores, including failures)
 
 ## `examples/providers/` — real providers / opt-in
 

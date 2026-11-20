@@ -20,6 +20,7 @@ examples=(
   examples/offline/retrieve_rag_genserver_offline.exs
   examples/offline/react_tool_logging_offline.exs
   examples/offline/request_defaults_offline.exs
+  examples/offline/semantic_f1_evaluation_offline.exs
 )
 
 echo "== Verifying offline examples =="

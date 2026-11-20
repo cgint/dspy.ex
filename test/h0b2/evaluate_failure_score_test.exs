@@ -11,7 +11,28 @@ defmodule DspyEvaluateH0b2FailureScoreTest do
   alias Dspy.Evaluate
   alias Dspy.Example
 
+  defmodule ForwardProbe do
+    @behaviour Dspy.Module
+    defstruct [:caller]
+
+    @impl true
+    def forward(%__MODULE__{caller: caller}, _inputs) do
+      send(caller, :forward_called)
+      {:error, :boom}
+    end
+  end
+
   defp ex(id), do: Example.new(%{id: id, answer: "ok"})
+
+  test "a nonnumeric failure score is rejected before forwarding any examples" do
+    assert_raise ArgumentError, ~r/failure_score must be a number/, fn ->
+      Evaluate.evaluate(%ForwardProbe{caller: self()}, [ex(1)], fn _, _ -> 1 end,
+        failure_score: :custom
+      )
+    end
+
+    refute_received :forward_called
+  end
 
   test "3 of 4 examples score 1.0, 1 raises -> 4 items, failed score 0.0, mean 0.75" do
     program = %H0b2.Support.ForwardRaises{}
