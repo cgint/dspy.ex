@@ -10,16 +10,31 @@ defmodule Dspy.LM.Cache do
 
   @table :dspy_lm_cache
 
+  use GenServer
+
+  def start_link(_opts), do: GenServer.start_link(__MODULE__, :ok)
+
+  @impl true
+  def init(:ok) do
+    :ets.new(@table, [
+      :named_table,
+      :set,
+      :public,
+      read_concurrency: true,
+      write_concurrency: true
+    ])
+
+    {:ok, nil}
+  end
+
+  def table_ref, do: :ets.whereis(@table)
+
   @spec clear() :: :ok
   def clear do
-    case :ets.whereis(@table) do
-      :undefined ->
-        :ok
-
-      _tid ->
-        :ets.delete_all_objects(@table)
-        :ok
-    end
+    with_table(table_ref(), :ok, fn tid ->
+      :ets.delete_all_objects(tid)
+      :ok
+    end)
   end
 
   @doc """
@@ -32,14 +47,14 @@ defmodule Dspy.LM.Cache do
   """
   @spec fetch(lm :: term(), request :: term(), keyword()) :: {:hit, term()} | :miss
   def fetch(lm, request, opts \\ []) do
-    ensure_table!()
+    with_table(Keyword.get_lazy(opts, :table, &table_ref/0), :miss, fn tid ->
+      key = cache_key(lm, request, Keyword.get(opts, :rollout_id))
 
-    key = cache_key(lm, request, Keyword.get(opts, :rollout_id))
-
-    case :ets.lookup(@table, key) do
-      [{^key, value}] -> {:hit, value}
-      _ -> :miss
-    end
+      case :ets.lookup(tid, key) do
+        [{^key, value}] -> {:hit, value}
+        [] -> :miss
+      end
+    end)
   end
 
   @doc """
@@ -49,35 +64,20 @@ defmodule Dspy.LM.Cache do
   """
   @spec put(lm :: term(), request :: term(), value :: term(), keyword()) :: :ok
   def put(lm, request, value, opts \\ []) do
-    ensure_table!()
-
-    key = cache_key(lm, request, Keyword.get(opts, :rollout_id))
-    true = :ets.insert(@table, {key, value})
-    :ok
+    with_table(Keyword.get_lazy(opts, :table, &table_ref/0), :ok, fn tid ->
+      key = cache_key(lm, request, Keyword.get(opts, :rollout_id))
+      true = :ets.insert(tid, {key, value})
+      :ok
+    end)
   end
 
-  defp ensure_table! do
-    case :ets.whereis(@table) do
-      :undefined ->
-        try do
-          :ets.new(@table, [
-            :named_table,
-            :set,
-            :public,
-            read_concurrency: true,
-            write_concurrency: true
-          ])
+  defp with_table(:undefined, fallback, _operation), do: fallback
 
-          :ok
-        rescue
-          # Another process created the named table concurrently.
-          ArgumentError ->
-            :ok
-        end
-
-      _tid ->
-        :ok
-    end
+  defp with_table(tid, fallback, operation) do
+    operation.(tid)
+  rescue
+    # The supervisor may have replaced the table since we obtained the reference.
+    ArgumentError -> fallback
   end
 
   defp cache_key(lm, request, nil) do
