@@ -315,11 +315,18 @@ defmodule Dspy.ModuleNamedPredictorsTest do
     demo = Example.new(question: "Example", answer: "Example answer")
 
     predict =
-      Predict.new(QA, lm: lm, examples: [demo], max_retries: 1)
+      Predict.new(QA, lm: lm, examples: [demo], max_retries: 1, config: [temperature: 0.4])
       |> put_in([Access.key(:signature), Access.key(:instructions)], "Keep these instructions")
 
     legacy = Map.delete(predict, :lm)
-    cot = ChainOfThought.new(QA, lm: lm, examples: [demo], reasoning_field: :rationale)
+
+    cot =
+      ChainOfThought.new(QA,
+        lm: lm,
+        examples: [demo],
+        reasoning_field: :rationale,
+        config: [rollout_id: nil, max_tokens: 16]
+      )
 
     program = %Program{
       branch: %Program{left: cot},
@@ -354,5 +361,21 @@ defmodule Dspy.ModuleNamedPredictorsTest do
       reset = Module.reset_copy(program)
       assert {:ok, %{attrs: %{answer: "ambient"}}} = Module.forward(reset, question: "Which LM?")
     end)
+  end
+
+  test "native predictors can reset their learned state and retain config" do
+    lm = %RecordingLM{model: "bound"}
+    demo = Example.new(question: "Example", answer: "Example answer")
+
+    for predictor_module <- [Predict, ChainOfThought] do
+      program =
+        predictor_module.new(QA,
+          lm: lm,
+          examples: [demo],
+          config: [rollout_id: 0, temperature: 0.0]
+        )
+
+      assert predictor_module.reset(program) == %{program | examples: [], lm: nil}
+    end
   end
 end
