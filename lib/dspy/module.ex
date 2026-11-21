@@ -168,6 +168,17 @@ defmodule Dspy.Module do
   end
 
   @doc """
+  Return a program with demos and stored LM bindings cleared on each named predictor.
+
+  Reset predictors use the configured LM on their next call. Signatures and
+  generation options carry over to the result.
+  """
+  @spec reset_copy(t()) :: t()
+  def reset_copy(program) do
+    map_named_predictors(program, &Map.merge(&1, %{examples: [], lm: nil}))
+  end
+
+  @doc """
   Get a module's parameters if it implements the callback.
   """
   def parameters(module) do

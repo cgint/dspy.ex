@@ -309,4 +309,50 @@ defmodule Dspy.ModuleNamedPredictorsTest do
       Module.set_lm(left, "provider/model")
     end
   end
+
+  test "reset_copy clears demos and stored LMs across named slots" do
+    lm = %RecordingLM{model: "original"}
+    demo = Example.new(question: "Example", answer: "Example answer")
+
+    predict =
+      Predict.new(QA, lm: lm, examples: [demo], max_retries: 1)
+      |> put_in([Access.key(:signature), Access.key(:instructions)], "Keep these instructions")
+
+    legacy = Map.delete(predict, :lm)
+    cot = ChainOfThought.new(QA, lm: lm, examples: [demo], reasoning_field: :rationale)
+
+    program = %Program{
+      branch: %Program{left: cot},
+      items: [predict, legacy],
+      mapping: %{1 => predict, "1" => predict},
+      data: %Data{predictor: predict}
+    }
+
+    reset = Module.reset_copy(program)
+    cold = %{predict | examples: [], lm: nil}
+
+    assert reset == %{
+             program
+             | branch: %Program{left: %{cot | examples: [], lm: nil}},
+               items: [cold, cold],
+               mapping: %{1 => cold, "1" => cold}
+           }
+
+    assert Module.get_lm(reset) == nil
+    assert program.items == [predict, legacy]
+    assert Module.reset_copy(%Program{}) == %Program{}
+  end
+
+  test "a standalone reset uses the configured LM on the next call" do
+    bound = %RecordingLM{model: "bound"}
+    ambient = %RecordingLM{model: "ambient"}
+    program = Predict.new(QA, lm: bound, adapter: Dspy.Signature.Adapters.JSONAdapter)
+
+    Dspy.context([lm: ambient], fn ->
+      assert {:ok, %{attrs: %{answer: "bound"}}} = Module.forward(program, question: "Which LM?")
+
+      reset = Module.reset_copy(program)
+      assert {:ok, %{attrs: %{answer: "ambient"}}} = Module.forward(reset, question: "Which LM?")
+    end)
+  end
 end
