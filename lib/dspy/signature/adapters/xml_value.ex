@@ -8,7 +8,10 @@ defmodule Dspy.Signature.Adapters.XMLValue do
   @entry_tag ~r/\A<entry[ \t]+key[ \t]*=[ \t]*(?:"([^"<\x00-\x1f]*)"|'([^'<\x00-\x1f]*)')[ \t]*(\/?)>/u
   @opening_newline ~r/\A[ \t]*\r?\n/
   @closing_newline ~r/\r?\n[ \t]*\z/
+  @opening_tag_start ~r/\A<[\p{L}_]/u
+  @opening_tag_line ~r/\A<[\p{L}_](?:"[^"\r\n]*"|'[^'\r\n]*'|[^"'>\r\n])*+>[ \t]*(?:\r?\n|\z)/u
   @json_string ~S/"(?:[^"\\]++|\\[\s\S])*+"/
+  @bounded_json_string ~S/"(?:[^"\\\x00-\x1f]++|\\[^\x00-\x1f])*+"/
   @scalar_types %{"integer" => :integer, "number" => :number, "boolean" => :boolean}
 
   def kind(schema) do
@@ -16,7 +19,7 @@ defmodule Dspy.Signature.Adapters.XMLValue do
 
     cond do
       object_variants(schema) -> :discriminated
-      record_union_branches(schema) -> :record_union
+      union = record_union_branches(schema) -> elem(union, 0)
       true -> shape_kind(schema)
     end
   end
@@ -66,7 +69,9 @@ defmodule Dspy.Signature.Adapters.XMLValue do
   def record_union_branches(%{"discriminator" => _}), do: nil
   def record_union_branches(%{"allOf" => _}), do: nil
   def record_union_branches(%{"anyOf" => _, "oneOf" => _}), do: nil
-  def record_union_branches(%{"type" => type}) when type != "object", do: nil
+
+  def record_union_branches(%{"type" => type}) when type != "object" and not is_list(type),
+    do: nil
 
   def record_union_branches(%{"anyOf" => choices} = schema),
     do: record_union_branches(schema, "anyOf", choices)
@@ -78,16 +83,42 @@ defmodule Dspy.Signature.Adapters.XMLValue do
 
   defp record_union_branches(schema, keyword, choices) when is_integer(length(choices)) do
     shared = Map.delete(schema, keyword)
+    non_null = Enum.reject(choices, &match?(%{"type" => "null"}, &1))
+    {records, other} = Enum.split_with(non_null, &record_branch?/1)
+    shared_type = Map.get(schema, "type", "object")
 
-    with [_, _ | _] = branches <- Enum.reject(choices, &match?(%{"type" => "null"}, &1)),
-         true <- Enum.all?(branches, &record_branch?/1) do
-      Enum.map(branches, &{&1, merge_record_shape(shared, shape(&1))})
-    else
-      _ -> nil
+    kind =
+      case {records, other, shared_type} do
+        {[_, _ | _], [], "object"} ->
+          :record_union
+
+        {[_ | _], [_ | _], type} ->
+          if mixed_union_type?(type) and Enum.all?(other, &string_branch?/1),
+            do: :mixed_record_union
+
+        _ ->
+          nil
+      end
+
+    if kind do
+      branches =
+        Enum.map(records, fn branch ->
+          grammar = branch |> shape() |> Map.put_new("type", "object")
+          {branch, merge_record_shape(shared, grammar)}
+        end)
+
+      {kind, branches}
     end
   end
 
   defp record_union_branches(_schema, _keyword, _choices), do: nil
+
+  defp mixed_union_type?("object"), do: true
+
+  defp mixed_union_type?(types) when is_integer(length(types)),
+    do: Enum.sort(types) in [["object", "string"], ["null", "object", "string"]]
+
+  defp mixed_union_type?(_type), do: false
 
   defp record_branch?(branch) when is_map(branch) do
     not Enum.any?(["discriminator", "allOf", "anyOf", "oneOf"], &Map.has_key?(branch, &1)) and
@@ -95,6 +126,8 @@ defmodule Dspy.Signature.Adapters.XMLValue do
   end
 
   defp record_branch?(_branch), do: false
+
+  defp string_branch?(schema), do: match?(%{"type" => "string"}, shape(schema))
 
   # Combine the declarations needed to read the XML. Keep validation on the
   # original branch and union, where the constraints still apply independently.
@@ -356,10 +389,14 @@ defmodule Dspy.Signature.Adapters.XMLValue do
   defp read_container(text, name, schema, boundary, ancestors) do
     shaped = shape(schema)
     variants = object_variants(shaped)
-    branches = record_union_branches(shaped)
-    kind = if variants || branches, do: :object, else: shape_kind(shaped)
+    union = record_union_branches(shaped)
+    kind = if variants || union, do: :object, else: shape_kind(shaped)
 
     cond do
+      match?({:mixed_record_union, _}, union) ->
+        {:mixed_record_union, branches} = union
+        read_mixed_record_union(text, name, {schema, branches}, boundary, ancestors)
+
       json_container?(String.trim_leading(text), kind) ->
         with {:ok, raw, rest} <- read_literal(text, name, boundary, ancestors, false, :json),
              {:ok, decoded} <- decode_json(raw, name) do
@@ -369,11 +406,43 @@ defmodule Dspy.Signature.Adapters.XMLValue do
       variants ->
         read_discriminated(text, name, variants, boundary, ancestors)
 
-      branches ->
+      union ->
+        {:record_union, branches} = union
         read_record_union(text, name, {schema, branches}, boundary, ancestors)
 
       true ->
         read_shaped_container(text, name, shaped, kind, boundary, ancestors)
+    end
+  end
+
+  defp read_mixed_record_union(text, name, union, boundary, ancestors) do
+    body = String.trim_leading(text)
+
+    structural? =
+      if Regex.match?(@opening_newline, text),
+        do: Regex.match?(@opening_tag_line, body),
+        else: Regex.match?(@opening_tag_start, body)
+
+    if structural? do
+      read_record_union(text, name, union, boundary, ancestors)
+    else
+      case mixed_json_candidate(body, name, boundary, ancestors) do
+        {:ok, _value, _rest} = json -> json
+        :error -> read_literal(text, name, boundary, ancestors, false, :text)
+      end
+    end
+  end
+
+  defp mixed_json_candidate(body, name, boundary, ancestors) do
+    # JSON takes precedence only after a complete value and a structural close.
+    # Its field close can be followed by an enclosing close on the same line.
+    # A malformed quote falls back to the ordinary literal reader.
+    with true <- String.starts_with?(body, ["{", "\"", "null"]),
+         {:ok, raw, rest} <- read_literal(body, name, boundary, ancestors, false, :bounded_json),
+         {:ok, decoded} <- Jason.decode(String.trim(raw)) do
+      {:ok, decoded, rest}
+    else
+      _ -> :error
     end
   end
 
@@ -594,7 +663,13 @@ defmodule Dspy.Signature.Adapters.XMLValue do
 
     alternatives = ["(" <> field_close <> ")" | Enum.map(scopes, &close_pattern(elem(&1, 0)))]
     # Skip quoted JSON tokens before looking for any of the XML closing tags.
-    alternatives = if mode == :json, do: [@json_string | alternatives], else: alternatives
+    alternatives =
+      case mode do
+        :json -> [@json_string | alternatives]
+        :bounded_json -> [@bounded_json_string | alternatives]
+        :text -> alternatives
+      end
+
     matcher = Regex.compile!(Enum.join(alternatives, "|"))
     fallback = if allow_fallback?, do: :keep, else: :none
 

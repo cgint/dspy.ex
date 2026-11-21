@@ -88,8 +88,15 @@ Record-only `oneOf` and `anyOf` schemas also accept native XML without a
 discriminator. Branch constraints and shared constraints participate in
 validation. Distinct valid interpretations return an ambiguity error. Use
 explicit JSON inside the field tag to choose a value type. Demos for these
-unions carry JSON inside the tags. JSON also supports schemas that rely on
-`patternProperties`.
+unions carry JSON inside the tags.
+
+Unions of strings and records accept literal text and native XML records.
+A child tag immediately after the field opener selects the record syntax.
+With a framing newline, a child opening tag on its own line selects the
+record syntax. A compact line of markup in a multiline field is literal
+text. Explicit JSON strings and objects let the caller choose the type and
+preserve these values in demonstrations and history. JSON also supports
+schemas that rely on `patternProperties`.
 
 ### Refine failure allowance
 
