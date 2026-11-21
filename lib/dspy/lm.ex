@@ -257,11 +257,20 @@ defmodule Dspy.LM do
   @callback generate(lm :: t(), request :: request()) :: {:ok, response()} | {:error, any()}
 
   @doc """
+  Generate one text completion and call `on_delta` for each text fragment.
+
+  Return the normalized completion after the stream ends. A callback returning
+  `:halt` cancels the stream. A callback returning `{:error, reason}` aborts it.
+  """
+  @callback stream_generate(lm :: t(), request :: request(), on_delta :: (String.t() -> term())) ::
+              {:ok, response()} | {:error, term()}
+
+  @doc """
   Check if the language model supports a specific feature.
   """
   @callback supports?(lm :: t(), feature :: atom()) :: boolean()
 
-  @optional_callbacks [supports?: 2]
+  @optional_callbacks [supports?: 2, stream_generate: 3]
 
   @doc false
   def validate_binding!(nil), do: nil
@@ -290,6 +299,56 @@ defmodule Dspy.LM do
   def generate(lm, request) do
     generate_request(lm, request, [])
   end
+
+  @doc """
+  Stream a single text completion using an LM that implements streaming.
+
+  Applies the same request defaults as `generate/2`. A delta is a text fragment
+  in provider order. A callback returning `:halt` yields `{:error, :cancelled}`.
+  A callback returning `{:error, reason}` stops the stream with that error.
+  Streaming bypasses DSPy caching and retries.
+  """
+  @spec stream_generate(t(), request(), (String.t() -> term())) ::
+          {:ok, response()} | {:error, term()}
+  def stream_generate(%module{} = lm, request, on_delta)
+      when is_map(request) and is_function(on_delta, 1) do
+    with true <- Code.ensure_loaded?(module) and function_exported?(module, :stream_generate, 3),
+         :ok <- validate_stream_options(request) do
+      module.stream_generate(lm, apply_settings_defaults(request), on_delta)
+    else
+      false -> {:error, :streaming_unsupported}
+      {:error, _} = error -> error
+    end
+  end
+
+  @doc false
+  def validate_stream_options(options) do
+    unsupported =
+      Enum.find([:output_contract, :response_format, :tools, :tool_choice, :n], fn key ->
+        not streaming_option_allowed?(key, stream_option(options, key))
+      end)
+
+    if unsupported, do: {:error, {:unsupported_streaming_option, unsupported}}, else: :ok
+  end
+
+  defp stream_option(%{} = options, key) do
+    case Dspy.Attrs.fetch_map(options, key) do
+      {:ok, value} -> value
+      :error -> nil
+    end
+  end
+
+  defp stream_option(options, key) when is_list(options), do: Keyword.get(options, key)
+  defp stream_option(_options, _key), do: nil
+
+  defp streaming_option_allowed?(_key, nil), do: true
+  defp streaming_option_allowed?(:tools, []), do: true
+  defp streaming_option_allowed?(:n, 1), do: true
+
+  defp streaming_option_allowed?(:response_format, %{} = format),
+    do: stream_option(format, :type) in [:text, "text"]
+
+  defp streaming_option_allowed?(_key, _value), do: false
 
   @doc false
   def generate_with_options(nil, request, opts) do

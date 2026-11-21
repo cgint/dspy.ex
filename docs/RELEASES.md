@@ -8,6 +8,15 @@ This repo ships in **small, user-usable slices**.
 
 ## Consumer notes
 
+### LM streaming transport
+
+`Dspy.LM.stream_generate/3` delivers ReqLLM text deltas to a callback in the
+calling process and returns the normalized LM response, including usage.
+The callback can halt the stream. A separate provider owner closes the HTTP
+connection if the caller exits. The transport bypasses response caches and
+DSPy retries. The loopback suite verifies the OpenAI Responses route.
+Program streaming, field listeners, and status events remain in M5.
+
 ### Scoped diagnostic history
 
 `Dspy.capture_history/2` returns the call result and a bounded LM history

@@ -1,5 +1,11 @@
 # Status
 
+> **M5, streaming transport.** `Dspy.LM.stream_generate/3` delivers text
+> deltas and the final normalized response. A monitored ReqLLM owner closes
+> the HTTP stream on caller exit. Loopback tests cover startup cleanup,
+> incremental delivery, cancellation, and private data in crash logs.
+> Program streaming, field listeners, and status events remain open.
+
 > **M4b, XML adapter.** Opt-in XML outputs support typed records, arrays, and dictionaries with literal string leaves. Repeated list fields preserve item order across intervening fields. Record unions decode native XML when the value has a unique valid interpretation. Mixed string and record unions distinguish literal markup from record tags by line framing. Union demos use JSON inside field tags. XML also replays typed user turns, images, attachments, and completed tool exchanges. The [offline example](../../examples/offline/structured_react_refine_offline.exs) verifies a typed output retry on both Chat and XML with the same image-bearing tool history.
 
 > **M4a, structured ReAct and Refine.** Refine uses distinct rollouts, a per-call failure allowance, and optional slot-specific advice through a caller-bound LM. A bounded report contains declared fields. Advice lasts one attempt and survives its output retries. The [offline example](../../examples/offline/structured_react_refine_offline.exs) replays image-bearing ReAct history, validates a submit call, and exercises a Refine feedback retry.
