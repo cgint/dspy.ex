@@ -98,6 +98,21 @@ defmodule Dspy.Module do
   defp attach_usage_to_result(other, _usage), do: other
 
   @doc """
+  List the named Predict and ChainOfThought values in a program.
+
+  Names follow module fields and the immediate entries of list, tuple and map
+  fields. The same predictor value in multiple slots appears at each name.
+  A standalone Predict is named `self`. ChainOfThought contributes `predict`
+  within its slot and is returned as the native ChainOfThought value.
+  """
+  @spec named_predictors(t()) :: [{String.t(), Dspy.Module.PredictorSlots.predictor()}]
+  def named_predictors(program) do
+    for {path, predictor} <- Dspy.Module.PredictorSlots.list(program) do
+      {Dspy.Module.PredictorSlots.name(path, predictor), predictor}
+    end
+  end
+
+  @doc """
   Get a module's parameters if it implements the callback.
   """
   def parameters(module) do
