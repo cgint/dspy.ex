@@ -16,6 +16,7 @@ defmodule Dspy.Teleprompt.BootstrapFewShotWithRandomSearch do
     Module,
     Parameter,
     Prediction,
+    PredictorConfig,
     Random,
     Settings,
     Signature,
@@ -463,6 +464,11 @@ defmodule Dspy.Teleprompt.BootstrapFewShotWithRandomSearch do
       else
         Keyword.merge(optimizer.teacher_settings, rollout_id: round, temperature: 1.0)
       end
+
+    teacher =
+      if round > 0 and module_program?(teacher),
+        do: PredictorConfig.set_rollout(teacher, round),
+        else: teacher
 
     Dspy.context(overrides, fn ->
       with {:ok, prediction, traces} <- forward_teacher(teacher, mode, example) do

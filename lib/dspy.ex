@@ -262,15 +262,31 @@ defmodule Dspy do
 
   Currently supported options:
   - `:callbacks` — signature-adapter callbacks (`[{module, state}]`)
+  - `:config` — generation options for this call to a Predict or ChainOfThought program
   """
   @spec forward(Dspy.Module.t(), Dspy.Module.inputs(), keyword()) ::
           {:ok, Dspy.Module.outputs()} | {:error, term()}
   def forward(program, inputs, opts) when is_list(opts) do
     callbacks = Keyword.get(opts, :callbacks, [])
 
+    program =
+      case Keyword.fetch(opts, :config) do
+        :error -> program
+        {:ok, config} -> with_call_config(program, config)
+      end
+
     with_callbacks(callbacks, fn ->
       forward(program, inputs)
     end)
+  end
+
+  defp with_call_config(%Predict{} = predict, config), do: Predict.update_config(predict, config)
+
+  defp with_call_config(%ChainOfThought{} = cot, config),
+    do: ChainOfThought.update_config(cot, config)
+
+  defp with_call_config(_program, _config) do
+    raise ArgumentError, "per-call config requires a Predict or ChainOfThought program"
   end
 
   @doc """

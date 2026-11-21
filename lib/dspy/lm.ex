@@ -260,12 +260,7 @@ defmodule Dspy.LM do
   @doc """
   Generate a completion using the configured language model.
   """
-  def generate(request) do
-    case Dspy.Settings.get(:lm) do
-      nil -> {:error, :no_lm_configured}
-      lm -> generate(lm, request)
-    end
-  end
+  def generate(request), do: generate_with_options(nil, request, [])
 
   @doc """
   Generate a completion using a specific language model.
@@ -275,11 +270,26 @@ defmodule Dspy.LM do
   per-request values.
   """
   def generate(lm, request) do
+    generate_request(lm, request, [])
+  end
+
+  @doc false
+  def generate_with_options(nil, request, opts) do
+    case Dspy.Settings.get(:lm) do
+      nil -> {:error, :no_lm_configured}
+      lm -> generate_request(lm, request, opts)
+    end
+  end
+
+  def generate_with_options(lm, request, opts), do: generate_request(lm, request, opts)
+
+  defp generate_request(lm, request, opts) do
     request = apply_settings_defaults(request)
     started_at_ms = System.monotonic_time(:millisecond)
 
     if cache_enabled?() and cacheable_request?(request) do
-      cache_opts = [rollout_id: Dspy.Settings.get(:rollout_id), table: Dspy.LM.Cache.table_ref()]
+      rollout_id = Keyword.get_lazy(opts, :rollout_id, fn -> Dspy.Settings.get(:rollout_id) end)
+      cache_opts = [rollout_id: rollout_id, table: Dspy.LM.Cache.table_ref()]
 
       case Dspy.LM.Cache.fetch(lm, request, cache_opts) do
         {:hit, cached} ->
