@@ -560,8 +560,8 @@ Evidence:
 |---|---|---|---|
 | `dspy.evaluate(...)` | `Dspy.evaluate/4` (or `Dspy.Evaluate.evaluate/4`) | Deterministic/offline default patterns (`num_threads: 1`, `progress: false`) | `test/evaluate_golden_path_test.exs`, `test/dspy_facade_test.exs` |
 | built-in metrics | `Dspy.Metrics` | Standard metrics + metric composition helpers | `test/metrics_test.exs` |
-| cross-validation | `Dspy.Evaluate.cross_validate/4` | Quiet-by-default supported | `test/evaluate_detailed_results_test.exs` |
-| dataset split/sample | `Dspy.Trainset.split/2`, `sample/3` | Seeded determinism | `test/trainset_test.exs` |
+| cross-validation | `Dspy.Evaluate.cross_validate/4` | Quiet by default, with CPython-compatible seeded shuffle | `test/evaluate_detailed_results_test.exs` |
+| dataset split/sample | `Dspy.Trainset.split/2`, `sample/3` | Explicit seeded state. Seeded orders can differ from v0.4.11. | `test/trainset_test.exs` |
 
 ### Teleprompting (optimization) + persistence
 

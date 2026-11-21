@@ -8,6 +8,13 @@ This repo ships in **small, user-usable slices**.
 
 ## Consumer notes
 
+### Sampling after v0.4.11
+
+Cross-validation, `Trainset`, `Ensemble`, and `BootstrapFewShot` now use explicit
+CPython-compatible random state. An integer seed still gives repeatable results.
+It can produce different folds, samples, or demonstrations than v0.4.11.
+These calls preserve the caller's Erlang random state.
+
 ### Adapter fixes in v0.4.11
 
 - Transport and output retry exhaustion now log at debug level. The original
