@@ -80,7 +80,7 @@ defmodule Dspy.LM.ReqLLM do
 
             {:error, native_reason} ->
               Logger.warning(
-                "native structured-output generation failed; falling back to text generation: #{inspect(native_reason)}"
+                "native structured-output generation failed; falling back to text generation: #{Dspy.LogReason.format(native_reason)}"
               )
 
               generate_text_response(lm, input, opts)
