@@ -99,12 +99,10 @@ defmodule Dspy.Signature.Adapters.XMLValue do
   # Combine the declarations needed to read the XML. Keep validation on the
   # original branch and union, where the constraints still apply independently.
   defp merge_record_shape(shared, branch) when is_map(shared) and is_map(branch) do
-    Map.merge(shared, branch, fn
-      "properties", shared_fields, branch_fields
-      when is_map(shared_fields) and is_map(branch_fields) ->
-        Map.merge(shared_fields, branch_fields, fn _name, left, right ->
-          merge_record_shape(left, right)
-        end)
+    shared
+    |> Map.merge(branch, fn
+      "type", left, right ->
+        merge_shape_type(left, right)
 
       key, left, right when key in ["items", "additionalProperties"] ->
         merge_record_shape(left, right)
@@ -112,10 +110,71 @@ defmodule Dspy.Signature.Adapters.XMLValue do
       _key, _left, right ->
         right
     end)
+    |> merge_shape_properties(shared, branch)
+    |> merge_shape_prefix_items(shared, branch)
   end
 
+  defp merge_record_shape(false, _branch), do: false
   defp merge_record_shape(shared, true), do: shared
   defp merge_record_shape(_shared, branch), do: branch
+
+  defp merge_shape_type(left, right) do
+    common =
+      for a <- List.wrap(left),
+          b <- List.wrap(right),
+          type = intersect_type(a, b),
+          is_binary(type),
+          uniq: true,
+          do: type
+
+    case common do
+      [] -> right
+      [type] -> type
+      types -> types
+    end
+  end
+
+  defp intersect_type(type, type), do: type
+  defp intersect_type("integer", "number"), do: "integer"
+  defp intersect_type("number", "integer"), do: "integer"
+  defp intersect_type(_left, _right), do: nil
+
+  defp merge_shape_properties(merged, shared, branch) do
+    with left when is_map(left) <- Map.get(shared, "properties", %{}),
+         right when is_map(right) <- Map.get(branch, "properties", %{}),
+         names = Enum.uniq(Map.keys(left) ++ Map.keys(right)),
+         [_ | _] <- names do
+      shared_default = Map.get(shared, "additionalProperties", true)
+      branch_default = Map.get(branch, "additionalProperties", true)
+
+      properties =
+        Map.new(names, fn name ->
+          child =
+            merge_record_shape(
+              Map.get(left, name, shared_default),
+              Map.get(right, name, branch_default)
+            )
+
+          {name, child}
+        end)
+
+      Map.put(merged, "properties", properties)
+    else
+      _ -> merged
+    end
+  end
+
+  defp merge_shape_prefix_items(merged, shared, branch) do
+    with left when is_integer(length(left)) <- Map.get(shared, "prefixItems", []),
+         right when is_integer(length(right)) <- Map.get(branch, "prefixItems", []),
+         width when width > 0 <- max(length(left), length(right)) do
+      left = left ++ List.duplicate(Map.get(shared, "items", true), width - length(left))
+      right = right ++ List.duplicate(Map.get(branch, "items", true), width - length(right))
+      Map.put(merged, "prefixItems", Enum.zip_with(left, right, &merge_record_shape/2))
+    else
+      _ -> merged
+    end
+  end
 
   defp object_variant(schema, property, shared) do
     object = shape(schema)
@@ -321,8 +380,9 @@ defmodule Dspy.Signature.Adapters.XMLValue do
   defp read_record_union(text, name, {schema, branches}, boundary, ancestors) do
     decoded =
       Enum.reduce_while(branches, nil, fn {branch, shaped}, selected ->
-        with {:ok, value, _rest} = candidate <-
+        with {:ok, value, rest} = candidate <-
                read_shaped_container(text, name, shaped, :object, boundary, ancestors),
+             true <- boundary.(String.trim_leading(rest)),
              {:ok, _} <- TypedOutputs.validate_term(value, branch),
              {:ok, _} <- TypedOutputs.validate_term(value, schema) do
           case selected do

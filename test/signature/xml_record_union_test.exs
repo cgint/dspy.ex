@@ -154,6 +154,70 @@ defmodule Dspy.Signature.XMLRecordUnionTest do
              )
   end
 
+  test "a branch that closes before an unknown sibling cannot make the union ambiguous" do
+    record = object(%{value: object(%{n: %{type: [:integer, :null]}})})
+    text = object(%{value: %{type: :string}})
+    signature = signature(%{oneOf: [record, text]})
+    summary = %{name: :summary, type: :string, required: true}
+    signature = %{signature | output_fields: signature.output_fields ++ [summary]}
+
+    value = "<n /></value></answer><bogus>literal</bogus>"
+    xml = "<answer><value>#{value}</value></answer><summary>ready</summary>"
+
+    assert %{answer: %{"value" => ^value}, summary: "ready"} =
+             XMLAdapter.parse_outputs(signature, xml)
+  end
+
+  test "a branch prefix constraint inherits shared positional item types" do
+    for items <- [
+          %{prefixItems: [%{type: :integer}, %{type: :integer}], items: false},
+          %{items: %{type: :integer}}
+        ] do
+      schema = %{
+        type: :object,
+        properties: %{pair: Map.put(items, :type, :array)},
+        oneOf: [Count, object(%{pair: %{prefixItems: [%{minimum: 5}]}})]
+      }
+
+      assert %{answer: %{"pair" => [7, 8]}} =
+               XMLAdapter.parse_outputs(
+                 signature(schema),
+                 "<answer><pair><item>7</item><item>8</item></pair></answer>"
+               )
+    end
+  end
+
+  test "an explicit branch property inherits a shared additional property type" do
+    schema = %{
+      type: :object,
+      additionalProperties: %{type: :integer},
+      oneOf: [Labels, object(%{count: %{minimum: 1}})]
+    }
+
+    assert %{answer: %{"count" => 7}} =
+             XMLAdapter.parse_outputs(signature(schema), "<answer><count>7</count></answer>")
+  end
+
+  test "intersecting integer and number declarations preserves exact large integers" do
+    count = 9_007_199_254_740_993
+    xml = "<answer><count>#{count}</count></answer>"
+
+    for {shared, branch} <- [
+          {:integer, :number},
+          {:number, :integer},
+          {[:integer, :null], :number}
+        ] do
+      schema = %{
+        type: :object,
+        properties: %{count: %{type: shared}},
+        oneOf: [Labels, object(%{count: %{type: branch}})]
+      }
+
+      assert %{answer: %{"count" => ^count}} =
+               XMLAdapter.parse_outputs(signature(schema), xml)
+    end
+  end
+
   defp object(properties) do
     %{
       type: :object,
