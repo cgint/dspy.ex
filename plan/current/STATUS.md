@@ -1,5 +1,12 @@
 # Status
 
+> **M5, status messages and exit example.** `streamify/2` accepts a
+> lifecycle status provider. The [offline ChainOfThought example](../../examples/offline/chain_of_thought_streaming_offline.exs)
+> emits status and field chunks, returns the validated prediction, and
+> verifies worker cleanup after an early halt. Loopback tests prove HTTP
+> cancellation with status enabled. Broader listener and adapter parity
+> remain open.
+
 > **M5, Chat field listeners.** `streamify/2` can select plain string
 > fields on a standalone ChatAdapter predictor. Field events preserve
 > output order across split markers and retain the ordinary final

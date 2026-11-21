@@ -466,6 +466,10 @@ defmodule Dspy do
   the parser uses its JSON fallback.
   Omitting `:stream_listeners` or passing `[]` yields raw deltas.
 
+  Set `:status_message_provider` to a module implementing
+  `Dspy.StatusMessageProvider` to receive `Dspy.StatusMessage` progress events
+  alongside raw deltas or selected field chunks.
+
   The remaining options are the per-call options accepted by `call/3`.
   """
   @spec streamify(Predict.t() | ChainOfThought.t(), keyword()) ::

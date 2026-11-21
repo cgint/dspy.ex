@@ -158,10 +158,10 @@ After this you can …show answers as they are generated (token streaming plus s
 
 | id | symbol | status | V | E | score | introduced | deps | breaking | old P | gap | queue status |
 |---|---|---|---|---|---|---|---|---|---|---|---|
-| U020 | StatusMessage | missing | M | S | 2.00 | 3.0.0 | S072 | N | - | no streaming message types at all | todo |
-| U021 | StatusMessageProvider | missing | M | M | 1.00 | 3.0.0 | U020 S072 | N | - | no status provider behaviour; Dspy.Tools.Callback is a different (callback) shape | todo |
+| U020 | StatusMessage | done | M | S | 2.00 | 3.0.0 | S072 | N | - | A message value carries provider-formatted progress text in the program stream. | M5 status messages |
+| U021 | StatusMessageProvider | partial | M | M | 1.00 | 3.0.0 | U020 S072 | N | - | Opt-in formatters receive module and LM lifecycle phases and allowlisted metadata. Tool progress defaults and composite routing remain. | M5 status provider |
 | U023 | StreamResponse | partial | L | S | 1.00 | 3.0.0 | S072 | N | - | Field chunks name the predictor and signature field and signal field completion. Standalone Chat string outputs are covered. | M5 Chat field chunks |
-| S072 | streamify | partial | H | L | 0.75 | <=2.6 | S022 | N | P12 | Lazy standalone Predict and ChainOfThought streams deliver raw text deltas or selected Chat field chunks and a final prediction. Halting consumption closes the HTTP stream. Status events and composite programs remain. | M5 program streaming |
+| S072 | streamify | partial | H | L | 0.75 | <=2.6 | S022 | N | P12 | Lazy standalone Predict and ChainOfThought streams deliver raw or selected Chat field chunks, optional progress events, and a final prediction. Halting consumption closes the HTTP stream. Composite programs and broader adapter support remain. | M5 program streaming |
 | U022 | StreamListener | partial | H | L | 0.75 | 3.0.0 | U023 | N | P12 | Standalone Chat field selection accepts declared string output names. Composite predictor resolution and other adapters remain. | M5 Chat field listeners |
 | U024 | apply_sync_streaming | missing | L | M | 0.50 | 3.0.0 | U020 S072 | N | - | no async-generator-to-sync bridge; Task.async_stream exists but is not dspy-streaming | todo |
 | U025 | streaming_response | missing | L | M | 0.50 | 3.0.0 | U023 S072 | N | - | no streaming_response wrapper | todo |

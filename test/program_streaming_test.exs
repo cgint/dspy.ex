@@ -3,7 +3,7 @@ defmodule Dspy.ProgramStreamingTest do
 
   import Dspy.TestSupport.StreamingSSE, only: [fixture: 3]
 
-  alias Dspy.{ChainOfThought, Predict, Prediction, Settings, StreamResponse}
+  alias Dspy.{ChainOfThought, Predict, Prediction, Settings, StatusMessage, StreamResponse}
   alias Dspy.Signature.Adapters.{ChatAdapter, JSONAdapter, TwoStep}
 
   @wait 5_000
@@ -86,6 +86,71 @@ defmodule Dspy.ProgramStreamingTest do
     @impl true
     def on_module_start(_meta, _payload, {owner, program, inputs}) do
       send(owner, {:nested_prediction, Dspy.call(program, inputs)})
+      :ok
+    end
+  end
+
+  defmodule Progress do
+    def message(event, _meta), do: Atom.to_string(event)
+  end
+
+  defmodule RecordingProgress do
+    def message(event, metadata) do
+      lm = Settings.get(:lm)
+      send(lm.owner, {:status_metadata, self(), lm.model, event, metadata})
+      "#{lm.model}:#{event}"
+    end
+  end
+
+  defmodule FaultyProgress do
+    def message(:module_start, _metadata), do: throw(:provider_failure)
+    def message(:lm_start, _metadata), do: raise("provider failure")
+    def message(:lm_end, _metadata), do: {:unexpected, :result}
+    def message(:module_end, _metadata), do: "finished despite formatter failures"
+  end
+
+  defmodule ReentrantProgress do
+    def message(:module_start, _metadata) do
+      if Process.get(__MODULE__) do
+        "unexpected nested module"
+      else
+        Process.put(__MODULE__, true)
+        lm = %BatchLM{result: {:ok, "[[ ## answer ## ]]Nested"}}
+        program = Predict.new("question -> answer", lm: lm, adapter: ChatAdapter)
+
+        {:ok, %Prediction{attrs: %{answer: "Nested"}}} =
+          Dspy.call(program, %{question: "Nested?"})
+
+        "outer module started"
+      end
+    end
+
+    def message(:lm_start, _metadata) do
+      if Process.get(__MODULE__), do: "LM started"
+    end
+
+    def message(_event, _metadata), do: nil
+  end
+
+  defmodule ForeignLMObserver do
+    @behaviour Dspy.Module.Callback
+
+    @impl true
+    def on_module_start(_meta, _payload, owner) do
+      context = Dspy.Context.capture()
+
+      task =
+        Task.async(fn ->
+          Dspy.Context.with_context(context, fn ->
+            Dspy.LM.generate(%BatchLM{result: {:ok, "batch text"}}, %{messages: []})
+          end)
+        end)
+
+      send(
+        owner,
+        {:foreign_lm_result, Task.yield(task, 1_000) || Task.shutdown(task, :brutal_kill)}
+      )
+
       :ok
     end
   end
@@ -459,6 +524,222 @@ defmodule Dspy.ProgramStreamingTest do
     assert {:error, :closed} = Task.await(fixture, @wait)
   end
 
+  test "statuses surround selected field chunks and expose only lifecycle metadata" do
+    lm = scripted("observed", [@answer_header, @answer])
+    program = Predict.new("question -> answer", adapter: ChatAdapter)
+
+    stream =
+      Dspy.streamify(program,
+        stream_listeners: [:answer],
+        status_message_provider: RecordingProgress
+      ).(@inputs)
+
+    refute_received {:status_metadata, _, _, _, _}
+
+    Dspy.context([lm: lm, cache: false], fn ->
+      assert {:ok, prediction} = Dspy.call(program, @inputs)
+
+      assert Enum.to_list(stream) == [
+               status_event("observed:module_start"),
+               status_event("observed:lm_start"),
+               field_event("self", :answer, @answer, false),
+               status_event("observed:lm_end"),
+               status_event("observed:module_end"),
+               field_event("self", :answer, "", true),
+               prediction
+             ]
+    end)
+
+    assert_received {:status_metadata, worker, "observed", :module_start, module_start}
+    assert %{call_id: module_call, module: Predict} = module_start
+    assert is_reference(module_call)
+    assert module_start == %{call_id: module_call, module: Predict}
+
+    assert_received {:status_metadata, ^worker, "observed", :lm_start, lm_start}
+    assert %{call_id: lm_call} = lm_start
+    assert is_reference(lm_call)
+    refute lm_call == module_call
+    assert lm_start.module == ScriptedLM
+    assert is_reference(lm_start.parent_call_id)
+    assert Enum.sort(Map.keys(lm_start)) == [:call_id, :module, :parent_call_id]
+
+    for {event, start} <- [lm_end: lm_start, module_end: module_start] do
+      assert_received {:status_metadata, ^worker, "observed", ^event, end_metadata}
+      assert %{status: :ok, duration_us: duration} = end_metadata
+      assert is_integer(duration) and duration >= 0
+      assert end_metadata == Map.merge(start, %{status: :ok, duration_us: duration})
+    end
+  end
+
+  test "status publication waits for demand before invoking the LM or delivering its first delta" do
+    program = predict(scripted("status-pacing", [@answer_header, @answer]))
+    stream = Dspy.streamify(program, status_message_provider: Progress).(@inputs)
+    suspend = fn event, _acc -> {:suspend, event} end
+
+    assert {:suspended, first, next} = Enumerable.reduce(stream, {:cont, nil}, suspend)
+    assert first == status_event("module_start")
+    refute_receive {:stream_call, "status-pacing", _, _, _}, 50
+
+    assert {:suspended, second, next} = next.({:cont, nil})
+    assert second == status_event("lm_start")
+    refute_receive {:stream_call, "status-pacing", _, _, _}, 50
+
+    assert {:suspended, {:delta, @answer_header}, next} = next.({:cont, nil})
+    assert_received {:stream_call, "status-pacing", _, _, _}
+    refute_receive {:produced, @answer}, 50
+    assert {:halted, nil} = next.({:halt, nil})
+  end
+
+  test "skipped, failing, and invalid provider returns never replace normal stream events" do
+    deltas = [@answer_header, @answer]
+    program = predict(scripted("faulty-status", deltas))
+    {:ok, prediction} = Dspy.call(program, @inputs)
+    raw = Enum.map(deltas, &{:delta, &1})
+
+    assert Enum.to_list(Dspy.streamify(program, status_message_provider: nil).(@inputs)) ==
+             raw ++ [prediction]
+
+    faulty = Dspy.streamify(program, status_message_provider: FaultyProgress)
+
+    assert Enum.to_list(faulty.(@inputs)) ==
+             raw ++ [status_event("finished despite formatter failures"), prediction]
+
+    for provider <- ["progress", BatchLM] do
+      assert_raise ArgumentError, ~r/status_message_provider/, fn ->
+        Dspy.streamify(program, status_message_provider: provider)
+      end
+    end
+  end
+
+  test "a provider can run a nested ordinary prediction without recursively formatting its events" do
+    program = predict(scripted("reentrant-status", [@answer_header, @answer]))
+    stream = Dspy.streamify(program, status_message_provider: ReentrantProgress).(@inputs)
+
+    assert [first, second, {:delta, @answer_header}, {:delta, @answer}, %Prediction{}] =
+             Enum.to_list(stream)
+
+    assert first == status_event("outer module started")
+    assert second == status_event("LM started")
+  end
+
+  test "a per-call callback can propagate context to a child without publishing foreign status" do
+    program = predict(scripted("foreign-lm", [@answer_header, @answer]))
+
+    stream =
+      Dspy.streamify(program,
+        status_message_provider: Progress,
+        callbacks: [{ForeignLMObserver, self()}]
+      ).(@inputs)
+
+    assert Enum.to_list(stream) == [
+             status_event("module_start"),
+             status_event("lm_start"),
+             {:delta, @answer_header},
+             {:delta, @answer},
+             status_event("lm_end"),
+             status_event("module_end"),
+             Prediction.new(%{answer: @answer})
+           ]
+
+    assert_received {:foreign_lm_result, {:ok, {:ok, "batch text"}}}
+  end
+
+  test "concurrent status streams retain the enumerating scope and isolate their output" do
+    program = Predict.new("question -> answer", adapter: ChatAdapter)
+    stream = Dspy.streamify(program, status_message_provider: RecordingProgress).(@inputs)
+    parent = self()
+
+    runs =
+      for model <- ["first-status", "second-status"] do
+        lm = scripted(model, [@answer_header, model])
+
+        consumer =
+          Task.async(fn ->
+            Dspy.context([lm: lm], fn ->
+              Enum.map(stream, fn event ->
+                if event == status_event("#{model}:module_start") do
+                  send(parent, {:waiting_at_status, self()})
+                  assert_receive :continue, @wait
+                end
+
+                event
+              end)
+            end)
+          end)
+
+        {model, consumer}
+      end
+
+    for {_model, %{pid: pid}} <- runs do
+      assert_receive {:waiting_at_status, ^pid}, @wait
+    end
+
+    for {model, consumer} <- runs do
+      send(consumer.pid, :continue)
+
+      assert Task.await(consumer, @wait) == [
+               status_event("#{model}:module_start"),
+               status_event("#{model}:lm_start"),
+               {:delta, @answer_header},
+               {:delta, model},
+               status_event("#{model}:lm_end"),
+               status_event("#{model}:module_end"),
+               Prediction.new(%{answer: model})
+             ]
+    end
+  end
+
+  test "status providers receive an error status while the terminal reason stays separate" do
+    reason = {:custom_transport, "private transport detail"}
+    lm = %ScriptedLM{owner: self(), model: "failed-status", result: {:error, reason}}
+    program = Predict.new("question -> answer", adapter: ChatAdapter)
+    stream = Dspy.streamify(program, status_message_provider: RecordingProgress).(@inputs)
+
+    Dspy.context([lm: lm], fn ->
+      assert Enum.to_list(stream) == [
+               status_event("failed-status:module_start"),
+               status_event("failed-status:lm_start"),
+               status_event("failed-status:lm_end"),
+               status_event("failed-status:module_end"),
+               {:error, reason}
+             ]
+    end)
+
+    for event <- [:lm_end, :module_end] do
+      assert_received {:status_metadata, _, "failed-status", ^event, metadata}
+      assert %{status: :error, duration_us: _} = metadata
+
+      assert Map.keys(metadata) -- [:call_id, :parent_call_id, :module, :status, :duration_us] ==
+               []
+
+      refute inspect(metadata) =~ "private transport detail"
+    end
+  end
+
+  test "halting after a selected field closes the socket with status messages enabled" do
+    {fixture, url} = fixture(:close, @answer_header <> @answer, " More text.")
+
+    stream =
+      Dspy.streamify(loopback_predict(url),
+        stream_listeners: [:answer],
+        status_message_provider: Progress
+      ).(@inputs)
+
+    events =
+      Enum.reduce_while(stream, [], fn
+        %StreamResponse{} = event, events -> {:halt, Enum.reverse([event | events])}
+        event, events -> {:cont, [event | events]}
+      end)
+
+    assert events == [
+             status_event("module_start"),
+             status_event("lm_start"),
+             field_event("self", :answer, @answer, false)
+           ]
+
+    assert {:error, :closed} = Task.await(fixture, @wait)
+  end
+
   test "killing a consumer waiting on a real stream closes the provider socket" do
     {fixture, url} = fixture(:close, @answer_header, @answer)
     owner = self()
@@ -496,6 +777,8 @@ defmodule Dspy.ProgramStreamingTest do
       is_last_chunk: last?
     }
   end
+
+  defp status_event(message), do: %StatusMessage{message: message}
 
   defp resume_in_another_process(continuation) do
     task =
