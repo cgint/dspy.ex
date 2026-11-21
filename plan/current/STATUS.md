@@ -1,6 +1,6 @@
 # Status
 
-> **M4a, Refine rollouts.** Refine uses separate rollout IDs with temperature `1.0` during generation, so cached responses are keyed to their attempt. Reward scoring uses the enclosing settings. The feedback loop and failure budget remain open.
+> **M4a, Refine rollouts.** Refine keys cached responses to each attempt's rollout ID. Named predictors use temperature `1.0`, and custom modules inherit it as a scoped default. Reward scoring uses the enclosing settings. The feedback loop and failure budget remain open.
 
 > **M3b, tracing and logging.** Evaluation, module, LM, adapter, and tool callbacks emit paired events and carry parent IDs through captured contexts. The [offline example](../../examples/offline/evaluation_callbacks_offline.exs) traces two examples in a parallel run. DSPy diagnostics can be silenced independently of host logs and callbacks. Telemetry and scoped history remain open.
 

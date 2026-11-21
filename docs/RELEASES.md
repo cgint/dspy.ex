@@ -10,10 +10,10 @@ This repo ships in **small, user-usable slices**.
 
 ### Refine rollouts
 
-`Dspy.Refine` runs each attempt at temperature `1.0` with a distinct rollout
-ID. LM response caching partitions attempts by that ID. Each reward call
-uses the caller's settings, and predictor configuration stays scoped to the
-attempt.
+`Dspy.Refine` gives each attempt a distinct rollout ID. It sets temperature
+`1.0` on named predictors and passes `1.0` as a scoped default to custom
+modules. LM response caching partitions attempts by rollout ID. Reward
+scoring uses the caller's settings.
 
 ### DSPy logging controls
 

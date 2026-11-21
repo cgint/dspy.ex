@@ -15,9 +15,11 @@ defmodule Dspy.Refine do
   via `:reward_fn`, and returns the best prediction. If a score meets/exceeds
   `:threshold`, it stops early.
 
-  Each attempt uses temperature `1.0` and a distinct rollout ID, starting
-  at the configured ID or `0`. The rollout ID partitions the LM response
-  cache. Rewards run in the caller's settings scope.
+  Each attempt has a distinct rollout ID, starting at the configured ID or
+  `0`. Named predictors use temperature `1.0`. Custom modules inherit `1.0`
+  as a scoped default and can supply an explicit request temperature. The
+  rollout ID partitions the LM response cache. Rewards run in the caller's
+  settings scope.
   """
 
   use Dspy.Module

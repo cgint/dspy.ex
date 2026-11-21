@@ -138,7 +138,7 @@ After this you can …build tool-using agents that also take images or audio, re
 | S007 | ChatAdapter | partial | H | M | 1.50 | <=2.6 | S005,S015,S016 | N | - | no assistant tool_calls / tool-role history rendering; no fallback flag | todo |
 | S011 | Image | done | H | M | 1.50 | <=2.6 | S018 | N | - | done: Dspy.Image + :image field (0d7b0d1); :image now declared+validatable, docs everywhere | done 2026-10-10 v0.4.7 (align-image-input-with-python) |
 | S061 | Retrieve | partial | H | M | 1.50 | <=2.6 | S059;U032 | N | - | No dspy.Retrieve Parameter (k, callbacks) wrapping settings.rm; dspy.ex Dspy.Retrieve is a | todo |
-| S043 | Refine | partial | H | M | 1.50 | 3.0.0 | S038 | N | - | Distinct rollout IDs at temperature 1.0. OfferFeedback advice and failure-budget parity remain open. | Rollout handling implemented |
+| S043 | Refine | partial | H | M | 1.50 | 3.0.0 | S038 | N | - | Distinct rollout IDs and temperature 1.0 for named predictors. OfferFeedback advice and failure-budget parity remain open. | Rollout handling implemented |
 | U032 | dummy_rm | missing | L | S | 1.00 | <=2.6 | S061 | N | - | No dummy_rm stub retriever | todo |
 | S006 | Audio | missing | M | M | 1.00 | 3.0.0 | S018 | N | - | no audio input type; Attachments is file-only, no base64/audio parts | todo |
 | S019 | XMLAdapter | missing | M | M | 1.00 | 3.0.0 | S007 | N | P10 | no XML signature adapter; Dspy.Adapters.XMLAdapter.parse is an unimplemented stub | todo |

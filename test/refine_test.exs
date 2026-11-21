@@ -43,8 +43,11 @@ defmodule Dspy.RefineTest do
     defstruct [:lm]
 
     @impl true
-    def forward(program, %{question: question}) do
-      with {:ok, answer} <- LM.generate(program.lm, %{messages: [LM.user_message(question)]}) do
+    def forward(program, %{question: question} = inputs) do
+      request =
+        inputs |> Map.take([:temperature]) |> Map.put(:messages, [LM.user_message(question)])
+
+      with {:ok, answer} <- LM.generate(program.lm, request) do
         {:ok, Prediction.new(%{answer: answer})}
       end
     end
@@ -194,6 +197,18 @@ defmodule Dspy.RefineTest do
       assert_received {:reward, ^scoped, "last"}
       refute_received {:reward, _, _}
       assert Settings.current_overrides() == scoped
+    end)
+  end
+
+  test "custom modules can set an explicit request temperature" do
+    program = %CustomProgram{lm: recording_lm(:custom, ok: "answer")}
+    refiner = Refine.new(program, n: 1, reward_fn: fn _, _ -> 1.0 end)
+
+    Dspy.context([cache: false, rollout_id: 5, temperature: 0.4], fn ->
+      assert {:ok, %Prediction{attrs: %{answer: "answer"}}} =
+               Dspy.call(refiner, %{question: "custom request", temperature: 0.3})
+
+      assert_received {:lm_call, :custom, 5, %{temperature: 0.3}}
     end)
   end
 
