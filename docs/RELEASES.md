@@ -27,14 +27,15 @@ returns the original examples ranked by dot product. Training and query
 field names share a lexical order. Equal scores favor the later training
 row. Scoring uses Elixir's native numeric representation.
 
-### Trace-aware BootstrapRS metrics
+### Trace-aware bootstrap metrics
 
-Pass an arity-three metric to `Dspy.Teleprompt.new(:bootstrap_rs, metric: metric)`
-to receive the training example, the teacher prediction, and the ordered
-predictor steps for one attempt. Each step contains a typed slot path, the
-predictor inputs, and its prediction. A teacher without steps supplies `[]`.
-`Dspy.Evaluate` passes `nil` as the third argument, so the same metric can
-score the validation candidates.
+BootstrapRS, BootstrapFewShot, and KNNFewShot accept an arity-three metric
+that receives the training example, the teacher prediction, and the ordered
+predictor steps from that attempt. Each step contains a typed slot path,
+the predictor inputs, and its prediction. A teacher without steps supplies
+`[]`. `Dspy.Evaluate` passes `nil` as the third argument, so the same
+metric can score validation candidates. KNNFewShot passes the exact indexed
+neighbor and runs the configured student once per query.
 
 ### Streaming progress messages
 

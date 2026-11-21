@@ -37,7 +37,13 @@ defmodule Dspy.Teleprompt do
 
   @type metric_fun :: (Example.t() -> number()) | (Example.t(), Dspy.Prediction.t() -> number())
 
-  @typedoc "One successful predictor call in a BootstrapRS teacher attempt."
+  @typedoc """
+  One successful predictor call in a bootstrap teacher attempt.
+
+  Paths use `{:field, atom}` for struct fields, `{:index, index}` for zero-based
+  list and tuple positions, and `{:key, key}` for exact map keys.
+  A standalone predictor has the empty path `[]`.
+  """
   @type trace_step :: %{
           path: Dspy.Module.PredictorSlots.path(),
           inputs: map(),
@@ -47,7 +53,7 @@ defmodule Dspy.Teleprompt do
   @typedoc "Successful predictor calls in one teacher attempt, in completion order."
   @type trace :: [trace_step()]
 
-  @typedoc "A metric that receives teacher steps during BootstrapRS and nil during evaluation."
+  @typedoc "A metric that receives teacher steps during bootstrapping and nil during evaluation."
   @type trace_metric_fun ::
           (Example.t(), Dspy.Prediction.t(), trace() | nil -> number() | boolean())
 
