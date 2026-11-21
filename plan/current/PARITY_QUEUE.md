@@ -63,7 +63,7 @@ After this you can …optimize a program once, save it, load it later or elsewhe
 
 | id | symbol | status | V | E | score | introduced | deps | breaking | old P | gap | queue status |
 |---|---|---|---|---|---|---|---|---|---|---|---|
-| S002 | configure | partial | H | S | 3.00 | <=2.6 | - | N | - | [facet rule: done->partial] Parsimonious keys unported: rm/trace/num_threads/max_errors/ma | todo |
+| S002 | configure | partial | H | S | 3.00 | <=2.6 | - | N | - | Shared `num_threads` settings reach Evaluate and Parallel. Evaluate already reads the shared `max_errors` budget. Global retrieval, tracing, and other execution settings remain. | Shared concurrency implemented. Release pending. |
 | S051 | Example | partial | H | S | 3.00 | <=2.6 | - | N | - | Labels, field removal, and recursive dictionaries for `Example`, `Prediction`, and `History` are implemented. Legacy `inputs/1` still falls back to all attributes when inputs are unset or empty. | M2 example slices implemented. Release pending. |
 | S054 | Module | partial | H | S | 3.00 | <=2.6 | - | N | P5 (Module.inspect_history = facet S054.f7), P4 | Named discovery, immutable slot updates, shared LM bindings, and reset copies implemented. BootstrapRS records private teacher traces. Public history remains. | M2 traversal and reset slices implemented. Release pending. |
 | S055 | Prediction | partial | H | S | 3.00 | <=2.6 | S051 | N | - | `from_completions` exposes the first row and retains parsed alternatives. Score conversion, arithmetic and comparisons remain. | M2 parsed-completion slice implemented. Release pending. |

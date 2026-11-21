@@ -59,7 +59,7 @@ defmodule Dspy.Parallel do
 
   """
 
-  alias Dspy.{Context, Example, Module}
+  alias Dspy.{Context, Example, Module, Settings}
 
   @type t :: %__MODULE__{
           num_threads: pos_integer(),
@@ -80,12 +80,11 @@ defmodule Dspy.Parallel do
 
   ## Options
 
-  - `:num_threads` - max concurrent tasks (default: `System.schedulers_online()`;
-    same naming as `Dspy.Evaluate`).
+  - `:num_threads` - max concurrent tasks. Defaults to the configured
+    `:num_threads` or the number of online schedulers.
   - `:max_errors` - error budget; stop producing results for the remaining
-    pairs once this many failures occur. Default `nil` = unlimited. (Python
-    DSPy falls back to `settings.max_errors`; `Dspy.Settings` has no such key,
-    hence the default.)
+    pairs once this many failures occur. The default `nil` permits all pairs
+    to run.
   - `:timeout` - per-task timeout in milliseconds (default `120_000`). A task
     exceeding it is killed and that pair is recorded as a failure.
   - `:return_failed_examples` - when `true`, `run/3` also returns the failed
@@ -98,7 +97,7 @@ defmodule Dspy.Parallel do
   @spec new(keyword()) :: t()
   def new(opts \\ []) do
     %__MODULE__{
-      num_threads: Keyword.get(opts, :num_threads, System.schedulers_online()),
+      num_threads: Keyword.get_lazy(opts, :num_threads, &Settings.default_num_threads/0),
       max_errors: Keyword.get(opts, :max_errors),
       timeout: Keyword.get(opts, :timeout, 120_000),
       return_failed_examples: Keyword.get(opts, :return_failed_examples, false),

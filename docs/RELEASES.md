@@ -8,6 +8,12 @@ This repo ships in **small, user-usable slices**.
 
 ## Consumer notes
 
+### Shared concurrency defaults
+
+`Dspy.configure(num_threads: count)` and `Dspy.context/2` set the default
+concurrency for `Dspy.Evaluate.evaluate/4` and `Dspy.Parallel.new/1`. Explicit
+options take precedence. The default `nil` uses the number of online schedulers.
+
 ### Parsed completions
 
 `Dspy.Prediction.from_completions/1,2` accepts ordered output rows or parallel
