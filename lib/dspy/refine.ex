@@ -20,6 +20,11 @@ defmodule Dspy.Refine do
   as a scoped default and can supply an explicit request temperature. The
   rollout ID partitions the LM response cache. Rewards run in the caller's
   settings scope.
+
+  Set `fail_count:` to the number of program errors, program exceptions,
+  and invalid rewards a call may tolerate. The next failure returns
+  `{:error, {:refine_failed, details}}`. An omitted or `nil` allowance uses
+  the existing attempt limit and lets program exceptions propagate.
   """
 
   use Dspy.Module
@@ -27,7 +32,7 @@ defmodule Dspy.Refine do
   alias Dspy.{PredictorConfig, Settings}
   alias Dspy.Module, as: DspyModule
 
-  defstruct [:program, :threshold, :n, :reward_fn]
+  defstruct [:program, :threshold, :n, :reward_fn, :fail_count]
 
   @type reward_fn :: (map(), Dspy.Prediction.t() -> number())
 
@@ -35,7 +40,8 @@ defmodule Dspy.Refine do
           program: Dspy.Module.t(),
           threshold: number(),
           n: pos_integer(),
-          reward_fn: reward_fn()
+          reward_fn: reward_fn(),
+          fail_count: non_neg_integer() | nil
         }
 
   @spec new(Dspy.Module.t(), keyword()) :: t()
@@ -43,18 +49,20 @@ defmodule Dspy.Refine do
     reward_fn = Keyword.fetch!(opts, :reward_fn)
     n = Keyword.get(opts, :n, Keyword.get(opts, :N, 5))
     threshold = Keyword.get(opts, :threshold, 1.0)
+    fail_count = Keyword.get(opts, :fail_count)
 
-    validate_opts!(reward_fn, n, threshold)
+    validate_opts!(reward_fn, n, threshold, fail_count)
 
     %__MODULE__{
       program: program,
       threshold: threshold,
       n: n,
-      reward_fn: reward_fn
+      reward_fn: reward_fn,
+      fail_count: fail_count
     }
   end
 
-  defp validate_opts!(reward_fn, n, threshold) do
+  defp validate_opts!(reward_fn, n, threshold, fail_count) do
     unless is_function(reward_fn, 2) do
       raise ArgumentError, ":reward_fn must be a function with arity 2"
     end
@@ -67,12 +75,17 @@ defmodule Dspy.Refine do
       raise ArgumentError, ":threshold must be a number"
     end
 
+    unless is_nil(fail_count) or (is_integer(fail_count) and fail_count >= 0) do
+      raise ArgumentError, ":fail_count must be a non-negative integer or nil"
+    end
+
     :ok
   end
 
   @impl true
   def forward(%__MODULE__{} = refiner, inputs) when is_map(inputs) do
     start = Settings.get(:rollout_id) || 0
+    fail_count = Map.get(refiner, :fail_count)
 
     initial = %{
       best_pred: nil,
@@ -90,7 +103,7 @@ defmodule Dspy.Refine do
 
       result =
         Settings.context([temperature: 1.0, rollout_id: rollout_id], fn ->
-          DspyModule.forward(program, inputs)
+          run_program(program, inputs, fail_count)
         end)
 
       case result do
@@ -112,20 +125,25 @@ defmodule Dspy.Refine do
                 {:cont, acc}
               end
 
-            {:error, _reason} ->
-              {:cont, %{acc | invalid_reward_attempts: acc.invalid_reward_attempts + 1}}
+            {:error, reason} ->
+              acc = %{acc | invalid_reward_attempts: acc.invalid_reward_attempts + 1}
+              continue_after_failure(acc, fail_count, reason)
           end
 
         {:error, reason} ->
-          {:cont,
-           %{
-             acc
-             | last_program_error: reason,
-               program_error_attempts: acc.program_error_attempts + 1
-           }}
+          acc = %{
+            acc
+            | last_program_error: reason,
+              program_error_attempts: acc.program_error_attempts + 1
+          }
+
+          continue_after_failure(acc, fail_count, reason)
       end
     end)
     |> case do
+      {:error, _reason} = error ->
+        error
+
       %{best_pred: %Dspy.Prediction{} = best_pred} ->
         {:ok, best_pred}
 
@@ -134,6 +152,32 @@ defmodule Dspy.Refine do
 
       acc ->
         {:error, {:no_successful_attempts, acc}}
+    end
+  end
+
+  defp run_program(program, inputs, nil), do: DspyModule.forward(program, inputs)
+
+  defp run_program(program, inputs, _fail_count) do
+    DspyModule.forward(program, inputs)
+  rescue
+    error -> {:error, raised_reason(error)}
+  end
+
+  defp continue_after_failure(acc, nil, _reason), do: {:cont, acc}
+
+  defp continue_after_failure(acc, fail_count, reason) do
+    failures = acc.invalid_reward_attempts + acc.program_error_attempts
+
+    if failures > fail_count do
+      details = %{
+        failures: failures,
+        attempts: acc.scored_attempts + failures,
+        last_error: reason
+      }
+
+      {:halt, {:error, {:refine_failed, details}}}
+    else
+      {:cont, acc}
     end
   end
 
@@ -147,8 +191,8 @@ defmodule Dspy.Refine do
         {:error, :invalid_score}
       end
     rescue
-      e ->
-        {:error, {:raised, %{module: e.__struct__, message: Exception.message(e)}}}
+      error ->
+        {:error, raised_reason(error)}
     catch
       :throw, value ->
         {:error, {:throw, value}}
@@ -160,4 +204,7 @@ defmodule Dspy.Refine do
         {:error, {kind, reason}}
     end
   end
+
+  defp raised_reason(error),
+    do: {:raised, %{module: error.__struct__, message: Exception.message(error)}}
 end

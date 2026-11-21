@@ -8,6 +8,14 @@ This repo ships in **small, user-usable slices**.
 
 ## Consumer notes
 
+### Refine failure allowance
+
+`Dspy.Refine.new/2` accepts `fail_count:` to bound failed attempts per call.
+Program errors, program exceptions, and invalid rewards count toward the
+allowance. Exceeding it returns `{:error, {:refine_failed, details}}`, with
+the failure count, attempts used, and last error. An omitted or `nil` value
+uses the existing attempt limit and exception behavior.
+
 ### ReqLLM tool history
 
 The ReqLLM bridge preserves assistant function calls and tool-role results
