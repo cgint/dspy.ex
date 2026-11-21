@@ -68,14 +68,14 @@ After this you can …optimize a program once, save it, load it later or elsewhe
 | S054 | Module | partial | H | S | 3.00 | <=2.6 | - | N | P5 (Module.inspect_history = facet S054.f7), P4 | [facet rule: done->partial] named_predictors/predictors/map_named_predictors, set_lm/get_l | todo |
 | S055 | Prediction | partial | H | S | 3.00 | <=2.6 | S051 | N | - | [facet rule: done->partial] score float()/arithmetic/comparison ops and from_completions m | todo |
 | S067 | Signature | partial | H | S | 3.00 | <=2.6 | - | N | - | [facet rule: done->partial] pydantic-model validation, annotated types, and field constrai | todo |
-| S077 | BootstrapFewShotWithRandomSearch | missing | H | S | 3.00 | <=2.6 | S075 | N | P7 | no Elixir equivalent | todo |
+| S077 | BootstrapFewShotWithRandomSearch | partial | H | S | 3.00 | <=2.6 | S075 | N | P7 | Search, ranking, and teacher bootstrapping work for modules exposing `predict.examples`. Composite programs need named predictor traces. | M2 first slice implemented. Release pending. |
 | S060 | EmbeddingsWithScores | partial | M | S | 2.00 | 3.2.0 | S059 | N | - | No EmbeddingsWithScores class; closest: InMemoryRetriever Document.score (cosine) | todo |
 | S038 | Predict | partial | H | M | 1.50 | <=2.6 | S033 | N | - | Missing **config (temperature/rollout_id), set_lm/get_lm, reset, dump/load_state, criteria | todo |
 | S113 | load | partial | H | M | 1.50 | <=2.6 | S059 | N | P4 | No program-level load (upstream cloudpickle); only parameter-state JSON persistence; no ve | todo |
 | S050 | Completions | partial | L | S | 1.00 | <=2.6 | S055 | N | - | No standalone Completions type: just a list on Prediction; from_completions, int-index, cr | todo |
 | S021 | Embedder | partial | M | M | 1.00 | <=2.6 | S022 | N | - | provider behaviour exists but no Dspy.Embedder facade, no batch_size, no caching, no calla | todo |
 | S004 | load_settings | missing | L | S | 1.00 | 3.2.0 | - | N | - | Dspy.Settings.save/load (upstream settings.py:266,299) not ported | todo |
-| S001 | *also:* `BootstrapRS` alias (idiom today) moves with S077 | idiom | | | | | S077 | N | P7 | alias must point at real random search | todo |
+| S001 | *also:* `:bootstrap_rs` optimizer alias | idiom | | | | | S077 | N | P7 | Routes to `Dspy.Teleprompt.BootstrapFewShotWithRandomSearch`. | M2 first slice implemented. Release pending. |
 
 ## M3 — Production LM
 After this you can …run against real providers robustly: clear error types, automatic retries, a cache that survives restarts, and hooks that trace every call.
