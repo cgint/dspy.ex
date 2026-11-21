@@ -20,6 +20,41 @@ defmodule Dspy.Module.PredictorSlots do
   def name(path, %ChainOfThought{}), do: render(path ++ [{:field, :predict}])
   def name(path, %Predict{}), do: render(path)
 
+  @spec map(Dspy.Module.t(), (path(), predictor() -> term())) :: term()
+  def map(program, fun) do
+    replacements = for {path, predictor} <- list(program), do: {path, fun.(path, predictor)}
+    replace_slots(program, replacements)
+  end
+
+  defp replace_slots(value, []), do: value
+  defp replace_slots(_value, [{[], replacement}]), do: replacement
+
+  defp replace_slots(value, replacements) do
+    # Paths end at predictors. Group siblings to rebuild each container once.
+    children =
+      Enum.group_by(replacements, fn {[segment | _], _} -> segment end, fn
+        {[_ | path], replacement} -> {path, replacement}
+      end)
+
+    replace_children(value, children)
+  end
+
+  defp replace_children(list, children) when is_list(list) do
+    Enum.with_index(list, fn value, index ->
+      replace_slots(value, Map.get(children, {:index, index}, []))
+    end)
+  end
+
+  defp replace_children(tuple, children) when is_tuple(tuple) do
+    tuple |> Tuple.to_list() |> replace_children(children) |> List.to_tuple()
+  end
+
+  defp replace_children(map, children) when is_map(map) do
+    Enum.reduce(children, map, fn {{_kind, key}, replacements}, acc ->
+      Map.update!(acc, key, &replace_slots(&1, replacements))
+    end)
+  end
+
   defp walk(%module{} = program, path) do
     if module_struct?(module), do: walk_module(program, path), else: []
   end

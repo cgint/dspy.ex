@@ -6,6 +6,8 @@ defmodule Dspy.Module do
   forward passes for inference and can contain optimizable parameters.
   """
 
+  alias Dspy.Module.PredictorSlots
+
   @type t :: struct()
   @type inputs :: map() | keyword() | Dspy.Example.t()
   @type outputs :: Dspy.Prediction.t()
@@ -107,11 +109,32 @@ defmodule Dspy.Module do
 
   Raises `ArgumentError` if `program` is not a module struct implementing `forward/2`.
   """
-  @spec named_predictors(t()) :: [{String.t(), Dspy.Module.PredictorSlots.predictor()}]
+  @spec named_predictors(t()) :: [{String.t(), PredictorSlots.predictor()}]
   def named_predictors(program) do
-    for {path, predictor} <- Dspy.Module.PredictorSlots.list(program) do
-      {Dspy.Module.PredictorSlots.name(path, predictor), predictor}
+    for {path, predictor} <- PredictorSlots.list(program) do
+      {PredictorSlots.name(path, predictor), predictor}
     end
+  end
+
+  @doc """
+  Return the predictor values in the same order as `named_predictors/1`.
+  """
+  @spec predictors(t()) :: [PredictorSlots.predictor()]
+  def predictors(program) do
+    for {_path, predictor} <- PredictorSlots.list(program), do: predictor
+  end
+
+  @doc """
+  Return a new program with each discovered predictor replaced by `fun`'s result.
+
+  The unary function receives each predictor once in `named_predictors/1` order.
+  Equal predictor values in separate slots are visited separately. A standalone
+  predictor returns the function's result directly. A program without predictors
+  is returned as given.
+  """
+  @spec map_named_predictors(t(), (PredictorSlots.predictor() -> term())) :: term()
+  def map_named_predictors(program, fun) when is_function(fun, 1) do
+    PredictorSlots.map(program, fn _path, predictor -> fun.(predictor) end)
   end
 
   @doc """
