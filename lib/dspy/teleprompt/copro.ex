@@ -94,8 +94,11 @@ defmodule Dspy.Teleprompt.COPRO do
       raise ArgumentError, "COPRO requires a :metric function"
     end
 
+    metric = Keyword.fetch!(opts, :metric)
+    Dspy.Teleprompt.validate_metric!(metric)
+
     %__MODULE__{
-      metric: Keyword.fetch!(opts, :metric),
+      metric: metric,
       num_trials: Keyword.get(opts, :num_trials, 10),
       max_rounds: Keyword.get(opts, :max_rounds, 3),
       minibatch_size: Keyword.get(opts, :minibatch_size, 25),

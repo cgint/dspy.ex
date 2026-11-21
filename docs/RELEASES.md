@@ -8,6 +8,12 @@ This repo ships in **small, user-usable slices**.
 
 ## Consumer notes
 
+### Metric function arity
+
+Evaluation and optimizers that score programs expect metric functions with one
+or two arguments. An unsupported arity raises `ArgumentError` with the supplied
+arity before evaluation or optimizer workers run.
+
 ### Embedding batches
 
 `Dspy.Embedder.new/2` accepts a hosted model or local embedding function.

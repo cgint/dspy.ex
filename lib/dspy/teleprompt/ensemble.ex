@@ -294,6 +294,8 @@ defmodule Dspy.Teleprompt.Ensemble do
   @spec compile(t(), Dspy.Teleprompt.program_t(), list(Example.t())) ::
           Dspy.Teleprompt.compile_result()
   def compile(%__MODULE__{} = teleprompt, program, trainset) do
+    validate_base_metric!(teleprompt)
+
     Dspy.Teleprompt.Util.log(
       teleprompt,
       "Starting Ensemble compilation with #{teleprompt.size} members..."
@@ -313,6 +315,20 @@ defmodule Dspy.Teleprompt.Ensemble do
   end
 
   # Private functions
+
+  defp validate_base_metric!(%__MODULE__{
+         base_teleprompt: base,
+         combination_strategy: strategy
+       })
+       when base in [:labeled_few_shot, :ensemble] and strategy != :weighted_average,
+       do: :ok
+
+  defp validate_base_metric!(%__MODULE__{base_teleprompt_config: config}) do
+    case Keyword.fetch(config, :metric) do
+      {:ok, metric} -> Dspy.Teleprompt.validate_metric!(metric)
+      :error -> :ok
+    end
+  end
 
   defp validate_trainset(trainset) when is_list(trainset) do
     cond do

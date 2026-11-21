@@ -113,11 +113,14 @@ defmodule Dspy.Teleprompt.MIPROv2 do
       raise ArgumentError, "MIPROv2 requires a :metric function"
     end
 
+    metric = Keyword.fetch!(opts, :metric)
+    Dspy.Teleprompt.validate_metric!(metric)
+
     auto = Keyword.get(opts, :auto, "medium")
     auto_config = configure_auto_settings(auto)
 
     %__MODULE__{
-      metric: Keyword.fetch!(opts, :metric),
+      metric: metric,
       auto: auto,
       num_trials: Keyword.get(opts, :num_trials, auto_config.num_trials),
       max_bootstrapped_demos: Keyword.get(opts, :max_bootstrapped_demos, 4),
