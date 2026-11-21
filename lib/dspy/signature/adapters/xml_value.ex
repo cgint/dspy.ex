@@ -101,16 +101,26 @@ defmodule Dspy.Signature.Adapters.XMLValue do
 
   def literal(text, name, boundary, mode), do: read_literal(text, name, boundary, [], true, mode)
 
-  def list_item?(_text, _name, true, _schema), do: false
+  def list_item?(_text, _name, true, _schema, _boundary), do: false
 
-  def list_item?(text, name, false, schema),
-    do: kind(schema) == :array and unwrapped_item?(String.trim_leading(text), name)
+  def list_item?(text, name, false, schema, boundary),
+    do: kind(schema) == :array and unwrapped_item?(text, name, schema, boundary)
 
-  defp unwrapped_item?(text, name) do
-    close = Regex.compile!("\\A(?:null\\s*)?" <> close_pattern(name))
+  defp unwrapped_item?(text, name, schema, boundary) do
+    body = String.trim_leading(text)
 
-    not String.starts_with?(text, "[") and not child_tag?(text, nil, :array) and
-      not Regex.match?(close, text)
+    not String.starts_with?(body, "[") and not child_tag?(body, nil, :array) and
+      not empty_list_body?(text, name, schema, boundary, body)
+  end
+
+  defp empty_list_body?(text, name, schema, boundary, body) do
+    null_literal = if nullable?(schema), do: "(?:null\\s*)?", else: ""
+    close = Regex.compile!("\\A" <> null_literal <> literal_close_pattern(text, name))
+
+    case Regex.run(close, body) do
+      [tag] -> boundary.(String.trim_leading(after_offset(body, byte_size(tag))))
+      nil -> false
+    end
   end
 
   def read_list_item(text, {name, key}, schema, boundary, previous, scopes \\ []) do
@@ -234,7 +244,7 @@ defmodule Dspy.Signature.Adapters.XMLValue do
       previous = Map.fetch(acc, key)
 
       cond do
-        list_item?(text, name, self_close?, child) ->
+        list_item?(text, name, self_close?, child, boundary) ->
           read_list_item(text, {name, key}, child, boundary, previous, scopes)
 
         previous == :error ->
@@ -306,13 +316,7 @@ defmodule Dspy.Signature.Adapters.XMLValue do
   # A matching close in a literal is structural only when a valid continuation
   # follows it. A leaf may not run past a recognized enclosing close.
   defp read_literal(text, name, boundary, scopes, allow_fallback?, mode) do
-    field_close =
-      if Regex.match?(@opening_newline, text) do
-        "</#{Regex.escape(name)}[ \\t]*>(?=[ \\t]*(?:\\r?\\n|\\z))"
-      else
-        close_pattern(name)
-      end
-
+    field_close = literal_close_pattern(text, name)
     alternatives = ["(" <> field_close <> ")" | Enum.map(scopes, &close_pattern(elem(&1, 0)))]
     # Skip quoted JSON tokens before looking for any of the XML closing tags.
     alternatives = if mode == :json, do: [@json_string | alternatives], else: alternatives
@@ -361,6 +365,14 @@ defmodule Dspy.Signature.Adapters.XMLValue do
   end
 
   defp close_pattern(name), do: "</#{Regex.escape(name)}\\s*>"
+
+  defp literal_close_pattern(text, name) do
+    if Regex.match?(@opening_newline, text) do
+      "</#{Regex.escape(name)}[ \\t]*>(?=[ \\t]*(?:\\r?\\n|\\z))"
+    else
+      close_pattern(name)
+    end
+  end
 
   defp after_offset(text, offset), do: binary_part(text, offset, byte_size(text) - offset)
 

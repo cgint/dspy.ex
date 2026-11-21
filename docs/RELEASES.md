@@ -17,7 +17,9 @@ tags and preserve multipart images and trailing text. Schema-backed output
 records, lists, and dictionaries support nested XML in responses and demos.
 Lists use `<item>` and dictionary keys that need escaping use `<entry key="...">`.
 Declared lists also accept repeated field tags in encounter order, including
-repeated dictionary keys. Use one representation per list field.
+repeated dictionary keys. Use a single wrapper, a JSON array, or repeated
+item tags per list field. Put literal strings such as `[draft]`, the empty
+string, and `null` on nullable lists inside explicit `<item>` tags.
 Structured fields still accept JSON inside their XML tags, including schemas
 that rely on `patternProperties` or have multiple non-null branches.
 

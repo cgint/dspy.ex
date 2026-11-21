@@ -258,7 +258,10 @@ defmodule Dspy.Signature.Adapters.XMLAdapter do
 
   @impl true
   def parse_outputs(%Signature{} = signature, text, _opts \\ []) when is_binary(text) do
-    fields = Map.new(signature.output_fields, &{Atom.to_string(&1.name), &1})
+    fields =
+      Map.new(signature.output_fields, fn field ->
+        {Atom.to_string(field.name), {field, container_schema(field)}}
+      end)
 
     with true <- String.valid?(text),
          {:ok, text} <- unwrap_completion(String.trim(text), fields),
@@ -337,10 +340,11 @@ defmodule Dspy.Signature.Adapters.XMLAdapter do
 
     case Regex.run(@open_tag, text) do
       [opening, name, slash] ->
-        with {:ok, field} <- fetch_field(fields, name),
+        with {:ok, {field, _schema} = definition} <- fetch_field(fields, name),
              rest = binary_part(text, byte_size(opening), byte_size(text) - byte_size(opening)),
              previous = Map.fetch(outputs, field.name),
-             {:ok, value, rest} <- read_output(rest, name, slash == "/", field, fields, previous) do
+             {:ok, value, rest} <-
+               read_output(rest, name, slash == "/", definition, fields, previous) do
           parse_fields(rest, fields, Map.put(outputs, field.name, value))
         end
 
@@ -356,7 +360,7 @@ defmodule Dspy.Signature.Adapters.XMLAdapter do
     end
   end
 
-  defp read_output(text, name, self_close?, field, fields, previous) do
+  defp read_output(text, name, self_close?, {field, schema}, fields, previous) do
     boundary? = fn suffix ->
       case Regex.run(@open_tag, suffix) do
         [_, sibling, _] -> Map.has_key?(fields, sibling)
@@ -364,10 +368,8 @@ defmodule Dspy.Signature.Adapters.XMLAdapter do
       end
     end
 
-    schema = container_schema(field)
-
     cond do
-      XMLValue.list_item?(text, name, self_close?, schema) ->
+      XMLValue.list_item?(text, name, self_close?, schema, boundary?) ->
         XMLValue.read_list_item(text, {name, name}, schema, boundary?, previous)
 
       previous == :error ->

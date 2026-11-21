@@ -337,6 +337,46 @@ defmodule Dspy.Signature.XMLAdapterTest do
              XMLAdapter.parse_outputs(signature, xml)
   end
 
+  test "distinguishes a literal null item from an explicitly nullable list" do
+    signature = Repeated.signature()
+    [values | fields] = signature.output_fields
+    schema = %{type: :array, items: %{type: :string}}
+    signature = %{signature | output_fields: [%{values | schema: schema} | fields]}
+    suffix = "<summary>ok</summary><counts />"
+
+    assert %{values: ["null", "ready"]} =
+             XMLAdapter.parse_outputs(
+               signature,
+               "<values>null</values><values>ready</values>" <> suffix
+             )
+
+    assert %{values: ["[draft]", "", "null"]} =
+             XMLAdapter.parse_outputs(
+               signature,
+               "<values><item>[draft]</item><item></item><item>null</item></values>" <> suffix
+             )
+
+    nullable = %{schema | type: [:array, :null]}
+    signature = %{signature | output_fields: [%{values | schema: nullable} | fields]}
+
+    assert %{values: nil} = XMLAdapter.parse_outputs(signature, "<values>null</values>" <> suffix)
+    assert %{values: nil} = XMLAdapter.parse_outputs(signature, "<values />" <> suffix)
+  end
+
+  test "preserves a leading apparent closer in a repeated string item" do
+    signature = Repeated.signature()
+    [values | fields] = signature.output_fields
+    schema = %{type: :array, items: %{type: :string}}
+    signature = %{signature | output_fields: [%{values | schema: schema} | fields]}
+
+    for literal <- ["</values> is literal\nbody", "</values><i>literal markup</i>"] do
+      xml =
+        "<values>\n#{literal}\n</values>\n<values>tail</values><summary>ok</summary><counts />"
+
+      assert %{values: [^literal, "tail"]} = XMLAdapter.parse_outputs(signature, xml)
+    end
+  end
+
   test "validates the complete array and rejects repeats of scalar or complete fields" do
     signature = Repeated.signature()
 
