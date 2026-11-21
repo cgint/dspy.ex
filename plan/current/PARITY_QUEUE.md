@@ -79,6 +79,12 @@ After this you can …optimize a program once, save it, load it later or elsewhe
 
 ## M3 — Production LM
 
+`v0.6.0` covers M3a provider hardening. The
+[offline acceptance example](../../examples/offline/provider_retry_disk_cache_offline.exs)
+exercises 429 recovery and persistent cache reuse across application restart.
+The disk tier currently supports the stock OpenAI `gpt-4.1-mini` Responses
+route. Wider eligibility and M3b lifecycle hooks remain in scope.
+
 The first provider retry slice classifies known HTTP, transport, and local
 failures internally. It preserves caller error tuples and keeps structured
 fallback for explicit schema or capability failures. Public error types remain

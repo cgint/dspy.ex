@@ -3,7 +3,7 @@ set -euo pipefail
 
 # Verify official deterministic (offline) examples.
 #
-# These examples should run without network calls or API keys.
+# These examples run without external services or real API keys.
 #
 # Run:
 #   scripts/verify_examples.sh
@@ -21,6 +21,7 @@ examples=(
   examples/offline/react_tool_logging_offline.exs
   examples/offline/request_defaults_offline.exs
   examples/offline/semantic_f1_evaluation_offline.exs
+  examples/offline/provider_retry_disk_cache_offline.exs
 )
 
 echo "== Verifying offline examples =="
