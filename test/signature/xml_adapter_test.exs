@@ -1008,5 +1008,59 @@ defmodule Dspy.Signature.XMLAdapterTest do
     assert content == "<result>\n<image>\n</result>"
   end
 
+  test "replayed demos use placeholders without shifting a historical turn's image" do
+    demo_image = Dspy.Image.new("data:image/png;base64,QUJD")
+    history_url = "data:image/png;base64,REVG"
+
+    demo = Dspy.Example.new(%{question: "Demo", picture: demo_image})
+
+    history =
+      Dspy.History.new([
+        %Dspy.History.Turn{inputs: %{question: "Text-only turn"}},
+        %Dspy.History.Turn{
+          inputs: %{question: "Image turn", picture: Dspy.Image.new(history_url)}
+        }
+      ])
+
+    for adapter <- [Dspy.Signature.Adapters.ChatAdapter, XMLAdapter] do
+      assert %{messages: [_system, text_turn, image_turn, _current]} =
+               adapter.format_request(
+                 Replay.signature(),
+                 %{question: "Continue", history: history},
+                 [demo]
+               )
+
+      assert is_binary(text_turn.content)
+      assert text_turn.content =~ "<image>"
+      refute text_turn.content =~ Dspy.Signature.AdapterPipeline.image_ref_token()
+
+      assert %{
+               content: [
+                 %{"text" => prefix},
+                 %{"image_url" => %{"url" => ^history_url}},
+                 %{"text" => suffix}
+               ]
+             } = image_turn
+
+      assert prefix =~ "Demo"
+      assert suffix =~ "Image turn"
+      refute prefix =~ Dspy.Signature.AdapterPipeline.image_ref_token()
+      refute suffix =~ Dspy.Signature.AdapterPipeline.image_ref_token()
+    end
+  end
+
+  test "historical malformed JSON values fall back to valid XML text without raising" do
+    signature = Replay.signature()
+    [output] = signature.output_fields
+    signature = %{signature | output_fields: [Map.delete(output, :schema)]}
+    value = %{field: [1 | :tail]}
+    history = Dspy.History.new([%Dspy.History.Turn{outputs: %{result: value}}])
+
+    assert %{messages: [_system, %{role: "assistant", content: content}, _user]} =
+             XMLAdapter.format_request(signature, %{question: "Continue", history: history}, [])
+
+    assert content == "<result>\n%{field: [1 | :tail]}\n</result>"
+  end
+
   defp recording_lm(replies), do: %RecordingLM{owner: self(), key: make_ref(), replies: replies}
 end

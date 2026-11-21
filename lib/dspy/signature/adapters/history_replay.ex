@@ -4,6 +4,11 @@ defmodule Dspy.Signature.Adapters.HistoryReplay do
   alias Dspy.{Attrs, Attachments, History, Image}
   alias Dspy.Signature.AdapterPipeline
 
+  def demo_text(text) do
+    # Demo image markers have no matching media parts when replaying a turn.
+    String.replace(text, AdapterPipeline.image_ref_token(), "<image>")
+  end
+
   def render(signature, %History.Turn{} = turn, render_user, render_assistant) do
     with {:ok, users} <- user_messages(signature, turn.inputs, render_user) do
       fields =

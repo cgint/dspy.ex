@@ -66,10 +66,7 @@ defmodule Dspy.Signature.Adapters.XMLAdapter do
     }
 
     render_user = &user_message(filtered_signature, &1, demos)
-
-    render_prior_user = fn inputs ->
-      user_message(filtered_signature, inputs, demos, &Attrs.fetch_map/2)
-    end
+    render_prior_user = &user_message(filtered_signature, &1, demos, :history)
 
     render_turn = fn turn ->
       HistoryReplay.render(filtered_signature, turn, render_prior_user, &history_outputs/2)
@@ -88,7 +85,7 @@ defmodule Dspy.Signature.Adapters.XMLAdapter do
     end
   end
 
-  defp user_message(signature, inputs, demos, fetch_input \\ &Attrs.fetch/2) do
+  defp user_message(signature, inputs, demos, mode \\ :live) do
     examples =
       demos
       |> Enum.with_index(1)
@@ -98,6 +95,12 @@ defmodule Dspy.Signature.Adapters.XMLAdapter do
           "\n" <> render_fields(signature.output_fields, Example.to_map(example))
       end)
 
+    {examples, fetch_input} =
+      case mode do
+        :history -> {Enum.map(examples, &HistoryReplay.demo_text/1), &Attrs.fetch_map/2}
+        :live -> {examples, &Attrs.fetch/2}
+      end
+
     input = render_fields(signature.input_fields, inputs, :input, fetch_input)
     content = Enum.join(examples ++ [input], "\n\n")
     %{role: "user", content: content}
@@ -106,20 +109,26 @@ defmodule Dspy.Signature.Adapters.XMLAdapter do
   defp history_outputs(fields, outputs) do
     Enum.map_join(fields, "\n", fn field ->
       {:ok, value} = Attrs.fetch_map(outputs, field.name)
-
-      case HistoryReplay.media_placeholder(value) do
-        nil ->
-          xml = render_field(field, value, :output)
-
-          if String.valid?(xml),
-            do: xml,
-            else: render_text_field(field.name, HistoryReplay.output_text(value))
-
-        placeholder ->
-          render_text_field(field.name, placeholder)
-      end
+      history_field(field, value)
     end)
   end
+
+  defp history_field(field, value) do
+    case HistoryReplay.media_placeholder(value) do
+      nil ->
+        xml = render_field(field, value, :output)
+
+        if String.valid?(xml), do: xml, else: history_text_field(field, value)
+
+      placeholder ->
+        render_text_field(field.name, placeholder)
+    end
+  rescue
+    FunctionClauseError -> history_text_field(field, value)
+  end
+
+  defp history_text_field(field, value),
+    do: render_text_field(field.name, HistoryReplay.output_text(value))
 
   defp render_fields(fields, values, direction \\ :output, fetch_field \\ &Attrs.fetch/2) do
     fields

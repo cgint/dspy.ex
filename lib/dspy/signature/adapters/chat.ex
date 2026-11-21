@@ -48,9 +48,10 @@ defmodule Dspy.Signature.Adapters.ChatAdapter do
     }
 
     render_user = &user_message(filtered_signature, &1, demos)
+    render_prior_user = &user_message(filtered_signature, &1, demos, :history)
 
     render_turn = fn turn ->
-      HistoryReplay.render(filtered_signature, turn, render_user, &history_outputs/2)
+      HistoryReplay.render(filtered_signature, turn, render_prior_user, &history_outputs/2)
     end
 
     with {:ok, %{inputs: filtered_inputs, messages: history_messages}} <-
@@ -92,9 +93,12 @@ defmodule Dspy.Signature.Adapters.ChatAdapter do
   defp instruction_line(%Dspy.Signature{instructions: instructions}),
     do: "Instructions: #{instructions}"
 
-  defp user_message(signature, inputs, demos) do
+  defp user_message(signature, inputs, demos, mode \\ :live) do
+    demo_text = render_demos(signature, demos)
+    demo_text = if mode == :history, do: HistoryReplay.demo_text(demo_text), else: demo_text
+
     content =
-      [render_demos(signature, demos), render_inputs(signature, inputs)]
+      [demo_text, render_inputs(signature, inputs)]
       |> Enum.reject(&(&1 == ""))
       |> Enum.join("\n\n")
 
