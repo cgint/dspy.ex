@@ -116,20 +116,26 @@ defmodule Dspy.LM.ReqLLMToolMessagesTest do
             }} = result
   end
 
-  test "preserves multipart text and tool call order and excludes provider builtin calls" do
+  test "preserves multipart text and ordered call metadata and excludes provider builtin calls" do
     lm = bridge()
+
+    first_call =
+      @prior_call
+      |> put_in([:function, :metadata], %{thought_signature: "original", provider_tag: "test"})
+      |> Map.put(:thought_signature, "fallback")
 
     second_call = %{
       "id" => "call_second",
       "type" => "function",
-      "function" => %{"name" => "lookup", "arguments" => %{"x" => 3}}
+      "function" => %{"name" => "lookup", "arguments" => %{"x" => 3}},
+      "thought_signature" => "flat-signature"
     }
 
     messages = [
       %{
         role: "assistant",
         content: [%{type: "text", text: "Looking"}],
-        tool_calls: [@prior_call, second_call]
+        tool_calls: [first_call, second_call]
       },
       %{
         role: "tool",
@@ -171,11 +177,15 @@ defmodule Dspy.LM.ReqLLMToolMessagesTest do
                      }}
 
     assert Enum.map(calls, &Map.from_struct/1) == [
-             @prior_call,
+             Map.delete(first_call, :thought_signature),
              %{
                id: "call_second",
                type: "function",
-               function: %{name: "lookup", arguments: ~s({"x":3})}
+               function: %{
+                 name: "lookup",
+                 arguments: ~s({"x":3}),
+                 metadata: %{thought_signature: "flat-signature"}
+               }
              }
            ]
   end
@@ -187,6 +197,16 @@ defmodule Dspy.LM.ReqLLMToolMessagesTest do
           %{role: "tool", content: "result"},
           %{role: "tool", content: "result", tool_call_id: " "},
           %{role: "assistant", content: "", tool_calls: [%{id: "call_incomplete"}]},
+          %{
+            role: "assistant",
+            content: "",
+            tool_calls: [put_in(@prior_call, [:function, :arguments], "{invalid")]
+          },
+          %{
+            role: "assistant",
+            content: "",
+            tool_calls: [put_in(@prior_call, [:function, :arguments], "[1]")]
+          },
           %{role: "assistant", content: "", tool_calls: [builtin]}
         ] do
       assert {:error, {:unsupported_message, _reason}} =

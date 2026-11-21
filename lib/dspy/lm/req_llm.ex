@@ -315,7 +315,8 @@ defmodule Dspy.LM.ReqLLM do
          name = wire_field(function, :name),
          true <- nonblank?(id) and nonblank?(name),
          {:ok, args} <- encode_tool_arguments(wire_field(function, :arguments)) do
-      {:ok, ReqLLM.ToolCall.new(id, name, args)}
+      tool_call = ReqLLM.ToolCall.new(id, name, args)
+      {:ok, ReqLLM.ToolCall.put_metadata(tool_call, tool_call_metadata(call))}
     else
       _ -> {:error, {:unsupported_message, :invalid_tool_call}}
     end
@@ -323,12 +324,32 @@ defmodule Dspy.LM.ReqLLM do
 
   defp to_req_llm_tool_call(_call), do: {:error, {:unsupported_message, :invalid_tool_call}}
 
-  defp encode_tool_arguments(args) when is_binary(args), do: {:ok, args}
+  defp encode_tool_arguments(args) when is_binary(args) do
+    case Jason.decode(args) do
+      {:ok, %{}} -> {:ok, args}
+      _ -> :error
+    end
+  end
 
   defp encode_tool_arguments(args) when is_map(args) and not is_struct(args),
     do: Jason.encode(args)
 
   defp encode_tool_arguments(_args), do: :error
+
+  defp tool_call_metadata(call) do
+    metadata = ReqLLM.ToolCall.metadata(call)
+
+    nested_signature =
+      Map.get(metadata, :thought_signature) || Map.get(metadata, "thought_signature")
+
+    signature = Map.get(call, :thought_signature) || Map.get(call, "thought_signature")
+
+    if is_nil(nested_signature) and is_binary(signature) do
+      Map.put(metadata, :thought_signature, signature)
+    else
+      metadata
+    end
+  end
 
   defp wire_field(map, key), do: Map.get(map, key, Map.get(map, Atom.to_string(key)))
 
