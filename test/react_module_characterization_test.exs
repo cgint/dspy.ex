@@ -118,6 +118,25 @@ defmodule Dspy.ReactModuleCharacterizationTest do
     def supports?(_lm, _feature), do: true
   end
 
+  defmodule ToolLifecycleRecorder do
+    def on_module_start(%{module: Dspy.ReAct} = meta, _payload, owner) do
+      send(owner, {:react_start, meta})
+      :ok
+    end
+
+    def on_module_start(_meta, _payload, _owner), do: :ok
+
+    def on_tool_start(meta, payload, owner) do
+      send(owner, {:tool_start, self(), meta, payload})
+      :ok
+    end
+
+    def on_tool_end(meta, payload, owner) do
+      send(owner, {:tool_end, self(), meta, payload})
+      :ok
+    end
+  end
+
   setup do
     Dspy.TestSupport.restore_settings_on_exit()
     Process.put({ReactScriptedLM, :idx}, 0)
@@ -140,8 +159,24 @@ defmodule Dspy.ReactModuleCharacterizationTest do
 
     react = Dspy.ReAct.new("question -> answer", [add], max_steps: 5, adapter: nil)
 
-    assert {:ok, pred} = Dspy.call(react, %{question: "2+3"})
+    owner = self()
+
+    assert {:ok, pred} =
+             Dspy.call(react, %{question: "2+3"}, callbacks: [{ToolLifecycleRecorder, owner}])
+
     assert pred.attrs.answer == "5"
+
+    assert_received {:react_start, %{call_id: parent}}
+    assert_received {:tool_start, ^owner, meta, start_payload}
+    assert start_payload == %{}
+    assert is_reference(meta.call_id)
+    assert meta.call_id != parent
+    assert meta == %{call_id: meta.call_id, module: __MODULE__, parent_call_id: parent}
+    assert_received {:tool_end, ^owner, ^meta, payload}
+    assert is_integer(payload.duration_us) and payload.duration_us >= 0
+    assert payload == %{status: :ok, duration_us: payload.duration_us}
+    refute_received {:tool_start, _, _, _}
+    refute_received {:tool_end, _, _, _}
 
     # Trajectory is expected to be available for debugging.
     assert is_binary(pred.attrs.trajectory)

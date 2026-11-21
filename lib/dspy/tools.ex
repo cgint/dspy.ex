@@ -13,6 +13,9 @@ defmodule Dspy.Tools do
   For the current stable surface + evidence, see `docs/OVERVIEW.md`.
   """
 
+  alias Dspy.{Context, Lifecycle}
+  alias Dspy.Signature.Adapter.Callbacks
+
   defmodule Tool do
     @moduledoc """
     Represents a callable tool with metadata and validation.
@@ -216,7 +219,8 @@ defmodule Dspy.Tools do
     Notes:
     - Tool functions are executed in a separate `Task` and are subject to each tool's `timeout`.
       Do not rely on `self()` inside a tool being the ReAct process.
-    - Tool start/end callbacks (`Dspy.Tools.Callback`) are invoked around tool execution.
+    - Register `Dspy.Tools.Callback` observers via the ReAct `:callbacks` option.
+      `Dspy.Tools.LifecycleCallback` handlers use Settings or per-call frames.
 
     For the current stable surface + evidence, see `docs/OVERVIEW.md`.
     """
@@ -499,97 +503,37 @@ defmodule Dspy.Tools do
 
       notify_tool_start(callbacks, call_id, tool, args)
 
-      # Capture process-local DSPy state (overrides + callback stack) in the
-      # caller; reinstall it in the task (tasks do not inherit the dictionary).
-      ctx = Dspy.Context.capture()
-
-      task =
-        Task.async(fn ->
-          Dspy.Context.with_context(ctx, fn ->
-            try do
-              {:ok, tool.function.(args)}
-            rescue
-              e ->
-                {:error,
-                 %{
-                   kind: :exception,
-                   message: Exception.message(e)
-                 }}
-            catch
-              :exit, reason ->
-                {:error,
-                 %{
-                   kind: :exit,
-                   message: Dspy.Tools.format_exit(reason)
-                 }}
-
-              kind, reason ->
-                {:error,
-                 %{
-                   kind: kind,
-                   message: inspect(reason)
-                 }}
-            end
-          end)
-        end)
-
-      case Task.yield(task, timeout) || Task.shutdown(task, :brutal_kill) do
-        {:ok, {:ok, result}} ->
+      case Dspy.Tools.run_tool(tool, args, timeout) do
+        {:ok, result} = success ->
           notify_tool_end(callbacks, call_id, tool, result, nil)
-          {:ok, result}
+          success
 
-        {:ok, {:error, error}} ->
-          notify_tool_end(callbacks, call_id, tool, nil, error)
-          {:error, "Tool execution failed: #{error.message}"}
-
-        {:exit, reason} ->
-          # Child exited (e.g. a crash the catch-all did not cover, or the
-          # task was killed externally). Surface through the existing error shape.
-          error = %{kind: :exit, message: Dspy.Tools.format_exit(reason)}
-          notify_tool_end(callbacks, call_id, tool, nil, error)
-          {:error, "Tool execution failed: #{error.message}"}
-
-        nil ->
-          error = %{kind: :timeout, message: "Tool execution timed out"}
+        {:error, %{kind: :timeout} = error} ->
           notify_tool_end(callbacks, call_id, tool, nil, error)
           {:error, error.message}
+
+        {:error, error} ->
+          notify_tool_end(callbacks, call_id, tool, nil, error)
+          {:error, "Tool execution failed: #{error.message}"}
       end
     end
 
     defp notify_tool_start(callbacks, call_id, tool, inputs) do
-      Enum.each(callbacks || [], fn
-        {mod, state} ->
-          try do
-            mod.on_tool_start(call_id, tool, inputs, state)
-          rescue
-            e ->
-              Logger.debug(
-                "Tool callback on_tool_start failed: #{inspect(mod)} #{Exception.message(e)}"
-              )
-
-              :ok
-          end
+      Enum.each(callbacks || [], fn {mod, state} ->
+        notify_tool_observer(mod, :on_tool_start, [call_id, tool, inputs, state])
       end)
-
-      :ok
     end
 
     defp notify_tool_end(callbacks, call_id, tool, outputs, error) do
-      Enum.each(callbacks || [], fn
-        {mod, state} ->
-          try do
-            mod.on_tool_end(call_id, tool, outputs, error, state)
-          rescue
-            e ->
-              Logger.debug(
-                "Tool callback on_tool_end failed: #{inspect(mod)} #{Exception.message(e)}"
-              )
-
-              :ok
-          end
+      Enum.each(callbacks || [], fn {mod, state} ->
+        notify_tool_observer(mod, :on_tool_end, [call_id, tool, outputs, error, state])
       end)
+    end
 
-      :ok
+    defp notify_tool_observer(module, event, args) do
+      apply(module, event, args)
+    catch
+      _, _ -> Logger.debug("Tool callback #{event} failed: #{inspect(module)}")
     end
 
     defp extract_reasoning_trace(history) do
@@ -773,38 +717,71 @@ defmodule Dspy.Tools do
     }
   end
 
-  @doc """
-  Execute a tool with arguments.
-  """
-  def execute_tool(%Tool{} = tool, args, opts \\ []) do
-    timeout = opts[:timeout] || tool.timeout
+  @doc false
+  def run_tool(%Tool{} = tool, args, timeout) do
+    case Callbacks.tool_handlers(Callbacks.settings_callbacks()) do
+      [] ->
+        run_tool_worker(tool, args, timeout)
 
-    # Capture process-local DSPy state (overrides + callback stack) in the
-    # caller; reinstall it in the task (tasks do not inherit the dictionary).
-    ctx = Dspy.Context.capture()
+      handlers ->
+        Lifecycle.run(
+          tool_module(tool),
+          handlers,
+          {:tool_start, :tool_end},
+          fn -> run_tool_worker(tool, args, timeout) end,
+          &tool_summary/1
+        )
+    end
+  end
+
+  defp tool_module(%Tool{function: function}) when is_function(function) do
+    {:module, module} = Function.info(function, :module)
+    module
+  end
+
+  defp tool_module(%Tool{}), do: Tool
+
+  defp tool_summary({:error, %{kind: kind}}), do: %{failure_kind: kind}
+  defp tool_summary({:ok, _result}), do: %{}
+
+  defp run_tool_worker(%Tool{} = tool, args, timeout) do
+    context = Context.capture()
 
     task =
       Task.async(fn ->
-        Dspy.Context.with_context(ctx, fn ->
+        Context.with_context(context, fn ->
           try do
-            result = tool.function.(args)
-            {:ok, result}
+            {:ok, tool.function.(args)}
           rescue
-            e -> {:error, Exception.message(e)}
+            exception -> {:error, %{kind: :exception, message: Exception.message(exception)}}
           catch
             :exit, reason ->
-              {:error, "Tool exited: #{Dspy.Tools.format_exit(reason)}"}
+              {:error, %{kind: :exit, message: format_exit(reason)}}
 
-            kind, reason ->
-              {:error, "Tool #{kind}: #{inspect(reason)}"}
+            :throw, reason ->
+              {:error, %{kind: :throw, message: inspect(reason)}}
           end
         end)
       end)
 
     case Task.yield(task, timeout) || Task.shutdown(task, :brutal_kill) do
       {:ok, result} -> result
-      {:exit, reason} -> {:error, "Tool exited: #{Dspy.Tools.format_exit(reason)}"}
-      nil -> {:error, "Tool execution timed out"}
+      {:exit, reason} -> {:error, %{kind: :exit, message: format_exit(reason)}}
+      nil -> {:error, %{kind: :timeout, message: "Tool execution timed out"}}
+    end
+  end
+
+  @doc """
+  Execute a tool with arguments.
+
+  Register `Dspy.Tools.LifecycleCallback` handlers to observe tool execution.
+  """
+  def execute_tool(%Tool{} = tool, args, opts \\ []) do
+    case run_tool(tool, args, opts[:timeout] || tool.timeout) do
+      {:ok, _result} = success -> success
+      {:error, %{kind: :exit, message: message}} -> {:error, "Tool exited: #{message}"}
+      {:error, %{kind: :throw, message: message}} -> {:error, "Tool throw: #{message}"}
+      {:error, %{message: message}} -> {:error, message}
     end
   end
 
