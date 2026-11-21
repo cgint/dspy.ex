@@ -58,7 +58,8 @@ defmodule Dspy.LM do
   - "provider:model" (`req_llm` style), e.g. "openai:gpt-4.1-mini"
 
   Options are forwarded as default provider options (e.g. `:temperature`, `:max_tokens`,
-  `:api_key`).
+  `:api_key`). `:cache_namespace` identifies the provider account for eligible
+  disk cache entries.
 
   ## Examples
 
@@ -104,9 +105,19 @@ defmodule Dspy.LM do
       {:error, :invalid_model}
     else
       normalized = normalize_model_spec(model)
+      {namespace, opts} = Keyword.pop(opts, :cache_namespace)
 
-      with {:ok, normalized_opts} <- normalize_lm_new_opts(normalized, opts) do
-        {:ok, Dspy.LM.ReqLLM.new(model: normalized, default_opts: normalized_opts)}
+      with true <- Dspy.LM.ReqLLM.valid_cache_namespace?(namespace),
+           {:ok, normalized_opts} <- normalize_lm_new_opts(normalized, opts) do
+        {:ok,
+         Dspy.LM.ReqLLM.new(
+           model: normalized,
+           cache_namespace: namespace,
+           default_opts: normalized_opts
+         )}
+      else
+        false -> {:error, :invalid_cache_namespace}
+        {:error, _} = error -> error
       end
     end
   end
@@ -291,13 +302,13 @@ defmodule Dspy.LM do
       rollout_id = Keyword.get_lazy(opts, :rollout_id, fn -> Dspy.Settings.get(:rollout_id) end)
       cache_opts = [rollout_id: rollout_id, table: Dspy.LM.Cache.table_ref()]
 
-      case Dspy.LM.Cache.fetch(lm, request, cache_opts) do
+      case fetch_cached_response(lm, request, cache_opts) do
         {:hit, cached} ->
           duration_ms = System.monotonic_time(:millisecond) - started_at_ms
           maybe_track_usage(lm, request, cached, cache_hit?: true, duration_ms: duration_ms)
           {:ok, cached}
 
-        :miss ->
+        {:miss, disk} ->
           case lm.__struct__.generate(lm, request) do
             {:ok, response} ->
               duration_ms = System.monotonic_time(:millisecond) - started_at_ms
@@ -308,6 +319,7 @@ defmodule Dspy.LM do
               )
 
               :ok = Dspy.LM.Cache.put(lm, request, response, cache_opts)
+              :ok = maybe_store_disk(disk, lm, request, response, cache_opts)
               {:ok, response}
 
             {:error, reason} ->
@@ -325,6 +337,43 @@ defmodule Dspy.LM do
           other
       end
     end
+  end
+
+  defp fetch_cached_response(lm, request, opts) do
+    case Dspy.LM.Cache.fetch(lm, request, opts) do
+      {:hit, _} = hit ->
+        hit
+
+      :miss ->
+        with epoch when is_reference(epoch) <- Dspy.LM.DiskCache.context(),
+             key when is_binary(key) <- disk_key(lm, request, opts) do
+          case Dspy.LM.DiskCache.fetch(epoch, key) do
+            {:hit, response} = hit ->
+              :ok = Dspy.LM.Cache.put(lm, request, response, opts)
+              hit
+
+            :miss ->
+              {:miss, {epoch, key}}
+          end
+        else
+          nil -> {:miss, nil}
+        end
+    end
+  end
+
+  defp maybe_store_disk(nil, _lm, _request, _response, _opts), do: :ok
+
+  defp maybe_store_disk({epoch, key}, lm, request, response, opts) do
+    # The provider's effective route or options can change during generation.
+    if disk_key(lm, request, opts) == key do
+      Dspy.LM.DiskCache.put(epoch, key, response, Keyword.fetch!(opts, :table))
+    else
+      :ok
+    end
+  end
+
+  defp disk_key(lm, request, opts) do
+    Dspy.LM.DiskCache.Identity.key(lm, request, Keyword.fetch!(opts, :rollout_id))
   end
 
   @doc """

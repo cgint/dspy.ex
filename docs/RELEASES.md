@@ -15,6 +15,21 @@ least recently used response. `Dspy.configure_cache(memory_max_entries: 500)`
 sets a different limit and clears stored responses. Clearing, reconfiguring,
 or restarting the cache discards fills from generations already in flight.
 
+### LM disk cache
+
+`Dspy.configure_cache(disk_cache_dir: path, disk_size_limit_bytes: bytes)` enables
+disk storage for eligible LM responses. Use a directory reserved for one BEAM
+writer and give the LM a `cache_namespace:` identifying its provider account.
+The first supported route is stock ReqLLM `openai:gpt-4.1-mini` Responses.
+The `cache:` setting still controls whether a generation uses either cache.
+
+The disk store keeps versioned JSON responses in a private subdirectory. It
+counts published response bytes and evicts the oldest records first, using the
+key to break timestamp ties. Entries survive a restart or memory clear.
+`Dspy.configure_cache(disk_cache_dir: nil)` disables disk access and retains
+the existing files. Unsupported requests and unavailable disk storage bypass
+the disk tier.
+
 ### Provider retries
 
 Predictors retry known transient HTTP and transport failures within their

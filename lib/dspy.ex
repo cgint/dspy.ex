@@ -107,26 +107,48 @@ defmodule Dspy do
   end
 
   @doc """
-  Set the maximum number of responses in the in-memory LM cache.
+  Configure a tier of the LM response cache.
 
-  Pass `memory_max_entries` as a positive integer. The default limit is
-  10,000 entries, and configuring a limit clears the cache. At capacity, the
-  least recently used entry is evicted when a new response is stored.
+  `memory_max_entries: count` sets the in-memory limit and clears that tier.
+  The default is 10,000 entries. At capacity, new responses evict the least
+  recently used entry.
+
+  `disk_cache_dir: path, disk_size_limit_bytes: bytes` enables a disk store in
+  a private subdirectory. Reserve the directory for one running BEAM. The
+  disk tier currently supports stock ReqLLM OpenAI `gpt-4.1-mini` Responses
+  calls using an LM constructed with `cache_namespace:`. Use a distinct
+  namespace for each provider account. Disk entries survive restarts.
+  `disk_cache_dir: nil` disables disk access and retains existing files.
 
   Response caching is opt-in through `configure(cache: true)` or a
   process-scoped `context/2` with `cache: true`. The `:dspy` application
   must be running to configure the cache.
 
-  Raises `ArgumentError` if the limit is missing or invalid or if other options
-  are supplied.
+  Each limit must be a positive integer. Invalid combinations raise
+  `ArgumentError`. Disk setup errors return `{:error, reason}`.
   """
-  @spec configure_cache(memory_max_entries: pos_integer()) :: :ok
+  @spec configure_cache(keyword()) :: :ok | {:error, term()}
   def configure_cache(memory_max_entries: limit) when is_integer(limit) and limit > 0 do
     Dspy.LM.Cache.configure(limit)
   end
 
-  def configure_cache(_opts) do
-    raise ArgumentError, "expected a positive integer for :memory_max_entries"
+  def configure_cache(disk_cache_dir: nil), do: Dspy.LM.DiskCache.disable()
+
+  def configure_cache(opts) when is_integer(length(opts)) do
+    case Enum.sort(opts) do
+      [disk_cache_dir: directory, disk_size_limit_bytes: limit]
+      when is_binary(directory) and byte_size(directory) > 0 and is_integer(limit) and limit > 0 ->
+        Dspy.LM.DiskCache.configure(directory, limit)
+
+      _ ->
+        invalid_cache_config!()
+    end
+  end
+
+  def configure_cache(_opts), do: invalid_cache_config!()
+
+  defp invalid_cache_config! do
+    raise ArgumentError, "expected memory_max_entries or a disk_cache_dir policy"
   end
 
   @doc """
