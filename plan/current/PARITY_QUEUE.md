@@ -31,7 +31,7 @@ compatibility decisions are recorded.
 | # | Slice | Upstream | Effort | Status |
 |---|---|---|---|---|
 | P0 | `Dspy.context/2` process-scoped settings overrides (foundation for BestOfN/Parallel; `Dspy.Settings.get` consults overlay) | `dsp/utils/settings.py` context | S/M | done (2026-09-26, v0.3.40) |
-| P1 | `Dspy.BestOfN` (uses P0; per-attempt temperature 1.0 + `rollout_id` in cache key; note `Dspy.Refine` today repeats identical calls, which collapse under `cache: true`) (N rollouts, reward fn, threshold, fail_count) | `predict/best_of_n.py` | S | done (2026-09-26, v0.3.41) |
+| P1 | `Dspy.BestOfN` (uses P0; per-attempt temperature 1.0 and `rollout_id` in the cache key) (N rollouts, reward fn, threshold, fail_count) | `predict/best_of_n.py` | S | done (2026-09-26, v0.3.41) |
 | P2 | `Dspy.Parallel` (batch-run module/example pairs, `num_threads`→`max_concurrency`, error budget) | `predict/parallel.py` | S | done (2026-09-26, v0.3.42) |
 | H0 | Carry caller context (overrides, callbacks) into all 13 library spawn sites | `utils/parallelizer.py` | M | done (2026-09-26, v0.3.44) |
 | P3 | `Dspy.MultiChainComparison` (M completions → comparison signature) | `predict/multi_chain_comparison.py` | S/M | done (2026-09-26, v0.3.43) |
@@ -138,7 +138,7 @@ After this you can …build tool-using agents that also take images or audio, re
 | S007 | ChatAdapter | partial | H | M | 1.50 | <=2.6 | S005,S015,S016 | N | - | no assistant tool_calls / tool-role history rendering; no fallback flag | todo |
 | S011 | Image | done | H | M | 1.50 | <=2.6 | S018 | N | - | done: Dspy.Image + :image field (0d7b0d1); :image now declared+validatable, docs everywhere | done 2026-10-10 v0.4.7 (align-image-input-with-python) |
 | S061 | Retrieve | partial | H | M | 1.50 | <=2.6 | S059;U032 | N | - | No dspy.Retrieve Parameter (k, callbacks) wrapping settings.rm; dspy.ex Dspy.Retrieve is a | todo |
-| S043 | Refine | partial | H | M | 1.50 | 3.0.0 | S038 | N | - | No OfferFeedback advice loop; no temperature-1.0/rollout_id per attempt; no fail_count | todo |
+| S043 | Refine | partial | H | M | 1.50 | 3.0.0 | S038 | N | - | Distinct rollout IDs at temperature 1.0. OfferFeedback advice and failure-budget parity remain open. | Rollout handling implemented |
 | U032 | dummy_rm | missing | L | S | 1.00 | <=2.6 | S061 | N | - | No dummy_rm stub retriever | todo |
 | S006 | Audio | missing | M | M | 1.00 | 3.0.0 | S018 | N | - | no audio input type; Attachments is file-only, no base64/audio parts | todo |
 | S019 | XMLAdapter | missing | M | M | 1.00 | 3.0.0 | S007 | N | P10 | no XML signature adapter; Dspy.Adapters.XMLAdapter.parse is an unimplemented stub | todo |

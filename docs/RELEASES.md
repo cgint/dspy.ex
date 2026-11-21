@@ -8,6 +8,13 @@ This repo ships in **small, user-usable slices**.
 
 ## Consumer notes
 
+### Refine rollouts
+
+`Dspy.Refine` runs each attempt at temperature `1.0` with a distinct rollout
+ID. LM response caching partitions attempts by that ID. Each reward call
+uses the caller's settings, and predictor configuration stays scoped to the
+attempt.
+
 ### DSPy logging controls
 
 `Dspy.disable_logging/0` silences DSPy diagnostics across the VM.
