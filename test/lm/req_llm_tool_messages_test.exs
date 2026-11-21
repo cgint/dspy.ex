@@ -108,6 +108,32 @@ defmodule Dspy.LM.ReqLLMToolMessagesTest do
             }} = result
   end
 
+  test "projects the OpenAI Responses call ID into structured predictor outputs" do
+    signature = Dspy.Signature.define("question -> tool_calls")
+    [calls] = signature.output_fields
+
+    calls =
+      Map.merge(calls, %{type: :tool_calls, required: false, tool_call_format: :structured})
+
+    predictor =
+      Dspy.Predict.new(%{signature | output_fields: [calls]},
+        adapter: Dspy.Signature.Adapters.ChatAdapter,
+        lm: offline_bridge(),
+        max_retries: 0,
+        max_output_retries: 0
+      )
+
+    Dspy.context([cache: false], fn ->
+      assert {:ok, prediction} = Dspy.call(predictor, %{question: "Look it up"})
+
+      assert prediction.attrs.tool_calls == [
+               %{id: "call_next", name: "lookup", args: %{"x" => 2}}
+             ]
+    end)
+
+    assert_received {:http_request, "/responses", _}
+  end
+
   test "a named tool selection reaches the Responses wire and can be omitted on the next call" do
     lm = offline_bridge(tool_choice: :auto)
 
