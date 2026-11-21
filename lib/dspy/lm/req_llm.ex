@@ -151,6 +151,7 @@ defmodule Dspy.LM.ReqLLM do
   def supports?(%__MODULE__{model: model}, :structured_output),
     do: native_structured_model?(model)
 
+  def supports?(_lm, :multiple_choices), do: false
   def supports?(_lm, _feature), do: true
 
   defp to_req_llm_input_and_opts(%__MODULE__{} = lm, request) do

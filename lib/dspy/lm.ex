@@ -375,25 +375,58 @@ defmodule Dspy.LM do
   end
 
   def choice_from_response(response) do
-    case first_choice_message(response) do
-      {:ok, message} ->
-        text = Map.get(message, :content) || Map.get(message, "content")
-        tool_calls = Map.get(message, :tool_calls) || Map.get(message, "tool_calls")
-
-        {:ok,
-         %{
-           text: if(is_binary(text), do: text, else: nil),
-           # Preserve malformed non-nil tool_calls so the adapter pipeline can
-           # return an explicit merge/normalization error instead of silently
-           # treating them as absent.
-           tool_calls:
-             if(is_nil(tool_calls) or is_list(tool_calls), do: tool_calls, else: tool_calls),
-           raw: message
-         }}
-
-      {:error, _} = error ->
-        error
+    with {:ok, message} <- first_choice_message(response) do
+      {:ok, normalize_choice_message(message)}
     end
+  end
+
+  @doc false
+  @spec choices_from_response(response() | String.t(), pos_integer()) ::
+          {:ok, [map()]} | {:error, term()}
+  def choices_from_response(response, count) do
+    with choices when is_integer(length(choices)) <- response_choices(response),
+         :ok <- check_choice_count(length(choices), count) do
+      choices
+      |> Enum.reduce_while({:ok, []}, fn choice, {:ok, acc} ->
+        with {:ok, message} <- choice_message(choice),
+             %{text: text} = choice when is_binary(text) <- normalize_choice_message(message) do
+          {:cont, {:ok, [choice | acc]}}
+        else
+          {:error, _} = error -> {:halt, error}
+          _ -> {:halt, {:error, {:missing_content, nil}}}
+        end
+      end)
+      |> case do
+        {:ok, choices} -> {:ok, Enum.reverse(choices)}
+        {:error, _} = error -> error
+      end
+    else
+      {:error, _} = error -> error
+      _ -> {:error, {:missing_content, nil}}
+    end
+  end
+
+  defp response_choices(response) when is_binary(response), do: [%{message: %{content: response}}]
+
+  defp response_choices(response) when is_map(response),
+    do: Map.get(response, :choices) || Map.get(response, "choices")
+
+  defp response_choices(_), do: nil
+
+  defp check_choice_count(count, count), do: :ok
+
+  defp check_choice_count(actual, expected),
+    do: {:error, {:unexpected_choice_count, %{expected: expected, actual: actual}}}
+
+  defp normalize_choice_message(message) do
+    text = Map.get(message, :content) || Map.get(message, "content")
+
+    %{
+      text: if(is_binary(text), do: text, else: nil),
+      # Retain malformed tool calls so the pipeline can report its merge error.
+      tool_calls: Map.get(message, :tool_calls) || Map.get(message, "tool_calls"),
+      raw: message
+    }
   end
 
   @doc """
@@ -415,24 +448,22 @@ defmodule Dspy.LM do
   end
 
   defp first_choice_message(response) when is_map(response) do
-    choices = Map.get(response, :choices) || Map.get(response, "choices")
-
-    case choices do
-      [first | _] when is_map(first) ->
-        message = Map.get(first, :message) || Map.get(first, "message")
-
-        if is_map(message) do
-          {:ok, message}
-        else
-          {:error, {:missing_content, message}}
-        end
-
-      _ ->
-        {:error, {:missing_content, nil}}
+    case response_choices(response) do
+      [first | _] -> choice_message(first)
+      _ -> {:error, {:missing_content, nil}}
     end
   end
 
   defp first_choice_message(_), do: {:error, {:missing_content, nil}}
+
+  defp choice_message(choice) when is_map(choice) do
+    case Map.get(choice, :message) || Map.get(choice, "message") do
+      message when is_map(message) -> {:ok, message}
+      other -> {:error, {:missing_content, other}}
+    end
+  end
+
+  defp choice_message(_), do: {:error, {:missing_content, nil}}
 
   @doc """
   Check if a language model supports a feature.
