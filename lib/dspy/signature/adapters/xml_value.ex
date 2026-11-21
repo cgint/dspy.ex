@@ -40,10 +40,12 @@ defmodule Dspy.Signature.Adapters.XMLValue do
   def object_variants(%{"discriminator" => %{"propertyName" => property}} = schema)
       when is_binary(property) and property != "" do
     choices = Map.get(schema, "oneOf", Map.get(schema, "anyOf"))
+    shared = Map.get(schema, "properties", %{})
 
     with true <- is_integer(length(choices)),
+         true <- is_map(shared),
          [_, _ | _] = objects <- Enum.reject(choices, &match?(%{"type" => "null"}, &1)),
-         variants = Enum.map(objects, &object_variant(&1, property)),
+         variants = Enum.map(objects, &object_variant(&1, property, shared)),
          true <- Enum.all?(variants, &match?({[_ | _], _}, &1)),
          tags = Enum.flat_map(variants, &elem(&1, 0)),
          true <- length(tags) == length(Enum.uniq(tags)) do
@@ -55,18 +57,24 @@ defmodule Dspy.Signature.Adapters.XMLValue do
 
   def object_variants(_schema), do: nil
 
-  defp object_variant(schema, property) do
+  defp object_variant(schema, property, shared) do
     object = shape(schema)
 
     with :object <- shape_kind(object),
-         {:ok, tag} <- property_schema(object, property),
+         properties = Map.merge(shared, Map.get(object, "properties", %{}), &merge_property/3),
+         {:ok, tag} <- Map.fetch(properties, property),
          [_ | _] = members <- literal_members(tag),
          true <- Enum.all?(members, &is_binary/1) do
-      {members, object}
+      {members, Map.put(object, "properties", properties)}
     else
       _ -> nil
     end
   end
+
+  defp merge_property(_key, shared, branch) when is_map(shared) and is_map(branch),
+    do: Map.merge(shared, branch)
+
+  defp merge_property(_key, _shared, branch), do: branch
 
   defp object_kind(schema) do
     additional = Map.get(schema, "additionalProperties", true)
@@ -246,16 +254,22 @@ defmodule Dspy.Signature.Adapters.XMLValue do
   end
 
   defp read_discriminated(text, name, {property, variants}, boundary, ancestors) do
-    Enum.reduce_while(variants, decode_error({:invalid_xml_discriminator, name, property}), fn
-      {tags, branch}, invalid ->
+    decoded =
+      Enum.reduce_while(variants, nil, fn {tags, branch}, selected ->
         with {:ok, value, rest} <-
                read_shaped_container(text, name, branch, :object, boundary, ancestors),
              true <- Map.get(value, property) in tags do
-          {:halt, {:ok, value, rest}}
+          if selected do
+            {:halt, decode_error({:ambiguous_xml_discriminator, name, property})}
+          else
+            {:cont, {:ok, value, rest}}
+          end
         else
-          _ -> {:cont, invalid}
+          _ -> {:cont, selected}
         end
-    end)
+      end)
+
+    decoded || decode_error({:invalid_xml_discriminator, name, property})
   end
 
   defp read_shaped_container(text, name, schema, kind, boundary, ancestors) do

@@ -147,12 +147,25 @@ defmodule Dspy.Signature.Adapters.XMLAdapter do
   defp render_discriminated(value, schema) do
     {property, variants} = XMLValue.object_variants(XMLValue.shape(schema))
     tag = discriminator_value(value, property)
+    variant = Enum.find(variants, fn {tags, _branch} -> tag in tags end)
 
-    case Enum.find(variants, fn {tags, _branch} -> tag in tags end) do
-      {_tags, branch} -> render_object(value, branch)
-      nil -> render_container_json(value)
+    # Literal closing tags can be structural under a different branch.
+    with {_tags, branch} <- variant, false <- contains_xml_close?(value) do
+      render_object(value, branch)
+    else
+      _ -> render_container_json(value)
     end
   end
+
+  defp contains_xml_close?(value) when is_binary(value), do: String.contains?(value, "</")
+
+  defp contains_xml_close?(value) when is_map(value),
+    do: Enum.any?(Map.values(value), &contains_xml_close?/1)
+
+  defp contains_xml_close?(value) when is_integer(length(value)),
+    do: Enum.any?(value, &contains_xml_close?/1)
+
+  defp contains_xml_close?(_value), do: false
 
   defp discriminator_value(value, property) do
     case Map.fetch(value, property) do
