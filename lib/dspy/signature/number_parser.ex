@@ -209,23 +209,13 @@ defmodule Dspy.Signature.NumberParser do
 
     cond do
       String.match?(s, ~r/^[+-]?0[xX]/) ->
-        case parse_radix(s, 16, :int) do
-          {:ok, int} -> {:ok, int}
-          _ -> {:error, :invalid_integer}
-        end
+        parse_radix(s, 16, :int)
 
       String.match?(s, ~r/^[+-]?0[bB]/) ->
-        case parse_radix(s, 2, :int) do
-          {:ok, int} -> {:ok, int}
-          _ -> {:error, :invalid_integer}
-        end
+        parse_radix(s, 2, :int)
 
       String.match?(s, ~r/^[+-]?0[oO]/) ->
-        # Octal (HB8 2026-09-29): "0o17" -> 15, matching upstream.
-        case parse_radix(s, 8, :int) do
-          {:ok, int} -> {:ok, int}
-          _ -> {:error, :invalid_integer}
-        end
+        parse_radix(s, 8, :int)
 
       true ->
         case Integer.parse(s) do
@@ -236,48 +226,24 @@ defmodule Dspy.Signature.NumberParser do
   end
 
   defp parse_radix(s, base, :float) do
-    {sign, digits} =
-      cond do
-        String.starts_with?(s, "+") -> {1, binary_part(s, 1, byte_size(s) - 1)}
-        String.starts_with?(s, "-") -> {-1, binary_part(s, 1, byte_size(s) - 1)}
-        true -> {1, s}
-      end
-
-    digits =
-      digits
-      |> String.replace_prefix("0x", "")
-      |> String.replace_prefix("0X", "")
-      |> String.replace_prefix("0b", "")
-      |> String.replace_prefix("0B", "")
-      |> String.replace_prefix("0o", "")
-      |> String.replace_prefix("0O", "")
-
-    case Integer.parse(digits, base) do
-      {int, ""} -> {:ok, sign * int * 1.0}
-      :error -> {:error, :invalid_number}
+    case parse_radix(s, base, :int) do
+      {:ok, int} -> {:ok, int * 1.0}
+      {:error, :invalid_integer} -> {:error, :invalid_number}
     end
+  rescue
+    ArithmeticError -> {:error, :invalid_number}
   end
 
   defp parse_radix(s, base, :int) do
     {sign, digits} =
-      cond do
-        String.starts_with?(s, "+") -> {1, binary_part(s, 1, byte_size(s) - 1)}
-        String.starts_with?(s, "-") -> {-1, binary_part(s, 1, byte_size(s) - 1)}
-        true -> {1, s}
+      case s do
+        <<?-, _prefix::binary-size(2), digits::binary>> -> {-1, digits}
+        <<_prefix::binary-size(2), digits::binary>> -> {1, digits}
       end
-
-    digits =
-      digits
-      |> String.replace_prefix("0x", "")
-      |> String.replace_prefix("0X", "")
-      |> String.replace_prefix("0b", "")
-      |> String.replace_prefix("0B", "")
-      |> String.replace_prefix("0o", "")
-      |> String.replace_prefix("0O", "")
 
     case Integer.parse(digits, base) do
       {int, ""} -> {:ok, sign * int}
-      :error -> {:error, :invalid_integer}
+      _ -> {:error, :invalid_integer}
     end
   end
 

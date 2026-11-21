@@ -97,6 +97,7 @@ defmodule SignatureNumberIntegerStrictTest do
           {"'2.0'", 2},
           {"0o_17", 15},
           {"0x_FF", 255},
+          {"0x0b10", 2_832},
           {"-0B_1_01", -5}
         ] do
       assert {:ok, %Dspy.Prediction{attrs: %{answer: number}}} = call_number(input)
@@ -116,6 +117,21 @@ defmodule SignatureNumberIntegerStrictTest do
 
       assert {:error, {:output_parse_failed, {:invalid_output_value, :count, _}, _}} =
                call_integer(input)
+    end
+  end
+
+  test "a radix literal outside the float range still parses as an exact integer" do
+    hexadecimal = String.duplicate("f", 257)
+    expected = Integer.pow(16, 257) - 1
+
+    for prefix <- ["0x", "0x_"] do
+      input = prefix <> hexadecimal
+
+      assert {:error,
+              {:output_parse_failed, {:invalid_output_value, :answer, :invalid_number}, _}} =
+               call_number(input)
+
+      assert {:ok, %Dspy.Prediction{attrs: %{count: ^expected}}} = call_integer(input)
     end
   end
 
