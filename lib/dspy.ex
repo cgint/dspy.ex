@@ -415,24 +415,23 @@ defmodule Dspy do
   @doc """
   Returns the most common completion for the target field.
 
-  Port of Python DSPy's `dspy.majority`: takes a list of completions (maps
-  with atom keys or `%Dspy.Prediction{}`) in caller order, normalises the
-  chosen field of each, and returns the first original completion whose
-  normalised value is the most common one, as a `%Dspy.Prediction{}`.
+  Accepts a list in caller order, a `Dspy.Completions` collection, or a
+  prediction with parsed completions. Returns the first original completion
+  with the most common normalized value as a `Dspy.Prediction`.
 
   ## Options
 
-  - `:field` — the completion key to vote on. Required unless every completion
-    has exactly one and the same key.
-  - `:normalize` — `(term() -> term()) | nil`. Default:
-    `&Dspy.Majority.default_normalize/1`. `nil` means no normalisation.
+  - `:field` — the completion key to vote on. Parsed inputs can use the last
+    signature output by default. Both forms can infer a sole shared key.
+  - `:normalize` — `(term() -> term()) | nil`. Defaults to text normalization.
+    Parsed inputs pass other values through by default. `nil` uses identity.
 
   ## Examples
 
       Dspy.majority([%{answer: "2"}, %{answer: "2"}, %{answer: "3"}])
 
   """
-  @spec majority([map() | Prediction.t()], keyword()) :: Prediction.t()
+  @spec majority(Majority.input(), keyword()) :: Prediction.t()
   def majority(completions, opts \\ []) do
     Majority.majority(completions, opts)
   end
