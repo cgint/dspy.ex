@@ -8,6 +8,12 @@ This repo ships in **small, user-usable slices**.
 
 ## Consumer notes
 
+### Usage tracking after an interrupted module call
+
+Tracked module calls now release their usage scope on a raise, throw, or
+exit. Later calls can report their own usage. A caller that recovers from an
+interrupted nested call retains the usage from model requests it already made.
+
 ### Numeric output parsing
 
 `-5.e3` now keeps its sign on both numeric output types. The parser matches

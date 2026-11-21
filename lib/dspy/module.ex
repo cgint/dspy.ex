@@ -53,7 +53,14 @@ defmodule Dspy.Module do
     if track_usage_enabled?() do
       outer? = Dspy.LM.UsageAcc.enter()
 
-      result = forward_untracked(module, inputs)
+      result =
+        try do
+          forward_untracked(module, inputs)
+        catch
+          kind, reason ->
+            Dspy.LM.UsageAcc.exit()
+            :erlang.raise(kind, reason, __STACKTRACE__)
+        end
 
       usage = Dspy.LM.UsageAcc.exit()
 
