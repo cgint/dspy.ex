@@ -9,5 +9,5 @@
 
 ## 2. Verification
 
-- [ ] 2.1 Verify the final source inventory, full precommit, and frozen consumer contract. Run the offline examples and committed consumer replays before merging.
+- [x] 2.1 Verify the final source inventory, full precommit, and frozen consumer contract. Run the offline examples and committed consumer replays before merging. Runtime commit `0d05099` passed 1,000 tests with eight exclusions, all 38 consumer contracts, and the offline examples. All five committed consumer replays passed, including two with matching baseline warnings.
 - [ ] 2.2 [User Verification] Review the documented seeded-order change against a project that pins a seed. This task belongs exclusively to the human user and must never be checked off by the agent.
