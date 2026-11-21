@@ -107,6 +107,29 @@ defmodule Dspy do
   end
 
   @doc """
+  Set the maximum number of responses in the in-memory LM cache.
+
+  Pass `memory_max_entries` as a positive integer. The default limit is
+  10,000 entries, and configuring a limit clears the cache. At capacity, the
+  least recently used entry is evicted when a new response is stored.
+
+  Response caching is opt-in through `configure(cache: true)` or a
+  process-scoped `context/2` with `cache: true`. The `:dspy` application
+  must be running to configure the cache.
+
+  Raises `ArgumentError` if the limit is missing or invalid or if other options
+  are supplied.
+  """
+  @spec configure_cache(memory_max_entries: pos_integer()) :: :ok
+  def configure_cache(memory_max_entries: limit) when is_integer(limit) and limit > 0 do
+    Dspy.LM.Cache.configure(limit)
+  end
+
+  def configure_cache(_opts) do
+    raise ArgumentError, "expected a positive integer for :memory_max_entries"
+  end
+
+  @doc """
   Run `fun` with process-scoped DSPy settings overrides.
 
   Elixir equivalent of Python `dspy.context(**overrides)`.

@@ -1,41 +1,24 @@
 defmodule Dspy.LM.Cache do
   @moduledoc false
 
-  # Simple in-memory cache for LM generate/2 calls.
-  #
-  # Design goals:
-  # - deterministic (pure function of `{lm, request}`)
-  # - low ceremony (ETS named table)
-  # - safe defaults: only enabled when `Dspy.Settings.get(:cache)` is true
-
   @table :dspy_lm_cache
+  @limit_key :lm_cache_max_entries
+  @default_limit 10_000
 
   use GenServer
 
-  def start_link(_opts), do: GenServer.start_link(__MODULE__, :ok)
+  def start_link(_opts), do: GenServer.start_link(__MODULE__, :ok, name: __MODULE__)
 
   @impl true
-  def init(:ok) do
-    :ets.new(@table, [
-      :named_table,
-      :set,
-      :public,
-      read_concurrency: true,
-      write_concurrency: true
-    ])
-
-    {:ok, nil}
-  end
+  def init(:ok), do: {:ok, empty_cache(configured_limit())}
 
   def table_ref, do: :ets.whereis(@table)
 
+  @spec configure(pos_integer()) :: :ok
+  def configure(limit), do: GenServer.call(__MODULE__, {:configure, limit}, :infinity)
+
   @spec clear() :: :ok
-  def clear do
-    with_table(table_ref(), :ok, fn tid ->
-      :ets.delete_all_objects(tid)
-      :ok
-    end)
-  end
+  def clear, do: call(:clear, :ok)
 
   @doc """
   Fetch a cached value for `{lm, request}`.
@@ -49,11 +32,7 @@ defmodule Dspy.LM.Cache do
   def fetch(lm, request, opts \\ []) do
     with_table(Keyword.get_lazy(opts, :table, &table_ref/0), :miss, fn tid ->
       key = cache_key(lm, request, Keyword.get(opts, :rollout_id))
-
-      case :ets.lookup(tid, key) do
-        [{^key, value}] -> {:hit, value}
-        [] -> :miss
-      end
+      call({:fetch, tid, key}, :miss)
     end)
   end
 
@@ -66,18 +45,90 @@ defmodule Dspy.LM.Cache do
   def put(lm, request, value, opts \\ []) do
     with_table(Keyword.get_lazy(opts, :table, &table_ref/0), :ok, fn tid ->
       key = cache_key(lm, request, Keyword.get(opts, :rollout_id))
-      true = :ets.insert(tid, {key, value})
-      :ok
+      call({:put, tid, key, value}, :ok)
     end)
   end
 
-  defp with_table(:undefined, fallback, _operation), do: fallback
+  @impl true
+  def handle_call({:configure, limit}, _from, state) do
+    Application.put_env(:dspy, @limit_key, limit)
+    {:reply, :ok, replace_table(state.table, limit)}
+  end
 
-  defp with_table(tid, fallback, operation) do
-    operation.(tid)
-  rescue
-    # The supervisor may have replaced the table since we obtained the reference.
-    ArgumentError -> fallback
+  def handle_call(:clear, _from, state),
+    do: {:reply, :ok, replace_table(state.table, state.limit)}
+
+  def handle_call({:fetch, tid, key}, _from, %{table: tid} = state) do
+    case :ets.lookup(tid, key) do
+      [{^key, value, age}] ->
+        state = visit(state, key, :gb_trees.delete(age, state.order))
+        true = :ets.update_element(tid, key, {3, state.sequence})
+        {:reply, {:hit, value}, state}
+
+      [] ->
+        {:reply, :miss, state}
+    end
+  end
+
+  def handle_call({:fetch, _tid, _key}, _from, state), do: {:reply, :miss, state}
+
+  def handle_call({:put, tid, key, value}, _from, %{table: tid} = state) do
+    order =
+      if :ets.member(tid, key) do
+        age = :ets.lookup_element(tid, key, 3)
+        :gb_trees.delete(age, state.order)
+      else
+        evict_if_full(state)
+      end
+
+    state = visit(state, key, order)
+    true = :ets.insert(tid, {key, value, state.sequence})
+    {:reply, :ok, state}
+  end
+
+  def handle_call({:put, _tid, _key, _value}, _from, state), do: {:reply, :ok, state}
+
+  defp configured_limit do
+    case Application.get_env(:dspy, @limit_key) do
+      limit when is_integer(limit) and limit > 0 -> limit
+      _ -> @default_limit
+    end
+  end
+
+  defp empty_cache(limit) do
+    :ets.new(@table, [:named_table, :set, :protected])
+    %{table: table_ref(), limit: limit, order: :gb_trees.empty(), sequence: 0}
+  end
+
+  defp replace_table(table, limit) do
+    # A new table reference invalidates fills started before this operation.
+    :ets.delete(table)
+    empty_cache(limit)
+  end
+
+  defp visit(state, key, order) do
+    sequence = state.sequence + 1
+    %{state | sequence: sequence, order: :gb_trees.insert(sequence, key, order)}
+  end
+
+  defp evict_if_full(%{table: table, limit: limit, order: order}) do
+    if :gb_trees.size(order) == limit do
+      {_age, key, order} = :gb_trees.take_smallest(order)
+      true = :ets.delete(table, key)
+      order
+    else
+      order
+    end
+  end
+
+  defp with_table(:undefined, fallback, _operation), do: fallback
+  defp with_table(tid, _fallback, operation), do: operation.(tid)
+
+  defp call(message, fallback) do
+    GenServer.call(__MODULE__, message, :infinity)
+  catch
+    # Caching should fail open if the supervised owner is unavailable.
+    :exit, _reason -> fallback
   end
 
   defp cache_key(lm, request, nil) do

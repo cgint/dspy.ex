@@ -95,7 +95,7 @@ After this you can …run against real providers robustly: clear error types, au
 | S012 | JSONAdapter | partial | H | M | 1.50 | <=2.6 | S005,S016 | N | - | output_contract in request map ≠ upstream response_format; no json_repair | todo |
 | U026 | BaseCallback | partial | H | M | 1.50 | <=2.6 | U036 | N | P8 | Elixir behaviours cover adapter + tool events only; module/LM/evaluate/compile/interpreter | todo |
 | U036 | with_callbacks | partial | H | M | 1.50 | <=2.6 | U026 | N | P8 | Functional equivalent exists (with_callbacks(callbacks, fun) + Settings :callbacks); event | todo |
-| S025 | configure_cache | partial | H | M | 1.50 | 3.0.0 | S022 | N | P13 | only boolean Dspy.configure(cache:) exists; no disk cache, size limit, memory_max_entries, | todo |
+| S025 | configure_cache | partial | H | M | 1.50 | 3.0.0 | S022 | N | P13 | `Dspy.configure_cache/1` sets a bounded LRU memory policy. Disk persistence, its byte budget, and portable cache keys remain. | todo |
 | S110 | configure_dspy_loggers | missing | L | S | 1.00 | <=2.6 | - | N | - | No logger setup API; ad-hoc Logger.info/debug calls only (application.ex:41) | todo |
 | S111 | disable_logging | missing | L | S | 1.00 | <=2.6 | S112 | N | - | No silencing toggle for event logs | todo |
 | S112 | enable_logging | missing | L | S | 1.00 | <=2.6 | S111 | N | - | No enabling toggle for event logs | todo |
