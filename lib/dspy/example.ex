@@ -93,6 +93,27 @@ defmodule Dspy.Example do
   end
 
   @doc """
+  Return a new example containing the attributes outside the explicit input selection.
+
+  Call `with_inputs/2` first. An empty selection marks every attribute as a
+  label. The returned example starts with empty metadata.
+  """
+  @spec labels(t()) :: t()
+  def labels(%__MODULE__{} = example) do
+    attrs = example.attrs || %{}
+
+    case input_keys(example) do
+      nil ->
+        raise ArgumentError,
+              "set the example's input keys with with_inputs/2 before calling labels/1"
+
+      keys ->
+        label_attrs = Map.drop(attrs, Map.keys(take_input_keys(attrs, keys)))
+        new(label_attrs)
+    end
+  end
+
+  @doc """
   Get an attribute from the example.
 
   When `key` is an atom, this also checks for the string version of the key
@@ -131,6 +152,26 @@ defmodule Dspy.Example do
         %{example | attrs: Map.delete(attrs, actual_key)}
     end
   end
+
+  @doc """
+  Return a copy with the given attribute key or list of keys removed.
+
+  Metadata, including the input selection, is preserved. Atom keys can match
+  stored string keys as in `delete/2`. A missing key raises `KeyError`.
+  """
+  @spec without(t(), term()) :: t()
+  def without(%__MODULE__{} = example, keys) when is_list(keys) do
+    attrs =
+      Enum.reduce(keys, example.attrs, fn key, attrs ->
+        actual_key = Dspy.Attrs.resolve_key(attrs, key) || key
+        {_value, remaining} = Map.pop!(attrs, actual_key)
+        remaining
+      end)
+
+    %{example | attrs: attrs}
+  end
+
+  def without(%__MODULE__{} = example, key), do: without(example, [key])
 
   @doc """
   Get all attribute keys.
