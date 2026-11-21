@@ -28,7 +28,9 @@ shows a successful example and a failed one in the same run. Adapter
 callbacks report when a phase ends in error and identify the enclosing call.
 Tool callbacks also link to the enclosing call and report timeout outcomes.
 DSPy diagnostics can be silenced while host logs and callbacks continue.
-Wider disk cache support, telemetry, and call-scoped history remain open.
+Opt-in telemetry shares lifecycle IDs with callbacks. Call-scoped history
+can retain bounded rendered text alongside successful worker and cache-hit
+records. Wider disk cache support remains open.
 
 ## Historical milestone notes from September 2026
 

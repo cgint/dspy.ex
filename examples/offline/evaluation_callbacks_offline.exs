@@ -54,18 +54,22 @@ defmodule EvaluationCallbacksOffline do
     {:ok, events} = Agent.start_link(fn -> [] end)
 
     try do
-      %Dspy.Evaluate.Result{count: 2, failures: 1, scores: scores, score: 50.0} =
-        result = evaluate(events)
+      {result, capture} =
+        Dspy.capture_history(fn -> evaluate(events) end, include_payloads: true)
 
+      %Dspy.Evaluate.Result{count: 2, failures: 1, scores: scores, score: 50.0} = result
       true = scores == [1.0, 0.0]
 
-      verify_lifecycle!(Agent.get(events, & &1))
+      observed = Agent.get(events, & &1)
+      verify_lifecycle!(observed)
+      verify_history!(capture, observed)
 
       IO.puts(
         "Evaluated #{result.count} rows with #{result.failures} failure and a score of #{result.score}%."
       )
 
       IO.puts("Verified 1 evaluation, 2 module calls, and 2 LM calls through paired callbacks.")
+      IO.puts("Captured the successful worker's rendered prompt and completion.")
     after
       Agent.stop(events)
     end
@@ -97,7 +101,7 @@ defmodule EvaluationCallbacksOffline do
         |> Dspy.Example.with_inputs([:question])
       end
 
-    Dspy.context([cache: false], fn ->
+    Dspy.context([cache: false, track_usage: false], fn ->
       Dspy.with_callbacks([{Recorder, events}], fn ->
         Dspy.Evaluate.evaluate(predictor, examples, &Dspy.Metrics.answer_exact_match/2,
           num_threads: 2,
@@ -106,6 +110,22 @@ defmodule EvaluationCallbacksOffline do
         )
       end)
     end)
+  end
+
+  defp verify_history!(capture, events) do
+    [{:lm_end, %{call_id: id, parent_call_id: parent}, %{status: :ok}}] =
+      Enum.filter(events, &match?({:lm_end, _, %{status: :ok}}, &1))
+
+    [
+      %{
+        call_id: ^id,
+        parent_call_id: ^parent,
+        payload: %{messages: [%{parts: [prompt]}], completions: ["Answer: Four"]}
+      }
+    ] = capture.records
+
+    true = String.contains?(prompt, "What is two plus two?")
+    0 = capture.dropped
   end
 
   defp verify_lifecycle!(events) do

@@ -13,6 +13,8 @@ defmodule Dspy.Context do
     (`{Dspy.Signature.Adapter.Callbacks, :stack}` frames, innermost first).
   - **Active call ID** — the current observed lifecycle call, when present.
     A worker uses it to correlate its own hooks to the caller.
+  - **History capture scopes** — the active collectors, when present.
+    A worker can contribute its LM calls while those captures remain open.
 
   Usage accumulators (`Dspy.LM.UsageAcc`) are **intentionally NOT captured**:
   the usage frame is opened per `Dspy.Module.forward/2` in whichever process
@@ -76,10 +78,12 @@ defmodule Dspy.Context do
   @type t :: %{
           required(:overrides) => map(),
           required(:callback_stack) => list() | nil,
-          optional(:active_call_id) => reference()
+          optional(:active_call_id) => reference(),
+          optional(:history_captures) => [Dspy.LM.HistoryCapture.scope()]
         }
 
   alias Dspy.Lifecycle
+  alias Dspy.LM.HistoryCapture
   alias Dspy.Signature.Adapter.Callbacks
 
   @stack_key {Callbacks, :stack}
@@ -87,9 +91,9 @@ defmodule Dspy.Context do
   @doc """
   Capture the caller's process-local DSPy state.
 
-  Reads the current settings overrides, raw callback stack, and active
-  lifecycle call ID. The `:active_call_id` key is present only inside an
-  observed call, so ordinary snapshots keep their original two keys.
+  Reads the current settings overrides, raw callback stack, lifecycle call ID
+  and history capture scopes. The lifecycle and history keys are present only
+  when those scopes are active.
 
   The result is meant to be installed later in another process via
   `with_context/2` (see the module docs for the capture/install split).
@@ -107,9 +111,15 @@ defmodule Dspy.Context do
       callback_stack: Process.get(@stack_key)
     }
 
-    case Lifecycle.active_call_id() do
-      call_id when is_reference(call_id) -> Map.put(context, :active_call_id, call_id)
-      _ -> context
+    context =
+      case Lifecycle.active_call_id() do
+        call_id when is_reference(call_id) -> Map.put(context, :active_call_id, call_id)
+        _ -> context
+      end
+
+    case HistoryCapture.current() do
+      [] -> context
+      scopes -> Map.put(context, :history_captures, scopes)
     end
   end
 
@@ -125,6 +135,8 @@ defmodule Dspy.Context do
   - the captured RAW callback stack, preserving the target's previous stack;
   - the captured active call ID when present, restoring the target's previous
     ID afterward. A context without that key leaves the enclosing ID in scope.
+  - the captured history scopes alongside the enclosing captures, restoring the
+    target's previous scopes afterward. Each collector receives a call only once.
 
   Installs **no** usage frame (usage accumulators are not captured — see the
   module docs).
@@ -150,13 +162,11 @@ defmodule Dspy.Context do
 
     try do
       case ctx do
-        %{active_call_id: call_id} when is_reference(call_id) ->
-          Lifecycle.with_active_call_id(call_id, fn ->
-            Dspy.Settings.with_overrides(ctx.overrides, fun)
-          end)
+        %{history_captures: scopes} ->
+          HistoryCapture.with_scopes(scopes, fn -> with_lifecycle(ctx, fun) end)
 
         _ ->
-          Dspy.Settings.with_overrides(ctx.overrides, fun)
+          with_lifecycle(ctx, fun)
       end
     after
       if install? do
@@ -164,6 +174,14 @@ defmodule Dspy.Context do
       end
     end
   end
+
+  defp with_lifecycle(%{active_call_id: call_id, overrides: overrides}, fun)
+       when is_reference(call_id) do
+    Lifecycle.with_active_call_id(call_id, fn -> Dspy.Settings.with_overrides(overrides, fun) end)
+  end
+
+  defp with_lifecycle(%{overrides: overrides}, fun),
+    do: Dspy.Settings.with_overrides(overrides, fun)
 
   defp restore_stack(nil), do: Process.delete(@stack_key)
 

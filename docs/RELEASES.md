@@ -8,6 +8,17 @@ This repo ships in **small, user-usable slices**.
 
 ## Consumer notes
 
+### Scoped diagnostic history
+
+`Dspy.capture_history/2` returns the call result and a bounded LM history
+snapshot. Successful calls from DSPy workers and cache hits appear even
+with usage tracking disabled. Nested scopes have independent limits and
+each snapshot reports how many records were evicted. Pass
+`include_payloads: true` to retain bounded rendered prompt and completion
+text for `Dspy.inspect_history/2`. Structured tool data and non-text
+attachments use placeholders. Values rendered as ordinary text can appear
+in the excerpts. The VM-wide history keeps its existing metadata format.
+
 ### Opt-in lifecycle telemetry
 
 Set `telemetry: true` globally or with `Dspy.context/2` to emit
