@@ -142,13 +142,13 @@ defmodule Dspy.Teleprompt.BootstrapTraceDataTest do
 
   test "metric errors preserve the first failed index and can be skipped" do
     program = %RecordingProgram{owner: self()}
-    dataset = Enum.map(["bad score", "raised", "good"], &row/1)
+    dataset = Enum.map(["first", "bad score", "raised", "last"], &row/1)
 
     metric = fn row, _prediction ->
       case row[:question] do
         "bad score" -> :invalid
         "raised" -> raise "metric failed"
-        "good" -> 0.5
+        _ -> 0.5
       end
     end
 
@@ -157,14 +157,46 @@ defmodule Dspy.Teleprompt.BootstrapTraceDataTest do
         Teleprompt.bootstrap_trace_data(program, dataset, metric: metric)
       end
 
-    assert error.example_index == 0
+    assert error.example_index == 1
     assert error.reason == {:invalid_metric_result, :invalid}
 
-    assert [%{example_index: 2, score: 0.5}] =
+    assert [%{example_index: 0, score: 0.5}, %{example_index: 3, score: 0.5}] =
              Teleprompt.bootstrap_trace_data(program, dataset,
                metric: metric,
                raise_on_error: false
              )
+  end
+
+  test "malformed selectors fail instead of coercing a label into an input" do
+    program = %RecordingProgram{owner: self()}
+
+    for selectors <- [[1], [~c"1"], ["1" | :improper], "1"] do
+      example = Example.new(%{"1" => "private"}, %{"inputs" => selectors})
+
+      error =
+        assert_raise Error, fn ->
+          Teleprompt.bootstrap_trace_data(program, [example])
+        end
+
+      assert error.example_index == 0
+      assert error.reason == :invalid_input_keys
+    end
+
+    refute_received {:forwarded, _}
+  end
+
+  test "raw atom selectors use the same names as with_inputs" do
+    program = %RecordingProgram{owner: self()}
+    attrs = %{"" => "private", "nil" => "declared"}
+    legacy = Example.new(attrs, %{"inputs" => [nil]})
+    canonical = Example.new(attrs) |> Example.with_inputs(nil)
+
+    assert [_, _] = Teleprompt.bootstrap_trace_data(program, [legacy, canonical])
+
+    for _ <- 1..2 do
+      assert_received {:forwarded, inputs}
+      assert inputs == %{"nil" => "declared"}
+    end
   end
 
   test "invalid arguments fail before any call to the program" do

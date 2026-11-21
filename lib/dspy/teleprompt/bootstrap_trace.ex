@@ -54,18 +54,10 @@ defmodule Dspy.Teleprompt.BootstrapTrace do
 
   # Parallel passes the original example to the attempt so the metric can see its labels.
   def forward(%__MODULE__{} = attempt, %Example{} = example) do
-    with {:ok, inputs} <- selected_inputs(example),
+    with {:ok, inputs} <- Example.declared_inputs(example),
          {:ok, prediction, trace} <- capture(attempt.program, inputs) do
       record = %{example: example, prediction: prediction, trace: trace}
       score_record(record, attempt.metric)
-    end
-  end
-
-  defp selected_inputs(example) do
-    case Example.input_keys(example) do
-      nil -> {:error, :missing_input_keys}
-      [] -> {:ok, %{}}
-      _keys -> {:ok, Example.inputs(example)}
     end
   end
 
