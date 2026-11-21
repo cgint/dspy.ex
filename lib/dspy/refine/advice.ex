@@ -1,21 +1,16 @@
 defmodule Dspy.Refine.Advice do
   @moduledoc false
 
-  alias Dspy.{Attrs, Context, LM, Settings}
+  alias Dspy.{Context, LM, Settings}
   alias Dspy.Module.PredictorSlots
-  alias Dspy.Signature.AdapterPipeline
+  alias Dspy.Signature.{AdapterPipeline, PromptPreview}
 
   @key {__MODULE__, :text}
   @step_limit 32
-  @field_limit 12
-  @member_limit 6
-  @field_bytes 384
   @report_bytes 16_384
   @reply_bytes 8_192
   @advice_bytes 1_024
   @timeout 5_000
-  @omitted "[omitted]"
-  @truncated "[truncated]"
 
   @type binding :: {reference(), PredictorSlots.path()} | nil
 
@@ -85,8 +80,8 @@ defmodule Dspy.Refine.Advice do
           {:ok, {id, signature}} ->
             step = %{
               "slot" => id,
-              "inputs" => project(signature.input_fields, inputs),
-              "outputs" => project(signature.output_fields, prediction.attrs)
+              "inputs" => PromptPreview.project(signature.input_fields, inputs),
+              "outputs" => PromptPreview.project(signature.output_fields, prediction.attrs)
             }
 
             # One extra byte covers each separator in the enclosing array.
@@ -106,76 +101,6 @@ defmodule Dspy.Refine.Advice do
       {Enum.reverse(steps), ids, truncated? or length(trace) >= @step_limit}
     end)
   end
-
-  defp project(fields, attrs) do
-    fields
-    |> Enum.take(@field_limit)
-    |> Enum.reduce(%{}, fn field, selected ->
-      case Attrs.fetch_map(attrs, field.name) do
-        {:ok, value} ->
-          Map.put(selected, Atom.to_string(field.name), field_value(field.type, value))
-
-        :error ->
-          selected
-      end
-    end)
-    |> then(fn selected ->
-      if length(fields) > @field_limit, do: Map.put(selected, @truncated, true), else: selected
-    end)
-  end
-
-  defp field_value(type, _value) when type in [:image, :history, :tool, :tools, :tool_calls],
-    do: @omitted
-
-  defp field_value(_type, value) do
-    preview = preview(value, 2)
-
-    if byte_size(Jason.encode!(preview)) <= @field_bytes, do: preview, else: @truncated
-  end
-
-  defp preview(value, _depth) when is_binary(value), do: truncate(value, div(@field_bytes, 2))
-
-  defp preview(value, _depth) when is_number(value) or is_boolean(value) or is_nil(value),
-    do: value
-
-  defp preview(%_struct{}, _depth), do: @omitted
-
-  defp preview(value, depth) when is_map(value) and depth > 0 do
-    entries = Enum.take(value, @member_limit)
-
-    projected =
-      for {key, term} <- entries,
-          is_binary(key) or is_atom(key),
-          into: %{},
-          do: {truncate(to_string(key), 64), preview(term, depth - 1)}
-
-    if map_size(value) > @member_limit, do: Map.put(projected, @truncated, true), else: projected
-  end
-
-  defp preview(value, depth) when is_list(value) and depth > 0,
-    do: preview_list(value, depth - 1, @member_limit)
-
-  defp preview(_value, _depth), do: @omitted
-
-  defp preview_list([], _depth, _remaining), do: []
-  defp preview_list(_value, _depth, 0), do: [@truncated]
-
-  defp preview_list([head | tail], depth, remaining),
-    do: [preview(head, depth) | preview_list(tail, depth, remaining - 1)]
-
-  defp preview_list(_improper_tail, _depth, _remaining), do: [@omitted]
-
-  defp truncate(value, limit) when byte_size(value) > limit do
-    prefix = binary_part(value, 0, limit - byte_size(@truncated))
-
-    case :unicode.characters_to_binary(prefix) do
-      text when is_binary(text) -> text <> @truncated
-      {:incomplete, text, _tail} -> text <> @truncated
-      {:error, _text, _tail} -> @omitted
-    end
-  end
-
-  defp truncate(value, _limit), do: if(String.valid?(value), do: value, else: @omitted)
 
   defp query(lm, payload, ids) do
     context = Context.capture()
@@ -262,7 +187,7 @@ defmodule Dspy.Refine.Advice do
 
   defp valid_advice(value) when is_binary(value) do
     text = value |> AdapterPipeline.sanitize_prompt() |> String.trim()
-    if text in ["", "N/A"], do: :error, else: {:ok, truncate(text, @advice_bytes)}
+    if text in ["", "N/A"], do: :error, else: {:ok, PromptPreview.truncate(text, @advice_bytes)}
   end
 
   defp valid_advice(_value), do: :error

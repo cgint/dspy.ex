@@ -44,6 +44,14 @@ declared inputs and returns their predictions and predictor traces. An optional
 metric scores each attempt in its worker. Skipping failed rows preserves
 the original zero-based indices for batch scoring and reflection.
 
+### Reflective GEPA instruction search
+
+`Dspy.Teleprompt.GEPA` accepts a reflection LM and a rollout budget. A
+five-argument metric can give feedback about a predictor step. Reflection
+proposes an instruction for that slot, and the optimizer keeps candidates
+that improve the validation score. The [offline example](../examples/offline/gepa_reflection_offline.exs)
+improves from 0% to 100% on a held-out addition question.
+
 ### Streaming progress messages
 
 Pass a `status_message_provider:` module to `Dspy.streamify/2` to turn

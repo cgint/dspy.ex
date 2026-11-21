@@ -20,6 +20,12 @@
 > metric sees each attempt's trace in its worker. Parse-failure records and
 > GEPA's reflection loop remain open.
 
+> **M6, GEPA instruction reflection.** An opt-in reflection LM proposes
+> changes for one typed predictor slot at a time. The budgeted search
+> keeps candidates that improve held-out scores. The offline example
+> verifies that improvement. Pareto selection, richer proposals, and
+> parse-failure feedback remain open.
+
 > **M5, status messages and exit example.** `streamify/2` accepts a
 > lifecycle status provider. The [offline ChainOfThought example](../../examples/offline/chain_of_thought_streaming_offline.exs)
 > emits status and field chunks, returns the validated prediction, and
