@@ -1,75 +1,100 @@
-# program-state Specification
+# Restore an optimized program in a fresh process
+
+## Purpose
+
+Let callers reuse the learned predictor state of a native DSPy program after the original process ends while retaining control over the program, its field schema, and its language models.
 
 ## ADDED Requirements
 
-### Requirement: Named predictor paths
-`Dspy.Module.named_predictors/1` SHALL list every predictor in a program with upstream DSPy 3.4.0 path names: `"self"` for a predictor on its own, `"<field>"` for a predictor field, `"<field>.<sub>"` for a nested module, `"<field>[<i>]"` for list items and `"<field>['<key>']"` for map entries, in sorted field order. A `Dspy.ChainOfThought` SHALL report its predictor at `"predict"`.
+### Requirement: Native versioned checkpoint
 
-#### Scenario: All path shapes
-- **WHEN** a program has a predictor field, a ChainOfThought field, a list of two predictors and a map of predictors
-- **THEN** the paths SHALL be the upstream names for each shape
+`Dspy.Module.save_state(program, path, opts)` SHALL return `:ok` after publishing native JSON v1 at the supplied path. `Dspy.Module.load_state(program, path, opts)` SHALL return `{:ok, restored_program}` for a compatible checkpoint. Options default to `[]`. The format SHALL carry an explicit identifier and integer version. Filenames are caller-selected.
 
-### Requirement: JSON state round trip
-`Dspy.Module.save/2` SHALL write the program state as JSON and `Dspy.Module.load/3` SHALL return a new program whose `dump_state/1` equals the saved one. Each predictor state SHALL contain `traces`, `train`, `demos`, `signature` (instructions plus each field's `name`, `prefix` and `description`) and `lm`.
+#### Scenario: Fresh runtime
 
-#### Scenario: Round trip
-- **WHEN** a program with changed instructions, demos and field descriptions is saved and loaded
-- **THEN** `dump_state/1` of the loaded program SHALL equal that of the original
+- **WHEN** the caller saves the result of real composite BootstrapRS and builds a compatible program in an independent BEAM with matching runtime settings and caller-supplied LMs
+- **THEN** the loaded program SHALL reproduce the original inference requests and prediction for the same input
 
-#### Scenario: Same prompt after load
-- **WHEN** the loaded program and the original are given the same inputs
-- **THEN** the rendered LM request SHALL be identical, although loaded demos have string keys
+#### Scenario: Foreign format or version
 
-### Requirement: Python interoperability
-Files SHALL be readable by upstream DSPy 3.4.0 `load` and files written by it SHALL be readable by `load/3`. `metadata.dependency_versions` SHALL be written as an empty object; our versions SHALL be written under `metadata.dspy_ex`.
+- **WHEN** a file contains a different checkpoint format or an unsupported version
+- **THEN** load SHALL return a format or version error without hydration
 
-#### Scenario: Python reads our file
-- **WHEN** upstream DSPy loads a file written by `save/2`
-- **THEN** it SHALL not raise and SHALL restore the same instructions, demos and descriptions
+### Requirement: Exact predictor slots
 
-#### Scenario: We read Python's file
-- **WHEN** `load/3` reads a file written by upstream DSPy for each path shape
-- **THEN** each predictor's state SHALL equal the file's
+A checkpoint SHALL identify every predictor by a typed path. A root predictor uses an empty path. Paths SHALL distinguish struct fields, zero-based list or tuple positions, and map keys. Supported map key types are atoms, UTF-8 strings, and integers. Save SHALL reject unsupported key types on predictor paths.
 
-### Requirement: Refuse silent mislabelling
-When the file carries field names that do not match the signature, or carries no names and a different field count, `load/3` SHALL return `{:error, {:signature_mismatch, path, details}}` instead of restoring by position.
+#### Scenario: Exact map identity
 
-#### Scenario: Reordered names
-- **WHEN** a file's field names are in a different order than the signature's
-- **THEN** `load/3` SHALL return a signature-mismatch error
+- **WHEN** equal predictors occupy slots under keys `1`, `"1"`, and `:"1"`
+- **THEN** save and load SHALL keep the three predictor states distinct
 
-#### Scenario: Count differs without names
-- **WHEN** a Python-written file has one field fewer than the signature
-- **THEN** `load/3` SHALL return a signature-mismatch error
+#### Scenario: Standalone ChainOfThought
 
-### Requirement: Missing, extra and unknown state
-A program path missing from the file SHALL return `{:error, {:missing_state, path}}`. An extra path in the file, or an unknown key in a predictor state, SHALL be ignored with a logged warning. A bad later path SHALL never produce `{:ok, program}` with earlier paths applied.
+- **WHEN** a standalone ChainOfThought checkpoint is loaded into a compatible ChainOfThought
+- **THEN** load SHALL restore the predictor at the root and preserve the caller's reasoning configuration
 
-#### Scenario: Extra path
-- **WHEN** the file has a path the program does not have
-- **THEN** the load SHALL succeed and log a warning
+### Requirement: Compatible caller program
 
-#### Scenario: Half-loaded is not success
-- **WHEN** the second of two paths in a file is invalid
-- **THEN** `load/3` SHALL return `{:error, _}`
+The file and target SHALL have identical sets of predictor slots. At each slot the target SHALL match the predictor kind and the ordered input names and ordered output names. The target supplies the remaining field schema and program configuration.
 
-### Requirement: Unsafe LM keys
-`api_base`, `base_url` and `model_list` in a saved `lm` SHALL be dropped with a warning unless `allow_unsafe_lm_state: true` is given.
+#### Scenario: Different shape
 
-#### Scenario: Dropped by default
-- **WHEN** a file's `lm` contains `api_base`
-- **THEN** the loaded LM state SHALL not contain it and a warning SHALL be logged
+- **WHEN** the checkpoint has duplicate, missing, or extra slots, a different predictor kind, or changed field names, order, or direction
+- **THEN** load SHALL return an error for the incompatibility
 
-### Requirement: No atoms from file data
-Loading SHALL NOT create atoms from paths, field names, demo keys or LM class names.
+### Requirement: Learned state round trip
 
-#### Scenario: Never-seen names
-- **WHEN** a file with runtime-built never-seen names is loaded
-- **THEN** `String.to_existing_atom/1` on each name SHALL still raise
+The checkpoint SHALL preserve each predictor's instructions, ordered demos, and stored generation config. Supported demos are `Dspy.Example` values with portable attributes and metadata. The codec SHALL preserve the exact type of supported keys and values. Config SHALL preserve explicit `rollout_id: nil` independently of omission and preserve `n`.
 
-### Requirement: Format errors are values
-A `.pkl` or non-`.json` path, invalid JSON, or a JSON value that is not an object SHALL return `{:error, _}` naming the problem.
+#### Scenario: Typed example and metadata
 
-#### Scenario: Pickle path
-- **WHEN** `load/3` is given a `.pkl` path
-- **THEN** it SHALL return an error that names `.json`
+- **WHEN** a saved example contains a declared atom field key, a string key with the same spelling, and metadata from `Example.with_inputs/2`
+- **THEN** the two keys, their values, and the metadata SHALL survive hydration with the same runtime types
+
+#### Scenario: Caller-owned runtime setup
+
+- **WHEN** a compatible caller program supplies adapters, callbacks, retry options, field definitions, or non-predictor fields
+- **THEN** hydration SHALL preserve those values while replacing the learned state
+
+### Requirement: External LM bindings
+
+Save SHALL represent a bound LM solely by its unique matching name in the caller's optional `lms:` registry. Load SHALL resolve each reference from the caller's registry. An unbound predictor SHALL carry a null reference and hydrate as unbound. Save SHALL exclude the bound LM's runtime struct and all its fields.
+
+#### Scenario: Bound and unbound slots
+
+- **WHEN** a file has a named binding and a null binding
+- **THEN** load SHALL bind the first slot to the supplied LM and clear any pre-existing binding in the second slot
+
+#### Scenario: Unresolvable LM reference
+
+- **WHEN** a bound LM has zero or multiple matching names on save, or a file references a name missing on load
+- **THEN** the operation SHALL return a distinct LM reference error without fallback
+
+### Requirement: Safe all-or-error restoration
+
+Load SHALL validate the complete envelope, predictor records, values, and LM references before returning a hydrated program. The loader SHALL rely on caller-provided slot and signature atoms and a fixed metadata vocabulary. File data SHALL never create atoms. Duplicate JSON members, typed keys, or slots SHALL be rejected before any corresponding map loses that information.
+
+#### Scenario: Late malformed state
+
+- **WHEN** a file has a valid first slot and an invalid later record
+- **THEN** load SHALL return an error and no partially restored program
+
+#### Scenario: Missing atom in the caller schema
+
+- **WHEN** a checkpoint tags an unrecognized name as an atom example key
+- **THEN** load SHALL reject it even if that atom already exists elsewhere in the VM
+
+### Requirement: Atomic checkpoint replacement
+
+Save SHALL publish a complete file by atomic replacement. It SHALL return errors for unsupported values or recoverable I/O failures and preserve an existing destination if save fails.
+
+#### Scenario: Unsupported value after a valid checkpoint
+
+- **WHEN** the caller saves over an existing checkpoint and a demo contains a function, process identifier, unsupported key, or struct
+- **THEN** save SHALL return an unsupported-value error and preserve the earlier file byte for byte
+
+#### Scenario: Failed publish
+
+- **WHEN** save cannot rename its temporary file to the destination
+- **THEN** save SHALL return a filesystem error and clean up its temporary file
