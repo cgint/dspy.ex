@@ -52,14 +52,19 @@ defmodule Dspy.Module do
   - a `%Dspy.Example{}` (converted via `Dspy.Example.inputs/1`)
   """
   def forward(module, inputs) do
-    {track_usage, global_callbacks} = Dspy.Settings.module_observability()
+    {track_usage, global_callbacks, telemetry?} = Dspy.Settings.module_observability()
 
     with %{__struct__: type} when is_atom(type) <- module,
-         [_ | _] = callbacks <-
-           Callbacks.module_handlers(global_callbacks, program_callbacks(module)) do
-      Lifecycle.run(type, callbacks, {:module_start, :module_end}, fn ->
-        forward_with_usage(module, inputs, track_usage)
-      end)
+         callbacks = Callbacks.module_handlers(global_callbacks, program_callbacks(module)),
+         true <- telemetry? or callbacks != [] do
+      Lifecycle.run(
+        type,
+        callbacks,
+        {:module_start, :module_end},
+        fn -> forward_with_usage(module, inputs, track_usage) end,
+        nil,
+        telemetry?
+      )
     else
       _ -> forward_with_usage(module, inputs, track_usage)
     end

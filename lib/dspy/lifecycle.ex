@@ -2,8 +2,15 @@ defmodule Dspy.Lifecycle do
   @moduledoc false
 
   alias Dspy.Signature.Adapter.Callbacks
+  alias Dspy.Telemetry
 
   @active_call_id_key {__MODULE__, :active_call_id}
+  @boundaries %{
+    module_start: :module,
+    lm_start: :lm,
+    tool_start: :tool,
+    evaluate_start: :evaluate
+  }
 
   @type meta :: %{
           required(:call_id) => reference(),
@@ -26,7 +33,14 @@ defmodule Dspy.Lifecycle do
     end
   end
 
-  def run(type, handlers, {start_event, end_event}, fun, summarize \\ nil) do
+  def run(
+        type,
+        handlers,
+        {start_event, _end_event} = events,
+        fun,
+        summarize \\ nil,
+        telemetry? \\ false
+      ) do
     meta = %{call_id: make_ref(), module: type}
 
     meta =
@@ -35,6 +49,18 @@ defmodule Dspy.Lifecycle do
         _ -> meta
       end
 
+    if telemetry? do
+      boundary = Map.fetch!(@boundaries, start_event)
+
+      Telemetry.span(boundary, meta, fn ->
+        run_callbacks(handlers, events, meta, fun, summarize, boundary)
+      end)
+    else
+      run_callbacks(handlers, events, meta, fun, summarize, nil)
+    end
+  end
+
+  defp run_callbacks(handlers, {start_event, end_event}, meta, fun, summarize, boundary) do
     handlers = Callbacks.emit(handlers, start_event, meta, %{})
     started_at = System.monotonic_time(:microsecond)
 
@@ -50,6 +76,7 @@ defmodule Dspy.Lifecycle do
 
     status = if match?({:error, _}, result), do: :error, else: :ok
     summary = if summarize, do: summarize.(result), else: %{}
+    if boundary && summarize, do: Telemetry.record(boundary, summary, summary)
     emit_end(handlers, end_event, meta, started_at, status, summary)
     result
   end

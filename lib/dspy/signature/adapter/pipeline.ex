@@ -11,7 +11,7 @@ defmodule Dspy.Signature.Adapter.Pipeline do
   It is used by `Dspy.Predict` and `Dspy.ChainOfThought`.
   """
 
-  alias Dspy.{Lifecycle, LM, Prediction, PredictorConfig, Settings, Signature}
+  alias Dspy.{Lifecycle, LM, Prediction, PredictorConfig, Settings, Signature, Telemetry}
   alias Dspy.Refine.Advice
   alias Dspy.Signature.Adapter.Callbacks
   alias Dspy.Signature.AdapterPipeline
@@ -47,12 +47,7 @@ defmodule Dspy.Signature.Adapter.Pipeline do
       when is_map(inputs) and is_list(demos) and is_list(opts) do
     adapter = AdapterPipeline.active_adapter(adapter: Keyword.get(opts, :adapter))
 
-    global_callbacks =
-      if Process.whereis(Dspy.Settings) do
-        Dspy.Settings.get(:callbacks) || []
-      else
-        []
-      end
+    {global_callbacks, telemetry?} = Settings.lifecycle_observability()
 
     program_callbacks = Keyword.get(opts, :callbacks, [])
     call_callbacks = Callbacks.current_call_callbacks()
@@ -71,6 +66,7 @@ defmodule Dspy.Signature.Adapter.Pipeline do
       max_retries: Keyword.get(opts, :max_retries, 3),
       request_options: force_tool(request_options, Keyword.get(opts, :forced_tool)),
       prompt_advice: Keyword.get(opts, :prompt_advice),
+      telemetry?: telemetry?,
       cache_options: cache_options
     }
 
@@ -91,18 +87,31 @@ defmodule Dspy.Signature.Adapter.Pipeline do
     call_id = make_ref()
     max_output_attempts = max_output_retries + 1
 
-    with :ok <- validate_choice_request(count, lm, adapter, signature) do
-      do_run_attempt(
-        signature,
-        inputs,
-        demos,
-        adapter,
-        callbacks,
-        meta(call_id, adapter, signature),
-        lm_options,
-        max_output_retries,
-        max_output_attempts
-      )
+    meta = meta(call_id, adapter, signature)
+
+    run = fn ->
+      with :ok <- validate_choice_request(count, lm, adapter, signature) do
+        do_run_attempt(
+          signature,
+          inputs,
+          demos,
+          adapter,
+          callbacks,
+          meta,
+          lm_options,
+          max_output_retries,
+          max_output_attempts
+        )
+      end
+    end
+
+    if telemetry? do
+      Telemetry.span(:adapter, meta, fn ->
+        Telemetry.record(:adapter, %{}, %{output_attempts: 0, transport_attempts: 0})
+        Lifecycle.with_active_call_id(call_id, run)
+      end)
+    else
+      run.()
     end
   end
 
@@ -176,6 +185,7 @@ defmodule Dspy.Signature.Adapter.Pipeline do
               max_retries >= 0 and
               is_integer(output_retries_left) and output_retries_left >= 0 and
               is_integer(max_output_attempts) and max_output_attempts >= 1 do
+    if lm_options.telemetry?, do: Telemetry.record(:adapter, %{}, %{output_attempts: 1})
     callbacks = Callbacks.emit(callbacks, :format_start, meta, %{inputs_keys: Map.keys(inputs)})
 
     {formatted, callbacks} =
@@ -447,6 +457,10 @@ defmodule Dspy.Signature.Adapter.Pipeline do
           # Treat prompt replacement as the "format" phase for the next attempt.
           next_attempt = attempt + 1
           meta = %{meta | attempt: next_attempt}
+
+          if lm_options.telemetry? do
+            Telemetry.record(:adapter, %{}, %{output_attempts: next_attempt})
+          end
 
           Logger.debug(
             "dspy.adapter_retry kind=output call_id=#{inspect(call_id)} attempt=#{next_attempt}/#{max_output_attempts} reason=#{Dspy.LogReason.format(reason)}"
@@ -837,6 +851,7 @@ defmodule Dspy.Signature.Adapter.Pipeline do
   defp do_call_with_retry_log(request, lm_options, attempt, max_attempts, call_id) do
     result =
       with {:ok, advised_request} <- append_advice(request, lm_options.prompt_advice) do
+        if lm_options.telemetry?, do: Telemetry.count_transport_attempt()
         Dspy.LM.generate_with_options(lm_options.lm, advised_request, lm_options.cache_options)
       end
 

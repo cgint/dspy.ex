@@ -8,6 +8,15 @@ This repo ships in **small, user-usable slices**.
 
 ## Consumer notes
 
+### Opt-in lifecycle telemetry
+
+Set `telemetry: true` globally or with `Dspy.context/2` to emit
+`[:dspy, boundary, phase]` events for modules, LMs, adapters, tools, and
+evaluations. Callbacks and telemetry share call IDs across observed
+boundaries. Events carry native durations and selected numeric counts.
+Metadata excludes prompts, results, credentials, and failure text.
+The direct `:telemetry` dependency uses the existing 1.4.2 lock.
+
 ### Opt-in Refine feedback
 
 `Dspy.Refine.new/2` accepts `feedback_lm:`. A scored attempt below the

@@ -6,7 +6,7 @@ defmodule Dspy.LM do
   like OpenAI, Anthropic, local models, etc.
   """
 
-  alias Dspy.Lifecycle
+  alias Dspy.{Lifecycle, Telemetry}
   alias Dspy.Signature.Adapter.Callbacks
 
   @type content_part :: map()
@@ -299,17 +299,25 @@ defmodule Dspy.LM do
   def generate_with_options(lm, request, opts), do: generate_request(lm, request, opts)
 
   defp generate_request(lm, request, opts) do
+    {callbacks, telemetry?} = Dspy.Settings.lifecycle_observability()
+
     with %{__struct__: type} when is_atom(type) <- lm,
-         [_ | _] = handlers <- Callbacks.lm_handlers(Callbacks.settings_callbacks()) do
-      Lifecycle.run(type, handlers, {:lm_start, :lm_end}, fn ->
-        do_generate_request(lm, request, opts)
-      end)
+         handlers = Callbacks.lm_handlers(callbacks),
+         true <- telemetry? or handlers != [] do
+      Lifecycle.run(
+        type,
+        handlers,
+        {:lm_start, :lm_end},
+        fn -> do_generate_request(lm, request, opts, telemetry?) end,
+        nil,
+        telemetry?
+      )
     else
-      _ -> do_generate_request(lm, request, opts)
+      _ -> do_generate_request(lm, request, opts, false)
     end
   end
 
-  defp do_generate_request(lm, request, opts) do
+  defp do_generate_request(lm, request, opts, telemetry?) do
     request = apply_settings_defaults(request)
     started_at_ms = System.monotonic_time(:millisecond)
 
@@ -320,7 +328,12 @@ defmodule Dspy.LM do
       case fetch_cached_response(lm, request, cache_opts) do
         {:hit, cached} ->
           duration_ms = System.monotonic_time(:millisecond) - started_at_ms
-          maybe_track_usage(lm, request, cached, cache_hit?: true, duration_ms: duration_ms)
+
+          maybe_track_usage(lm, request, cached, telemetry?,
+            cache_hit?: true,
+            duration_ms: duration_ms
+          )
+
           {:ok, cached}
 
         {:miss, disk} ->
@@ -328,7 +341,7 @@ defmodule Dspy.LM do
             {:ok, response} ->
               duration_ms = System.monotonic_time(:millisecond) - started_at_ms
 
-              maybe_track_usage(lm, request, response,
+              maybe_track_usage(lm, request, response, telemetry?,
                 cache_hit?: false,
                 duration_ms: duration_ms
               )
@@ -345,7 +358,12 @@ defmodule Dspy.LM do
       case lm.__struct__.generate(lm, request) do
         {:ok, response} = ok ->
           duration_ms = System.monotonic_time(:millisecond) - started_at_ms
-          maybe_track_usage(lm, request, response, cache_hit?: false, duration_ms: duration_ms)
+
+          maybe_track_usage(lm, request, response, telemetry?,
+            cache_hit?: false,
+            duration_ms: duration_ms
+          )
+
           ok
 
         other ->
@@ -693,14 +711,14 @@ defmodule Dspy.LM do
   defp lm_model_key(%{__struct__: mod}) when is_atom(mod), do: Atom.to_string(mod)
   defp lm_model_key(_), do: "unknown"
 
-  defp maybe_track_usage(lm, request, response, opts) when is_list(opts) do
+  defp maybe_track_usage(lm, request, response, telemetry?, opts) when is_list(opts) do
+    if telemetry? do
+      counts = normalize_usage_for_history(response_usage(response)) || %{}
+      Telemetry.record(:lm, %{cache_hit?: Keyword.get(opts, :cache_hit?, false)}, counts)
+    end
+
     if not is_nil(Process.whereis(Dspy.Settings)) and Dspy.Settings.get(:track_usage) == true do
-      usage_raw =
-        case response do
-          %{usage: u} -> u
-          %{"usage" => u} -> u
-          _ -> nil
-        end
+      usage_raw = response_usage(response)
 
       model_key = lm_model_key(lm)
 
@@ -721,19 +739,22 @@ defmodule Dspy.LM do
     :ok
   end
 
+  defp response_usage(%{usage: usage}), do: usage
+  defp response_usage(%{"usage" => usage}), do: usage
+  defp response_usage(_response), do: nil
+
   defp normalize_usage_for_history(%{} = usage) do
-    # Prefer Python/DSPy-style keys if present.
-    prompt_tokens = usage[:prompt_tokens] || usage["prompt_tokens"]
-    completion_tokens = usage[:completion_tokens] || usage["completion_tokens"]
-    total_tokens = usage[:total_tokens] || usage["total_tokens"]
+    prompt_tokens =
+      Map.get(usage, :prompt_tokens) || Map.get(usage, "prompt_tokens") ||
+        Map.get(usage, :input_tokens) || Map.get(usage, "input_tokens")
 
-    # Fallback to ReqLLM-style keys.
-    prompt_tokens = prompt_tokens || usage[:input_tokens] || usage["input_tokens"]
-    completion_tokens = completion_tokens || usage[:output_tokens] || usage["output_tokens"]
-    total_tokens = total_tokens || usage[:total_tokens] || usage["total_tokens"]
+    completion_tokens =
+      Map.get(usage, :completion_tokens) || Map.get(usage, "completion_tokens") ||
+        Map.get(usage, :output_tokens) || Map.get(usage, "output_tokens")
 
-    cached_tokens = usage[:cached_tokens] || usage["cached_tokens"]
-    reasoning_tokens = usage[:reasoning_tokens] || usage["reasoning_tokens"]
+    total_tokens = Map.get(usage, :total_tokens) || Map.get(usage, "total_tokens")
+    cached_tokens = Map.get(usage, :cached_tokens) || Map.get(usage, "cached_tokens")
+    reasoning_tokens = Map.get(usage, :reasoning_tokens) || Map.get(usage, "reasoning_tokens")
 
     if is_integer(prompt_tokens) and is_integer(completion_tokens) and is_integer(total_tokens) do
       base = %{

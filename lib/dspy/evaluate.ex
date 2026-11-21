@@ -109,11 +109,13 @@ defmodule Dspy.Evaluate do
   @spec evaluate(Dspy.Module.t(), [Example.t()], function(), keyword()) ::
           Dspy.Evaluate.Result.t()
   def evaluate(program, testset, metric_fn, opts \\ []) do
-    case Callbacks.evaluate_handlers(Callbacks.settings_callbacks()) do
-      [] ->
+    {callbacks, telemetry?} = Dspy.Settings.lifecycle_observability()
+
+    case {Callbacks.evaluate_handlers(callbacks), telemetry?} do
+      {[], false} ->
         do_evaluate(program, testset, metric_fn, opts)
 
-      handlers ->
+      {handlers, telemetry?} ->
         Lifecycle.run(
           __MODULE__,
           handlers,
@@ -121,7 +123,8 @@ defmodule Dspy.Evaluate do
           fn -> do_evaluate(program, testset, metric_fn, opts) end,
           fn %Dspy.Evaluate.Result{count: count, failures: failures} ->
             %{count: count, failures: failures}
-          end
+          end,
+          telemetry?
         )
     end
   end
