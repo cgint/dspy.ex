@@ -46,6 +46,16 @@ defmodule Dspy.Signature.XMLAdapterTest do
     output_field(:result, :json, "Result", schema: Result)
   end
 
+  defmodule Replay do
+    use Dspy.Signature
+
+    input_field(:picture, :image, "Picture", required: false)
+    input_field(:question, :string, "Question")
+    input_field(:files, :string, "Files", required: false)
+    input_field(:history, :history, "Conversation History", required: false)
+    output_field(:result, :json, "Result", schema: Result)
+  end
+
   defmodule Line do
     use JSV.Schema
 
@@ -859,6 +869,143 @@ defmodule Dspy.Signature.XMLAdapterTest do
     assert_received {:xml_request, %{messages: [%{content: instructions}, %{content: user}]}}
     assert instructions =~ "<reasoning>"
     assert user =~ "<question>\nSum?\n</question>"
+  end
+
+  test "replays XML media and completed tool turns across a typed output retry" do
+    alias Dspy.History.Turn
+
+    lm =
+      recording_lm([
+        "<result><count>2</count></result>",
+        "<result><count>invalid</count></result>",
+        "<result><count>3</count></result>"
+      ])
+
+    demo = Dspy.Example.new(%{question: "example", result: %{count: 1}})
+
+    predictor =
+      Dspy.Predict.new(Replay,
+        lm: lm,
+        adapter: XMLAdapter,
+        examples: [demo],
+        max_retries: 0,
+        max_output_retries: 1
+      )
+
+    image_url = "data:image/png;base64,QUJD"
+    file_path = Path.join(System.tmp_dir!(), "xml-typed-history-fixture.pdf")
+
+    previous = %{
+      picture: Dspy.Image.new(image_url),
+      question: "Previous page",
+      files: Dspy.Attachments.new(file_path)
+    }
+
+    lookup = %{
+      id: "lookup-1",
+      name: "lookup",
+      arguments: %{"page" => 1},
+      result: %{count: 2}
+    }
+
+    confirm = %{id: "check-2", name: "check", arguments: %{}, result: "confirmed"}
+
+    live =
+      Dspy.context([cache: false], fn ->
+        assert {:ok, %{attrs: %{result: %Result{count: 2}} = outputs}} =
+                 Dspy.call(predictor, previous)
+
+        assert_received {:xml_request, %{messages: [_instructions, live]}}
+        assert %{role: "user", content: parts} = live
+        assert %{"type" => "input_file", "file_path" => ^file_path} = List.last(parts)
+        assert Enum.any?(parts, &match?(%{"image_url" => %{"url" => ^image_url}}, &1))
+
+        history =
+          Dspy.History.new([
+            %{question: "Flat question", result: "Flat answer"},
+            %Turn{inputs: previous, outputs: outputs, tool_exchanges: [lookup]},
+            %Turn{tool_exchanges: [confirm]}
+          ])
+
+        current = %{
+          picture: Dspy.Image.new("data:image/png;base64,REVG"),
+          question: "Continue",
+          history: history
+        }
+
+        assert {:ok, %{attrs: %{result: %Result{count: 3}}}} = Dspy.call(predictor, current)
+        live
+      end)
+
+    assert_received {:xml_request, first}
+    assert_received {:xml_request, retry}
+    refute_received {:xml_request, _}
+
+    assert [
+             _system,
+             %{role: "user", content: "Question: Flat question"},
+             %{role: "assistant", content: "Result: Flat answer"},
+             ^live,
+             assistant,
+             %{role: "tool", tool_call_id: "lookup-1", name: "lookup", content: ~s({"count":2})},
+             tool_only,
+             %{role: "tool", tool_call_id: "check-2", content: "confirmed"}
+           ] = prior = Enum.drop(first.messages, -1)
+
+    assert %{
+             role: "assistant",
+             content: xml,
+             tool_calls: [
+               %{id: "lookup-1", function: %{name: "lookup", arguments: %{"page" => 1}}}
+             ]
+           } = assistant
+
+    assert xml =~ "<result>"
+    assert xml =~ "<count>\n2\n</count>"
+
+    assert %{
+             role: "assistant",
+             content: "",
+             tool_calls: [%{id: "check-2", function: %{name: "check", arguments: %{}}}]
+           } = tool_only
+
+    assert Enum.drop(retry.messages, -1) == prior
+    assert %{role: "user", content: [primary | tail]} = List.last(first.messages)
+    assert %{role: "user", content: [retry_primary | ^tail]} = List.last(retry.messages)
+    assert retry_primary["text"] =~ primary["text"]
+    assert retry_primary["text"] =~ "Return the XML field tags"
+
+    assert Enum.any?(
+             tail,
+             &match?(%{"image_url" => %{"url" => "data:image/png;base64,REVG"}}, &1)
+           )
+  end
+
+  test "validates typed tool IDs before dispatching an XML request" do
+    exchange = %{id: "duplicate", name: "lookup", arguments: %{}, result: "found"}
+    turn = %Dspy.History.Turn{tool_exchanges: [exchange]}
+    history = Dspy.History.new([turn, turn])
+
+    predictor = Dspy.Predict.new(Replay, lm: recording_lm([]), adapter: XMLAdapter)
+
+    assert {:error, {:invalid_history_element, %{index: 1, reason: :duplicate_tool_call_id}}} =
+             Dspy.call(predictor, %{question: "Continue", history: history})
+
+    refute_received {:xml_request, _}
+  end
+
+  test "replays historical assistant images as XML text placeholders" do
+    signature = Replay.signature()
+    [output] = signature.output_fields
+    output = output |> Map.delete(:schema) |> Map.put(:type, :image)
+    signature = %{signature | output_fields: [output]}
+    image = Dspy.Image.new("data:image/png;base64,QUJD")
+    history = Dspy.History.new([%Dspy.History.Turn{outputs: %{result: image}}])
+
+    assert %{messages: [_system, %{role: "assistant", content: content}, _user]} =
+             XMLAdapter.format_request(signature, %{question: "Continue", history: history}, [])
+
+    assert content == "<result>\n<image>\n</result>"
   end
 
   defp recording_lm(replies), do: %RecordingLM{owner: self(), key: make_ref(), replies: replies}

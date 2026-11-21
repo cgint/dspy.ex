@@ -1,6 +1,6 @@
 # Status
 
-> **M4b, XML adapter.** Opt-in XML outputs support typed records, arrays, and dictionaries with literal string leaves. Repeated list fields preserve item order across intervening fields. Typed demos use nested XML where their schema identifies the values. JSON remains available inside the XML tags. Mixed schema branches and structured tool history remain open.
+> **M4b, XML adapter.** Opt-in XML outputs support typed records, arrays, and dictionaries with literal string leaves. Repeated list fields preserve item order across intervening fields. Typed demos use nested XML where their schema identifies the values. XML also replays typed user turns, images, attachments, and completed tool exchanges. The [offline example](../../examples/offline/structured_react_refine_offline.exs) verifies a typed output retry on both Chat and XML with the same image-bearing tool history. General schema unions remain open.
 
 > **M4a, structured ReAct and Refine.** Refine uses distinct rollouts, a per-call failure allowance, and optional slot-specific advice through a caller-bound LM. A bounded report contains declared fields. Advice lasts one attempt and survives its output retries. The [offline example](../../examples/offline/structured_react_refine_offline.exs) replays image-bearing ReAct history, validates a submit call, and exercises a Refine feedback retry.
 

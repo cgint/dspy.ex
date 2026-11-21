@@ -1,12 +1,22 @@
 alias Dspy.{History, Image, Predict, ReAct, Refine, Tools}
 alias Dspy.History.Turn
-alias Dspy.Signature.Adapters.ChatAdapter
+alias Dspy.Signature.AdapterPipeline
+alias Dspy.Signature.Adapters.{ChatAdapter, XMLAdapter}
 
 defmodule StructuredAgentExample.Signature do
   use Dspy.Signature
 
   input_field(:question, :string, "Question about the page")
   input_field(:page, :image, "Source page")
+  output_field(:answer, :integer, "Value from the page")
+end
+
+defmodule StructuredAgentExample.ReplaySignature do
+  use Dspy.Signature
+
+  input_field(:question, :string, "Follow-up question about the page")
+  input_field(:page, :image, "Source page", required: false)
+  input_field(:history, :history, "Previous conversation")
   output_field(:answer, :integer, "Value from the page")
 end
 
@@ -56,17 +66,56 @@ react_lm =
 
 agent = ReAct.new(StructuredAgentExample.Signature, [lookup], mode: :structured)
 
-Dspy.context([lm: react_lm, cache: false], fn ->
-  {:ok, prediction} = Dspy.call(agent, %{question: "What value is on the page?", page: image})
+history =
+  Dspy.context([lm: react_lm, cache: false], fn ->
+    {:ok, prediction} = Dspy.call(agent, %{question: "What value is on the page?", page: image})
 
-  %{
-    answer: 42,
-    history: %History{messages: [%Turn{inputs: %{page: ^image}}, %Turn{}]},
-    termination_reason: :submit
-  } = prediction.attrs
+    %{
+      answer: 42,
+      history: %History{messages: [%Turn{inputs: %{page: ^image}}, %Turn{}]} = history,
+      termination_reason: :submit
+    } = prediction.attrs
 
-  IO.puts("Structured ReAct submitted 42 after replaying the page and tool result.")
-end)
+    IO.puts("Structured ReAct submitted 42 after replaying the page and tool result.")
+    history
+  end)
+
+for {adapter, invalid, valid} <- [
+      {ChatAdapter, "[[ ## answer ## ]]\nunknown", "[[ ## answer ## ]]\n42"},
+      {XMLAdapter, "<answer>unknown</answer>", "<answer>42</answer>"}
+    ] do
+  replay_lm =
+    struct!(ScriptedLM,
+      reply: fn request ->
+        true =
+          Enum.any?(request.messages, fn message ->
+            Enum.any?(List.wrap(message.content), &match?(%{"type" => "image_url"}, &1))
+          end)
+
+        true =
+          Enum.any?(request.messages, fn message ->
+            match?(%{role: "tool", tool_call_id: "lookup_page", content: "42"}, message)
+          end)
+
+        {:ok, prompt} = AdapterPipeline.primary_prompt_text(request)
+        {:ok, if(prompt =~ "Your previous output", do: valid, else: invalid)}
+      end
+    )
+
+  verifier =
+    Predict.new(StructuredAgentExample.ReplaySignature,
+      adapter: adapter,
+      lm: replay_lm,
+      max_output_retries: 1
+    )
+
+  {:ok, %{attrs: %{answer: 42}}} =
+    Dspy.context([cache: false], fn ->
+      Dspy.call(verifier, %{question: "Confirm the page value.", history: history})
+    end)
+
+  IO.puts("#{inspect(adapter)} kept the page image and tool result through a typed output retry.")
+end
 
 draft_lm =
   struct!(ScriptedLM,

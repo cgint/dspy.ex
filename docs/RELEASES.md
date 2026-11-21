@@ -54,10 +54,12 @@ returns a text trajectory.
 ### Typed conversation replay
 
 `Dspy.History.Turn` stores declared input and output fields and completed tool
-exchanges. ChatAdapter replays user image and attachment parts through the
-live formatter and associates each tool result with its original call ID.
-Tool-only turns can omit user inputs. Assistant images use a text placeholder.
-Built-in adapters with flat history formatting require flat map entries.
+exchanges. ChatAdapter and XMLAdapter use their live field formatters to
+replay user image and attachment parts. Assistant tool calls and their tool
+results share their original IDs. Tool-only turns can omit user inputs.
+Assistant images use a text placeholder. The offline structured-agent
+example replays a completed tool call and its source image through both
+adapters and verifies a typed output retry on each.
 
 The internal structured tool response path retains provider call IDs from
 tool-only responses and parses JSON tool calls in ChatAdapter marker sections.
