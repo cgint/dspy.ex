@@ -8,6 +8,15 @@ This repo ships in **small, user-usable slices**.
 
 ## Consumer notes
 
+### Random search for few-shot demos
+
+`Dspy.Teleprompt.new(:bootstrap_rs, metric: metric)` creates the seeded search
+optimizer. Compile it with `Dspy.Teleprompt.compile/3` to get the best program.
+Use `Dspy.Teleprompt.BootstrapFewShotWithRandomSearch.compile_with_candidates/4`
+for ranked scores, subscores, and a separate validation set. This first slice
+supports programs exposing `predict.examples`. Composite per-predictor demos
+require trace support.
+
 ### Sampling after v0.4.11
 
 Cross-validation, `Trainset`, `Ensemble`, and `BootstrapFewShot` now use explicit
