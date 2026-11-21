@@ -70,7 +70,7 @@ After this you can …optimize a program once, save it, load it later or elsewhe
 | S067 | Signature | partial | H | S | 3.00 | <=2.6 | - | N | - | [facet rule: done->partial] pydantic-model validation, annotated types, and field constrai | todo |
 | S077 | BootstrapFewShotWithRandomSearch | partial | H | S | 3.00 | <=2.6 | S075 | N | P7 | Search, ranking, and per-slot teacher demos work for composite programs. Custom programs can still use `predict.examples`. Trace-aware metrics remain. | M2 composite slice implemented. Release pending. |
 | S060 | EmbeddingsWithScores | partial | M | S | 2.00 | 3.2.0 | S059 | N | - | No EmbeddingsWithScores class; closest: InMemoryRetriever Document.score (cosine) | todo |
-| S038 | Predict | partial | H | M | 1.50 | <=2.6 | S033 | N | - | LM assignment and lookup use S054. Config (temperature/rollout_id), reset, dump/load_state, and criteria remain. | todo |
+| S038 | Predict | partial | H | M | 1.50 | <=2.6 | S033 | N | - | LM assignment and lookup use S054. Stored and call config support temperature, token limits, and rollout IDs. Generation counts, reset, dump/load_state, and criteria remain. | M2 config slice implemented. Release pending. |
 | S113 | load | partial | H | M | 1.50 | <=2.6 | S059 | N | P4 | No program-level load (upstream cloudpickle); only parameter-state JSON persistence; no ve | todo |
 | S050 | Completions | partial | L | S | 1.00 | <=2.6 | S055 | N | - | No standalone Completions type: just a list on Prediction; from_completions, int-index, cr | todo |
 | S021 | Embedder | partial | M | M | 1.00 | <=2.6 | S022 | N | - | provider behaviour exists but no Dspy.Embedder facade, no batch_size, no caching, no calla | todo |

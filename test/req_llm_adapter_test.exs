@@ -79,6 +79,35 @@ defmodule DspyReqLLMAdapterTest do
     end
   end
 
+  test "predictor config overrides ReqLLM defaults and rollout stays cache-local" do
+    lm =
+      Dspy.LM.ReqLLM.new(
+        model: "google:gemini",
+        default_opts: [temperature: 0.7, max_completion_tokens: 64],
+        client_module: FakeReqLLM,
+        context_module: FakeContext,
+        response_module: FakeResponse,
+        generation_module: FakeGeneration
+      )
+
+    predictor =
+      Dspy.predict("question -> result",
+        lm: lm,
+        adapter: Dspy.Signature.Adapters.JSONAdapter,
+        config: [temperature: 0.0, max_completion_tokens: 16, rollout_id: 1]
+      )
+
+    Dspy.context([cache: false], fn ->
+      assert {:ok, %Dspy.Prediction{attrs: %{result: "native"}}} =
+               Dspy.call(predictor, %{question: "q"}, config: [max_completion_tokens: 8])
+    end)
+
+    assert_received {:req_llm_object_call, "google:gemini", _, _, opts}
+    assert opts[:temperature] === 0.0
+    assert opts[:max_completion_tokens] == 8
+    refute Keyword.has_key?(opts, :rollout_id)
+  end
+
   defmodule FailingGeneration do
     def generate_object(_model, _input, _schema, _opts), do: {:error, :timeout}
   end
