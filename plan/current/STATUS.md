@@ -1,5 +1,11 @@
 # Status
 
+> **M5, Chat field listeners.** `streamify/2` can select plain string
+> fields on a standalone ChatAdapter predictor. Field events preserve
+> output order across split markers and retain the ordinary final
+> prediction. Status events, composite listeners, and the milestone
+> exit example remain open.
+
 > **M5, program streaming.** `Dspy.streamify/2` wraps standalone
 > Predict and ChainOfThought in a lazy enumerable. The consumer receives
 > raw deltas and the normal parsed result. Loopback tests verify incremental

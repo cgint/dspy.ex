@@ -1,16 +1,20 @@
 defmodule Dspy.ProgramStream do
   @moduledoc false
 
-  alias Dspy.{ChainOfThought, Context, Predict}
+  alias Dspy.{ChainOfThought, Context, Predict, Prediction, StreamResponse}
+  alias Dspy.Signature.AdapterPipeline
+  alias Dspy.Signature.Adapters.{ChatAdapter, ChatStream}
 
   @delta_key {__MODULE__, :on_delta}
 
   def wrap(%{__struct__: type} = program, opts) when type in [Predict, ChainOfThought] do
     unless Keyword.keyword?(opts), do: raise(ArgumentError, "expected streamify call options")
+    {fields, call_opts} = Keyword.pop(opts, :stream_listeners, [])
+    listeners = select_fields(program, fields)
 
     fn inputs ->
       Stream.resource(
-        fn -> start(program, inputs, opts) end,
+        fn -> start(program, inputs, call_opts, listeners) end,
         &next_event/1,
         &stop/1
       )
@@ -23,7 +27,50 @@ defmodule Dspy.ProgramStream do
 
   def take_delta, do: Process.delete(@delta_key)
 
-  defp start(program, inputs, opts) do
+  defp select_fields(_program, []), do: nil
+
+  defp select_fields(program, fields) when is_integer(length(fields)) do
+    if length(fields) != MapSet.size(MapSet.new(fields)) do
+      raise ArgumentError, "stream_listeners cannot contain duplicate fields"
+    end
+
+    outputs = program.signature.output_fields
+
+    if Enum.any?(outputs, &match?(%{type: :tool_calls, tool_call_format: :structured}, &1)) do
+      raise ArgumentError, "stream_listeners require ordinary Chat markers"
+    end
+
+    Enum.each(fields, fn field ->
+      unless is_atom(field) and Enum.any?(outputs, &plain_string_output?(&1, field)) do
+        raise ArgumentError, "stream_listeners must name declared plain string outputs by atom"
+      end
+    end)
+
+    [{predict_name, _predictor}] = Dspy.Module.named_predictors(program)
+    {predict_name, fields}
+  end
+
+  defp select_fields(_program, _fields) do
+    raise ArgumentError, "stream_listeners must be a list of output field atoms"
+  end
+
+  defp plain_string_output?(%{name: name, type: :string} = output, name),
+    do: not Map.has_key?(output, :schema)
+
+  defp plain_string_output?(_output, _name), do: false
+
+  defp field_events(fragments, predict_name) do
+    for {field, chunk, last?} <- fragments do
+      %StreamResponse{
+        predict_name: predict_name,
+        signature_field_name: field,
+        chunk: chunk,
+        is_last_chunk: last?
+      }
+    end
+  end
+
+  defp start(program, inputs, opts, listeners) do
     consumer = self()
     tag = make_ref()
     context = Context.capture()
@@ -48,13 +95,19 @@ defmodule Dspy.ProgramStream do
                 {:error, :invalid_stream_delta}
             end)
 
-            call_program(program, inputs, opts)
+            call_program(program, inputs, opts, listeners)
           end)
 
         send(consumer, {tag, :terminal, terminal})
       end)
 
-    {consumer, tag, worker, worker_ref}
+    listener =
+      case listeners do
+        nil -> nil
+        {predict_name, fields} -> {predict_name, ChatStream.new(fields)}
+      end
+
+    %{consumer: consumer, tag: tag, worker: {worker, worker_ref}, listener: listener, pending: []}
   end
 
   defp await_demand(tag) do
@@ -73,37 +126,63 @@ defmodule Dspy.ProgramStream do
     end
   end
 
-  defp next_event(:done), do: {:halt, :done}
+  defp next_event(%{worker: nil, pending: []} = state), do: {:halt, state}
 
-  defp next_event({consumer, tag, worker, worker_ref} = state) when consumer == self() do
+  defp next_event(%{consumer: consumer, worker: worker}) when consumer != self(),
+    do: reject_foreign_consumer!(worker)
+
+  # Yield one event at a time so a resumed enumeration always checks ownership.
+  defp next_event(%{pending: [event | pending]} = state),
+    do: {[event], %{state | pending: pending}}
+
+  defp next_event(%{tag: tag, worker: {worker, worker_ref}} = state) do
     send(worker, {tag, :demand})
 
     receive do
       {^tag, {:delta, _text} = delta} ->
-        {[delta], state}
+        next_event(queue_delta(state, delta))
 
       {^tag, :terminal, event} ->
         await_stop(worker, worker_ref)
-        {[event], :done}
+        next_event(queue_terminal(state, event))
 
       {:DOWN, ^worker_ref, :process, ^worker, reason} ->
-        {[{:error, {:stream_worker_exited, reason}}], :done}
+        next_event(queue_terminal(state, {:error, {:stream_worker_exited, reason}}))
     end
   end
 
-  defp next_event({_consumer, _tag, worker, _worker_ref}), do: reject_foreign_consumer!(worker)
+  defp queue_delta(%{listener: nil} = state, delta), do: %{state | pending: [delta]}
 
-  defp stop(:done), do: :ok
+  defp queue_delta(%{listener: {predict_name, scanner}} = state, {:delta, text}) do
+    {fragments, scanner} = ChatStream.push(scanner, text)
+    %{state | listener: {predict_name, scanner}, pending: field_events(fragments, predict_name)}
+  end
 
-  defp stop({consumer, _tag, worker, worker_ref}) when consumer == self() do
+  defp queue_terminal(%{listener: {predict_name, scanner}} = state, %Prediction{} = prediction) do
+    pending = field_events(ChatStream.finish(scanner), predict_name) ++ [prediction]
+    %{state | worker: nil, listener: nil, pending: pending}
+  end
+
+  defp queue_terminal(state, event), do: %{state | worker: nil, listener: nil, pending: [event]}
+
+  defp stop(%{worker: nil, pending: []}), do: :ok
+
+  defp stop(%{consumer: consumer, worker: worker}) when consumer != self(),
+    do: reject_foreign_consumer!(worker)
+
+  defp stop(%{worker: nil}), do: :ok
+
+  defp stop(%{worker: {worker, worker_ref}}) do
     Process.exit(worker, :shutdown)
     await_stop(worker, worker_ref)
   end
 
-  defp stop({_consumer, _tag, worker, _worker_ref}), do: reject_foreign_consumer!(worker)
-
   defp reject_foreign_consumer!(worker) do
-    Process.exit(worker, :shutdown)
+    case worker do
+      {pid, _ref} -> Process.exit(pid, :shutdown)
+      nil -> :ok
+    end
+
     raise ArgumentError, "streamify continuations belong to their original consumer"
   end
 
@@ -113,17 +192,29 @@ defmodule Dspy.ProgramStream do
     end
   end
 
-  defp call_program(program, inputs, opts) do
-    result = if opts == [], do: Dspy.call(program, inputs), else: Dspy.call(program, inputs, opts)
+  defp call_program(program, inputs, opts, listeners) do
+    with {:ok, program} <- select_adapter(program, listeners) do
+      result =
+        if opts == [], do: Dspy.call(program, inputs), else: Dspy.call(program, inputs, opts)
 
-    case result do
-      {:ok, prediction} -> prediction
-      {:error, _} = error -> error
+      case result do
+        {:ok, prediction} -> prediction
+        {:error, _} = error -> error
+      end
     end
   rescue
     error -> {:error, error}
   catch
     :exit, reason -> {:error, {:stream_worker_exited, reason}}
     :throw, reason -> {:error, {:stream_worker_threw, reason}}
+  end
+
+  defp select_adapter(program, nil), do: {:ok, program}
+
+  defp select_adapter(program, _listeners) do
+    case AdapterPipeline.active_adapter(adapter: program.adapter) do
+      ChatAdapter -> {:ok, %{program | adapter: ChatAdapter}}
+      adapter -> {:error, {:unsupported_streaming_adapter, adapter}}
+    end
   end
 end
