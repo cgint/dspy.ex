@@ -16,6 +16,10 @@ live formatter and associates each tool result with its original call ID.
 Tool-only turns can omit user inputs. Assistant images use a text placeholder.
 Built-in adapters with flat history formatting require flat map entries.
 
+The internal structured tool response path retains provider call IDs from
+tool-only responses and parses JSON tool calls in ChatAdapter marker sections.
+Ordinary predictor tool outputs still expose `name` and `args`.
+
 ### Opt-in XML field adapter
 
 Select `Dspy.Signature.Adapters.XMLAdapter` on a predictor to format field
