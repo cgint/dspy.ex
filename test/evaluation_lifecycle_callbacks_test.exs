@@ -288,7 +288,16 @@ defmodule Dspy.EvaluationLifecycleCallbacksTest do
 
     assert_receive {:adapter, ^label, ^worker, :start, meta}, 2_000
     assert_receive {:adapter, ^label, ^worker, :end, ^meta}, 2_000
-    assert Enum.sort(Map.keys(meta)) == [:adapter, :attempt, :call_id, :signature_name]
+
+    assert Enum.sort(Map.keys(meta)) == [
+             :adapter,
+             :attempt,
+             :call_id,
+             :parent_call_id,
+             :signature_name
+           ]
+
+    assert meta.parent_call_id == predictor_id
     assert meta.attempt == 1
     assert length(Enum.uniq([root, program_id, predictor_id, lm_id, meta.call_id])) == 5
   end

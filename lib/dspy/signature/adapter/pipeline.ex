@@ -11,7 +11,7 @@ defmodule Dspy.Signature.Adapter.Pipeline do
   It is used by `Dspy.Predict` and `Dspy.ChainOfThought`.
   """
 
-  alias Dspy.{LM, Prediction, PredictorConfig, Settings, Signature}
+  alias Dspy.{Lifecycle, LM, Prediction, PredictorConfig, Settings, Signature}
   alias Dspy.Signature.Adapter.Callbacks
   alias Dspy.Signature.AdapterPipeline
   require Logger
@@ -94,8 +94,7 @@ defmodule Dspy.Signature.Adapter.Pipeline do
         demos,
         adapter,
         callbacks,
-        call_id,
-        1,
+        meta(call_id, adapter, signature),
         lm_options,
         max_output_retries,
         max_output_attempts
@@ -133,53 +132,65 @@ defmodule Dspy.Signature.Adapter.Pipeline do
 
   defp validate_choice_request(_count, _lm, _adapter, _signature), do: :ok
 
+  defp complete_phase(callbacks, end_event, meta, work) do
+    {result, payload} =
+      try do
+        work.()
+      catch
+        kind, reason ->
+          stacktrace = __STACKTRACE__
+          status = if kind == :error, do: :raise, else: kind
+          Callbacks.emit(callbacks, end_event, meta, %{status: status})
+          :erlang.raise(kind, reason, stacktrace)
+      end
+
+    {result, Callbacks.emit(callbacks, end_event, meta, payload)}
+  end
+
   defp do_run_attempt(
          %Signature{} = signature,
          inputs,
          demos,
          adapter,
          callbacks,
-         call_id,
-         attempt,
+         meta,
          %{lm: lm, max_retries: max_retries} = lm_options,
          output_retries_left,
          max_output_attempts
        )
        when is_map(inputs) and is_list(demos) and is_atom(adapter) and is_list(callbacks) and
-              is_integer(attempt) and attempt >= 1 and is_integer(max_retries) and
+              is_integer(max_retries) and
               max_retries >= 0 and
               is_integer(output_retries_left) and output_retries_left >= 0 and
               is_integer(max_output_attempts) and max_output_attempts >= 1 do
-    meta = meta(call_id, attempt, adapter, signature)
-
     callbacks = Callbacks.emit(callbacks, :format_start, meta, %{inputs_keys: Map.keys(inputs)})
 
-    with {:ok, request0} <-
-           AdapterPipeline.format_request(signature, inputs, demos, adapter: adapter),
-         {:ok, request} <- merge_media_parts(signature, inputs, request0),
-         {:ok, base_prompt} <- AdapterPipeline.primary_prompt_text(request) do
-      request = Map.merge(request, lm_options.request_options)
+    {formatted, callbacks} =
+      complete_phase(callbacks, :format_end, meta, fn ->
+        with {:ok, request0} <-
+               AdapterPipeline.format_request(signature, inputs, demos, adapter: adapter),
+             {:ok, request} <- merge_media_parts(signature, inputs, request0),
+             {:ok, base_prompt} <- AdapterPipeline.primary_prompt_text(request) do
+          request = Map.merge(request, lm_options.request_options)
+          {{:ok, request, base_prompt}, %{request: request_summary(request, lm)}}
+        else
+          {:error, _reason} = error -> {error, %{status: :error}}
+        end
+      end)
 
-      callbacks =
-        Callbacks.emit(callbacks, :format_end, meta, %{request: request_summary(request, lm)})
-
-      # `base_request` is the request we use as a stable template for prompt replacement
-      # during typed-output retries.
-      base_request = request
-
+    with {:ok, request, base_prompt} <- formatted do
       do_call_and_parse(
         signature,
         inputs,
         demos,
         adapter,
         callbacks,
-        call_id,
-        attempt,
+        meta,
         lm_options,
         output_retries_left,
         max_output_attempts,
         request,
-        base_request,
+        request,
         base_prompt
       )
     end
@@ -191,8 +202,7 @@ defmodule Dspy.Signature.Adapter.Pipeline do
          demos,
          adapter,
          callbacks,
-         call_id,
-         attempt,
+         %{call_id: call_id} = meta,
          %{lm: lm, count: count} = lm_options,
          output_retries_left,
          max_output_attempts,
@@ -202,75 +212,76 @@ defmodule Dspy.Signature.Adapter.Pipeline do
        )
        when is_map(request) and is_map(base_request) and is_binary(base_prompt) and
               is_integer(max_output_attempts) and max_output_attempts >= 1 do
-    meta = meta(call_id, attempt, adapter, signature)
-
     callbacks =
       Callbacks.emit(callbacks, :call_start, meta, %{request: request_summary(request, lm)})
 
-    case call_with_retry_log(request, lm_options, call_id) do
-      {:ok, response} ->
-        usage_raw = extract_usage(response)
+    {called, callbacks} =
+      complete_phase(callbacks, :call_end, meta, fn ->
+        case call_with_retry_log(request, lm_options, call_id) do
+          {:ok, response} = success ->
+            {success,
+             %{
+               request: request_summary(request, lm),
+               usage: response |> extract_usage() |> normalize_usage()
+             }}
 
-        callbacks =
-          Callbacks.emit(callbacks, :call_end, meta, %{
-            request: request_summary(request, lm),
-            usage: normalize_usage(usage_raw)
-          })
-
-        with {:ok, choices} <- response_choices(response, count) do
-          response_chars = Enum.sum(Enum.map(choices, &String.length(&1.text)))
-
-          callbacks =
-            Callbacks.emit(
-              callbacks,
-              :parse_start,
-              meta,
-              with_choice_count(%{response_chars: response_chars}, count)
+          {:error, reason, attempts_used} ->
+            Logger.debug(
+              "dspy.adapter_exhausted kind=transport call_id=#{inspect(call_id)} attempts_used=#{attempts_used} last_reason=#{Dspy.LogReason.format(reason)}"
             )
 
+            {{:error, reason}, %{status: :error}}
+        end
+      end)
+
+    with {:ok, response} <- called,
+         {:ok, choices} <- response_choices(response, count) do
+      response_chars = Enum.sum(Enum.map(choices, &String.length(&1.text)))
+
+      callbacks =
+        Callbacks.emit(
+          callbacks,
+          :parse_start,
+          meta,
+          with_choice_count(%{response_chars: response_chars}, count)
+        )
+
+      # An output retry keeps the state carried into parse_end.
+      {parsed, _callbacks} =
+        complete_phase(callbacks, :parse_end, meta, fn ->
           case parse_choices(signature, adapter, choices, lm_options) do
             {:ok, result, keys} ->
-              _callbacks =
-                Callbacks.emit(
-                  callbacks,
-                  :parse_end,
-                  meta,
-                  with_choice_count(%{outputs_keys: keys}, count)
-                )
-
-              {:ok, result}
+              {{:ok, result}, with_choice_count(%{outputs_keys: keys}, count)}
 
             {:error, reason, response_text, index} ->
               choice_index = if is_integer(count) and count > 1, do: index
               payload = with_choice_index(%{error: reason}, choice_index)
-              _callbacks = Callbacks.emit(callbacks, :parse_end, meta, payload)
-
-              maybe_retry_output(
-                signature,
-                inputs,
-                demos,
-                adapter,
-                callbacks,
-                call_id,
-                attempt,
-                lm_options,
-                output_retries_left,
-                max_output_attempts,
-                base_request,
-                base_prompt,
-                response_text,
-                reason,
-                choice_index
-              )
+              {{:error, reason, response_text, choice_index}, payload}
           end
-        end
+        end)
 
-      {:error, reason, attempts_used} ->
-        Logger.debug(
-          "dspy.adapter_exhausted kind=transport call_id=#{inspect(call_id)} attempts_used=#{attempts_used} last_reason=#{Dspy.LogReason.format(reason)}"
-        )
+      case parsed do
+        {:ok, _result} = success ->
+          success
 
-        {:error, reason}
+        {:error, reason, response_text, choice_index} ->
+          maybe_retry_output(
+            signature,
+            inputs,
+            demos,
+            adapter,
+            callbacks,
+            meta,
+            lm_options,
+            output_retries_left,
+            max_output_attempts,
+            base_request,
+            base_prompt,
+            response_text,
+            reason,
+            choice_index
+          )
+      end
     end
   end
 
@@ -358,8 +369,7 @@ defmodule Dspy.Signature.Adapter.Pipeline do
          demos,
          adapter,
          callbacks,
-         call_id,
-         attempt,
+         %{call_id: call_id, attempt: attempt} = meta,
          %{lm: lm} = lm_options,
          output_retries_left,
          max_output_attempts,
@@ -379,7 +389,7 @@ defmodule Dspy.Signature.Adapter.Pipeline do
                AdapterPipeline.replace_primary_prompt_text(base_request, retry_prompt) do
           # Treat prompt replacement as the "format" phase for the next attempt.
           next_attempt = attempt + 1
-          meta = meta(call_id, next_attempt, adapter, signature)
+          meta = %{meta | attempt: next_attempt}
 
           Logger.debug(
             "dspy.adapter_retry kind=output call_id=#{inspect(call_id)} attempt=#{next_attempt}/#{max_output_attempts} reason=#{Dspy.LogReason.format(reason)}"
@@ -388,10 +398,10 @@ defmodule Dspy.Signature.Adapter.Pipeline do
           callbacks =
             Callbacks.emit(callbacks, :format_start, meta, %{inputs_keys: Map.keys(inputs)})
 
-          callbacks =
-            Callbacks.emit(callbacks, :format_end, meta, %{
-              request: request_summary(retry_request, lm)
-            })
+          {:ok, callbacks} =
+            complete_phase(callbacks, :format_end, meta, fn ->
+              {:ok, %{request: request_summary(retry_request, lm)}}
+            end)
 
           do_call_and_parse(
             signature,
@@ -399,8 +409,7 @@ defmodule Dspy.Signature.Adapter.Pipeline do
             demos,
             adapter,
             callbacks,
-            call_id,
-            next_attempt,
+            meta,
             lm_options,
             output_retries_left - 1,
             max_output_attempts,
@@ -423,14 +432,13 @@ defmodule Dspy.Signature.Adapter.Pipeline do
     {:output_parse_failed, reason, with_choice_index(%{raw_output: response_text}, choice_index)}
   end
 
-  defp meta(call_id, attempt, adapter, %Signature{} = signature)
-       when is_integer(attempt) and attempt >= 1 do
-    %{
-      call_id: call_id,
-      attempt: attempt,
-      adapter: adapter,
-      signature_name: signature.name
-    }
+  defp meta(call_id, adapter, %Signature{} = signature) do
+    meta = %{call_id: call_id, attempt: 1, adapter: adapter, signature_name: signature.name}
+
+    case Lifecycle.active_call_id() do
+      parent when is_reference(parent) -> Map.put(meta, :parent_call_id, parent)
+      _ -> meta
+    end
   end
 
   defp signature_has_typed_outputs?(%Signature{} = signature) do

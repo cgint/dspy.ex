@@ -24,8 +24,9 @@ prediction after an application restart. Disk caching starts with OpenAI
 On `main`, evaluation callbacks link model calls to the evaluation that
 started them, including in parallel workers. The
 [offline example](../../examples/offline/evaluation_callbacks_offline.exs)
-shows a successful example and a failed one in the same run. Wider disk
-cache support and tracing through adapter and tool callbacks remain open.
+shows a successful example and a failed one in the same run. Adapter
+callbacks now report when a phase ends in error and identify the enclosing
+observed call. Wider disk cache support and tool tracing remain open.
 
 ## Historical milestone notes from September 2026
 

@@ -69,6 +69,51 @@ defmodule Dspy.Signature.AdapterCallbacksTest do
     def supports?(_lm, _feature), do: true
   end
 
+  defmodule ScriptedLM do
+    @behaviour Dspy.LM
+    defstruct [:owner, :outcome]
+
+    @impl true
+    def generate(%__MODULE__{} = lm, _request) do
+      send(lm.owner, :provider_called)
+
+      case lm.outcome do
+        {:raise, reason} -> raise(reason)
+        {:throw, reason} -> throw(reason)
+        {:exit, reason} -> exit(reason)
+        result -> result
+      end
+    end
+  end
+
+  defmodule FailureAdapter do
+    @behaviour Dspy.Signature.Adapter
+
+    @impl true
+    def format_instructions(_signature, _opts), do: ""
+
+    @impl true
+    def format_request(_signature, inputs, _demos, _opts) do
+      case Map.get(inputs, :format_outcome) do
+        {:raise, reason} -> raise(reason)
+        {:throw, reason} -> throw(reason)
+        {:exit, reason} -> exit(reason)
+        {:error, _reason} = error -> error
+        nil -> %{messages: [%{role: "user", content: inputs.question}]}
+      end
+    end
+
+    @impl true
+    def parse_outputs(_signature, text, _opts) do
+      case text do
+        "raise" -> raise("private parse reason")
+        "throw" -> throw("private parse reason")
+        "exit" -> exit("private parse reason")
+        "return" -> {:error, {:private_parse_reason, "raw parse detail"}}
+      end
+    end
+  end
+
   defmodule CapturingCB do
     @behaviour Dspy.Signature.Adapter.Callback
 
@@ -153,6 +198,39 @@ defmodule Dspy.Signature.AdapterCallbacksTest do
     def on_adapter_parse_end(_meta, _payload, state), do: state
   end
 
+  defmodule ModuleCB do
+    def on_module_start(meta, _payload, owner) do
+      send(owner, {:module_start, meta})
+      :ok
+    end
+
+    def on_module_end(meta, payload, owner) do
+      send(owner, {:module_end, meta, payload.status})
+      :ok
+    end
+  end
+
+  defmodule LMCB do
+    def on_lm_start(meta, _payload, owner) do
+      send(owner, {:lm_start, meta})
+      :ok
+    end
+
+    def on_lm_end(meta, payload, owner) do
+      send(owner, {:lm_end, meta, payload.status})
+      :ok
+    end
+  end
+
+  defmodule FormatStateCB do
+    def on_adapter_format_start(meta, _payload, owner), do: {owner, meta.call_id}
+
+    def on_adapter_format_end(meta, payload, {owner, start_id}) do
+      send(owner, {:format_state, start_id, meta.call_id, payload})
+      :ok
+    end
+  end
+
   setup do
     Dspy.TestSupport.restore_settings_on_exit()
     Dspy.configure(lm: %MockLM{})
@@ -181,6 +259,10 @@ defmodule Dspy.Signature.AdapterCallbacksTest do
     events = drain_events(6)
 
     phases = Enum.map(events, fn {:cb_event, _id, phase, _meta, _payload} -> phase end)
+
+    for {:cb_event, _, _, meta, _} <- events do
+      assert Enum.sort(Map.keys(meta)) == [:adapter, :attempt, :call_id, :signature_name]
+    end
 
     assert phases ==
              [
@@ -267,7 +349,7 @@ defmodule Dspy.Signature.AdapterCallbacksTest do
 
     Dspy.configure(
       lm: %RetryMockLM{counter: counter},
-      callbacks: [{CapturingCB, %{pid: self(), id: "global"}}]
+      callbacks: [{ModuleCB, self()}, {CapturingCB, %{pid: self(), id: "global"}}]
     )
 
     program = Dspy.Predict.new(TypedAnswerSignature, max_retries: 0, max_output_retries: 1)
@@ -275,7 +357,13 @@ defmodule Dspy.Signature.AdapterCallbacksTest do
     assert {:ok, pred} = Dspy.Module.forward(program, %{question: "?"})
     assert %AnswerSchema{answer: "42"} = pred.attrs.result
 
-    events = drain_events(12)
+    assert [{:module_start, %{call_id: parent} = module_meta} | rest] = drain_events(14)
+    assert {{:module_end, ^module_meta, :ok}, events} = List.pop_at(rest, -1)
+
+    for {:cb_event, _, _, meta, _} <- events do
+      assert %{parent_call_id: ^parent} = meta
+      refute meta.call_id == parent
+    end
 
     call_ids =
       Enum.map(events, fn {:cb_event, _id, _phase, meta, _payload} ->
@@ -306,5 +394,224 @@ defmodule Dspy.Signature.AdapterCallbacksTest do
 
     assert payload.usage == %{prompt_tokens: 10, completion_tokens: 5, total_tokens: 15}
     assert is_integer(payload.request.messages_count)
+  end
+
+  test "a terminal 503 closes the call phase after all LM attempts" do
+    previous = Application.fetch_env(:dspy, :predict_retry_sleep_ms)
+    Application.put_env(:dspy, :predict_retry_sleep_ms, 0)
+
+    on_exit(fn ->
+      case previous do
+        {:ok, value} -> Application.put_env(:dspy, :predict_retry_sleep_ms, value)
+        :error -> Application.delete_env(:dspy, :predict_retry_sleep_ms)
+      end
+    end)
+
+    reason =
+      ReqLLM.Error.API.Request.exception(status: 503, reason: "private provider reason")
+
+    program = failure_program({:error, reason}, max_retries: 2, max_output_retries: 2)
+    assert {:error, ^reason} = observed_call(program, callbacks: [ModuleCB, LMCB])
+
+    assert {:module_start, %{call_id: parent} = module_meta} = next_event()
+
+    assert {:cb_event, "phase", :format_start, %{call_id: id, attempt: 1} = meta, _} =
+             next_event()
+
+    assert {:cb_event, "phase", :format_end, ^meta, _} = next_event()
+    assert {:cb_event, "phase", :call_start, ^meta, _} = next_event()
+
+    lm_ids =
+      for _ <- 1..3 do
+        assert {:lm_start, %{call_id: lm_id, parent_call_id: ^parent} = lm_meta} = next_event()
+        assert :provider_called = next_event()
+        assert {:lm_end, ^lm_meta, :error} = next_event()
+        lm_id
+      end
+
+    assert length(Enum.uniq([parent, id | lm_ids])) == 5
+    assert {:cb_event, "phase", :call_end, ^meta, %{status: :error} = payload} = next_event()
+    assert payload == %{status: :error}
+    assert %{parent_call_id: ^parent} = meta
+    assert {:module_end, ^module_meta, :error} = next_event()
+    refute_events()
+  end
+
+  test "a returned format error closes only the started phase and retains callback state" do
+    reason = {:private_format_reason, "raw format detail"}
+    program = failure_program({:ok, "Answer: unused"}, adapter: FailureAdapter)
+
+    assert {:error, ^reason} =
+             observed_call(program,
+               inputs: %{format_outcome: {:error, reason}},
+               callbacks: [FormatStateCB]
+             )
+
+    assert_closed_phase(:format_end, :error)
+    assert_receive {:format_state, id, id, %{status: :error}}, 0
+    assert is_reference(id)
+    refute_events()
+  end
+
+  for {status, kind} <- [raise: :error, throw: :throw, exit: :exit] do
+    test "a provider #{status} keeps its interruption and closes only the call phase" do
+      status = unquote(status)
+      reason = interruption_reason(status, "private provider reason")
+      program = failure_program({status, reason}, max_retries: 2)
+
+      assert_interruption(
+        fn -> observed_call(program) end,
+        unquote(kind),
+        reason,
+        ScriptedLM,
+        :generate
+      )
+
+      assert_closed_phase(:call_end, status)
+      refute_events()
+    end
+
+    test "a formatter #{status} keeps its interruption and closes only the format phase" do
+      status = unquote(status)
+      reason = interruption_reason(status, "private format reason")
+      program = failure_program({:ok, "Answer: unused"}, adapter: FailureAdapter)
+
+      call = fn -> observed_call(program, inputs: %{format_outcome: {status, reason}}) end
+      assert_interruption(call, unquote(kind), reason, FailureAdapter, :format_request)
+      assert_closed_phase(:format_end, status)
+      refute_events()
+    end
+
+    test "a parser #{status} keeps its interruption and closes only the parse phase" do
+      status = unquote(status)
+      reason = interruption_reason(status, "private parse reason")
+      program = failure_program({:ok, Atom.to_string(status)}, adapter: FailureAdapter)
+
+      assert_interruption(
+        fn -> observed_call(program) end,
+        unquote(kind),
+        reason,
+        FailureAdapter,
+        :parse_outputs
+      )
+
+      assert_closed_phase(:parse_end, status)
+      refute_events()
+    end
+  end
+
+  test "a returned parse error retains the existing payload and caller error" do
+    reason = {:private_parse_reason, "raw parse detail"}
+    program = failure_program({:ok, "return"}, adapter: FailureAdapter)
+
+    assert {:error, {:output_parse_failed, ^reason, %{raw_output: "return"}}} =
+             observed_call(program)
+
+    assert_closed_phase(:parse_end, %{error: reason})
+    refute_events()
+  end
+
+  test "a choice request rejected before format starts emits no adapter events" do
+    adapter = Dspy.Signature.Adapters.TwoStep
+    program = failure_program({:ok, "Answer: unused"}, adapter: adapter, config: [n: 2])
+
+    assert {:error, {:multiple_choices_unsupported, {:adapter, ^adapter}}} =
+             observed_call(program)
+
+    refute_events()
+  end
+
+  test "a choice count rejection after a completed call emits no parse events" do
+    program = failure_program({:ok, "Answer: only choice"}, config: [n: 2])
+
+    assert {:error, {:unexpected_choice_count, %{expected: 2, actual: 1}}} =
+             observed_call(program)
+
+    assert [
+             {:cb_event, "phase", :format_start, meta, _},
+             {:cb_event, "phase", :format_end, meta, _},
+             {:cb_event, "phase", :call_start, meta, _},
+             :provider_called,
+             {:cb_event, "phase", :call_end, meta, %{request: _, usage: _}}
+           ] = drain_events(5)
+
+    refute_events()
+  end
+
+  defp failure_program(outcome, options) do
+    lm = %ScriptedLM{owner: self(), outcome: outcome}
+    Dspy.Predict.new(TestQA, Keyword.merge([lm: lm, max_output_retries: 0], options))
+  end
+
+  defp observed_call(program, options \\ []) do
+    inputs = Map.put(Keyword.get(options, :inputs, %{}), :question, "private input")
+    callbacks = [{CapturingCB, %{pid: self(), id: "phase"}}]
+    callbacks = callbacks ++ Enum.map(Keyword.get(options, :callbacks, []), &{&1, self()})
+    Dspy.call(program, inputs, callbacks: callbacks)
+  end
+
+  defp interruption_reason(:raise, message), do: %RuntimeError{message: message}
+  defp interruption_reason(_status, message), do: message
+
+  defp assert_interruption(fun, kind, reason, module, function) do
+    result =
+      try do
+        {:returned, fun.()}
+      catch
+        caught, caught_reason -> {caught, caught_reason, __STACKTRACE__}
+      end
+
+    assert {^kind, ^reason, [{^module, ^function, _, _} | _]} = result
+  end
+
+  defp assert_closed_phase(event, status) when is_atom(status),
+    do: assert_closed_phase(event, %{status: status})
+
+  defp assert_closed_phase(event, payload) do
+    earlier =
+      case event do
+        :format_end ->
+          [:format_start]
+
+        :call_end ->
+          [:format_start, :format_end, :call_start, :provider_called]
+
+        :parse_end ->
+          [:format_start, :format_end, :call_start, :provider_called, :call_end, :parse_start]
+      end
+
+    assert {:cb_event, "phase", :format_start, meta, _} = next_event()
+
+    for phase <- tl(earlier) do
+      case phase do
+        :provider_called -> assert :provider_called = next_event()
+        _ -> assert {:cb_event, "phase", ^phase, ^meta, _} = next_event()
+      end
+    end
+
+    assert {:cb_event, "phase", ^event, ^meta, ^payload} = next_event()
+  end
+
+  defp next_event do
+    receive do
+      :provider_called ->
+        :provider_called
+
+      message
+      when elem(message, 0) in [:cb_event, :module_start, :module_end, :lm_start, :lm_end] ->
+        message
+    after
+      0 -> flunk("expected another adapter or LM event")
+    end
+  end
+
+  defp refute_events do
+    refute_received :provider_called
+    refute_received {:cb_event, _, _, _, _}
+    refute_received {:module_start, _}
+    refute_received {:module_end, _, _}
+    refute_received {:lm_start, _}
+    refute_received {:lm_end, _, _}
+    refute_received {:format_state, _, _, _}
   end
 end

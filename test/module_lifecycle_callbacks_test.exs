@@ -231,7 +231,16 @@ defmodule Dspy.ModuleLifecycleCallbacksTest do
     id = assert_start(:program, Dspy.Predict)
     assert {:adapter_event, %{call_id: adapter_id, attempt: 1} = first_meta} = next_event()
     assert {:adapter_event, %{call_id: ^adapter_id, attempt: 2} = second_meta} = next_event()
-    assert Enum.sort(Map.keys(first_meta)) == [:adapter, :attempt, :call_id, :signature_name]
+
+    assert Enum.sort(Map.keys(first_meta)) == [
+             :adapter,
+             :attempt,
+             :call_id,
+             :parent_call_id,
+             :signature_name
+           ]
+
+    assert first_meta.parent_call_id == id
     assert second_meta == %{first_meta | attempt: 2}
     refute adapter_id == id
     assert_end(:program, Dspy.Predict, id)
