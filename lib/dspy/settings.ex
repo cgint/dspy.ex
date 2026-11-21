@@ -21,6 +21,7 @@ defmodule Dspy.Settings do
     max_output_retries: 0,
     cache: false,
     track_usage: false,
+    telemetry: false,
     history_max_entries: 200,
     experimental: [],
     teleprompt_verbose: false,
@@ -42,6 +43,7 @@ defmodule Dspy.Settings do
           max_output_retries: non_neg_integer(),
           cache: boolean(),
           track_usage: boolean(),
+          telemetry: boolean(),
           history_max_entries: pos_integer(),
           experimental: [atom()],
           teleprompt_verbose: boolean(),
@@ -67,6 +69,7 @@ defmodule Dspy.Settings do
   # GenServer) so plain `Task.async`/`spawn` do NOT inherit it;
   # use `with_overrides/2` to propagate explicitly into child processes.
   @overrides_key {__MODULE__, :process_overrides}
+  @telemetry_table :dspy_settings_telemetry
 
   @doc """
   Get current settings.
@@ -99,13 +102,47 @@ defmodule Dspy.Settings do
   @doc false
   def module_observability do
     case current_overrides() do
-      %{track_usage: track_usage, callbacks: callbacks} ->
-        {track_usage, callbacks}
+      %{track_usage: track_usage, callbacks: callbacks} = overrides ->
+        {track_usage, callbacks, telemetry_enabled?(overrides)}
 
       overrides ->
-        {track_usage, callbacks} = GenServer.call(__MODULE__, :module_observability)
-        {Map.get(overrides, :track_usage, track_usage), Map.get(overrides, :callbacks, callbacks)}
+        {track_usage, callbacks, telemetry} = GenServer.call(__MODULE__, :module_observability)
+
+        {Map.get(overrides, :track_usage, track_usage), Map.get(overrides, :callbacks, callbacks),
+         Map.get(overrides, :telemetry, telemetry) == true}
     end
+  end
+
+  @doc false
+  def lifecycle_observability do
+    case current_overrides() do
+      %{callbacks: callbacks} = overrides ->
+        {callbacks, telemetry_enabled?(overrides)}
+
+      overrides ->
+        {callbacks, telemetry} =
+          if Process.whereis(__MODULE__),
+            do: GenServer.call(__MODULE__, :lifecycle_observability),
+            else: {[], false}
+
+        {Map.get(overrides, :callbacks, callbacks),
+         Map.get(overrides, :telemetry, telemetry) == true}
+    end
+  end
+
+  defp telemetry_enabled?(overrides) do
+    case Map.fetch(overrides, :telemetry) do
+      {:ok, value} -> value == true
+      :error -> read_telemetry_flag()
+    end
+  end
+
+  # When all the other settings are scoped, preserve their server-free lookup.
+  # This table belongs to Settings and disappears with its owner.
+  defp read_telemetry_flag do
+    :ets.lookup_element(@telemetry_table, :enabled, 2, false)
+  rescue
+    ArgumentError -> false
   end
 
   @doc false
@@ -224,6 +261,8 @@ defmodule Dspy.Settings do
   @impl true
   def init(opts) do
     settings = struct(__MODULE__, opts)
+    :ets.new(@telemetry_table, [:named_table, :set, :protected, read_concurrency: true])
+    :ets.insert(@telemetry_table, {:enabled, settings.telemetry == true})
     {:ok, settings}
   end
 
@@ -233,6 +272,10 @@ defmodule Dspy.Settings do
 
     if should_clear_cache?(settings, new_settings, opts) do
       :ok = Dspy.LM.Cache.clear()
+    end
+
+    if settings.telemetry != new_settings.telemetry do
+      :ets.insert(@telemetry_table, {:enabled, new_settings.telemetry == true})
     end
 
     {:reply, :ok, new_settings}
@@ -250,7 +293,11 @@ defmodule Dspy.Settings do
   end
 
   def handle_call(:module_observability, _from, settings) do
-    {:reply, {settings.track_usage, settings.callbacks}, settings}
+    {:reply, {settings.track_usage, settings.callbacks, settings.telemetry}, settings}
+  end
+
+  def handle_call(:lifecycle_observability, _from, settings) do
+    {:reply, {settings.callbacks, settings.telemetry}, settings}
   end
 
   defp should_clear_cache?(old_settings, new_settings, opts) do

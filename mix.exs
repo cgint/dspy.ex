@@ -29,6 +29,7 @@ defmodule Dspy.MixProject do
   defp deps do
     [
       {:jason, "~> 1.4"},
+      {:telemetry, "~> 1.0"},
 
       # JSON Schema validation/casting for typed structured outputs.
       # Keep consumer lockfiles off EEF-CVE-2026-117680 and EEF-CVE-2026-117678.

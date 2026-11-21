@@ -719,17 +719,20 @@ defmodule Dspy.Tools do
 
   @doc false
   def run_tool(%Tool{} = tool, args, timeout) do
-    case Callbacks.tool_handlers(Callbacks.settings_callbacks()) do
-      [] ->
+    {callbacks, telemetry?} = Dspy.Settings.lifecycle_observability()
+
+    case {Callbacks.tool_handlers(callbacks), telemetry?} do
+      {[], false} ->
         run_tool_worker(tool, args, timeout)
 
-      handlers ->
+      {handlers, telemetry?} ->
         Lifecycle.run(
           tool_module(tool),
           handlers,
           {:tool_start, :tool_end},
           fn -> run_tool_worker(tool, args, timeout) end,
-          &tool_summary/1
+          &tool_summary/1,
+          telemetry?
         )
     end
   end
