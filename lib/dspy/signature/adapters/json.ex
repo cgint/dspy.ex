@@ -136,6 +136,42 @@ defmodule Dspy.Signature.Adapters.JSONAdapter do
     end
   end
 
+  @doc false
+  def cast_declared_outputs(%Dspy.Signature{} = signature, values) when is_map(values) do
+    signature.output_fields
+    |> Enum.reduce_while({[], [], %{}}, fn field, {fields, missing, present} ->
+      key = Atom.to_string(field.name)
+      resolved_key = if Map.has_key?(values, field.name), do: field.name, else: key
+
+      case {Map.fetch(values, resolved_key), Map.get(field, :schema)} do
+        {{:ok, nil}, _schema} when not field.required ->
+          {:cont, {fields, missing, present}}
+
+        {{:ok, nil}, nil} ->
+          {:halt, {:error, {:invalid_output_value, field.name, :null_required_output}}}
+
+        {{:ok, value}, _schema} ->
+          {:cont, {[field | fields], missing, Map.put(present, key, value)}}
+
+        {:error, _schema} when field.required ->
+          {:cont, {fields, [field.name | missing], present}}
+
+        {:error, _schema} ->
+          {:cont, {fields, missing, present}}
+      end
+    end)
+    |> case do
+      {fields, [], present} ->
+        map_json_to_outputs(%{signature | output_fields: Enum.reverse(fields)}, present)
+
+      {_fields, missing, _present} ->
+        {:error, {:missing_required_outputs, Enum.reverse(missing)}}
+
+      {:error, _reason} = error ->
+        error
+    end
+  end
+
   defp map_json_to_outputs(signature, decoded_map) do
     signature.output_fields
     |> Enum.reduce_while({:ok, %{}}, fn field, {:ok, acc} ->

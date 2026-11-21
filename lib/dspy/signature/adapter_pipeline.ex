@@ -617,14 +617,21 @@ defmodule Dspy.Signature.AdapterPipeline do
            {:ok, description} <- fetch_tool_key(function, :description),
            {:ok, parameters} <- fetch_tool_key(function, :parameters),
            {:ok, normalized_parameters} <- normalize_tool_parameters(parameters) do
+        declaration = %{
+          "name" => name,
+          "description" => description,
+          "parameters" => normalized_parameters
+        }
+
+        declaration =
+          if fetch_tool_key(function, :strict) == {:ok, false},
+            do: Map.put(declaration, "strict", false),
+            else: declaration
+
         {:ok,
          %{
            "type" => "function",
-           "function" => %{
-             "name" => name,
-             "description" => description,
-             "parameters" => normalized_parameters
-           }
+           "function" => declaration
          }}
       end
     else

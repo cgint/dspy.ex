@@ -194,6 +194,8 @@ defmodule Dspy.LM.ReqLLM do
   def supports?(%__MODULE__{model: model}, :structured_output),
     do: native_structured_model?(model)
 
+  def supports?(%__MODULE__{model: "openai:" <> _model}, :structured_react), do: true
+  def supports?(_lm, :structured_react), do: false
   def supports?(_lm, :multiple_choices), do: false
   def supports?(_lm, _feature), do: true
 
@@ -206,15 +208,46 @@ defmodule Dspy.LM.ReqLLM do
         |> maybe_put(:max_completion_tokens, request[:max_completion_tokens])
         |> maybe_put(:n, if(request[:n] === 1, do: 1))
         |> maybe_put(:stop, request[:stop])
-        |> maybe_put(:tools, request[:tools])
+        |> maybe_put(:tools, req_llm_tools(request[:tools]))
         |> maybe_put(:tool_choice, request[:tool_choice])
 
       opts = Keyword.merge(lm.default_opts, request_opts)
+
+      opts =
+        if Map.get(request, :reasoning_effort, :inherit) == nil,
+          do: Keyword.delete(opts, :reasoning_effort),
+          else: opts
+
       opts = normalize_token_limits_for_model(lm.model, opts)
 
       {:ok, {input, opts}}
     end
   end
+
+  defp req_llm_tools(tools) when is_integer(length(tools)), do: Enum.map(tools, &req_llm_tool/1)
+  defp req_llm_tools(tools), do: tools
+
+  # The Responses adapter forces strict mode on plain tool maps. Its Tool
+  # struct is the transport representation for an explicit opt-out.
+  defp req_llm_tool(%{
+         "type" => "function",
+         "function" => %{
+           "name" => name,
+           "description" => description,
+           "parameters" => parameters,
+           "strict" => false
+         }
+       }) do
+    %ReqLLM.Tool{
+      name: name,
+      description: description,
+      parameter_schema: parameters,
+      strict: false,
+      callback: fn _ -> {:error, :tool_declaration_only} end
+    }
+  end
+
+  defp req_llm_tool(tool), do: tool
 
   defp to_req_llm_input(%__MODULE__{} = lm, request) do
     case request[:messages] do

@@ -142,6 +142,24 @@ defmodule Dspy.History do
   defp render_entry(_entry, index, _fields, _render_turn, _ids),
     do: invalid_entry(index, :not_a_map)
 
+  @doc false
+  def typed_tool_ids(%__MODULE__{messages: messages}) when is_integer(length(messages)) do
+    messages
+    |> Enum.with_index()
+    |> Enum.reduce_while({:ok, MapSet.new()}, fn
+      {%Turn{} = turn, index}, {:ok, ids} ->
+        case validate_turn(turn, index, ids) do
+          {:ok, ids} -> {:cont, {:ok, ids}}
+          {:error, _} = error -> {:halt, error}
+        end
+
+      {_entry, index}, _acc ->
+        {:halt, invalid_entry(index, :expected_typed_turn)}
+    end)
+  end
+
+  def typed_tool_ids(_history), do: {:error, :invalid_structured_react_history}
+
   defp validate_turn(
          %Turn{inputs: inputs, outputs: outputs, tool_exchanges: exchanges},
          index,

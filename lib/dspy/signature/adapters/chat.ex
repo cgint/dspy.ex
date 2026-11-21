@@ -40,7 +40,11 @@ defmodule Dspy.Signature.Adapters.ChatAdapter do
       when is_map(inputs) and is_list(demos) and is_list(opts) do
     filtered_signature = %{
       signature
-      | input_fields: Enum.reject(signature.input_fields, &(&1.type == :history))
+      | input_fields:
+          Enum.reject(
+            signature.input_fields,
+            &(&1.type == :history or Map.get(&1, :wire_only, false))
+          )
     }
 
     render_turn = &render_history_turn(filtered_signature, demos, &1)

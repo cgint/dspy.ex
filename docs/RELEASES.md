@@ -8,6 +8,18 @@ This repo ships in **small, user-usable slices**.
 
 ## Consumer notes
 
+### Opt-in structured ReAct
+
+`Dspy.ReAct.new/3` accepts `mode: :structured` with ChatAdapter and supported
+OpenAI models through ReqLLM. It retains provider call IDs, assigns stable IDs
+to text tool calls, and returns replayable typed history with the final
+prediction. The `submit` tool validates the signature outputs. A forced final
+request selects `submit` exclusively. Optional outputs can use JSON null on
+the OpenAI strict tools wire. Complex submit schemas use non-strict
+provider declarations and retain local validation. Failed final
+submissions include the history in the error tuple. The default mode still
+returns a text trajectory.
+
 ### Typed conversation replay
 
 `Dspy.History.Turn` stores declared input and output fields and completed tool

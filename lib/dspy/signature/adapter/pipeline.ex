@@ -22,6 +22,7 @@ defmodule Dspy.Signature.Adapter.Pipeline do
   @type opts :: [
           adapter: module() | nil,
           lm: Dspy.LM.t() | nil,
+          forced_tool: String.t() | nil,
           config: PredictorConfig.t(),
           prediction_signature: Signature.t(),
           callbacks: Callbacks.callbacks(),
@@ -66,7 +67,7 @@ defmodule Dspy.Signature.Adapter.Pipeline do
       count: count,
       prediction_signature: Keyword.get(opts, :prediction_signature, signature),
       max_retries: Keyword.get(opts, :max_retries, 3),
-      request_options: request_options,
+      request_options: force_tool(request_options, Keyword.get(opts, :forced_tool)),
       cache_options: cache_options
     }
 
@@ -100,6 +101,15 @@ defmodule Dspy.Signature.Adapter.Pipeline do
         max_output_attempts
       )
     end
+  end
+
+  defp force_tool(options, nil), do: options
+
+  defp force_tool(options, name) when is_binary(name) do
+    Map.merge(options, %{
+      tool_choice: %{type: "function", function: %{name: name}},
+      reasoning_effort: nil
+    })
   end
 
   defp choice_lm(nil, count) when is_integer(count) and count > 1 do
