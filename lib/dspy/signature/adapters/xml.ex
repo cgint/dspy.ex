@@ -182,6 +182,7 @@ defmodule Dspy.Signature.Adapters.XMLAdapter do
         :object when is_map(value) -> render_object(value, XMLValue.shape(schema))
         :discriminated when is_map(value) -> render_discriminated(value, schema)
         :record_union when is_map(value) -> render_container_json(value)
+        :mixed_record_union -> render_container_json(value)
         :array when is_integer(length(value)) -> render_array(value, XMLValue.shape(schema))
         _ when is_binary(value) -> value
         _ -> render_json(value)
@@ -321,10 +322,23 @@ defmodule Dspy.Signature.Adapters.XMLAdapter do
 
   defp ordinary_xml_value?(value, schema) do
     case XMLValue.shape(schema) do
-      %{"type" => "integer"} -> is_integer(value)
-      %{"type" => "number"} -> is_number(value)
-      %{"type" => "boolean"} -> is_boolean(value)
-      shaped -> XMLValue.kind(shaped) in [:object, :array, :discriminated, :record_union]
+      %{"type" => "integer"} ->
+        is_integer(value)
+
+      %{"type" => "number"} ->
+        is_number(value)
+
+      %{"type" => "boolean"} ->
+        is_boolean(value)
+
+      shaped ->
+        XMLValue.kind(shaped) in [
+          :object,
+          :array,
+          :discriminated,
+          :record_union,
+          :mixed_record_union
+        ]
     end
   end
 
@@ -353,8 +367,8 @@ defmodule Dspy.Signature.Adapters.XMLAdapter do
         {property, [{[tag | _], branch} | _]} = XMLValue.object_variants(XMLValue.shape(schema))
         Map.put(sample_value(branch), property, tag)
 
-      :record_union ->
-        [{_branch, shaped} | _] = XMLValue.record_union_branches(XMLValue.shape(schema))
+      kind when kind in [:record_union, :mixed_record_union] ->
+        {^kind, [{_branch, shaped} | _]} = XMLValue.record_union_branches(XMLValue.shape(schema))
         sample_value(shaped)
 
       :leaf ->
@@ -381,7 +395,7 @@ defmodule Dspy.Signature.Adapters.XMLAdapter do
 
   defp container_schema(%{schema: spec}) do
     with {:ok, schema} <- TypedOutputs.native_schema(spec),
-         kind when kind in [:object, :array, :discriminated, :record_union] <-
+         kind when kind in [:object, :array, :discriminated, :record_union, :mixed_record_union] <-
            XMLValue.kind(schema) do
       schema
     else
@@ -528,7 +542,9 @@ defmodule Dspy.Signature.Adapters.XMLAdapter do
   end
 
   defp read_field(text, name, false, field, schema, boundary?) do
-    if schema && String.starts_with?(String.trim_leading(text), "<") do
+    if schema &&
+         (String.starts_with?(String.trim_leading(text), "<") or
+            XMLValue.kind(schema) == :mixed_record_union) do
       with {:ok, term, rest} <- XMLValue.container(text, name, schema, boundary?),
            {:ok, value} <- validate_term(term, field) do
         {:ok, value, rest}
