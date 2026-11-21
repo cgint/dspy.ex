@@ -15,6 +15,8 @@ It covers immediate list, tuple, and map entries as well as nested modules.
 Equal predictor values in separate slots still have separate names.
 `Dspy.Module.predictors/1` returns the values alone. `Dspy.Module.map_named_predictors/2`
 applies a function to each predictor in discovery order and returns an updated program.
+`Dspy.Module.set_lm/2` binds a language model across those slots. Use
+`Dspy.Module.get_lm/1` to read their shared stored binding.
 
 ### Random search for few-shot demos
 

@@ -141,7 +141,7 @@ defmodule Dspy.Module do
   Return a program with the same LM binding on every named predictor.
 
   Pass `nil` to clear the bindings and let the predictors use the configured
-  LM at call time. The original program remains available.
+  LM at call time.
   """
   @spec set_lm(t(), Dspy.LM.t() | nil) :: t()
   def set_lm(program, lm) do
@@ -152,9 +152,9 @@ defmodule Dspy.Module do
   @doc """
   Return the LM binding shared by all named predictors.
 
-  Returns `nil` when all predictors are unbound. The current settings do not
-  affect the result. Raises `ArgumentError` when there are no named predictors
-  or their bindings differ.
+  Reads stored bindings and returns `nil` when all predictors are unbound.
+  Raises `ArgumentError` when the program has no named predictors or their
+  bindings differ.
   """
   @spec get_lm(t()) :: Dspy.LM.t() | nil
   def get_lm(program) do
