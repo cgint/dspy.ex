@@ -7,7 +7,7 @@ defmodule Dspy.Teleprompt.GEPA.Reflective do
   alias Dspy.Signature.Adapters.JSONAdapter
   alias Dspy.Signature.PromptPreview
   alias Dspy.Teleprompt.BootstrapTrace
-  alias Dspy.Teleprompt.GEPA.{CandidatePool, InstructionProposer, Merger}
+  alias Dspy.Teleprompt.GEPA.{CandidatePool, InstructionProposer, Merger, ObservationMedia}
 
   @report_bytes 16_384
   @instruction_bytes 4_096
@@ -78,7 +78,7 @@ defmodule Dspy.Teleprompt.GEPA.Reflective do
     slots = round.parent |> PredictorSlots.list() |> Map.new()
     predictor = Map.fetch!(slots, path)
     name = PredictorSlots.name(path, predictor)
-    report = reflection_report(optimizer.metric, predictor, name, observations)
+    report = reflection_report(optimizer, predictor, name, observations)
 
     with {:ok, instruction} <- propose(optimizer, slots, path, report) do
       state = evaluate_proposal(optimizer, valset, state, round, path, instruction)
@@ -280,9 +280,9 @@ defmodule Dspy.Teleprompt.GEPA.Reflective do
   defp score(result) when is_map(result), do: Attrs.get(result, :score, result)
   defp score(result), do: result
 
-  defp propose(_optimizer, _slots, _path, []), do: {:ok, nil}
+  defp propose(_optimizer, _slots, _path, {[], []}), do: {:ok, nil}
 
-  defp propose(optimizer, slots, path, report) do
+  defp propose(optimizer, slots, path, {report, images}) do
     previous = Map.fetch!(slots, path).signature.instructions || ""
 
     case Map.get(optimizer, :instruction_proposer) do
@@ -292,7 +292,13 @@ defmodule Dspy.Teleprompt.GEPA.Reflective do
       %InstructionProposer{} = proposer ->
         preview = PromptPreview.truncate(previous, @instruction_bytes)
 
-        case InstructionProposer.propose(proposer, optimizer.reflection_lm, preview, report) do
+        case InstructionProposer.propose(
+               proposer,
+               optimizer.reflection_lm,
+               preview,
+               report,
+               images
+             ) do
           {:ok, instruction} -> validate_proposal(instruction, previous)
           {:error, reason} -> {:error, {:reflection_failed, reason}}
         end
@@ -350,11 +356,19 @@ defmodule Dspy.Teleprompt.GEPA.Reflective do
     end
   end
 
-  defp reflection_report(metric, predictor, name, observations) do
-    {records, _remaining} =
-      Enum.reduce_while(observations, {[], @report_bytes - 2}, fn {record, step},
-                                                                  {acc, remaining} ->
-        {outputs, feedback} = observation_feedback(metric, predictor, name, record, step)
+  defp reflection_report(optimizer, predictor, name, observations) do
+    media =
+      if match?(
+           %InstructionProposer{include_observation_images: true},
+           Map.get(optimizer, :instruction_proposer)
+         ),
+         do: %ObservationMedia{}
+
+    {records, _remaining, media} =
+      Enum.reduce_while(observations, {[], @report_bytes - 2, media}, fn {record, step},
+                                                                         {acc, remaining, media} ->
+        {outputs, feedback} =
+          observation_feedback(optimizer.metric, predictor, name, record, step)
 
         item = %{
           inputs: PromptPreview.project(predictor.signature.input_fields, step.inputs),
@@ -362,14 +376,15 @@ defmodule Dspy.Teleprompt.GEPA.Reflective do
           feedback: feedback
         }
 
+        {item, updated_media} = ObservationMedia.annotate(media, predictor.signature, step, item)
         bytes = byte_size(Jason.encode!(item)) + 1
 
         if bytes <= remaining,
-          do: {:cont, {[item | acc], remaining - bytes}},
-          else: {:halt, {acc, remaining}}
+          do: {:cont, {[item | acc], remaining - bytes, updated_media}},
+          else: {:halt, {acc, remaining, media}}
       end)
 
-    Enum.reverse(records)
+    {Enum.reverse(records), ObservationMedia.images(media)}
   end
 
   defp observation_feedback(

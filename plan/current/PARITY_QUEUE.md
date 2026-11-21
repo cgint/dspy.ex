@@ -179,7 +179,7 @@ After this you can …use the stronger optimizers: real GEPA, example selection 
 | S082 | InferRules | missing | M | M | 1.00 | 3.0.0 | S031 | N | - | no Elixir equivalent | todo |
 | S078 | BootstrapFinetune | missing | H | L | 0.75 | <=2.6 | - | N | - | no Elixir equivalent | todo |
 | S081 | GEPA | partial | H | L | 0.75 | 3.0.0 | S031 S087 | Y | - | Reflection LM, custom and configurable instruction proposers, five-argument feedback, typed slot mutation, opt-in Pareto selection, budgeted ancestor-based merges, and format-failure feedback. Additional frontier objectives and component selection remain open. | M6 GEPA instruction proposer |
-| N004 | InstructionProposer | partial | M | M | 1.00 | 3.4.1 | S081 | N | - | Base and additional instructions, explicit reference skill sources, configurable adapter, and Unicode length correction. Typed media and shortened history in reflective examples remain open. | M6 GEPA instruction proposer |
+| N004 | InstructionProposer | partial | M | M | 1.00 | 3.4.1 | S081 | N | - | Base and additional instructions, explicit reference skill sources, configurable adapter, Unicode length correction, and bounded opt-in image observations. Typed history and tool-result shortening remain open. | M6 GEPA image observations |
 | S074 | BetterTogether | missing | M | L | 0.50 | <=2.6 | - | N | - | no Elixir equivalent | todo |
 | S087 | bootstrap_trace_data | partial | L | M | 0.50 | 3.1.0 | S031 | N | - | Concurrent indexed traces and opt-in typed-slot parse-failure records with a configured score. Crash capture and partial-format scoring remain open. | M6 batch trace collection |
 | S073 | AvatarOptimizer | missing | L | L | 0.25 | <=2.6 | - | N | - | no Elixir equivalent | todo |

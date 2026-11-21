@@ -18,7 +18,8 @@ defmodule Dspy.Teleprompt.GEPA.InstructionProposer do
     :additional_instructions,
     :max_chars,
     skills: [],
-    adapter: JSONAdapter
+    adapter: JSONAdapter,
+    include_observation_images: false
   ]
 
   @opaque t :: %__MODULE__{
@@ -26,7 +27,8 @@ defmodule Dspy.Teleprompt.GEPA.InstructionProposer do
             additional_instructions: String.t() | nil,
             max_chars: pos_integer() | nil,
             skills: [String.t()],
-            adapter: module()
+            adapter: module(),
+            include_observation_images: boolean()
           }
 
   @doc """
@@ -43,6 +45,12 @@ defmodule Dspy.Teleprompt.GEPA.InstructionProposer do
     its final instruction byte limit.
   - `:adapter` selects the signature adapter for both calls. Defaults to
     `Dspy.Signature.Adapters.JSONAdapter`.
+  - `:include_observation_images` sends declared, typed images from selected
+    training observations to the reflection LM. The report identifies their
+    1-based positions in `observation_images`. Inputs precede outputs, and
+    fields and image lists keep their order within each observation. A proposal
+    sends up to eight images and eight MiB of encoded image URLs. Fields that
+    would exceed either limit stay omitted. Defaults to `false`.
   """
   @spec new(keyword()) :: t()
   def new(opts \\ []) do
@@ -52,7 +60,8 @@ defmodule Dspy.Teleprompt.GEPA.InstructionProposer do
         additional_instructions: nil,
         skills: [],
         max_chars: nil,
-        adapter: JSONAdapter
+        adapter: JSONAdapter,
+        include_observation_images: false
       )
 
     %__MODULE__{
@@ -61,12 +70,13 @@ defmodule Dspy.Teleprompt.GEPA.InstructionProposer do
         optional_text!(opts[:additional_instructions], :additional_instructions),
       max_chars: char_limit!(opts[:max_chars]),
       adapter: adapter!(opts[:adapter]),
-      skills: load_skills!(opts[:skills])
+      skills: load_skills!(opts[:skills]),
+      include_observation_images: observation_images!(opts[:include_observation_images])
     }
   end
 
   @doc false
-  def propose(%__MODULE__{} = proposer, lm, previous, report) do
+  def propose(%__MODULE__{} = proposer, lm, previous, report, images) do
     inputs =
       [
         reference_skills: reference_text(proposer.skills),
@@ -76,6 +86,8 @@ defmodule Dspy.Teleprompt.GEPA.InstructionProposer do
         examples_with_feedback: Jason.encode!(report)
       ]
       |> Enum.reject(fn {_key, value} -> is_nil(value) end)
+
+    inputs = inputs ++ image_inputs(images)
 
     with {:ok, draft} <-
            generate(
@@ -109,7 +121,7 @@ defmodule Dspy.Teleprompt.GEPA.InstructionProposer do
     signature =
       Signature.new("gepa_" <> Atom.to_string(output),
         instructions: instructions,
-        input_fields: Enum.map(Keyword.keys(inputs), &text_field/1),
+        input_fields: Enum.map(Keyword.keys(inputs), &input_field/1),
         output_fields: [output_field]
       )
 
@@ -133,6 +145,21 @@ defmodule Dspy.Teleprompt.GEPA.InstructionProposer do
         {:error, reason}
     end
   end
+
+  defp image_inputs([]), do: []
+
+  defp image_inputs(images) do
+    [
+      image_reference_guide:
+        "Each image_indices list gives 1-based positions in observation_images.",
+      observation_images: images
+    ]
+  end
+
+  defp input_field(:observation_images),
+    do: %{text_field(:observation_images) | type: :image}
+
+  defp input_field(name), do: text_field(name)
 
   defp text_field(name),
     do: %{name: name, type: :string, description: "", required: true, default: nil}
@@ -179,6 +206,11 @@ defmodule Dspy.Teleprompt.GEPA.InstructionProposer do
 
   defp char_limit!(_limit),
     do: raise(ArgumentError, ":max_chars must be a positive integer or nil")
+
+  defp observation_images!(value) when is_boolean(value), do: value
+
+  defp observation_images!(_value),
+    do: raise(ArgumentError, ":include_observation_images must be a boolean")
 
   defp adapter!(nil), do: JSONAdapter
 
