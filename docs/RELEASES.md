@@ -13,9 +13,10 @@ This repo ships in **small, user-usable slices**.
 `Dspy.Teleprompt.new(:bootstrap_rs, metric: metric)` creates the seeded search
 optimizer. Compile it with `Dspy.Teleprompt.compile/3` to get the best program.
 Use `Dspy.Teleprompt.BootstrapFewShotWithRandomSearch.compile_with_candidates/4`
-for ranked scores, subscores, and a separate validation set. This first slice
-supports programs exposing `predict.examples`. Composite per-predictor demos
-require trace support.
+for ranked scores, subscores, and a separate validation set. Pass
+`teacher_compiled: true` to reuse an already-compiled teacher's demos. The
+winning predictor uses its bound LM. This first slice supports programs
+exposing `predict.examples`. Composite per-predictor demos require trace support.
 
 ### Sampling after v0.4.11
 

@@ -95,10 +95,18 @@ defmodule Dspy.Teleprompt.BootstrapFewShotWithRandomSearch do
   `:restrict` selects candidate seeds. `:labeled_sample` controls sampling for
   the labeled-only baseline and defaults to `true`.
 
+  A teacher with a demo parameter receives labeled demos from each candidate's
+  training order. Pass `teacher_compiled: true` to use its existing demos.
+
   The result contains `:program` and `:candidates`. Each candidate has `:seed`,
   `:score`, `:subscores`, and `:program` fields. Ties keep the search order.
+  Teacher failures that exhaust the budget return `{:error, reason}`.
+  Candidate evaluation follows `Dspy.Evaluate.evaluate/4` error handling.
   """
   def compile_with_candidates(%__MODULE__{} = optimizer, student, trainset, opts \\ []) do
+    opts =
+      Keyword.validate!(opts, [:teacher, :teacher_compiled, :valset, :restrict, :labeled_sample])
+
     with {:ok, seeds} <-
            select_seeds(optimizer.num_candidate_programs, Keyword.get(opts, :restrict)),
          {:ok, trainset} <- Trainset.validate(trainset),
@@ -126,7 +134,6 @@ defmodule Dspy.Teleprompt.BootstrapFewShotWithRandomSearch do
   defp resolve_valset(valset, _trainset), do: Trainset.validate(valset)
 
   defp search(optimizer, student, teacher, trainset, valset, seeds, opts) do
-    labeled_sample = Keyword.get(opts, :labeled_sample, true)
     eval_opts = [max_errors: optimizer.max_errors]
 
     eval_opts =
@@ -135,7 +142,7 @@ defmodule Dspy.Teleprompt.BootstrapFewShotWithRandomSearch do
         else: eval_opts
 
     Enum.reduce_while(seeds, {:ok, []}, fn seed, {:ok, results} ->
-      case build_candidate(seed, optimizer, student, teacher, trainset, labeled_sample) do
+      case build_candidate(seed, optimizer, student, teacher, trainset, opts) do
         {:ok, program} ->
           evaluation = Evaluate.evaluate(program, valset, optimizer.metric, eval_opts)
 
@@ -169,18 +176,24 @@ defmodule Dspy.Teleprompt.BootstrapFewShotWithRandomSearch do
     end
   end
 
-  defp build_candidate(-3, _optimizer, student, _teacher, _trainset, _sample?), do: {:ok, student}
+  defp build_candidate(-3, _optimizer, student, _teacher, _trainset, _opts), do: {:ok, student}
 
-  defp build_candidate(-2, optimizer, student, _teacher, trainset, sample?) do
+  defp build_candidate(-2, optimizer, student, _teacher, trainset, opts) do
     count = min(optimizer.max_labeled_demos, length(trainset))
-    demos = if sample?, do: sample_labels(trainset, count), else: Enum.take(trainset, count)
+
+    demos =
+      if Keyword.get(opts, :labeled_sample, true),
+        do: sample_labels(trainset, count),
+        else: Enum.take(trainset, count)
+
     Util.set_predict_examples(student, demos)
   end
 
-  defp build_candidate(seed, optimizer, student, teacher, trainset, _sample?) do
+  defp build_candidate(seed, optimizer, student, teacher, trainset, opts) do
     {ordered, limit} = bootstrap_inputs(seed, trainset, optimizer.max_bootstrapped_demos)
 
-    with {:ok, accepted} <- collect_demos(ordered, limit, optimizer, teacher) do
+    with {:ok, teacher} <- prepare_teacher(teacher, ordered, optimizer.max_labeled_demos, opts),
+         {:ok, accepted} <- collect_demos(ordered, limit, optimizer, teacher) do
       {indices, augmented} = Enum.unzip(accepted)
       indices = MapSet.new(indices)
 
@@ -209,6 +222,17 @@ defmodule Dspy.Teleprompt.BootstrapFewShotWithRandomSearch do
     {state, _} = Random.seed(0)
     {_state, selected} = Random.sample(state, labels, count)
     selected
+  end
+
+  defp prepare_teacher(teacher, _trainset, 0, _opts), do: {:ok, teacher}
+
+  defp prepare_teacher(teacher, trainset, max_demos, opts) do
+    if Keyword.get(opts, :teacher_compiled, false) or is_nil(teacher_demos(teacher)) do
+      {:ok, teacher}
+    else
+      count = min(max_demos, length(trainset))
+      Util.set_predict_examples(teacher, sample_labels(trainset, count))
+    end
   end
 
   defp collect_demos(trainset, limit, optimizer, teacher) do
@@ -250,7 +274,7 @@ defmodule Dspy.Teleprompt.BootstrapFewShotWithRandomSearch do
   end
 
   defp without_demo(teacher, example) do
-    case Enum.find(Module.parameters(teacher), &match?(%Parameter{name: "predict.examples"}, &1)) do
+    case teacher_demos(teacher) do
       %Parameter{value: examples} when is_list(examples) ->
         remaining = Enum.reject(examples, &(&1 == example))
 
@@ -261,6 +285,10 @@ defmodule Dspy.Teleprompt.BootstrapFewShotWithRandomSearch do
       _ ->
         {:ok, teacher}
     end
+  end
+
+  defp teacher_demos(teacher) do
+    Enum.find(Module.parameters(teacher), &match?(%Parameter{name: "predict.examples"}, &1))
   end
 
   defp attempt(optimizer, teacher, example, round) do
@@ -280,6 +308,12 @@ defmodule Dspy.Teleprompt.BootstrapFewShotWithRandomSearch do
             else
               :rejected
             end
+
+          :error ->
+            {:error, :invalid_bootstrap_metric}
+
+          _ when is_nil(optimizer.metric_threshold) ->
+            :rejected
 
           _ ->
             {:error, :invalid_bootstrap_metric}

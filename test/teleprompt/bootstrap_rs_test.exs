@@ -45,10 +45,14 @@ defmodule Dspy.Teleprompt.BootstrapRSTest do
 
   defmodule OfflineLM do
     @behaviour Dspy.LM
-    defstruct []
+    defstruct [:observer]
 
     @impl true
-    def generate(_lm, _request) do
+    def generate(lm, request) do
+      if lm.observer do
+        send(lm.observer, {:teacher_prompt, Enum.map_join(request.messages, "\n", & &1.content)})
+      end
+
       {:ok, %{choices: [%{message: %{role: "assistant", content: ~s({"answer":"ok"})}}]}}
     end
   end
@@ -262,8 +266,109 @@ defmodule Dspy.Teleprompt.BootstrapRSTest do
     assert {:ok, %Prediction{attrs: %{answer: "ok"}}} = Dspy.Module.forward(best, id: 200)
   end
 
+  test "each candidate seeds an uncompiled teacher from its own ordering" do
+    adapter = Dspy.Signature.Adapters.JSONAdapter
+    student = Dspy.predict("question -> answer", lm: %OfflineLM{}, adapter: adapter)
+    stale = question_row(900)
+
+    teacher =
+      Dspy.predict("question -> answer",
+        lm: %OfflineLM{observer: self()},
+        adapter: adapter,
+        examples: [stale]
+      )
+
+    optimizer =
+      Teleprompt.new(:bootstrap_rs,
+        metric: &Dspy.Metrics.exact_match/2,
+        max_bootstrapped_demos: 1,
+        max_labeled_demos: 3,
+        verbose: false
+      )
+
+    trainset = Enum.map(0..5, &question_row/1)
+    options = [teacher: teacher, restrict: [-1, 0], valset: [question_row(100)]]
+
+    assert {:ok, _} = BootstrapRS.compile_with_candidates(optimizer, student, trainset, options)
+    assert_received {:teacher_prompt, natural}
+    assert_received {:teacher_prompt, shuffled}
+    refute_received {:teacher_prompt, _}
+
+    # Random(0) draws indices [3, 5, 0]. The teacher omits the current input from demos.
+    for {prompt, current, demos} <- [{natural, 0, [3, 5]}, {shuffled, 4, [0, 3]}] do
+      for id <- demos, do: assert(String.contains?(prompt, question(id)))
+      assert length(:binary.matches(prompt, question(current))) == 1
+      refute String.contains?(prompt, question(900))
+    end
+
+    assert teacher.examples == [stale]
+
+    assert {:ok, _} =
+             BootstrapRS.compile_with_candidates(optimizer, student, trainset,
+               teacher: teacher,
+               teacher_compiled: true,
+               restrict: [-1],
+               valset: [question_row(100)]
+             )
+
+    assert_received {:teacher_prompt, compiled}
+    assert String.contains?(compiled, question(900))
+    refute String.contains?(compiled, question(3))
+  end
+
+  test "a missing teacher score is a rejection without a threshold" do
+    metric = fn example, _ -> if example.attrs.id == 0, do: nil, else: 1.0 end
+
+    optimizer =
+      Teleprompt.new(:bootstrap_rs,
+        metric: metric,
+        max_errors: 1,
+        max_bootstrapped_demos: 1,
+        max_labeled_demos: 0,
+        verbose: false
+      )
+
+    student = %Student{observer: self()}
+    trainset = rows(0..5)
+    opts = [teacher: teacher(fn _, _ -> true end), restrict: [-1], valset: rows([100])]
+
+    assert {:ok, %{program: best}} =
+             BootstrapRS.compile_with_candidates(optimizer, student, trainset, opts)
+
+    assert demo_ids(best) == [1]
+
+    assert {:error, :invalid_bootstrap_metric} =
+             BootstrapRS.compile_with_candidates(
+               %{optimizer | metric_threshold: 0.5},
+               student,
+               trainset,
+               opts
+             )
+  end
+
+  test "unknown compile options fail before evaluation" do
+    optimizer =
+      Teleprompt.new(:bootstrap_rs,
+        metric: fn _, _ -> 1.0 end,
+        stop_at_score: 100,
+        verbose: false
+      )
+
+    assert_raise ArgumentError, ~r/val_set/, fn ->
+      BootstrapRS.compile_with_candidates(optimizer, %Student{observer: self()}, rows(0..2),
+        val_set: rows([100])
+      )
+    end
+
+    refute_received {:evaluated, _}
+  end
+
   defp rows(ids), do: Enum.map(ids, &Example.new(%{id: &1, answer: "ok"}))
   defp demo_ids(program), do: Enum.map(program.examples, & &1.attrs.id)
+  defp question(id), do: "probe-question-#{id}-end"
+
+  defp question_row(id),
+    do: Example.new(question: question(id), answer: "ok") |> Example.with_inputs(:question)
 
   defp teacher(accept?) do
     attempts = start_supervised!({Agent, fn -> %{} end})
