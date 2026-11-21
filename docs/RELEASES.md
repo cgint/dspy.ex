@@ -16,6 +16,9 @@ field columns. Ordinary attributes come from the first row. Use
 other rows or all values for a field. `Dspy.Prediction.completions/1` continues
 to expose raw completion metadata. The constructor rejects empty or ragged
 inputs and ambiguous atom and string spellings for the same field.
+`Dspy.majority/2` can vote over a parsed collection or a prediction built from
+one. It uses the last signature output when the caller omits `:field` and
+supports numeric and boolean votes in parsed collections.
 
 ### Example fields and dictionaries
 

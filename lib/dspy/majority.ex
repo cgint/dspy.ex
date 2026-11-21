@@ -1,6 +1,6 @@
 defmodule Dspy.Majority do
   @moduledoc """
-  Aggregation over a list of completions (self-consistency "majority vote").
+  Majority voting over ordered completions.
 
   `Dspy.majority/2` takes the completions in caller order, normalises the chosen
   field of each (a `nil` normalised value means the completion is ignored), and
@@ -8,77 +8,103 @@ defmodule Dspy.Majority do
   common one, wrapped as a `%Dspy.Prediction{}`.
   """
 
-  alias Dspy.Prediction
+  alias Dspy.{Completions, Prediction, Signature}
+
+  @type input :: [map() | Prediction.t()] | Completions.t() | Prediction.t()
 
   @doc """
   Returns the most common completion for the target field.
 
   ## Options
 
-  - `:field` — atom naming the completion key to vote on. Required unless every
-    completion has exactly one and the same key.
-  - `:normalize` — `(term() -> term()) | nil`. Default:
-    `&Dspy.Majority.default_normalize/1`. `nil` means no normalisation (identity).
+  - `:field` — choose a field explicitly. Lists accept an atom. Parsed inputs
+    accept an atom or string and use the last signature output when available.
+    Both infer the field when every row shares a sole key.
+  - `:normalize` — `(term() -> term()) | nil`. Text uses `default_normalize/1`
+    by default. Parsed inputs pass other values through by default.
+    `nil` means identity normalization.
     A normalised value of `nil` (and only `nil`) means the completion is ignored.
 
   ## Errors
 
-  Raises `ArgumentError` when the input is not a list (including a
-  `%Dspy.Prediction{}` passed as the whole input), when the list is empty, when
-  a completion lacks the chosen field, or when `:field` is missing and the
-  completions do not share one single key (the error lists the keys seen).
+  Provide a non-empty list, a `Dspy.Completions` collection, or a prediction with
+  parsed completions. An invalid input or missing voting field raises
+  `ArgumentError`. The result of a parsed vote retains the winning row and its
+  signature in a one-row parsed collection.
   """
-  @spec majority([map() | Prediction.t()], keyword()) :: Prediction.t()
-  def majority(completions, opts \\ []) do
+  @spec majority(input(), keyword()) :: Prediction.t()
+  def majority(completions, opts \\ [])
+
+  def majority(%Prediction{} = prediction, opts) do
+    case Prediction.parsed_completions(prediction) do
+      nil -> validate_list!(prediction)
+      parsed -> majority(parsed, opts)
+    end
+  end
+
+  def majority(%Completions{} = completions, opts) do
+    signature = Completions.signature(completions)
+    field = parsed_field(completions, Keyword.get(opts, :field), signature)
+    normalizer = normalizer(opts, &normalize_parsed/1)
+
+    case Completions.fetch(completions, field) do
+      {:ok, values} ->
+        normalized = Enum.map(values, normalizer)
+        winner = winning_value(normalized)
+        index = Enum.find_index(normalized, &(&1 == winner))
+        {:ok, row} = Completions.fetch(completions, index)
+        Prediction.from_completions([Prediction.to_map(row)], signature)
+
+      :error ->
+        raise ArgumentError,
+              "Dspy.majority/2: parsed completions are missing field #{inspect(field)}"
+    end
+  end
+
+  def majority(completions, opts) do
     validate_list!(completions)
     field = resolve_field(completions, Keyword.get(opts, :field))
-
-    normalizer =
-      if Keyword.has_key?(opts, :normalize) do
-        normalize_fun(Keyword.get(opts, :normalize))
-      else
-        &Dspy.Majority.default_normalize/1
-      end
+    normalizer = normalizer(opts, &default_normalize/1)
 
     normalized =
       Enum.map(completions, fn completion -> normalizer.(value_of(completion, field)) end)
 
+    winner = winning_value(normalized)
+
+    # Return the first original completion matching the winning value.
+    first_match =
+      Enum.find(completions, fn completion ->
+        normalizer.(value_of(completion, field)) == winner
+      end)
+
+    to_prediction(first_match)
+  end
+
+  defp winning_value(normalized) do
     # Only nil means "ignore this completion" — false, "", 0 and [] all vote.
-    votes =
-      Enum.reject(Enum.zip(completions, normalized), fn {_completion, value} -> is_nil(value) end)
+    votes = Enum.reject(normalized, &is_nil/1)
 
     # If every normalised value is nil, vote over all of them (the winner is nil).
-    votes = if votes == [], do: Enum.zip(completions, normalized), else: votes
+    votes = if votes == [], do: normalized, else: votes
 
     # Tally in first-appearance order: the list keeps {value, count} pairs in
     # the order each value was first seen, so max count with ties going to the
     # earliest position is correct. Do NOT "tidy" into Enum.frequencies +
     # Enum.max_by: a map loses first-appearance order and breaks ties by key
     # sort order (alphabetically).
-    winner_value =
-      votes
-      |> Enum.reduce([], fn {_completion, value}, acc ->
-        if List.keyfind(acc, value, 0) == nil do
-          [{value, 1} | acc]
-        else
-          {value, count} = List.keyfind(acc, value, 0)
-          List.replace_at(acc, index_of(acc, value), {value, count + 1})
-        end
-      end)
-      # Reverse restores first-appearance order; max_by keeps the EARLIEST
-      # max-count entry (ties by position, not value).
-      |> Enum.reverse()
-      |> Enum.max_by(fn {_value, count} -> count end)
-      |> elem(0)
-
-    # Return the FIRST original completion whose normalised value matches —
-    # the original, not the normalised value.
-    first_match =
-      Enum.find(completions, fn completion ->
-        normalizer.(value_of(completion, field)) == winner_value
-      end)
-
-    to_prediction(first_match)
+    votes
+    |> Enum.reduce([], fn value, acc ->
+      if List.keyfind(acc, value, 0) == nil do
+        [{value, 1} | acc]
+      else
+        {value, count} = List.keyfind(acc, value, 0)
+        List.replace_at(acc, index_of(acc, value), {value, count + 1})
+      end
+    end)
+    # Reverse restores first-appearance order for tie-breaking in max_by.
+    |> Enum.reverse()
+    |> Enum.max_by(fn {_value, count} -> count end)
+    |> elem(0)
   end
 
   defp validate_list!(%Prediction{} = _prediction) do
@@ -117,6 +143,16 @@ defmodule Dspy.Majority do
     end
   end
 
+  defp normalize_parsed(value) when is_binary(value), do: default_normalize(value)
+  defp normalize_parsed(value), do: value
+
+  defp normalizer(opts, default) do
+    case Keyword.fetch(opts, :normalize) do
+      {:ok, value} -> normalize_fun(value)
+      :error -> default
+    end
+  end
+
   defp normalize_fun(nil), do: fn x -> x end
   defp normalize_fun(fun) when is_function(fun, 1), do: fun
 
@@ -124,6 +160,21 @@ defmodule Dspy.Majority do
     raise ArgumentError,
           "Dspy.majority/2: :normalize must be nil or a 1-arity function, got: #{inspect(other)}"
   end
+
+  defp parsed_field(_completions, nil, %Signature{output_fields: [_ | _] = fields}),
+    do: List.last(fields).name
+
+  defp parsed_field(completions, nil, _signature) do
+    {:ok, first} = Completions.fetch(completions, 0)
+    resolve_field([first], nil)
+  end
+
+  defp parsed_field(_completions, field, _signature) when is_atom(field) or is_binary(field),
+    do: field
+
+  defp parsed_field(_completions, _field, _signature),
+    do:
+      raise(ArgumentError, "Dspy.majority/2: :field must be an atom or string for parsed inputs")
 
   defp resolve_field(_completions, field) when is_atom(field) and not is_nil(field), do: field
 
