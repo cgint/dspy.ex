@@ -4,7 +4,7 @@
 # dspy.ex checkout, without touching the consumer checkouts.
 #
 # Usage:
-#   scripts/consumer_canary.sh [--test] [consumer ...]
+#   scripts/consumer_canary.sh [--test] [--committed] [--revision=SHA] [--lock=FILE] [consumer ...]
 #
 #   consumer ...          Names of consumers to run (default: all 5).
 #                         A consumer name may also be an absolute/relative path to a
@@ -12,6 +12,11 @@
 #   --test                Additionally run `mix test` in the copy (report-only; does
 #                         not fail the canary). Network/integration tagged tests are
 #                         excluded if the consumer defines such tags.
+#   --committed           Use each app's committed HEAD and fetch its locked deps
+#                         into a new run directory. Ignore local edits and deps/.
+#   --revision=SHA        Use a specific commit instead of HEAD. Requires one app.
+#   --lock=FILE           Replay a recorded resolved lock. Requires one app and
+#                         --revision. Fail if resolution changes the lock.
 #
 # Env:
 #   CANARY_CONSUMERS_ROOT  Root dir containing the consumer checkouts
@@ -48,10 +53,18 @@ REWRITE_DIR="$CANARY_DIR/rewrites"
 ALL_CONSUMERS=(agent-coding-gui elix-live-chat third-eye-liveview finance-partner my-speech-google)
 
 RUN_TEST=0
+COMMITTED=0
+REQUESTED_REVISION=""
+REPLAY_LOCK=""
 args=()
 for arg in "$@"; do
   case "$arg" in
     --test) RUN_TEST=1 ;;
+    --committed) COMMITTED=1 ;;
+    --revision=) echo "--revision requires a commit" >&2; exit 2 ;;
+    --revision=*) COMMITTED=1; REQUESTED_REVISION="${arg#*=}" ;;
+    --lock=) echo "--lock requires a file" >&2; exit 2 ;;
+    --lock=*) REPLAY_LOCK="${arg#*=}" ;;
     -*) echo "Unknown option: $arg" >&2; exit 2 ;;
     *) args+=("$arg") ;;
   esac
@@ -62,7 +75,29 @@ else
   consumers=("${args[@]}")
 fi
 
-mkdir -p "$CANARY_DIR" "$REWRITE_DIR"
+if [ -n "$REPLAY_LOCK" ]; then
+  if [ -z "$REQUESTED_REVISION" ] || [ ! -f "$REPLAY_LOCK" ]; then
+    echo "--lock requires --revision and a readable lockfile" >&2
+    exit 2
+  fi
+  case "$REPLAY_LOCK" in
+    /*) ;;
+    *) REPLAY_LOCK="$PWD/$REPLAY_LOCK" ;;
+  esac
+fi
+
+mkdir -p "$CANARY_DIR"
+if [ "$COMMITTED" -eq 1 ]; then
+  if [ -n "$REQUESTED_REVISION" ] && [ "${#args[@]}" -ne 1 ]; then
+    echo "--revision requires exactly one consumer" >&2
+    exit 2
+  fi
+  CANARY_DIR=$(mktemp -d "$CANARY_DIR/committed.XXXXXXXX")
+  REWRITE_DIR="$CANARY_DIR/rewrites"
+  echo "Committed canary evidence: $CANARY_DIR"
+  mix --version > "$CANARY_DIR/toolchain.log"
+fi
+mkdir -p "$REWRITE_DIR"
 
 # Sanity: this repo must be a dspy checkout with mix.exs.
 if [ ! -f "$REPO_ROOT/mix.exs" ]; then
@@ -297,34 +332,83 @@ classify_warnings() {
   return 0
 }
 
+copy_for_run() {
+  local root="$1" dest="$2" revision="$3" path
+  if [ "$COMMITTED" -eq 0 ]; then
+    canary_copy "$root" "$dest"
+    return
+  fi
+
+  local paths=(mix.exs mix.lock lib test config)
+  for path in .formatter.exs rel priv; do
+    if git -C "$root" cat-file -e "$revision:$path" 2>/dev/null; then paths+=("$path"); fi
+  done
+
+  mkdir "$dest" || return
+  git -C "$root" archive "$revision" -- "${paths[@]}" \
+    ':(exclude,glob)config/**/.env*' ':(exclude,glob)config/**/*.secret.exs' \
+    ':(exclude)priv/static' | tar -xf - -C "$dest" || return
+
+  [ -f "$dest/mix.exs" ] && [ -f "$dest/mix.lock" ] && [ -f "$dest/test/test_helper.exs" ]
+}
+
+fetch_candidate_dependencies() {
+  MIX_ENV=test mix deps.get || return
+  if [ -n "$REPLAY_LOCK" ] && ! cmp -s "$REPLAY_LOCK" mix.lock; then
+    echo "The resolved lockfile differs from the requested replay lock" >&2
+    return 1
+  fi
+}
+
 run_consumer() {
   local name="$1" root="$2"
   local dest="$CANARY_DIR/$name"
   local log="$CANARY_DIR/$name.log"
   local t_start test_failed=0
 
-  if [ ! -f "$root/mix.exs" ]; then
+  if [ "$COMMITTED" -eq 0 ] && [ ! -f "$root/mix.exs" ]; then
     echo "[$name] FAIL: no mix.exs at $root"
     log_result "$name" "FAIL(no mix.exs)" ""
     return 0
   fi
 
-  local revision state git_root resolved_root
+  local revision="" state git_root resolved_root
   resolved_root=$(cd "$root" && pwd -P)
   git_root=$(git -C "$root" rev-parse --show-toplevel 2>/dev/null || true)
   if [ -n "$git_root" ] && [ "$(cd "$git_root" && pwd -P)" = "$resolved_root" ]; then
-    revision=$(git -C "$root" rev-parse HEAD)
-    if [ -n "$(git -C "$root" status --porcelain)" ]; then state=dirty; else state=clean; fi
-    echo "[$name] HEAD $revision ($state)"
+    if [ "$COMMITTED" -eq 1 ]; then
+      if ! revision=$(git -C "$root" rev-parse --verify --end-of-options "${REQUESTED_REVISION:-HEAD}^{commit}" 2>/dev/null); then
+        log_result "$name" "FAIL(invalid revision)" ""
+        return 0
+      fi
+      echo "[$name] committed snapshot $revision"
+    else
+      revision=$(git -C "$root" rev-parse HEAD)
+      if [ -n "$(git -C "$root" status --porcelain)" ]; then state=dirty; else state=clean; fi
+      echo "[$name] HEAD $revision ($state)"
+    fi
+  elif [ "$COMMITTED" -eq 1 ]; then
+    echo "[$name] FAIL: committed mode requires an app git checkout" >&2
+    log_result "$name" "FAIL(not a git checkout)" ""
+    return 0
   else
     echo "[$name] HEAD not a git checkout"
   fi
   t_start=$(date +%s)
 
   echo "[$name] allowlist copy -> $dest (root: $root)"
-  if ! canary_copy "$root" "$dest"; then
+  if ! copy_for_run "$root" "$dest" "$revision"; then
     log_result "$name" "FAIL(copy)" ""
     return 0
+  fi
+
+  if [ "$COMMITTED" -eq 1 ]; then
+    echo "[$name] source mix.lock blob $(git hash-object "$dest/mix.lock")"
+    cp "$dest/mix.lock" "$CANARY_DIR/$name.source.mix.lock"
+    if [ -n "$REPLAY_LOCK" ]; then
+      cp "$REPLAY_LOCK" "$dest/mix.lock"
+      echo "[$name] replay mix.lock blob $(git hash-object "$dest/mix.lock")"
+    fi
   fi
 
   # Rewrite the dspy dep in the COPY only.
@@ -341,7 +425,7 @@ run_consumer() {
 
   echo "[$name] MIX_ENV=test mix deps.get + mix compile --warnings-as-errors"
   if ( cd "$dest" && \
-      MIX_ENV=test mix deps.get >"$log" 2>&1 && \
+      fetch_candidate_dependencies >"$log" 2>&1 && \
       MIX_ENV=test mix compile --warnings-as-errors >>"$log" 2>&1 ); then
     echo "[$name] COMPILE OK"
     compile_ok=1
@@ -349,6 +433,14 @@ run_consumer() {
     echo "[$name] COMPILE FAILED (log: $log)"
     log_fail "$name" "$log"
     compile_ok=0
+  fi
+
+  if [ "$COMMITTED" -eq 1 ]; then
+    echo "[$name] resolved mix.lock blob $(git hash-object "$dest/mix.lock")"
+    if [ -n "$REPLAY_LOCK" ] && ! cmp -s "$REPLAY_LOCK" "$dest/mix.lock"; then
+      log_result "$name" "FAIL(lock changed)" "$log"
+      return 0
+    fi
   fi
 
   if [ "$RUN_TEST" -eq 1 ] && [ "$compile_ok" -eq 1 ]; then
@@ -372,7 +464,7 @@ run_consumer() {
     echo "[$name] classifying: baseline run with original dep (tmp/canary/$name-baseline)"
     local base="$CANARY_DIR/$name-baseline"
     local base_log="$CANARY_DIR/$name-baseline.log"
-    if ! canary_copy "$root" "$base"; then
+    if ! copy_for_run "$root" "$base" "$revision"; then
       log_result "$name" "FAIL(copy-baseline)" ""
       return 0
     fi
