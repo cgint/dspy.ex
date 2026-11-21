@@ -82,10 +82,14 @@ An exact string member takes precedence over a numeric or boolean spelling.
 Demos use JSON when literal XML would change the type of a constrained value.
 Discriminated record branches with distinct string tags support native XML
 responses and demos. The discriminator can appear anywhere in the record.
-Native XML rejects inputs that match multiple branch grammars. Discriminated
-demos with literal closing tags use JSON to preserve their contents.
-Structured fields still accept JSON inside their XML tags, including schemas
-that rely on `patternProperties` or do not declare distinct branch tags.
+Discriminated XML rejects inputs that match multiple branch grammars. Demos
+with literal closing tags use JSON to preserve their contents.
+Record-only `oneOf` and `anyOf` schemas also accept native XML without a
+discriminator. Branch constraints and shared constraints participate in
+validation. Distinct valid interpretations return an ambiguity error. Use
+explicit JSON inside the field tag to choose a value type. Demos for these
+unions carry JSON inside the tags. JSON also supports schemas that rely on
+`patternProperties`.
 
 ### Refine failure allowance
 

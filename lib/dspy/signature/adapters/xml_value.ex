@@ -1,6 +1,7 @@
 defmodule Dspy.Signature.Adapters.XMLValue do
   @moduledoc false
 
+  alias Dspy.TypedOutputs
   alias Dspy.Signature.Adapters.ChatAdapter
 
   @open_tag ~r/\A<([\p{L}_][\p{L}\p{N}\p{M}_.-]*)[ \t]*(\/?)>/u
@@ -12,7 +13,12 @@ defmodule Dspy.Signature.Adapters.XMLValue do
 
   def kind(schema) do
     schema = shape(schema)
-    if object_variants(schema), do: :discriminated, else: shape_kind(schema)
+
+    cond do
+      object_variants(schema) -> :discriminated
+      record_union_branches(schema) -> :record_union
+      true -> shape_kind(schema)
+    end
   end
 
   defp shape_kind(schema) do
@@ -56,6 +62,60 @@ defmodule Dspy.Signature.Adapters.XMLValue do
   end
 
   def object_variants(_schema), do: nil
+
+  def record_union_branches(%{"discriminator" => _}), do: nil
+  def record_union_branches(%{"allOf" => _}), do: nil
+  def record_union_branches(%{"anyOf" => _, "oneOf" => _}), do: nil
+  def record_union_branches(%{"type" => type}) when type != "object", do: nil
+
+  def record_union_branches(%{"anyOf" => choices} = schema),
+    do: record_union_branches(schema, "anyOf", choices)
+
+  def record_union_branches(%{"oneOf" => choices} = schema),
+    do: record_union_branches(schema, "oneOf", choices)
+
+  def record_union_branches(_schema), do: nil
+
+  defp record_union_branches(schema, keyword, choices) when is_integer(length(choices)) do
+    shared = Map.delete(schema, keyword)
+
+    with [_, _ | _] = branches <- Enum.reject(choices, &match?(%{"type" => "null"}, &1)),
+         true <- Enum.all?(branches, &record_branch?/1) do
+      Enum.map(branches, &{&1, merge_record_shape(shared, shape(&1))})
+    else
+      _ -> nil
+    end
+  end
+
+  defp record_union_branches(_schema, _keyword, _choices), do: nil
+
+  defp record_branch?(branch) when is_map(branch) do
+    not Enum.any?(["discriminator", "allOf", "anyOf", "oneOf"], &Map.has_key?(branch, &1)) and
+      shape_kind(shape(branch)) == :object
+  end
+
+  defp record_branch?(_branch), do: false
+
+  # Combine the declarations needed to read the XML. Keep validation on the
+  # original branch and union, where the constraints still apply independently.
+  defp merge_record_shape(shared, branch) when is_map(shared) and is_map(branch) do
+    Map.merge(shared, branch, fn
+      "properties", shared_fields, branch_fields
+      when is_map(shared_fields) and is_map(branch_fields) ->
+        Map.merge(shared_fields, branch_fields, fn _name, left, right ->
+          merge_record_shape(left, right)
+        end)
+
+      key, left, right when key in ["items", "additionalProperties"] ->
+        merge_record_shape(left, right)
+
+      _key, _left, right ->
+        right
+    end)
+  end
+
+  defp merge_record_shape(shared, true), do: shared
+  defp merge_record_shape(_shared, branch), do: branch
 
   defp object_variant(schema, property, shared) do
     object = shape(schema)
@@ -101,6 +161,7 @@ defmodule Dspy.Signature.Adapters.XMLValue do
       case kind(schema) do
         :array -> []
         :object -> %{}
+        :record_union -> %{}
         _ -> nil
       end
     end
@@ -234,9 +295,10 @@ defmodule Dspy.Signature.Adapters.XMLValue do
   def finish_items(value), do: value
 
   defp read_container(text, name, schema, boundary, ancestors) do
-    schema = shape(schema)
-    variants = object_variants(schema)
-    kind = if variants, do: :object, else: shape_kind(schema)
+    shaped = shape(schema)
+    variants = object_variants(shaped)
+    branches = record_union_branches(shaped)
+    kind = if variants || branches, do: :object, else: shape_kind(shaped)
 
     cond do
       json_container?(String.trim_leading(text), kind) ->
@@ -248,9 +310,32 @@ defmodule Dspy.Signature.Adapters.XMLValue do
       variants ->
         read_discriminated(text, name, variants, boundary, ancestors)
 
+      branches ->
+        read_record_union(text, name, {schema, branches}, boundary, ancestors)
+
       true ->
-        read_shaped_container(text, name, schema, kind, boundary, ancestors)
+        read_shaped_container(text, name, shaped, kind, boundary, ancestors)
     end
+  end
+
+  defp read_record_union(text, name, {schema, branches}, boundary, ancestors) do
+    decoded =
+      Enum.reduce_while(branches, nil, fn {branch, shaped}, selected ->
+        with {:ok, value, _rest} = candidate <-
+               read_shaped_container(text, name, shaped, :object, boundary, ancestors),
+             {:ok, _} <- TypedOutputs.validate_term(value, branch),
+             {:ok, _} <- TypedOutputs.validate_term(value, schema) do
+          case selected do
+            nil -> {:cont, candidate}
+            ^candidate -> {:cont, selected}
+            _ -> {:halt, decode_error({:ambiguous_xml_record_union, name})}
+          end
+        else
+          _ -> {:cont, selected}
+        end
+      end)
+
+    decoded || decode_error({:invalid_xml_record_union, name})
   end
 
   defp read_discriminated(text, name, {property, variants}, boundary, ancestors) do
