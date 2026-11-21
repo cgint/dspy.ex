@@ -207,6 +207,7 @@ defmodule Dspy.LM.ReqLLM do
         |> maybe_put(:n, if(request[:n] === 1, do: 1))
         |> maybe_put(:stop, request[:stop])
         |> maybe_put(:tools, request[:tools])
+        |> maybe_put(:tool_choice, request[:tool_choice])
 
       opts = Keyword.merge(lm.default_opts, request_opts)
       opts = normalize_token_limits_for_model(lm.model, opts)

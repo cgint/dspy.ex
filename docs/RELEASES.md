@@ -15,6 +15,10 @@ in request history, including their call IDs. Text-generation responses
 carry native function calls for the application to execute. Malformed tool
 messages return a local error.
 
+During text generation, set `:tool_choice` on an LM request to select a
+declared function for that call. An omitted or `nil` value uses the ReqLLM
+client's default options.
+
 ### Parallel call concurrency
 
 Pass `num_threads:` to `Dspy.Parallel.run/3` to set concurrency for that

@@ -19,6 +19,7 @@ defmodule Dspy.LM do
         }
 
   @type request :: %{
+          optional(:tool_choice) => atom() | String.t() | map() | nil,
           messages: [message()] | nil,
           max_tokens: pos_integer() | nil,
           # Some providers (OpenAI reasoning models) use max_completion_tokens instead.
