@@ -366,8 +366,9 @@ defmodule Dspy.Teleprompt.BootstrapFewShot do
   end
 
   defp forward_teacher(teacher, input, _metric) do
-    with {:ok, prediction} <- Dspy.Module.forward(teacher, input) do
-      {:ok, prediction, nil}
+    case Dspy.Module.forward(teacher, input) do
+      {:ok, prediction} -> {:ok, prediction, nil}
+      {:error, _reason} = error -> error
     end
   end
 
