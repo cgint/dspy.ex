@@ -283,6 +283,28 @@ defmodule DspyReqLLMAdapterTest do
     refute_received {:req_llm_call, _, _, _}
   end
 
+  test "typed schema and capability failures can fall back to text generation" do
+    lm = native_lm()
+
+    for reason <- [
+          ReqLLM.Error.Invalid.Schema.exception(reason: "invalid schema"),
+          ReqLLM.Error.Invalid.Capability.exception(missing: [:structured_output]),
+          ReqLLM.Error.API.SchemaValidation.exception(errors: ["missing field"])
+        ] do
+      Process.put(ScriptedGeneration, [{:error, reason}])
+
+      assert {:ok, response} =
+               Dspy.LM.generate(lm, %{prompt: "q", output_contract: %{"type" => "object"}})
+
+      assert_received :native_attempt
+      assert_received {:req_llm_call, "google:gemini", "q", _}
+      assert get_in(response, [:choices, Access.at(0), :message, :content]) == "hi"
+    end
+
+    refute_received :native_attempt
+    refute_received {:req_llm_call, _, _, _}
+  end
+
   test "native authentication and ambiguous bad requests return the original error" do
     program = native_predictor(max_retries: 3)
 
@@ -300,17 +322,18 @@ defmodule DspyReqLLMAdapterTest do
   end
 
   defp native_predictor(opts) do
-    lm =
-      Dspy.LM.ReqLLM.new(
-        model: "google:gemini",
-        generation_module: ScriptedGeneration,
-        client_module: FakeReqLLM,
-        context_module: FakeContext,
-        response_module: FakeResponse
-      )
-
-    opts = [lm: lm, adapter: Dspy.Signature.Adapters.JSONAdapter] ++ opts
+    opts = [lm: native_lm(), adapter: Dspy.Signature.Adapters.JSONAdapter] ++ opts
     Dspy.predict("question -> result", opts)
+  end
+
+  defp native_lm do
+    Dspy.LM.ReqLLM.new(
+      model: "google:gemini",
+      generation_module: ScriptedGeneration,
+      client_module: FakeReqLLM,
+      context_module: FakeContext,
+      response_module: FakeResponse
+    )
   end
 
   test "unsupported provider uses text fallback rather than native generation" do

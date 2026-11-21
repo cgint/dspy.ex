@@ -15,10 +15,11 @@ generation retry budget. Authentication and other known permanent failures
 return after the first generation attempt. Opaque custom LM errors still use
 the configured budget. Failures return their original reason terms.
 
-ReqLLM structured generation uses text fallback for explicit schema or
-capability errors. Retry logs count generation attempts in order. ReqLLM
-also manages HTTP retries inside each generation attempt, with a separate
-budget that depends on the provider.
+ReqLLM structured generation uses text fallback for `:unsupported_schema`
+and ReqLLM's `Invalid.Schema`, `Invalid.Capability`, and
+`API.SchemaValidation` errors. Provider HTTP errors stay on the structured
+route. Retry logs count generation attempts in order. ReqLLM also manages
+HTTP retries inside each generation attempt, with a provider-specific budget.
 
 ### Metric function arity
 
