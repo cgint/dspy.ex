@@ -12,29 +12,36 @@ defmodule Dspy.Signature.Adapters.XMLAdapter do
   alias Dspy.{Attrs, Example, History, Signature, TypedOutputs}
   alias Dspy.Signature.Adapters.ChatAdapter
 
-  @open_tag ~r/\A<([A-Za-z_][A-Za-z0-9_.-]*)[ \t]*(\/?)>/
-  @fenced ~r/\A```(?:xml)?[ \t]*\r?\n(.*)\r?\n```[ \t]*\z/s
+  @open_tag ~r/\A<([\p{L}_][\p{L}\p{N}\p{M}_.-]*)[ \t]*(\/?)>/u
+  @fenced ~r/\A```(?:xml)?[ \t]*\r?\n(.*)\r?\n```[ \t]*(?:\r?\n[^<]*)?\z/s
   @reasoning ~r/\A<(think|thinking)>/
   @opening_newline ~r/\A[ \t]*\r?\n/
   @closing_newline ~r/\r?\n[ \t]*\z/
 
   @impl true
   def format_instructions(%Signature{} = signature, _opts \\ []) do
-    formats =
-      Enum.map_join(signature.output_fields, "\n", fn field ->
-        name = Atom.to_string(field.name)
+    case Enum.reject(signature.output_fields, &(&1.type == :tool_calls)) do
+      [] ->
+        ""
 
-        value =
-          if field.type == :json or Map.has_key?(field, :schema),
-            do: "JSON value",
-            else: "#{field.type} value"
-
-        "<#{name}>{#{value}}</#{name}>"
-      end)
-
-    "Return the XML field tags shown below. Put string values inside their tags literally.\n" <>
-      "Use a self-closing tag for a null optional value.\n" <> formats
+      fields ->
+        "Return the XML field tags shown below. Put string values inside their tags literally.\n" <>
+          "Use a self-closing tag for a null optional value.\n" <>
+          Enum.map_join(fields, "\n", &field_instruction/1)
+    end
   end
+
+  defp field_instruction(%{name: name, schema: schema}) do
+    tag = "<#{name}>{JSON value}</#{name}>"
+
+    case TypedOutputs.prompt_schema_json(schema) do
+      {:ok, json} -> tag <> "\nJSON schema for #{name}: #{json}"
+      {:error, _} -> tag
+    end
+  end
+
+  defp field_instruction(%{name: name, type: :json}), do: "<#{name}>{JSON value}</#{name}>"
+  defp field_instruction(%{name: name, type: type}), do: "<#{name}>{#{type} value}</#{name}>"
 
   @impl true
   def format_request(%Signature{} = signature, inputs, demos, opts \\ []) do
@@ -97,7 +104,8 @@ defmodule Dspy.Signature.Adapters.XMLAdapter do
   def parse_outputs(%Signature{} = signature, text, _opts \\ []) when is_binary(text) do
     fields = Map.new(signature.output_fields, &{Atom.to_string(&1.name), &1})
 
-    with {:ok, text} <- unwrap_completion(String.trim(text), fields),
+    with true <- String.valid?(text),
+         {:ok, text} <- unwrap_completion(String.trim(text), fields),
          {:ok, outputs} <- parse_fields(text, fields, %{}) do
       missing =
         for field <- signature.output_fields,
@@ -108,6 +116,9 @@ defmodule Dspy.Signature.Adapters.XMLAdapter do
         [] -> add_defaults(signature.output_fields, outputs)
         names -> {:error, {:missing_required_outputs, names}}
       end
+    else
+      false -> decode_error(:invalid_xml_encoding)
+      {:error, _} = error -> error
     end
   end
 
@@ -128,18 +139,18 @@ defmodule Dspy.Signature.Adapters.XMLAdapter do
         end
 
       _ ->
-        unwrap_fence(text)
+        unwrap_fence(text, fields)
     end
   end
 
-  defp unwrap_fence(<<"```", _::binary>> = text) do
+  defp unwrap_fence(<<"```", _::binary>> = text, fields) do
     case Regex.run(@fenced, text) do
-      [_, content] -> {:ok, String.trim(content)}
+      [_, content] -> unwrap_completion(String.trim(content), fields)
       _ -> decode_error(:invalid_xml_fence)
     end
   end
 
-  defp unwrap_fence(text) do
+  defp unwrap_fence(text, _fields) do
     case :binary.match(text, "<") do
       {offset, _} -> {:ok, binary_part(text, offset, byte_size(text) - offset)}
       :nomatch -> {:ok, ""}
@@ -179,7 +190,20 @@ defmodule Dspy.Signature.Adapters.XMLAdapter do
   defp read_value(text, name, "", fields) do
     # A literal closing tag inside code is not a boundary unless a sibling
     # field or the end of the completion follows it.
-    candidates = :binary.matches(text, "</#{name}>")
+    escaped_name = Regex.escape(name)
+
+    close =
+      if Regex.match?(@opening_newline, text) do
+        "</#{escaped_name}[ \\t]*>(?=[ \\t]*(?:\\r?\\n|\\z))"
+      else
+        "</#{escaped_name}\\s*>"
+      end
+
+    candidates =
+      close
+      |> Regex.compile!()
+      |> Regex.scan(text, return: :index, capture: :first)
+      |> Enum.map(fn [position] -> position end)
 
     boundary =
       Enum.find(candidates, fn {offset, length} ->

@@ -71,6 +71,58 @@ defmodule Dspy.Signature.XMLAdapterTest do
 
     assert {:error, {:invalid_output_value, :result, {:output_validation_failed, _}}} =
              XMLAdapter.parse_outputs(signature, "<result>{\"count\":\"x\"}</result>")
+
+    instructions = XMLAdapter.format_instructions(signature)
+    assert instructions =~ ~s("count")
+    assert instructions =~ ~s("integer")
+  end
+
+  test "accepts a fenced preamble and trailing prose" do
+    completion = """
+    ```xml
+    <think>consider this</think>
+    Here is the answer:
+    <answer>yes</answer>
+    <count>2</count>
+    ```
+
+    Let me know if you have questions.
+    """
+
+    assert %{answer: "yes", count: 2} = XMLAdapter.parse_outputs(QA.signature(), completion)
+  end
+
+  test "keeps an inline closing tag and apparent sibling inside a multiline value" do
+    completion = """
+    <answer>
+    Literal </answer><count>99</count>
+    body
+    </answer >
+    <count>2</count>
+    """
+
+    assert %{answer: "Literal </answer><count>99</count>\nbody", count: 2} =
+             XMLAdapter.parse_outputs(QA.signature(), completion)
+  end
+
+  test "matches declared Unicode tag names" do
+    signature = QA.signature()
+    [answer | rest] = signature.output_fields
+    signature = %{signature | output_fields: [%{answer | name: :réponse} | rest]}
+
+    assert %{réponse: "oui", count: 2} =
+             XMLAdapter.parse_outputs(signature, "<réponse>oui</réponse><count>2</count>")
+  end
+
+  test "only text outputs are requested as XML tags" do
+    signature = QA.signature()
+    tool_field = %{name: :tool_calls, type: :tool_calls, required: true, default: nil}
+    mixed = %{signature | output_fields: [tool_field | signature.output_fields]}
+
+    instructions = XMLAdapter.format_instructions(mixed)
+    assert instructions =~ "<answer>"
+    refute instructions =~ "<tool_calls>"
+    assert XMLAdapter.format_instructions(%{mixed | output_fields: [tool_field]}) == ""
   end
 
   test "distinguishes a self-closing optional field and empty text" do
