@@ -123,6 +123,12 @@ defmodule Dspy.Embedder do
       {:encoding_format, value} when value in ["base64", :base64] ->
         raise ArgumentError, "encoding_format must return numeric embeddings"
 
+      {:provider_options, options}
+      when (is_map(options) and not is_struct(options)) or is_integer(length(options)) ->
+        if Enum.any?(options, &base64_encoding_option?/1) do
+          raise ArgumentError, "provider_options encoding_format must return numeric embeddings"
+        end
+
       _option ->
         :ok
     end)
@@ -132,6 +138,11 @@ defmodule Dspy.Embedder do
     do: raise(ArgumentError, "embedding model options require a two-argument function")
 
   defp validate_model_options!(_model, _opts), do: :ok
+
+  defp base64_encoding_option?({key, value}),
+    do: key in [:encoding_format, "encoding_format"] and value in ["base64", :base64]
+
+  defp base64_encoding_option?(_option), do: false
 
   defp split_options!(opts, default_batch_size) do
     unless Keyword.keyword?(opts),

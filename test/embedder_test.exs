@@ -118,6 +118,33 @@ defmodule Dspy.EmbedderTest do
     refute_received {:batch, _, _, _}
   end
 
+  test "hosted provider options cannot request base64 vectors" do
+    model = "azure:text-embedding-3-small"
+    embedder = Embedder.new(model, req_llm: RecordingClient, deployment: "test")
+
+    for provider_opts <- [[encoding_format: "base64"], %{encoding_format: "base64"}] do
+      opts = [provider_options: provider_opts]
+
+      assert_raise ArgumentError, ~r/encoding_format/, fn -> Embedder.new(model, opts) end
+
+      assert_raise ArgumentError, ~r/encoding_format/, fn ->
+        Embedder.embed(embedder, [], opts)
+      end
+
+      assert_raise ArgumentError, ~r/encoding_format/, fn ->
+        Embedder.embed(embedder, "a", opts)
+      end
+    end
+
+    refute_received {:batch, _, _, _}
+
+    assert Embedder.embed(embedder, "a", provider_options: [encoding_format: "float"]) ==
+             {:ok, [1, 1.0]}
+
+    assert_receive {:batch, ^model, ["a"], opts}
+    assert opts[:provider_options] == [encoding_format: "float"]
+  end
+
   test "wrong counts or dimensions return a structured error instead of partial embeddings" do
     short = Embedder.new(fn _ -> [[0.0]] end)
 
