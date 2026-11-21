@@ -70,6 +70,39 @@ defmodule Dspy.Signature.Adapters.XMLValue do
   def shape(%{"oneOf" => choices} = schema) when is_list(choices), do: unwrap(schema, choices)
   def shape(schema), do: schema
 
+  def literal_members(schema) do
+    case shape(schema) do
+      %{"const" => value} ->
+        Enum.filter([value], &scalar_literal?/1)
+
+      %{"enum" => values} when is_integer(length(values)) ->
+        Enum.filter(values, &scalar_literal?/1)
+
+      _ ->
+        []
+    end
+  end
+
+  defp scalar_literal?(value),
+    do: is_binary(value) or is_number(value) or is_boolean(value) or is_nil(value)
+
+  def literal_value(raw, schema) do
+    members = literal_members(schema)
+
+    if members == [] or raw in members do
+      raw
+    else
+      case decode_literal(raw) do
+        {:ok, value} -> if Enum.any?(members, &(&1 == value)), do: value, else: raw
+        {:error, _reason} -> raw
+      end
+    end
+  end
+
+  defp decode_literal("True"), do: {:ok, true}
+  defp decode_literal("False"), do: {:ok, false}
+  defp decode_literal(raw), do: Jason.decode(raw)
+
   defp unwrap(schema, choices) do
     case Enum.reject(choices, &match?(%{"type" => "null"}, &1)) do
       [choice] -> shape(choice)
@@ -299,7 +332,8 @@ defmodule Dspy.Signature.Adapters.XMLValue do
   end
 
   defp cast_scalar("null", %{"type" => "null"}, _name), do: {:ok, nil}
-  defp cast_scalar(raw, _schema, _name), do: {:ok, raw}
+  defp cast_scalar(raw, %{"type" => "string"}, _name), do: {:ok, raw}
+  defp cast_scalar(raw, schema, _name), do: {:ok, literal_value(raw, schema)}
 
   defp nullable?(%{"type" => "null"}), do: true
   defp nullable?(%{"type" => types}) when is_list(types), do: "null" in types

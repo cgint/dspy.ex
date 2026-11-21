@@ -109,6 +109,27 @@ defmodule Dspy.Signature.XMLAdapterTest do
     )
   end
 
+  defmodule LiteralRecord do
+    use JSV.Schema
+
+    defschema(%{
+      type: :object,
+      properties: %{
+        code: %{enum: [-1, 2]},
+        urgent: %{anyOf: [%{const: false}, %{type: :null}]},
+        choice: %{enum: [2, "2"]},
+        flag: %{enum: [true, "True"]}
+      },
+      required: [:code, :urgent, :choice, :flag]
+    })
+  end
+
+  defmodule Literals do
+    use Dspy.Signature
+
+    output_field(:record, :json, "Typed literals", schema: LiteralRecord)
+  end
+
   test "parses typed fields and treats markup and closing-tag literals as text" do
     body = "```elixir\nif x < y, do: \"</answer> & R&B\"\n```"
 
@@ -142,6 +163,50 @@ defmodule Dspy.Signature.XMLAdapterTest do
     demo = Dspy.Example.new(%{question: "Example", result: %Result{count: 5}})
     request = XMLAdapter.format_request(signature, %{question: "New question"}, [demo])
     assert List.last(request.messages).content =~ "<result>\n<count>\n5\n</count>\n</result>"
+  end
+
+  test "Predict accepts native enum and const leaves and prefers exact string members" do
+    completion = """
+    <record>
+    <code>2</code><urgent>False</urgent><choice>2</choice><flag>True</flag>
+    </record>
+    """
+
+    expected = %LiteralRecord{code: 2, urgent: false, choice: "2", flag: "True"}
+    predictor = Dspy.Predict.new(Literals, lm: recording_lm([completion]), adapter: XMLAdapter)
+
+    assert {:ok, %Dspy.Prediction{attrs: %{record: ^expected}}} =
+             Dspy.call(predictor, %{})
+
+    assert_received {:xml_request, %{messages: [%{content: instructions}, _]}}
+    assert instructions =~ "<urgent>\nfalse\n</urgent>"
+    assert instructions =~ "<code>\none of (-1, 2)\n</code>"
+
+    assert {:error, {:invalid_output_value, :record, {:output_validation_failed, _}}} =
+             XMLAdapter.parse_outputs(
+               Literals.signature(),
+               String.replace(completion, "<code>2</code>", "<code>7</code>")
+             )
+  end
+
+  test "literal demos use native XML when unambiguous and retain JSON for an ambiguous number" do
+    record = %LiteralRecord{code: -1, urgent: false, choice: "2", flag: true}
+
+    for value <- [record, %{record | choice: 2}] do
+      demo = Dspy.Example.new(%{record: value})
+      request = XMLAdapter.format_request(Literals.signature(), %{}, [demo])
+      [_, rendered] = Regex.run(~r/(<record>.*<\/record>)/s, List.last(request.messages).content)
+
+      if is_binary(value.choice) do
+        assert rendered =~ "<code>\n-1\n</code>"
+        assert rendered =~ "<urgent>\nfalse\n</urgent>"
+        assert rendered =~ "<flag>\ntrue\n</flag>"
+      else
+        assert rendered =~ ~s("choice":2)
+      end
+
+      assert %{record: ^value} = XMLAdapter.parse_outputs(Literals.signature(), rendered)
+    end
   end
 
   test "Predict parses nested records and lists and replays the typed value as XML" do

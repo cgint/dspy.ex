@@ -212,9 +212,14 @@ defmodule Dspy.Signature.Adapters.XMLAdapter do
       %{"type" => "integer"} -> is_integer(value)
       %{"type" => "number"} -> is_number(value)
       %{"type" => "boolean"} -> is_boolean(value)
-      shaped -> XMLValue.kind(shaped) in [:object, :array]
+      shaped -> XMLValue.kind(shaped) in [:object, :array] or literal_round_trip?(value, shaped)
     end
   end
+
+  defp literal_round_trip?(value, schema) when is_number(value) or is_boolean(value),
+    do: XMLValue.literal_value(render_json(value), schema) === value
+
+  defp literal_round_trip?(_value, _schema), do: false
 
   defp sample_value(schema) do
     case XMLValue.kind(schema) do
@@ -238,10 +243,24 @@ defmodule Dspy.Signature.Adapters.XMLAdapter do
         end
 
       :leaf ->
+        sample_leaf(schema)
+    end
+  end
+
+  defp sample_leaf(schema) do
+    case XMLValue.literal_members(schema) do
+      [] ->
         case XMLValue.shape(schema) do
           %{"type" => type} when is_binary(type) -> "{#{type} value}"
           _ -> "{JSON value}"
         end
+
+      [value] ->
+        value
+
+      values ->
+        choices = Enum.map_join(values, ", ", &render_json/1)
+        "one of (#{choices})"
     end
   end
 

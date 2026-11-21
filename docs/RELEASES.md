@@ -20,6 +20,9 @@ Declared lists also accept repeated field tags in encounter order, including
 repeated dictionary keys. Use a single wrapper, a JSON array, or repeated
 item tags per list field. Put literal strings such as `[draft]`, the empty
 string, and `null` on nullable lists inside explicit `<item>` tags.
+Nested scalar `enum` and `const` leaves support numeric and boolean literals.
+An exact string member takes precedence over a numeric or boolean spelling.
+Demos use JSON when literal XML would change the type of a constrained value.
 Structured fields still accept JSON inside their XML tags, including schemas
 that rely on `patternProperties` or have multiple non-null branches.
 
