@@ -11,7 +11,12 @@ defmodule Dspy.Signature.Adapters.XMLValue do
   @scalar_types %{"integer" => :integer, "number" => :number, "boolean" => :boolean}
 
   def kind(schema) do
-    case shape(schema) do
+    schema = shape(schema)
+    if object_variants(schema), do: :discriminated, else: shape_kind(schema)
+  end
+
+  defp shape_kind(schema) do
+    case schema do
       %{"type" => "array"} = array ->
         array_kind(array)
 
@@ -29,6 +34,37 @@ defmodule Dspy.Signature.Adapters.XMLValue do
 
       _ ->
         :leaf
+    end
+  end
+
+  def object_variants(%{"discriminator" => %{"propertyName" => property}} = schema)
+      when is_binary(property) and property != "" do
+    choices = Map.get(schema, "oneOf", Map.get(schema, "anyOf"))
+
+    with true <- is_integer(length(choices)),
+         [_, _ | _] = objects <- Enum.reject(choices, &match?(%{"type" => "null"}, &1)),
+         variants = Enum.map(objects, &object_variant(&1, property)),
+         true <- Enum.all?(variants, &match?({[_ | _], _}, &1)),
+         tags = Enum.flat_map(variants, &elem(&1, 0)),
+         true <- length(tags) == length(Enum.uniq(tags)) do
+      {property, variants}
+    else
+      _ -> nil
+    end
+  end
+
+  def object_variants(_schema), do: nil
+
+  defp object_variant(schema, property) do
+    object = shape(schema)
+
+    with :object <- shape_kind(object),
+         {:ok, tag} <- property_schema(object, property),
+         [_ | _] = members <- literal_members(tag),
+         true <- Enum.all?(members, &is_binary/1) do
+      {members, object}
+    else
+      _ -> nil
     end
   end
 
@@ -57,7 +93,7 @@ defmodule Dspy.Signature.Adapters.XMLValue do
       case kind(schema) do
         :array -> []
         :object -> %{}
-        :leaf -> nil
+        _ -> nil
       end
     end
   end
@@ -191,33 +227,57 @@ defmodule Dspy.Signature.Adapters.XMLValue do
 
   defp read_container(text, name, schema, boundary, ancestors) do
     schema = shape(schema)
-    kind = kind(schema)
+    variants = object_variants(schema)
+    kind = if variants, do: :object, else: shape_kind(schema)
+
+    cond do
+      json_container?(String.trim_leading(text), kind) ->
+        with {:ok, raw, rest} <- read_literal(text, name, boundary, ancestors, false, :json),
+             {:ok, decoded} <- decode_json(raw, name) do
+          {:ok, decoded, rest}
+        end
+
+      variants ->
+        read_discriminated(text, name, variants, boundary, ancestors)
+
+      true ->
+        read_shaped_container(text, name, schema, kind, boundary, ancestors)
+    end
+  end
+
+  defp read_discriminated(text, name, {property, variants}, boundary, ancestors) do
+    Enum.reduce_while(variants, decode_error({:invalid_xml_discriminator, name, property}), fn
+      {tags, branch}, invalid ->
+        with {:ok, value, rest} <-
+               read_shaped_container(text, name, branch, :object, boundary, ancestors),
+             true <- Map.get(value, property) in tags do
+          {:halt, {:ok, value, rest}}
+        else
+          _ -> {:cont, invalid}
+        end
+    end)
+  end
+
+  defp read_shaped_container(text, name, schema, kind, boundary, ancestors) do
     closer = Regex.compile!("\\A" <> close_pattern(name))
 
-    if json_container?(String.trim_leading(text), kind) do
-      with {:ok, raw, rest} <- read_literal(text, name, boundary, ancestors, false, :json),
-           {:ok, decoded} <- decode_json(raw, name) do
-        {:ok, decoded, rest}
+    scope = fn remainder ->
+      case Regex.run(closer, remainder) do
+        [tag] -> boundary.(String.trim_leading(after_offset(remainder, byte_size(tag))))
+        nil -> false
       end
-    else
-      scope = fn remainder ->
-        case Regex.run(closer, remainder) do
-          [tag] -> boundary.(String.trim_leading(after_offset(remainder, byte_size(tag))))
-          nil -> false
-        end
-      end
+    end
 
-      child_boundary = fn remainder ->
-        scope.(remainder) or child_tag?(remainder, schema, kind)
-      end
+    child_boundary = fn remainder ->
+      scope.(remainder) or child_tag?(remainder, schema, kind)
+    end
 
-      scopes = [{name, scope} | ancestors]
-      initial = if kind == :array, do: {[], 0}, else: %{}
+    scopes = [{name, scope} | ancestors]
+    initial = if kind == :array, do: {[], 0}, else: %{}
 
-      with {:ok, value, rest} <-
-             read_children(text, schema, closer, child_boundary, scopes, initial) do
-        close_result(value, rest, name)
-      end
+    with {:ok, value, rest} <-
+           read_children(text, schema, closer, child_boundary, scopes, initial) do
+      close_result(value, rest, name)
     end
   end
 

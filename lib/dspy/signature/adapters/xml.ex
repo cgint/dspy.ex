@@ -135,12 +135,38 @@ defmodule Dspy.Signature.Adapters.XMLAdapter do
     body =
       case XMLValue.kind(schema) do
         :object when is_map(value) -> render_object(value, XMLValue.shape(schema))
+        :discriminated when is_map(value) -> render_discriminated(value, schema)
         :array when is_integer(length(value)) -> render_array(value, XMLValue.shape(schema))
         _ when is_binary(value) -> value
         _ -> render_json(value)
       end
 
     "<#{name}#{attributes}>\n#{body}\n</#{name}>"
+  end
+
+  defp render_discriminated(value, schema) do
+    {property, variants} = XMLValue.object_variants(XMLValue.shape(schema))
+    tag = discriminator_value(value, property)
+
+    case Enum.find(variants, fn {tags, _branch} -> tag in tags end) do
+      {_tags, branch} -> render_object(value, branch)
+      nil -> render_container_json(value)
+    end
+  end
+
+  defp discriminator_value(value, property) do
+    case Map.fetch(value, property) do
+      {:ok, tag} ->
+        tag
+
+      :error ->
+        value
+        |> Map.to_list()
+        |> Enum.find_value(fn
+          {key, tag} when is_atom(key) -> if Atom.to_string(key) == property, do: tag
+          _ -> nil
+        end)
+    end
   end
 
   defp render_object(value, schema) do
@@ -239,7 +265,7 @@ defmodule Dspy.Signature.Adapters.XMLAdapter do
       %{"type" => "integer"} -> is_integer(value)
       %{"type" => "number"} -> is_number(value)
       %{"type" => "boolean"} -> is_boolean(value)
-      shaped -> XMLValue.kind(shaped) in [:object, :array]
+      shaped -> XMLValue.kind(shaped) in [:object, :array, :discriminated]
     end
   end
 
@@ -263,6 +289,10 @@ defmodule Dspy.Signature.Adapters.XMLAdapter do
           %{"prefixItems" => [_ | _] = items} -> Enum.map(items, &sample_value/1)
           schema -> [sample_value(XMLValue.item_schema(schema, 0))]
         end
+
+      :discriminated ->
+        {property, [{[tag | _], branch} | _]} = XMLValue.object_variants(XMLValue.shape(schema))
+        Map.put(sample_value(branch), property, tag)
 
       :leaf ->
         sample_leaf(schema)
@@ -288,7 +318,7 @@ defmodule Dspy.Signature.Adapters.XMLAdapter do
 
   defp container_schema(%{schema: spec}) do
     with {:ok, schema} <- TypedOutputs.native_schema(spec),
-         kind when kind in [:object, :array] <- XMLValue.kind(schema) do
+         kind when kind in [:object, :array, :discriminated] <- XMLValue.kind(schema) do
       schema
     else
       _ -> nil

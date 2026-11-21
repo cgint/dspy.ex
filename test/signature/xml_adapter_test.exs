@@ -133,6 +133,54 @@ defmodule Dspy.Signature.XMLAdapterTest do
     output_field(:record, :json, "Typed literals", schema: LiteralRecord)
   end
 
+  defmodule Cat do
+    use JSV.Schema
+
+    defschema(%{
+      type: :object,
+      properties: %{kind: %{const: "cat"}, name: string()},
+      required: [:kind, :name],
+      additionalProperties: false
+    })
+  end
+
+  defmodule Dog do
+    use JSV.Schema
+
+    defschema(%{
+      type: :object,
+      properties: %{
+        kind: %{enum: ["dog", "puppy"]},
+        tricks: %{type: :array, items: string()},
+        nickname: %{type: [:string, :null]}
+      },
+      required: [:kind, :tricks, :nickname],
+      additionalProperties: false
+    })
+  end
+
+  defmodule Pet do
+    def schema do
+      %{oneOf: [Cat, Dog], discriminator: %{propertyName: "kind"}}
+    end
+  end
+
+  defmodule Owner do
+    use JSV.Schema
+
+    defschema(%{
+      type: :object,
+      properties: %{pet: Pet.schema()},
+      required: [:pet]
+    })
+  end
+
+  defmodule Owners do
+    use Dspy.Signature
+
+    output_field(:owner, :json, "Cat or dog owner", schema: Owner)
+  end
+
   test "parses typed fields and treats markup and closing-tag literals as text" do
     body = "```elixir\nif x < y, do: \"</answer> & R&B\"\n```"
 
@@ -201,6 +249,74 @@ defmodule Dspy.Signature.XMLAdapterTest do
                Literals.signature(),
                String.replace(completion, "<code>2</code>", "<code>7</code>")
              )
+  end
+
+  test "Predict selects a nested record branch after reading its later discriminator" do
+    completion =
+      "<owner><pet><tricks>sit</tricks><tricks>fetch</tricks><nickname />" <>
+        "<kind>puppy</kind></pet></owner>"
+
+    expected = %Owner{pet: %Dog{kind: "puppy", tricks: ["sit", "fetch"], nickname: nil}}
+    predictor = Dspy.Predict.new(Owners, lm: recording_lm([completion]), adapter: XMLAdapter)
+
+    assert {:ok, %Dspy.Prediction{attrs: %{owner: ^expected}}} =
+             Dspy.call(predictor, %{})
+
+    assert_received {:xml_request, %{messages: [%{content: instructions}, _]}}
+    assert instructions =~ "<pet>\n<kind>\ncat\n</kind>"
+
+    assert %{owner: ^expected} =
+             XMLAdapter.parse_outputs(
+               Owners.signature(),
+               ~s(<owner><pet>{"kind":"puppy","tricks":["sit","fetch"],"nickname":null}</pet></owner>)
+             )
+
+    for pet <- [
+          "<tricks>sit</tricks><nickname /><kind>unknown</kind>",
+          "<tricks>sit</tricks><nickname />",
+          "<tricks>sit</tricks><nickname /><kind>cat</kind>"
+        ] do
+      assert {:error, {:output_decode_failed, {:invalid_xml_discriminator, "pet", "kind"}}} =
+               XMLAdapter.parse_outputs(Owners.signature(), "<owner><pet>#{pet}</pet></owner>")
+    end
+  end
+
+  test "discriminated record demos round-trip as XML with their typed fields" do
+    pets = [
+      %Cat{kind: "cat", name: "Milo"},
+      %Dog{kind: "dog", tricks: ["sit", "fetch"], nickname: nil}
+    ]
+
+    for pet <- pets do
+      owner = %Owner{pet: pet}
+      demo = Dspy.Example.new(%{owner: owner})
+      request = XMLAdapter.format_request(Owners.signature(), %{}, [demo])
+      [_, rendered] = Regex.run(~r/(<owner>.*<\/owner>)/s, List.last(request.messages).content)
+
+      assert rendered =~ "<kind>\n#{pet.kind}\n</kind>"
+      assert %{owner: ^owner} = XMLAdapter.parse_outputs(Owners.signature(), rendered)
+
+      assert %{owner: ^owner} =
+               XMLAdapter.parse_outputs(Owners.signature(), String.replace(rendered, "\n", ""))
+    end
+  end
+
+  test "a top-level discriminated object can use anyOf and still accepts JSON" do
+    signature = Owners.signature()
+    [field] = signature.output_fields
+    {branches, schema} = Map.pop!(Pet.schema(), :oneOf)
+    schema = Map.put(schema, :anyOf, branches)
+    signature = %{signature | output_fields: [%{field | schema: schema}]}
+    expected = %Cat{kind: "cat", name: "Milo"}
+
+    assert %{owner: ^expected} =
+             XMLAdapter.parse_outputs(
+               signature,
+               "<owner><name>Milo</name><kind>cat</kind></owner>"
+             )
+
+    assert %{owner: ^expected} =
+             XMLAdapter.parse_outputs(signature, ~s(<owner>{"kind":"cat","name":"Milo"}</owner>))
   end
 
   test "literal demos use native XML when unambiguous and retain typed JSON for collisions" do
