@@ -116,6 +116,7 @@ defmodule Dspy.Predict do
              lm: Map.get(predict, :lm),
              forced_tool: Map.get(predict, :forced_tool),
              config: get_config(predict),
+             prompt_advice: Dspy.Refine.Advice.binding(predict),
              callbacks: predict.callbacks,
              max_retries: predict.max_retries,
              max_output_retries: predict.max_output_retries

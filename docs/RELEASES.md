@@ -8,6 +8,17 @@ This repo ships in **small, user-usable slices**.
 
 ## Consumer notes
 
+### Opt-in Refine feedback
+
+`Dspy.Refine.new/2` accepts `feedback_lm:`. A scored attempt below the
+threshold can send a bounded report of declared fields to that LM when
+another attempt remains. Declared text may be sensitive. The report uses
+placeholders for images, attachments and tool data. The advisor has five
+seconds to respond. Valid advice applies to the addressed predictor slots
+for the next attempt, including their output retries. Advisor failures
+leave the program's failure allowance available. The offline example
+covers both Refine feedback and structured ReAct.
+
 ### Opt-in structured ReAct
 
 `Dspy.ReAct.new/3` accepts `mode: :structured` with ChatAdapter and supported

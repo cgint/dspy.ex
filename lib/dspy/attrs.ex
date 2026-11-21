@@ -38,7 +38,10 @@ defmodule Dspy.Attrs do
           {:ok, term()} | :error
   def fetch(%{attrs: attrs}, key) when is_map(attrs), do: fetch(attrs, key)
 
-  def fetch(attrs, key) when is_map(attrs) do
+  def fetch(attrs, key) when is_map(attrs), do: fetch_map(attrs, key)
+
+  @doc false
+  def fetch_map(attrs, key) when is_map(attrs) do
     case existing_key(attrs, key) do
       nil -> :error
       actual_key -> {:ok, Map.get(attrs, actual_key)}

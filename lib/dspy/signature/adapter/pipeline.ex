@@ -12,6 +12,7 @@ defmodule Dspy.Signature.Adapter.Pipeline do
   """
 
   alias Dspy.{Lifecycle, LM, Prediction, PredictorConfig, Settings, Signature}
+  alias Dspy.Refine.Advice
   alias Dspy.Signature.Adapter.Callbacks
   alias Dspy.Signature.AdapterPipeline
   require Logger
@@ -23,6 +24,7 @@ defmodule Dspy.Signature.Adapter.Pipeline do
           adapter: module() | nil,
           lm: Dspy.LM.t() | nil,
           forced_tool: String.t() | nil,
+          prompt_advice: Advice.binding(),
           config: PredictorConfig.t(),
           prediction_signature: Signature.t(),
           callbacks: Callbacks.callbacks(),
@@ -68,6 +70,7 @@ defmodule Dspy.Signature.Adapter.Pipeline do
       prediction_signature: Keyword.get(opts, :prediction_signature, signature),
       max_retries: Keyword.get(opts, :max_retries, 3),
       request_options: force_tool(request_options, Keyword.get(opts, :forced_tool)),
+      prompt_advice: Keyword.get(opts, :prompt_advice),
       cache_options: cache_options
     }
 
@@ -203,6 +206,19 @@ defmodule Dspy.Signature.Adapter.Pipeline do
         request,
         base_prompt
       )
+    end
+  end
+
+  defp append_advice(request, binding) do
+    case Advice.text(binding) do
+      nil ->
+        {:ok, request}
+
+      advice ->
+        with {:ok, prompt} <- AdapterPipeline.primary_prompt_text(request) do
+          advised = prompt <> "\n\n[Refine feedback]\n" <> advice <> "\n[/Refine feedback]"
+          AdapterPipeline.replace_primary_prompt_text(request, advised)
+        end
     end
   end
 
@@ -819,7 +835,12 @@ defmodule Dspy.Signature.Adapter.Pipeline do
   end
 
   defp do_call_with_retry_log(request, lm_options, attempt, max_attempts, call_id) do
-    case Dspy.LM.generate_with_options(lm_options.lm, request, lm_options.cache_options) do
+    result =
+      with {:ok, advised_request} <- append_advice(request, lm_options.prompt_advice) do
+        Dspy.LM.generate_with_options(lm_options.lm, advised_request, lm_options.cache_options)
+      end
+
+    case result do
       {:ok, response} ->
         {:ok, response}
 
