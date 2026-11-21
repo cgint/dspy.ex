@@ -33,8 +33,9 @@
 > proposer can supply typed-slot updates without a reflection LM.
 > The configurable LM-driven proposer supports reference skills, custom
 > instructions and adapters, and one correction for oversized drafts.
-> Typed media and history in proposals and additional frontier objectives
-> remain open.
+> It can also include declared training images with numbered references
+> in the reflection request. Typed history and additional frontier
+> objectives remain open.
 
 > **M5, status messages and exit example.** `streamify/2` accepts a
 > lifecycle status provider. The [offline ChainOfThought example](../../examples/offline/chain_of_thought_streaming_offline.exs)

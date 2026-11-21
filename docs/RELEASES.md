@@ -90,6 +90,12 @@ With `max_chars:`, an oversized draft gets one correction call before
 GEPA evaluates the instruction. The limit counts Unicode code points
 after trimming. Reflective examples use the existing bounded text previews.
 
+Set `include_observation_images: true` on the configured proposer to
+send declared images from the selected training observations. Numbered
+references in the text preview point to the images in wire order.
+Each proposal transfers up to eight image parts and eight MiB of image
+URL text, including data URIs. The default keeps the text preview.
+
 ### Streaming progress messages
 
 Pass a `status_message_provider:` module to `Dspy.streamify/2` to turn
