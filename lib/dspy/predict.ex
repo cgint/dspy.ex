@@ -8,12 +8,24 @@ defmodule Dspy.Predict do
 
   use Dspy.Module
 
-  defstruct [:signature, :examples, :lm, :max_retries, :max_output_retries, :adapter, :callbacks]
+  alias Dspy.PredictorConfig
+
+  defstruct [
+    :signature,
+    :examples,
+    :lm,
+    :max_retries,
+    :max_output_retries,
+    :adapter,
+    :callbacks,
+    config: %{}
+  ]
 
   @type t :: %__MODULE__{
           signature: Dspy.Signature.t(),
           examples: [Dspy.Example.t()],
           lm: Dspy.LM.t() | nil,
+          config: PredictorConfig.t(),
           max_retries: non_neg_integer(),
           max_output_retries: non_neg_integer(),
           adapter: module() | nil,
@@ -26,6 +38,7 @@ defmodule Dspy.Predict do
   Options:
   - `:examples` (default: [])
   - `:lm` — a `Dspy.LM` struct for this predictor. Defaults to the configured LM at call time.
+  - `:config` — stored generation options as a map or keyword list
   - `:max_retries` (default: 3) — retry LM call on provider errors
   - `:max_output_retries` (default: `Dspy.Settings.max_output_retries` or `0`) — retry when adapter outputs fail to parse/validate (e.g. inner reason `{:missing_required_outputs, ...}`); terminal pipeline failures return `{:output_parse_failed, reason, %{raw_output: response_text}}`
   - `:adapter` — optional signature adapter override
@@ -36,12 +49,21 @@ defmodule Dspy.Predict do
       signature: get_signature(signature),
       examples: Keyword.get(opts, :examples, []),
       lm: Dspy.LM.validate_binding!(Keyword.get(opts, :lm)),
+      config: PredictorConfig.new!(Keyword.get(opts, :config, %{})),
       max_retries: Keyword.get(opts, :max_retries, 3),
       max_output_retries: Keyword.get(opts, :max_output_retries, default_max_output_retries()),
       adapter: Keyword.get(opts, :adapter),
       callbacks: Keyword.get(opts, :callbacks, [])
     }
   end
+
+  @doc "Return the stored generation options."
+  @spec get_config(t()) :: PredictorConfig.t()
+  def get_config(%__MODULE__{} = predict), do: PredictorConfig.get(predict)
+
+  @doc "Return a predictor with the supplied generation options merged into its config."
+  @spec update_config(t(), PredictorConfig.t() | keyword()) :: t()
+  def update_config(%__MODULE__{} = predict, config), do: PredictorConfig.update(predict, config)
 
   @impl true
   def parameters(%__MODULE__{} = predict) do
@@ -85,6 +107,7 @@ defmodule Dspy.Predict do
              predict.examples,
              adapter: adapter,
              lm: Map.get(predict, :lm),
+             config: get_config(predict),
              callbacks: predict.callbacks,
              max_retries: predict.max_retries,
              max_output_retries: predict.max_output_retries

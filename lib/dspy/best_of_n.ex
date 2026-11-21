@@ -41,6 +41,7 @@ defmodule Dspy.BestOfN do
   use Dspy.Module
 
   alias Dspy.Module, as: DspyModule
+  alias Dspy.PredictorConfig
 
   defstruct [:program, :threshold, :n, :reward_fn, :fail_count]
 
@@ -114,9 +115,11 @@ defmodule Dspy.BestOfN do
   end
 
   defp attempt_step(bon, inputs, rollout_id, acc) do
+    program = PredictorConfig.set_rollout(bon.program, rollout_id)
+
     attempt_result =
       Dspy.Settings.context([temperature: 1.0, rollout_id: rollout_id], fn ->
-        with {:ok, pred} <- DspyModule.forward(bon.program, inputs) do
+        with {:ok, pred} <- DspyModule.forward(program, inputs) do
           {:ok, {pred, safe_reward(bon.reward_fn, inputs, pred)}}
         end
       end)

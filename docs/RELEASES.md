@@ -18,6 +18,16 @@ applies a function to each predictor in discovery order and returns an updated p
 `Dspy.Module.set_lm/2` binds a language model across those slots. Use
 `Dspy.Module.get_lm/1` to read their shared stored binding.
 
+### Predictor generation config
+
+`Dspy.Predict` and `Dspy.ChainOfThought` accept a `config:` map or keyword list
+with `:temperature`, `:max_tokens`, `:max_completion_tokens`, or `:rollout_id`.
+Use `get_config/1` to read the stored options, `update_config/2` to merge a patch
+into a predictor, or `Dspy.call/3` with `config:` to override options for one call.
+Nil request options inherit settings and LM defaults. An explicit nil rollout
+selects the unpartitioned cache. BootstrapRS and BestOfN apply their sampling
+options to temporary predictor copies for retries.
+
 ### Random search for few-shot demos
 
 `Dspy.Teleprompt.new(:bootstrap_rs, metric: metric)` creates the seeded search
