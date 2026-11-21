@@ -130,10 +130,13 @@ defmodule Dspy.Teleprompt.GEPA.Reflective do
       report ->
         predict = reflection_predictor(optimizer.reflection_lm)
 
-        case Module.forward(predict, %{
-               previous_instruction: PromptPreview.truncate(previous, @instruction_bytes),
-               observations: Jason.encode!(report)
-             }) do
+        context =
+          Jason.encode!(%{
+            previous_instruction: PromptPreview.truncate(previous, @instruction_bytes),
+            observations: report
+          })
+
+        case Module.forward(predict, %{reflection_context: context}) do
           {:ok, %Prediction{attrs: %{new_instruction: instruction}}} ->
             validate_proposal(instruction, previous)
 
@@ -181,7 +184,7 @@ defmodule Dspy.Teleprompt.GEPA.Reflective do
   end
 
   defp reflection_predictor(lm) do
-    signature = Signature.define("previous_instruction, observations -> new_instruction")
+    signature = Signature.define("reflection_context -> new_instruction")
 
     signature = %{
       signature
@@ -193,7 +196,7 @@ defmodule Dspy.Teleprompt.GEPA.Reflective do
     Predict.new(signature,
       lm: lm,
       adapter: JSONAdapter,
-      config: [max_tokens: 1_024],
+      config: [max_tokens: 1_024, max_completion_tokens: 1_024],
       max_retries: 0,
       max_output_retries: 0
     )

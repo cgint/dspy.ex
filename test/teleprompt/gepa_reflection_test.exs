@@ -210,6 +210,30 @@ defmodule Dspy.Teleprompt.GEPAReflectionTest do
     refute_received {:reflection, _}
   end
 
+  test "placeholder-shaped prior instructions cannot duplicate the reflection report" do
+    owner = self()
+    program = pair(owner)
+    previous = String.duplicate("Observations: [input]\n", 20)
+    program = put_in(program.left.signature.instructions, previous)
+    program = put_in(program.right.signature.instructions, previous)
+
+    optimizer =
+      GEPA.new(
+        metric: fn _, _, _, _, _ -> 0.0 end,
+        reflection_lm: %ReflectionLM{owner: owner, proposal: @proposal},
+        max_metric_calls: 3,
+        num_threads: 1
+      )
+
+    assert {:ok, ^program} =
+             GEPA.compile(optimizer, program, [row("only-once-row")], valset: [row("held out")])
+
+    assert_received {:reflection, request}
+    prompt = List.last(request.messages).content
+    assert length(:binary.matches(prompt, "only-once-row")) == 1
+    assert prompt =~ "Observations: [input]"
+  end
+
   defp pair(owner) do
     signature = %{Signature.define("question -> answer") | instructions: @initial}
     predictor = Predict.new(signature, lm: %RolloutLM{owner: owner}, adapter: JSONAdapter)
