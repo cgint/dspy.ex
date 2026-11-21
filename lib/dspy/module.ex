@@ -138,6 +138,36 @@ defmodule Dspy.Module do
   end
 
   @doc """
+  Return a program with the same LM binding on every named predictor.
+
+  Pass `nil` to clear the bindings and let the predictors use the configured
+  LM at call time.
+  """
+  @spec set_lm(t(), Dspy.LM.t() | nil) :: t()
+  def set_lm(program, lm) do
+    lm = Dspy.LM.validate_binding!(lm)
+    map_named_predictors(program, &Map.put(&1, :lm, lm))
+  end
+
+  @doc """
+  Return the LM binding shared by all named predictors.
+
+  Reads stored bindings and returns `nil` when all predictors are unbound.
+  Raises `ArgumentError` when the program has no named predictors or their
+  bindings differ.
+  """
+  @spec get_lm(t()) :: Dspy.LM.t() | nil
+  def get_lm(program) do
+    bindings = program |> predictors() |> Enum.map(&Map.get(&1, :lm)) |> Enum.uniq()
+
+    case bindings do
+      [lm] -> lm
+      [] -> raise ArgumentError, "program has no predictors"
+      _ -> raise ArgumentError, "program has different LM bindings"
+    end
+  end
+
+  @doc """
   Get a module's parameters if it implements the callback.
   """
   def parameters(module) do
