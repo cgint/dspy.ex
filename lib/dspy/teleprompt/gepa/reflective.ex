@@ -3,6 +3,7 @@ defmodule Dspy.Teleprompt.GEPA.Reflective do
 
   alias Dspy.{Attrs, Example, Module, Predict, Prediction, Random, Signature}
   alias Dspy.Module.PredictorSlots
+  alias Dspy.Signature.AdapterPipeline
   alias Dspy.Signature.Adapters.JSONAdapter
   alias Dspy.Signature.PromptPreview
   alias Dspy.Teleprompt.BootstrapTrace
@@ -56,7 +57,7 @@ defmodule Dspy.Teleprompt.GEPA.Reflective do
 
       parent = CandidatePool.fetch(state.pool, parent_id).program
       {random, batch} = Random.sample(random, trainset, count)
-      records = collect(optimizer, parent, batch, true)
+      records = collect(optimizer, parent, batch, :reflection)
       state = %{state | random: random, remaining: state.remaining - count}
       round = %{parent: parent, parent_id: parent_id, batch: batch, records: records}
 
@@ -77,7 +78,7 @@ defmodule Dspy.Teleprompt.GEPA.Reflective do
     predictor = round.parent |> PredictorSlots.list() |> Map.new() |> Map.fetch!(path)
     name = PredictorSlots.name(path, predictor)
 
-    with {:ok, instruction} <- propose(optimizer, predictor.signature, name, observations) do
+    with {:ok, instruction} <- propose(optimizer, predictor, name, observations) do
       state = evaluate_proposal(optimizer, valset, state, round, path, instruction)
       paths = Enum.reject(state.paths, &(&1 === path)) ++ [path]
       search(optimizer, trainset, valset, %{state | paths: paths})
@@ -203,7 +204,7 @@ defmodule Dspy.Teleprompt.GEPA.Reflective do
   defp passes_minibatch?(optimizer, candidate, round, state) do
     count = length(round.batch)
     parent_scores = ordered_scores(round.records, count, optimizer.failure_score)
-    records = collect(optimizer, candidate, round.batch, true)
+    records = collect(optimizer, candidate, round.batch, :minibatch)
     candidate_scores = ordered_scores(records, count, optimizer.failure_score)
 
     {Enum.sum(candidate_scores) > Enum.sum(parent_scores),
@@ -214,7 +215,7 @@ defmodule Dspy.Teleprompt.GEPA.Reflective do
     records =
       for record <- records,
           not optimizer.skip_perfect_score or record.score < optimizer.perfect_score do
-        {record, Map.new(record.trace, &{&1.path, &1})}
+        index_steps(record)
       end
 
     Enum.find_value(paths, fn path ->
@@ -227,8 +228,17 @@ defmodule Dspy.Teleprompt.GEPA.Reflective do
     end)
   end
 
+  defp index_steps(record) do
+    {successful, failed} = Enum.split_with(record.trace, &Map.has_key?(&1, :prediction))
+
+    steps = if record.prediction, do: Map.new(successful, &{&1.path, &1}), else: %{}
+    failures = Enum.reduce(failed, %{}, &Map.put_new(&2, &1.path, &1))
+
+    {%{record | trace: successful}, Map.merge(steps, failures)}
+  end
+
   defp validation_scores(optimizer, program, valset) do
-    records = collect(optimizer, program, valset, false)
+    records = collect(optimizer, program, valset, :validation)
     ordered_scores(records, length(valset), optimizer.failure_score)
   end
 
@@ -237,16 +247,30 @@ defmodule Dspy.Teleprompt.GEPA.Reflective do
     Enum.map(0..(count - 1), &Map.get(scores, &1, fallback))
   end
 
-  defp collect(optimizer, program, examples, capture?) do
+  defp collect(optimizer, program, examples, mode) do
+    capture_failed_parses? =
+      mode == :reflection and Map.get(optimizer, :add_format_failure_as_feedback, false)
+
     metric = fn example, prediction, trace ->
+      trace =
+        if capture_failed_parses?,
+          do: Enum.filter(trace, &Map.has_key?(&1, :prediction)),
+          else: trace
+
       optimizer.metric.(example, prediction, trace, nil, nil) |> score()
     end
 
     BootstrapTrace.collect(
       program,
       examples,
-      [metric: metric, num_threads: optimizer.num_threads, raise_on_error: false],
-      capture?: capture?,
+      [
+        metric: metric,
+        num_threads: optimizer.num_threads,
+        raise_on_error: false,
+        capture_failed_parses: capture_failed_parses?,
+        format_failure_score: optimizer.failure_score
+      ],
+      capture?: mode != :validation,
       strict_metric?: true
     )
   end
@@ -254,10 +278,10 @@ defmodule Dspy.Teleprompt.GEPA.Reflective do
   defp score(result) when is_map(result), do: Attrs.get(result, :score, result)
   defp score(result), do: result
 
-  defp propose(optimizer, signature, name, observations) do
-    previous = signature.instructions || ""
+  defp propose(optimizer, predictor, name, observations) do
+    previous = predictor.signature.instructions || ""
 
-    case reflection_report(optimizer.metric, signature, name, observations) do
+    case reflection_report(optimizer.metric, predictor, name, observations) do
       [] ->
         {:ok, nil}
 
@@ -280,14 +304,16 @@ defmodule Dspy.Teleprompt.GEPA.Reflective do
     end
   end
 
-  defp reflection_report(metric, signature, name, observations) do
+  defp reflection_report(metric, predictor, name, observations) do
     {records, _remaining} =
       Enum.reduce_while(observations, {[], @report_bytes - 2}, fn {record, step},
                                                                   {acc, remaining} ->
+        {outputs, feedback} = observation_feedback(metric, predictor, name, record, step)
+
         item = %{
-          inputs: PromptPreview.project(signature.input_fields, step.inputs),
-          outputs: PromptPreview.project(signature.output_fields, step.prediction.attrs),
-          feedback: predictor_feedback(metric, record, name, step)
+          inputs: PromptPreview.project(predictor.signature.input_fields, step.inputs),
+          outputs: outputs,
+          feedback: feedback
         }
 
         bytes = byte_size(Jason.encode!(item)) + 1
@@ -298,6 +324,39 @@ defmodule Dspy.Teleprompt.GEPA.Reflective do
       end)
 
     Enum.reverse(records)
+  end
+
+  defp observation_feedback(
+         _metric,
+         predictor,
+         _name,
+         _record,
+         %{error: {:output_parse_failed, _reason, %{raw_output: text}}}
+       ) do
+    {PromptPreview.truncate(text, @feedback_bytes), format_failure_feedback(predictor)}
+  end
+
+  defp observation_feedback(metric, predictor, name, record, step) do
+    outputs = PromptPreview.project(predictor.signature.output_fields, step.prediction.attrs)
+    {outputs, predictor_feedback(metric, record, name, step)}
+  end
+
+  defp format_failure_feedback(predictor) do
+    adapter = AdapterPipeline.active_adapter(adapter: predictor.adapter)
+
+    instruction =
+      if Code.ensure_loaded?(adapter) and function_exported?(adapter, :format_instructions, 2) do
+        adapter.format_instructions(predictor.signature, adapter: adapter)
+      end
+
+    feedback = "The output failed to parse. Follow the required output format."
+
+    if is_binary(instruction) and String.trim(instruction) != "" do
+      excerpt = PromptPreview.truncate(instruction, @feedback_bytes - byte_size(feedback) - 1)
+      feedback <> "\n" <> excerpt
+    else
+      feedback
+    end
   end
 
   defp predictor_feedback(metric, record, name, step) do
