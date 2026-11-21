@@ -7,6 +7,7 @@ defmodule Dspy.Module do
   """
 
   alias Dspy.Module.{PredictorSlots, ProgramState}
+  alias Dspy.Signature.Adapter.Callbacks
 
   @type t :: struct()
   @type inputs :: map() | keyword() | Dspy.Example.t()
@@ -50,29 +51,70 @@ defmodule Dspy.Module do
   - a `%Dspy.Example{}` (converted via `Dspy.Example.inputs/1`)
   """
   def forward(module, inputs) do
-    if track_usage_enabled?() do
-      outer? = Dspy.LM.UsageAcc.enter()
+    {track_usage, global_callbacks} = Dspy.Settings.module_observability()
 
-      result =
-        try do
-          forward_untracked(module, inputs)
-        catch
-          kind, reason ->
-            Dspy.LM.UsageAcc.exit()
-            :erlang.raise(kind, reason, __STACKTRACE__)
-        end
-
-      usage = Dspy.LM.UsageAcc.exit()
-
-      if outer? do
-        attach_usage_to_result(result, usage)
-      else
-        result
-      end
+    with %{__struct__: type} when is_atom(type) <- module,
+         [_ | _] = callbacks <-
+           Callbacks.module_handlers(global_callbacks, program_callbacks(module)) do
+      forward_with_callbacks(module, inputs, track_usage, type, callbacks)
     else
-      forward_untracked(module, inputs)
+      _ -> forward_with_usage(module, inputs, track_usage)
     end
   end
+
+  defp program_callbacks(%{__struct__: type} = module)
+       when type in [Dspy.Predict, Dspy.ChainOfThought],
+       do: Map.get(module, :callbacks)
+
+  defp program_callbacks(_module), do: []
+
+  defp forward_with_callbacks(module, inputs, track_usage, type, callbacks) do
+    meta = %{call_id: make_ref(), module: type}
+    callbacks = Callbacks.emit(callbacks, :module_start, meta, %{})
+    started_at = System.monotonic_time(:microsecond)
+
+    result =
+      try do
+        forward_with_usage(module, inputs, track_usage)
+      catch
+        kind, reason ->
+          status = if kind == :error, do: :raise, else: kind
+          emit_module_end(callbacks, meta, started_at, status)
+          :erlang.raise(kind, reason, __STACKTRACE__)
+      end
+
+    status = if match?({:error, _}, result), do: :error, else: :ok
+    emit_module_end(callbacks, meta, started_at, status)
+    result
+  end
+
+  defp emit_module_end(callbacks, meta, started_at, status) do
+    duration_us = System.monotonic_time(:microsecond) - started_at
+    Callbacks.emit(callbacks, :module_end, meta, %{status: status, duration_us: duration_us})
+  end
+
+  defp forward_with_usage(module, inputs, true) do
+    outer? = Dspy.LM.UsageAcc.enter()
+
+    result =
+      try do
+        forward_untracked(module, inputs)
+      catch
+        kind, reason ->
+          Dspy.LM.UsageAcc.exit()
+          :erlang.raise(kind, reason, __STACKTRACE__)
+      end
+
+    usage = Dspy.LM.UsageAcc.exit()
+
+    if outer? do
+      attach_usage_to_result(result, usage)
+    else
+      result
+    end
+  end
+
+  defp forward_with_usage(module, inputs, _track_usage), do: forward_untracked(module, inputs)
 
   defp forward_untracked(module, %Dspy.Example{} = example) do
     forward_untracked(module, Dspy.Example.inputs(example))
@@ -88,11 +130,6 @@ defmodule Dspy.Module do
 
   defp forward_untracked(module, inputs) do
     module.__struct__.forward(module, inputs)
-  end
-
-  defp track_usage_enabled? do
-    # Default: disabled.
-    Dspy.Settings.get(:track_usage) == true
   end
 
   defp attach_usage_to_result({:ok, %Dspy.Prediction{} = pred}, usage) do

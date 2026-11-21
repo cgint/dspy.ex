@@ -1,5 +1,7 @@
 # Status
 
+> **M3b, module callbacks.** `Dspy.Module.Callback` observes module calls with paired, metadata-only start and end events. End events report success, returned error, or catchable interruption after usage cleanup. Existing callback registrations also reach module hooks inside captured worker contexts. LM and evaluation hooks, cross-boundary correlation, telemetry, and call-scoped history remain open.
+
 > **M3a, `v0.6.0`.** Provider retries preserve the original error tuples. The bounded memory cache and opt-in disk store support restart-safe response reuse on the verified OpenAI Responses route. The [offline example](../../examples/offline/provider_retry_disk_cache_offline.exs) recovers from a 429 and returns the same prediction without a provider request after `:dspy` restarts. Wider disk eligibility, public error types, lifecycle hooks, and history remain open.
 
 > **Current baseline, 2026-11-21.** The [DSPy 3.5.0 recount](UPSTREAM_RECOUNT.md) is independently reviewed against Elixir commit `07e3cb2`. Stabilization shipped as `v0.4.11` at `975d7c6` after both Docker legs, all six hosted checks, a scratch Git-tag install, and five committed-source consumer replays. Three apps compiled cleanly and two reproduced their baseline warnings. [Release PR](https://github.com/cgint/dspy.ex/pull/14)

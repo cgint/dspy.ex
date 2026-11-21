@@ -99,8 +99,8 @@ After this you can …run against real providers robustly: clear error types, au
 | S090 | ContextWindowExceededError | missing | M | S | 2.00 | 3.2.0 | - | N | - | [reclassified na->missing] No detection/classification of context-window-exceeded response | todo |
 | S096 | LMError | missing | M | S | 2.00 | 3.3.0 | S099 | N | - | [reclassified na->missing] Base LM exception absent; errors are {:error, atom/term} on the | todo |
 | S012 | JSONAdapter | partial | H | M | 1.50 | <=2.6 | S005,S016 | N | - | output_contract in request map ≠ upstream response_format; no json_repair | todo |
-| U026 | BaseCallback | partial | H | M | 1.50 | <=2.6 | U036 | N | P8 | Elixir behaviours cover adapter + tool events only; module/LM/evaluate/compile/interpreter | todo |
-| U036 | with_callbacks | partial | H | M | 1.50 | <=2.6 | U026 | N | P8 | Functional equivalent exists (with_callbacks(callbacks, fun) + Settings :callbacks); event | todo |
+| U026 | BaseCallback | partial | H | M | 1.50 | <=2.6 | U036 | N | P8 | Elixir behaviours cover module, adapter, and tool events. LM, evaluate, compile, and interpreter hooks remain. | todo |
+| U036 | with_callbacks | partial | H | M | 1.50 | <=2.6 | U026 | N | P8 | `with_callbacks/2` and Settings `:callbacks` register module and adapter handlers. Correlation between lifecycle boundaries remains. | todo |
 | S025 | configure_cache | partial | H | M | 1.50 | 3.0.0 | S022 | N | P13 | Bounded LRU memory and opt-in, byte-bounded JSON disk storage for the stock OpenAI gpt-4.1-mini Responses route. Wider provider and model eligibility remains. | todo |
 | S110 | configure_dspy_loggers | missing | L | S | 1.00 | <=2.6 | - | N | - | No logger setup API; ad-hoc Logger.info/debug calls only (application.ex:41) | todo |
 | S111 | disable_logging | missing | L | S | 1.00 | <=2.6 | S112 | N | - | No silencing toggle for event logs | todo |

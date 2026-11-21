@@ -1,6 +1,6 @@
 defmodule Dspy.Signature.Adapter.Callbacks do
   @moduledoc """
-  Helpers for managing signature-adapter lifecycle callbacks.
+  Helpers for managing module and signature-adapter lifecycle callbacks.
 
   This module provides:
   - deterministic callback merging (global → program → per-call)
@@ -9,6 +9,7 @@ defmodule Dspy.Signature.Adapter.Callbacks do
   """
 
   alias Dspy.Signature.Adapter.Callback
+  alias Dspy.Module.Callback, as: ModuleCallback
 
   @type callback_entry :: {module(), term()}
   @type callbacks :: [callback_entry()]
@@ -45,8 +46,23 @@ defmodule Dspy.Signature.Adapter.Callbacks do
     List.wrap(global) ++ List.wrap(program) ++ List.wrap(call)
   end
 
+  @doc false
+  @spec module_handlers(callbacks() | nil, callbacks() | nil) :: callbacks()
+  def module_handlers(global, program) do
+    global
+    |> merge(program, current_call_callbacks())
+    |> Enum.filter(fn
+      {mod, _state} when is_atom(mod) ->
+        function_exported?(mod, :on_module_start, 3) or
+          function_exported?(mod, :on_module_end, 3)
+
+      _ ->
+        false
+    end)
+  end
+
   @doc "Emit a lifecycle event to all callbacks, swallowing callback failures."
-  @spec emit(callbacks(), atom(), Callback.meta(), map()) :: callbacks()
+  @spec emit(callbacks(), atom(), Callback.meta() | ModuleCallback.meta(), map()) :: callbacks()
   def emit(callbacks, event, meta, payload)
       when is_list(callbacks) and is_atom(event) and is_map(meta) and is_map(payload) do
     Enum.map(callbacks, fn
@@ -72,6 +88,8 @@ defmodule Dspy.Signature.Adapter.Callbacks do
   defp event_to_fun(:call_end), do: :on_adapter_call_end
   defp event_to_fun(:parse_start), do: :on_adapter_parse_start
   defp event_to_fun(:parse_end), do: :on_adapter_parse_end
+  defp event_to_fun(:module_start), do: :on_module_start
+  defp event_to_fun(:module_end), do: :on_module_end
   defp event_to_fun(_), do: nil
 
   defp safe_apply(mod, fun, args) do

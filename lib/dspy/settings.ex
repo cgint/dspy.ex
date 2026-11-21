@@ -97,6 +97,18 @@ defmodule Dspy.Settings do
   end
 
   @doc false
+  def module_observability do
+    case current_overrides() do
+      %{track_usage: track_usage, callbacks: callbacks} ->
+        {track_usage, callbacks}
+
+      overrides ->
+        {track_usage, callbacks} = GenServer.call(__MODULE__, :module_observability)
+        {Map.get(overrides, :track_usage, track_usage), Map.get(overrides, :callbacks, callbacks)}
+    end
+  end
+
+  @doc false
   @spec default_num_threads() :: pos_integer()
   def default_num_threads do
     configured = if Process.whereis(__MODULE__), do: get(:num_threads)
@@ -235,6 +247,10 @@ defmodule Dspy.Settings do
   def handle_call({:get, key}, _from, settings) do
     value = Map.get(settings, key)
     {:reply, value, settings}
+  end
+
+  def handle_call(:module_observability, _from, settings) do
+    {:reply, {settings.track_usage, settings.callbacks}, settings}
   end
 
   defp should_clear_cache?(old_settings, new_settings, opts) do
