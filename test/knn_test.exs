@@ -3,6 +3,10 @@ defmodule Dspy.KNNTest do
 
   alias Dspy.{Embedder, Example, KNN}
 
+  defmodule ExampleAttrs do
+    defstruct [:q, :label]
+  end
+
   test "ranks by raw dot product and embeds the training rows only once" do
     axis = example("axis")
     wide = example("wide")
@@ -76,6 +80,28 @@ defmodule Dspy.KNNTest do
     assert_received {:embedded, [""]}
     assert KNN.query(index, %{}) == {:ok, [row]}
     assert_received {:embedded, [""]}
+  end
+
+  test "struct-backed examples embed only the declared fields" do
+    row =
+      Example.new(%ExampleAttrs{q: "selected", label: "private"})
+      |> Example.with_inputs(:q)
+
+    embedder = recording_embedder(%{"q: selected" => [1]})
+
+    assert {:ok, index} = KNN.new(1, [row], embedder)
+    assert_received {:embedded, ["q: selected"]}
+    assert KNN.query(index, %{q: "selected"}) == {:ok, [row]}
+  end
+
+  test "malformed metadata cannot select a label through numeric coercion" do
+    row = Example.new(%{"123" => "private"}, %{"inputs" => [123]})
+    embedder = recording_embedder(%{"123: private" => [1]})
+
+    assert KNN.new(1, [row], embedder) ==
+             {:error, {:invalid_trainset, 0, :invalid_input_keys}}
+
+    refute_received {:embedded, _}
   end
 
   test "new string field names are projected without interning them as atoms" do

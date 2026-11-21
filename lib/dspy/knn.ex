@@ -99,22 +99,33 @@ defmodule Dspy.KNN do
     end
   end
 
-  defp training_text(%Example{attrs: attrs} = example)
-       when is_map(attrs) and not is_struct(attrs) do
-    with {:ok, selection} <- declared_inputs(example), do: serialize_inputs(attrs, selection)
+  defp training_text(%Example{attrs: attrs} = example) when is_map(attrs) do
+    with {:ok, selection} <- declared_inputs(example),
+         do: serialize_inputs(Map.to_list(attrs), selection)
   end
 
   defp training_text(_value), do: {:error, :expected_example}
 
-  defp declared_inputs(example) do
-    case Example.input_keys(example) do
-      nil -> {:error, :missing_input_keys}
-      keys -> {:ok, MapSet.new(keys)}
+  defp declared_inputs(%Example{metadata: nil}), do: {:error, :missing_input_keys}
+
+  defp declared_inputs(%Example{metadata: metadata}) when is_map(metadata) do
+    # Validate stored selectors before converting names so malformed metadata
+    # cannot make an unexpected field part of a hosted embedding request.
+    case Map.get(metadata, "inputs") || Map.get(metadata, :inputs) do
+      nil ->
+        {:error, :missing_input_keys}
+
+      keys when is_integer(length(keys)) ->
+        if Enum.all?(keys, &(is_atom(&1) or is_binary(&1))),
+          do: {:ok, MapSet.new(keys, &field_name/1)},
+          else: {:error, :invalid_input_keys}
+
+      _other ->
+        {:error, :invalid_input_keys}
     end
-  rescue
-    _error in [BadMapError, FunctionClauseError, Protocol.UndefinedError, ArgumentError] ->
-      {:error, :invalid_input_keys}
   end
+
+  defp declared_inputs(_example), do: {:error, :invalid_input_keys}
 
   defp query_text(inputs) when is_map(inputs) and not is_struct(inputs),
     do: serialize_inputs(inputs, :all)
