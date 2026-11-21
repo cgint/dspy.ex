@@ -161,7 +161,7 @@ After this you can …show answers as they are generated (token streaming plus s
 | U020 | StatusMessage | missing | M | S | 2.00 | 3.0.0 | S072 | N | - | no streaming message types at all | todo |
 | U021 | StatusMessageProvider | missing | M | M | 1.00 | 3.0.0 | U020 S072 | N | - | no status provider behaviour; Dspy.Tools.Callback is a different (callback) shape | todo |
 | U023 | StreamResponse | missing | L | S | 1.00 | 3.0.0 | S072 | N | - | no stream response struct | todo |
-| S072 | streamify | missing | H | L | 0.75 | <=2.6 | S022 | N | P12 | no program-level streaming wrapper; only low-level ReqLLM.stream_text exists (integration  | todo |
+| S072 | streamify | missing | H | L | 0.75 | <=2.6 | S022 | N | P12 | The LM transport delivers raw text deltas and releases the HTTP stream on cancellation. Program streaming, field listeners, status events, and final prediction delivery remain. | M5 transport |
 | U022 | StreamListener | missing | H | L | 0.75 | 3.0.0 | U023 | N | P12 | no listener concept; find_predictor_for_stream_listeners has no counterpart | todo |
 | U024 | apply_sync_streaming | missing | L | M | 0.50 | 3.0.0 | U020 S072 | N | - | no async-generator-to-sync bridge; Task.async_stream exists but is not dspy-streaming | todo |
 | U025 | streaming_response | missing | L | M | 0.50 | 3.0.0 | U023 S072 | N | - | no streaming_response wrapper | todo |

@@ -34,6 +34,8 @@ defmodule Dspy.LM.ReqLLM do
 
   @behaviour Dspy.LM
 
+  alias Dspy.{Context, LM}
+
   defstruct [
     :model,
     :cache_namespace,
@@ -120,11 +122,118 @@ defmodule Dspy.LM.ReqLLM do
 
   defp generate_text_response(lm, input, opts) do
     with {:ok, response} <- lm.client_module.generate_text(lm.model, input, opts) do
-      text = lm.response_module.text(response)
-      finish_reason = lm.response_module.finish_reason(response)
-      usage = lm.response_module.usage(response)
-      normalized_response(text || "", finish_reason, usage, response_tool_calls(lm, response))
+      normalize_text_response(lm, response)
     end
+  end
+
+  @doc """
+  Stream text with the delta callback running in the caller.
+
+  A monitored process opens ReqLLM with the caller's DSPy context. It owns the
+  provider resources until the stream finishes or the caller exits, including
+  during startup. A synchronous provider hook can delay shutdown of the ReqLLM
+  process that runs it until the hook returns.
+
+  Startup exceptions return `{:error, exception}`. Exits and throws during
+  startup return `{:error, {:stream_owner_exited, reason}}` and
+  `{:error, {:stream_owner_threw, reason}}`, respectively.
+  """
+  @impl true
+  def stream_generate(%__MODULE__{} = lm, request, on_delta)
+      when is_map(request) and is_function(on_delta, 1) do
+    with :ok <- LM.validate_stream_options(request),
+         {:ok, {input, opts}} <- to_req_llm_input_and_opts(lm, request),
+         :ok <- LM.validate_stream_options(opts),
+         :ok <- LM.validate_stream_options(Keyword.get(opts, :provider_options)) do
+      stream_text_response(lm, input, ReqLLM.Cache.request_opts(opts), on_delta)
+    end
+  end
+
+  defp stream_text_response(lm, input, opts, on_delta) do
+    caller = self()
+    tag = make_ref()
+    context = Context.capture()
+
+    {owner, owner_ref} =
+      spawn_monitor(fn ->
+        owner = self()
+        spawn(fn -> monitor_stream_owner(caller, owner) end)
+
+        result =
+          Context.with_context(context, fn -> open_provider_stream(lm, input, opts) end)
+
+        send(caller, {tag, result})
+
+        receive do
+          {^tag, :release} -> :ok
+        end
+
+        # Close provider children without an abnormal exit's crash report.
+        exit(:shutdown)
+      end)
+
+    receive do
+      {^tag, result} ->
+        try do
+          with {:ok, stream} <- result, do: consume_stream(lm, stream, on_delta)
+        after
+          send(owner, {tag, :release})
+
+          receive do
+            {:DOWN, ^owner_ref, :process, ^owner, _reason} -> :ok
+          end
+        end
+
+      {:DOWN, ^owner_ref, :process, ^owner, reason} ->
+        {:error, {:stream_owner_exited, reason}}
+    end
+  end
+
+  defp monitor_stream_owner(caller, owner) do
+    caller_ref = Process.monitor(caller)
+    owner_ref = Process.monitor(owner)
+
+    receive do
+      {:DOWN, ^caller_ref, :process, ^caller, _reason} -> Process.exit(owner, :shutdown)
+      {:DOWN, ^owner_ref, :process, ^owner, _reason} -> :ok
+    end
+  end
+
+  defp open_provider_stream(lm, input, opts) do
+    lm.client_module.stream_text(lm.model, input, opts)
+  rescue
+    error -> {:error, error}
+  catch
+    :exit, reason -> {:error, {:stream_owner_exited, reason}}
+    :throw, reason -> {:error, {:stream_owner_threw, reason}}
+  end
+
+  defp consume_stream(lm, stream, on_delta) do
+    ref = make_ref()
+
+    # A throw stops the enumerable and runs its cancellation finalizer.
+    on_result = fn delta ->
+      case on_delta.(delta) do
+        :halt -> throw({ref, :cancelled})
+        {:error, reason} -> throw({ref, reason})
+        _ -> :ok
+      end
+    end
+
+    try do
+      with {:ok, response} <- ReqLLM.StreamResponse.process_stream(stream, on_result: on_result) do
+        normalize_text_response(lm, response)
+      end
+    catch
+      {^ref, reason} -> {:error, reason}
+    end
+  end
+
+  defp normalize_text_response(lm, response) do
+    text = lm.response_module.text(response)
+    finish_reason = lm.response_module.finish_reason(response)
+    usage = lm.response_module.usage(response)
+    normalized_response(text || "", finish_reason, usage, response_tool_calls(lm, response))
   end
 
   defp normalize_object_response(lm, response) do
