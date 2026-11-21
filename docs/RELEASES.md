@@ -8,6 +8,14 @@ This repo ships in **small, user-usable slices**.
 
 ## Consumer notes
 
+### Numeric output parsing
+
+`-5.e3` now keeps its sign on both numeric output types. The parser matches
+DSPy for nested decimal parentheses, matching single or double quotes, and
+one underscore immediately after an unwrapped radix prefix. Malformed radix
+separators still produce parse errors. Radix values beyond the finite float
+range return a parse error on `:number` and retain their exact `:integer` value.
+
 ### LM memory cache
 
 Opt-in LM response caching keeps up to 10,000 entries per VM and evicts the

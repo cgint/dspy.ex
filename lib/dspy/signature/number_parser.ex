@@ -21,11 +21,12 @@ defmodule Dspy.Signature.NumberParser do
     "+1e2", "1e1_0" (== 1e10), "1e_1" (== 10.0)
   - underscore digit separators: "1_000", "1_000_000"
   - leading zeros as decimal (NOT octal): "010" == 10, "007" == 7
-  - hex / binary literal forms, SIGNED: "0x10" == 16, "0x10_0" == 256,
-    "0b101" == 5, "-0x10" == -16, "+0b1" == 1, "-0X10" == -16
-  - a single layer of double-quotes on BOTH paths: "\"0.8\"" -> 0.8,
+  - signed hex, binary, and octal literal forms: "0x10" == 16, "0x10_0" == 256,
+    "0b101" == 5, "-0x10" == -16, "+0b1" == 1, "0o_17" == 15
+  - one matching pair of single or double quotes on either path: "\"0.8\"" -> 0.8,
     "\"5\"" -> 5 / 5.0, "\" 5 \"" -> 5 (inner whitespace trimmed),
     "\"2.0\"" -> 2 (int), "\"1_000\"" -> 1000
+  - decimal literals in balanced parentheses: "((5))" and "('5')" -> 5 / 5.0
   - for `:integer` only: integer-valued float forms ("2.0" -> 2, "1E3" -> 1000,
     "2e2" -> 200, "5.e3" -> 5000, ".5e3" -> 500)
 
@@ -41,7 +42,7 @@ defmodule Dspy.Signature.NumberParser do
   - boolean words: "true", "True", "False" (Horst ruling 2026-09-29)
   - lone punctuation / empty: "", " ", ".", "+", "-", "+.", "-.", "[", "]",
     "(", ")", "%", "%%", "5.e" (trailing dot before a bare exponent)
-  - malformed hex / binary: "0x", "0b", "0xG", "0x10G"
+  - malformed radix forms: "0x", "0b", "0xG", "0x10G", "0o17_", "0b1__0"
   - malformed exponents: "1e", "1e-", "1e+"
   - leading / trailing underscore: "_1", "1_"
   - non-number tokens: "1d3", "1f"
@@ -70,108 +71,49 @@ defmodule Dspy.Signature.NumberParser do
   # ---------------------------------------------------------------------------
 
   defp do_parse(raw, :float) do
-    case unwrap(raw) do
-      {:ok, inner, quoted} ->
-        if strict_shape?(inner) and not (quoted and is_radix_form?(inner)),
-          do: parse_float_lex(inner),
-          else: {:error, :invalid_number}
+    {value, wrapper} = unwrap(raw)
 
-      {:ok_paren, inner, _quoted} ->
-        # Upstream (float path only) also unwraps a single layer of parens:
-        # "(0.8)" -> 0.8, but "(0.8)" as :integer rejects. Handled here so the
-        # :integer path does NOT unwrap parens (HB2 parity: quotes yes on both,
-        # parens only on float). Quoted hex/binary is rejected on both paths
-        # (upstream divergence, HB2).
-        if strict_shape?(inner) and not is_radix_form?(inner),
-          do: parse_float_lex(inner),
-          else: {:error, :invalid_number}
-    end
+    if strict_shape?(value) and not (wrapper != :bare and radix_literal?(value)),
+      do: parse_float_lex(value),
+      else: {:error, :invalid_number}
   end
 
   defp do_parse(raw, :int) do
-    t = String.trim(raw)
+    {value, wrapper} = unwrap(raw)
 
-    cond do
-      # Quoted single value on the :integer path (HB2: parity with :float).
-      # Upstream accepts '"5"' -> 5, '"010"' -> 10, '"2.0"' -> 2, '"1_000"' -> 1000,
-      # '" 5 "' -> 5; rejects '"0.8"' (non-integral), '"1E3"' (quoted exponent
-      # form), '"0x10"' / '"0o17"' (quoted radix — rejected on BOTH paths, HB2/HB8).
-      quoted_single?(t) ->
-        inner = String.trim(binary_part(t, 1, byte_size(t) - 2))
-
-        if strict_shape?(inner) and not is_radix_form?(inner) and
-             not String.match?(inner, ~r/[eE]/),
-           do: parse_int_lex(inner),
-           else: {:error, :invalid_integer}
-
-      # Parenthesised single value on the :integer path (HB7b/HB8 2026-09-29):
-      # upstream ACCEPTS "(5)" -> 5 and "(-2)" -> -2 (integer-valued), and
-      # REJECTS "(0.8)" because it is FRACTIONAL — not because of the parens.
-      # Unwrap one paren layer and parse; integral forms pass, fractional fail.
-      paren_single?(t) ->
-        inner = String.trim(binary_part(t, 1, byte_size(t) - 2))
-
-        if strict_shape?(inner) and not is_radix_form?(inner),
-          do: parse_int_lex(inner),
-          else: {:error, :invalid_integer}
-
-      strict_shape?(t) ->
-        parse_int_lex(t)
-
-      true ->
-        {:error, :invalid_integer}
-    end
-  end
-
-  # True when t is exactly a parenthesised single value (HB7b/HB8 2026-09-29):
-  # upstream accepts "(5)" / "(-2)" on :integer (integer-valued) and rejects
-  # "(0.8)" (fractional). The parens themselves are NOT the reason for the
-  # reject — only the fractional value is.
-  defp paren_single?(t) do
-    byte_size(t) >= 2 and String.starts_with?(t, "(") and String.ends_with?(t, ")")
+    if strict_shape?(value) and not (wrapper != :bare and radix_literal?(value)) and
+         not (wrapper == :quoted and String.match?(value, ~r/[eE]/)),
+       do: parse_int_lex(value),
+       else: {:error, :invalid_integer}
   end
 
   # ---------------------------------------------------------------------------
   # Shape / unwrap helpers
   # ---------------------------------------------------------------------------
 
-  # Unwrap a single layer of double-quotes OR parens (float path only) and
-  # verify the inner content is non-empty. Trims BOTH the outer whitespace AND
-  # the inner content, so `  "5"  ` -> "5" (HB2: whitespace inside and around
-  # quotes). Returns {:ok, inner, quoted?} / {:ok_paren, inner, quoted?}.
-  defp unwrap(t) do
-    trimmed = String.trim(t)
+  defp unwrap(raw) do
+    {value, wrapper} = strip_parentheses(String.trim(raw), :bare)
 
-    cond do
-      byte_size(trimmed) >= 2 and String.starts_with?(trimmed, "\"") and
-          String.ends_with?(trimmed, "\"") ->
-        {:ok, String.trim(binary_part(trimmed, 1, byte_size(trimmed) - 2)), true}
+    case value do
+      <<quote, _::binary>> when quote in [?", ?'] and byte_size(value) >= 2 ->
+        if :binary.last(value) == quote, do: {inside(value), :quoted}, else: {value, wrapper}
 
-      byte_size(trimmed) >= 2 and String.starts_with?(trimmed, "(") and
-          String.ends_with?(trimmed, ")") ->
-        {:ok_paren, String.trim(binary_part(trimmed, 1, byte_size(trimmed) - 2)), false}
-
-      true ->
-        {:ok, trimmed, false}
+      _ ->
+        {value, wrapper}
     end
   end
 
-  # True when t is exactly a double-quoted single value (used on the int path
-  # so quotes are unwrapped identically to the float path — HB2 parity).
-  defp quoted_single?(t) do
-    byte_size(t) >= 2 and String.starts_with?(t, "\"") and String.ends_with?(t, "\"")
+  defp strip_parentheses(<<?(, _::binary>> = value, wrapper) do
+    if :binary.last(value) == ?),
+      do: strip_parentheses(inside(value), :parenthesized),
+      else: {value, wrapper}
   end
 
-  # True when the (already unwrapped/trimmed) value is a hex, binary, or OCTAL
-  # literal form (0x... / 0b... / 0o..., optionally signed). Upstream rejects
-  # these when they arrived in a QUOTED string ("0x10", "0o17" reject on both
-  # :float and :integer), but accepts them unquoted (0x10 -> 16, 0o17 -> 15).
-  # HB2 2026-09-29; octal added HB8 2026-09-29.
-  defp is_radix_form?(s) do
-    String.match?(s, ~r/^[+-]?0[xX][0-9A-Fa-f][0-9A-Fa-f_]*$/) or
-      String.match?(s, ~r/^[+-]?0[bB][01][01_]*$/) or
-      String.match?(s, ~r/^[+-]?0[oO][0-7][0-7_]*$/)
-  end
+  defp strip_parentheses(value, wrapper), do: {value, wrapper}
+
+  defp inside(value), do: value |> binary_part(1, byte_size(value) - 2) |> String.trim()
+
+  defp radix_literal?(value), do: String.match?(value, ~r/\A[+-]?0[xXbBoO]/)
 
   # Full-string strict-number shape (upstream dspy 3.4.0 parse_value).
   # AT MOST ONE leading sign (HB2 2026-09-29: "+-1", "++1", "--1" reject).
@@ -186,17 +128,19 @@ defmodule Dspy.Signature.NumberParser do
   defp strict_shape?(value) do
     String.match?(
       value,
-      ~r/^
+      ~r/\A
         [+-]?                                   # at most ONE sign
         (?:
-          0[xX][0-9A-Fa-f][0-9A-Fa-f_]*         # hex (signed, underscore)
-        | 0[bB][01][01_]*                       # binary (signed, underscore)
-        | 0[oO][0-7][0-7_]*                     # octal (HB8 2026-09-29)
-        | (?:\d+(?:_\d+)*)(?:\.\d*(?:_\d+)*)?   # int or float, trailing "." ok
-        | \.\d+(?:_\d+)*                        # ".5"
+          0[xX]_?[0-9A-Fa-f]+(?:_[0-9A-Fa-f]+)* # hex
+        | 0[bB]_?[01]+(?:_[01]+)*               # binary
+        | 0[oO]_?[0-7]+(?:_[0-7]+)*             # octal
+        | (?:
+            \d+(?:_\d+)*(?:\.\d*(?:_\d+)*)?     # int or float, trailing "." ok
+          | \.\d+(?:_\d+)*                      # ".5"
+          )
+          (?:[eE][+-]?\d*(?:_\d+)*)?            # exponent, including "1e_1"
         )
-        (?:[eE][+-]?\d*(?:_\d+)*)?              # exponent: "1e", "1e-1", "1e1_0", "1e_1"
-      $/x
+      \z/x
     )
   end
 
@@ -250,10 +194,8 @@ defmodule Dspy.Signature.NumberParser do
         s |> String.replace(".", "0.", global: false)
 
       String.match?(s, ~r/^[+-]?\d+\.([eE][+-]?\d+)$/) ->
-        # "5.e3" -> "5.0e3" (dot immediately before the exponent). Use a
-        # non-capturing sign to keep the group count at 2.
-        [_, digits, exp] = Regex.run(~r/^(?:[+-]?)(\d+)\.((?:[eE][+-]?\d+))$/, s)
-        digits <> ".0" <> exp
+        # "-5.e3" -> "-5.0e3" (preserve the leading sign).
+        String.replace(s, ".", ".0", global: false)
 
       true ->
         # "5." stays "5." (Float.parse handles it as {5.0, "."}); anything
@@ -267,23 +209,13 @@ defmodule Dspy.Signature.NumberParser do
 
     cond do
       String.match?(s, ~r/^[+-]?0[xX]/) ->
-        case parse_radix(s, 16, :int) do
-          {:ok, int} -> {:ok, int}
-          _ -> {:error, :invalid_integer}
-        end
+        parse_radix(s, 16, :int)
 
       String.match?(s, ~r/^[+-]?0[bB]/) ->
-        case parse_radix(s, 2, :int) do
-          {:ok, int} -> {:ok, int}
-          _ -> {:error, :invalid_integer}
-        end
+        parse_radix(s, 2, :int)
 
       String.match?(s, ~r/^[+-]?0[oO]/) ->
-        # Octal (HB8 2026-09-29): "0o17" -> 15, matching upstream.
-        case parse_radix(s, 8, :int) do
-          {:ok, int} -> {:ok, int}
-          _ -> {:error, :invalid_integer}
-        end
+        parse_radix(s, 8, :int)
 
       true ->
         case Integer.parse(s) do
@@ -294,48 +226,24 @@ defmodule Dspy.Signature.NumberParser do
   end
 
   defp parse_radix(s, base, :float) do
-    {sign, digits} =
-      cond do
-        String.starts_with?(s, "+") -> {1, binary_part(s, 1, byte_size(s) - 1)}
-        String.starts_with?(s, "-") -> {-1, binary_part(s, 1, byte_size(s) - 1)}
-        true -> {1, s}
-      end
-
-    digits =
-      digits
-      |> String.replace_prefix("0x", "")
-      |> String.replace_prefix("0X", "")
-      |> String.replace_prefix("0b", "")
-      |> String.replace_prefix("0B", "")
-      |> String.replace_prefix("0o", "")
-      |> String.replace_prefix("0O", "")
-
-    case Integer.parse(digits, base) do
-      {int, ""} -> {:ok, sign * int * 1.0}
-      :error -> {:error, :invalid_number}
+    case parse_radix(s, base, :int) do
+      {:ok, int} -> {:ok, int * 1.0}
+      {:error, :invalid_integer} -> {:error, :invalid_number}
     end
+  rescue
+    ArithmeticError -> {:error, :invalid_number}
   end
 
   defp parse_radix(s, base, :int) do
     {sign, digits} =
-      cond do
-        String.starts_with?(s, "+") -> {1, binary_part(s, 1, byte_size(s) - 1)}
-        String.starts_with?(s, "-") -> {-1, binary_part(s, 1, byte_size(s) - 1)}
-        true -> {1, s}
+      case s do
+        <<?-, _prefix::binary-size(2), digits::binary>> -> {-1, digits}
+        <<_prefix::binary-size(2), digits::binary>> -> {1, digits}
       end
-
-    digits =
-      digits
-      |> String.replace_prefix("0x", "")
-      |> String.replace_prefix("0X", "")
-      |> String.replace_prefix("0b", "")
-      |> String.replace_prefix("0B", "")
-      |> String.replace_prefix("0o", "")
-      |> String.replace_prefix("0O", "")
 
     case Integer.parse(digits, base) do
       {int, ""} -> {:ok, sign * int}
-      :error -> {:error, :invalid_integer}
+      _ -> {:error, :invalid_integer}
     end
   end
 

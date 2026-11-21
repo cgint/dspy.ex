@@ -86,6 +86,55 @@ defmodule SignatureNumberIntegerStrictTest do
     end)
   end
 
+  test "reference numeric literals produce the same signed values on both paths" do
+    # DSPy 3.5.0 parse_value/2 at 4e9db7a, also verified at the 3.4.0 fixture pin.
+    for {input, expected} <- [
+          {"-5.e3", -5_000},
+          {"(-2.e2)", -200},
+          {"((5))", 5},
+          {~s|("5")|, 5},
+          {"('5')", 5},
+          {"'2.0'", 2},
+          {"0o_17", 15},
+          {"0x_FF", 255},
+          {"0x0b10", 2_832},
+          {"-0B_1_01", -5}
+        ] do
+      assert {:ok, %Dspy.Prediction{attrs: %{answer: number}}} = call_number(input)
+      assert number === expected / 1, "unexpected number for #{inspect(input)}"
+      assert {:ok, %Dspy.Prediction{attrs: %{count: integer}}} = call_integer(input)
+      assert integer === expected, "unexpected integer for #{inspect(input)}"
+    end
+
+    assert {:ok, %Dspy.Prediction{attrs: %{answer: zero}}} = call_number("-0.e2")
+    assert <<zero::float>> == <<-0.0::float>>
+  end
+
+  test "malformed radix separators and quoted parentheses remain rejected" do
+    for input <- ["0x__10", "0b1__0", "0o17_", "((0x_FF))", ~s|"(5)"|, ~s|"'5'"|] do
+      assert {:error, {:output_parse_failed, {:invalid_output_value, :answer, _}, _}} =
+               call_number(input)
+
+      assert {:error, {:output_parse_failed, {:invalid_output_value, :count, _}, _}} =
+               call_integer(input)
+    end
+  end
+
+  test "a radix literal outside the float range still parses as an exact integer" do
+    hexadecimal = String.duplicate("f", 257)
+    expected = Integer.pow(16, 257) - 1
+
+    for prefix <- ["0x", "0x_"] do
+      input = prefix <> hexadecimal
+
+      assert {:error,
+              {:output_parse_failed, {:invalid_output_value, :answer, :invalid_number}, _}} =
+               call_number(input)
+
+      assert {:ok, %Dspy.Prediction{attrs: %{count: ^expected}}} = call_integer(input)
+    end
+  end
+
   # ---------------------------------------------------------------------------
   # SS1: :number strict parsing
   # ---------------------------------------------------------------------------
