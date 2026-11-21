@@ -25,6 +25,7 @@ defmodule Dspy.Settings do
     experimental: [],
     teleprompt_verbose: false,
     rollout_id: nil,
+    num_threads: nil,
     max_errors: 10
   ]
 
@@ -45,6 +46,7 @@ defmodule Dspy.Settings do
           experimental: [atom()],
           teleprompt_verbose: boolean(),
           rollout_id: non_neg_integer() | nil,
+          num_threads: pos_integer() | nil,
           max_errors: pos_integer()
         }
 
@@ -91,6 +93,18 @@ defmodule Dspy.Settings do
       Map.get(overrides, key)
     else
       GenServer.call(__MODULE__, {:get, key})
+    end
+  end
+
+  @doc false
+  @spec default_num_threads() :: pos_integer()
+  def default_num_threads do
+    configured = if Process.whereis(__MODULE__), do: get(:num_threads)
+
+    case configured do
+      nil -> System.schedulers_online()
+      count when is_integer(count) and count > 0 -> count
+      _ -> raise ArgumentError, "the num_threads setting must be a positive integer or nil"
     end
   end
 

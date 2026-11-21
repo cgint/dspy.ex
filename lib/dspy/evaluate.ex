@@ -64,7 +64,8 @@ defmodule Dspy.Evaluate do
   - `testset` - list of test examples
   - `metric_fn` - metric function `(example, prediction) -> score`
   - `opts` - options:
-    - `:num_threads` - parallelism (default: schedulers_online)
+    - `:num_threads` - parallelism. Defaults to the configured `:num_threads`
+      or the number of online schedulers.
     - `:progress` - emit progress logs (default: false)
     - `:display_progress` - alias of `:progress`; if both are given, `:display_progress` wins
     - `:return_all` - include per-example details (default: false)
@@ -112,7 +113,7 @@ defmodule Dspy.Evaluate do
       raise ArgumentError, "devset must contain at least one example"
     end
 
-    num_threads = Keyword.get(opts, :num_threads, System.schedulers_online())
+    num_threads = Keyword.get_lazy(opts, :num_threads, &Dspy.Settings.default_num_threads/0)
     # M1-a (upstream `display_progress`): alias of `:progress`; if BOTH are
     # given, `:display_progress` wins (acceptance row 10e).
     display_progress =

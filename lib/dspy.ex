@@ -39,6 +39,7 @@ defmodule Dspy do
           temperature: number() | nil,
           cache: boolean(),
           track_usage: boolean(),
+          num_threads: pos_integer() | nil,
           history_max_entries: pos_integer()
         ]
 
@@ -53,6 +54,7 @@ defmodule Dspy do
           temperature: number() | nil,
           cache: boolean(),
           track_usage: boolean(),
+          num_threads: pos_integer() | nil,
           history_max_entries: pos_integer(),
           metadata: map()
         }
@@ -72,6 +74,8 @@ defmodule Dspy do
   - `:temperature` - Sampling temperature (default: `nil`, provider/runtime default)
   - `:cache` - Enable response caching (default: false)
   - `:track_usage` - Enable LM usage tracking and invocation history (default: false)
+  - `:num_threads` - Default concurrency for `Dspy.Evaluate` and `Dspy.Parallel`.
+    Set `nil` to use the number of online schedulers.
   - `:history_max_entries` - Bound the number of stored LM invocation history entries (default: 200)
 
   ## Examples
