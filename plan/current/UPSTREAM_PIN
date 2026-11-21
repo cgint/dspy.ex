@@ -1,0 +1,4 @@
+repository=https://github.com/stanfordnlp/dspy.git
+tag=3.5.0
+commit=4e9db7a83e71e4c36315a2402ae7ffd0c6493404
+elixir_commit=07e3cb272de9c831462615ec4bed65871255db92
