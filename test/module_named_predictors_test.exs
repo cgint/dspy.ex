@@ -67,6 +67,13 @@ defmodule Dspy.ModuleNamedPredictorsTest do
     assert Module.named_predictors(program) == []
   end
 
+  test "an improper data list does not prevent discovery of other fields" do
+    predict = Predict.new(QA)
+    program = %Program{items: [predict | :metadata], left: predict}
+
+    assert Module.named_predictors(program) == [{"left", predict}]
+  end
+
   test "identical members of an actual Ensemble occupy distinct slots" do
     predict = Predict.new(QA)
     ensemble = %Dspy.Teleprompt.Ensemble.Program{members: [predict, predict]}

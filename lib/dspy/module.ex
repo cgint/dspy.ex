@@ -100,7 +100,7 @@ defmodule Dspy.Module do
   @doc """
   List the named Predict and ChainOfThought values in a program.
 
-  Names follow module fields and the immediate entries of list, tuple and map
+  Names follow module fields and the immediate entries of proper list, tuple and map
   fields. The same predictor value in multiple slots appears at each name.
   A standalone Predict is named `self`. ChainOfThought contributes `predict`
   within its slot and is returned as the native ChainOfThought value.

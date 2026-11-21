@@ -35,11 +35,7 @@ defmodule Dspy.Module.PredictorSlots do
   defp walk_field(%_{} = value, path), do: walk(value, path)
   defp walk_field(tuple, path) when is_tuple(tuple), do: walk_field(Tuple.to_list(tuple), path)
 
-  defp walk_field(list, path) when is_list(list) do
-    list
-    |> Enum.with_index()
-    |> Enum.flat_map(fn {value, index} -> walk(value, [{:index, index} | path]) end)
-  end
+  defp walk_field(list, path) when is_list(list), do: walk_list(list, path, 0, [])
 
   defp walk_field(map, path) when is_map(map) do
     map
@@ -48,6 +44,15 @@ defmodule Dspy.Module.PredictorSlots do
   end
 
   defp walk_field(_value, _path), do: []
+
+  defp walk_list([], _path, _index, slots), do: Enum.reverse(slots)
+
+  defp walk_list([value | tail], path, index, slots) do
+    slots = Enum.reverse(walk(value, [{:index, index} | path]), slots)
+    walk_list(tail, path, index + 1, slots)
+  end
+
+  defp walk_list(_improper_tail, _path, _index, _slots), do: []
 
   defp render(path) do
     path
