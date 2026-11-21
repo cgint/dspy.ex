@@ -42,6 +42,49 @@ defmodule Dspy.ExampleWithInputsTest do
     refute Map.has_key?(inputs, "answer")
   end
 
+  test "Example.labels/1 returns the fields outside the selected inputs" do
+    example =
+      Example.new(%{"question" => "q", context: "hint", answer: nil}, %{origin: :fixture})
+      |> Example.with_inputs([:question, "context", "missing"])
+
+    labels = Example.labels(example)
+
+    assert labels == Example.new(answer: nil)
+    assert Example.input_keys(labels) == nil
+    assert Example.inputs(example) == %{"question" => "q", context: "hint"}
+  end
+
+  test "Example.labels/1 distinguishes empty input selection from missing input selection" do
+    example = Example.new(answer: "a")
+
+    assert_raise ArgumentError, ~r/with_inputs/, fn -> Example.labels(example) end
+    assert Example.labels(Example.with_inputs(example, [])) == example
+  end
+
+  test "Example.without/2 returns a copy preserving input selection and metadata" do
+    example =
+      Example.new(%{"source" => "web", question: "q", answer: nil}, %{origin: :fixture})
+      |> Example.with_inputs(:question)
+
+    updated = Example.without(example, [:source, :answer])
+
+    assert updated.attrs == %{question: "q"}
+    assert updated.metadata == example.metadata
+    assert Example.labels(updated) == Example.new()
+    assert Example.without(example, :question).attrs == %{"source" => "web", answer: nil}
+    assert example.attrs == %{"source" => "web", question: "q", answer: nil}
+  end
+
+  test "Example.without/2 removes exact keys first and rejects missing keys" do
+    example = Example.new(%{"question" => "string", question: "atom"})
+
+    assert Example.without(example, :question).attrs == %{"question" => "string"}
+    assert Example.without(example, "question").attrs == %{question: "atom"}
+    assert Example.without(example, []).attrs == example.attrs
+    assert_raise KeyError, fn -> Example.without(example, [:question, :missing]) end
+    assert_raise KeyError, fn -> Example.without(example, [:question, :question]) end
+  end
+
   test "Evaluate uses Example.inputs/1 when forwarding" do
     program = %StrictInputProgram{}
 

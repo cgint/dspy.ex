@@ -8,6 +8,12 @@ This repo ships in **small, user-usable slices**.
 
 ## Consumer notes
 
+### Example labels and field removal
+
+`Dspy.Example.labels/1` builds an example from the fields outside the selection
+made by `with_inputs/2`. `Dspy.Example.without/2` removes one or more fields from
+a copy while keeping its input selection and metadata.
+
 ### Named predictor inspection and updates
 
 `Dspy.Module.named_predictors/1` lists predictor values by their program slots.
