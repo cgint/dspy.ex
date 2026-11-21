@@ -1,0 +1,220 @@
+defmodule Dspy.LM.ReqLLMToolMessagesTest do
+  use ExUnit.Case, async: true
+
+  alias Dspy.LM.ReqLLM, as: Bridge
+
+  defmodule CapturingClient do
+    def generate_text(model, context, _opts) do
+      send(self(), {:context, context})
+
+      calls = [
+        ReqLLM.ToolCall.new_builtin("ws_builtin", "web_search_call", "{}"),
+        ReqLLM.ToolCall.new("call_next", "lookup", ~s({"x":2}))
+      ]
+
+      {:ok,
+       %ReqLLM.Response{
+         id: "response",
+         model: model,
+         context: context,
+         message: ReqLLM.Context.assistant("Next", tool_calls: calls),
+         finish_reason: :tool_calls
+       }}
+    end
+  end
+
+  defmodule OfflineResponses do
+    def run(request) do
+      send(
+        self(),
+        {:http_request, request.url.path, Jason.decode!(IO.iodata_to_binary(request.body))}
+      )
+
+      response =
+        Req.Response.new(
+          status: 200,
+          headers: [{"content-type", "application/json"}],
+          body:
+            Jason.encode!(%{
+              id: "resp_tool",
+              object: "response",
+              model: "gpt-4.1-mini",
+              status: "completed",
+              output: [
+                %{
+                  type: "function_call",
+                  id: "fc_next",
+                  call_id: "call_next",
+                  name: "lookup",
+                  arguments: ~s({"x":2})
+                }
+              ]
+            })
+        )
+
+      {request, response}
+    end
+  end
+
+  @prior_call %{
+    id: "call_prior",
+    type: "function",
+    function: %{name: "lookup", arguments: ~s({"x":1})}
+  }
+  @next_call %{
+    id: "call_next",
+    type: "function",
+    function: %{name: "lookup", arguments: ~s({"x":2})}
+  }
+
+  test "preserves assistant tool calls and tool results through the OpenAI Responses wire" do
+    lm =
+      Bridge.new(
+        model: "openai:gpt-4.1-mini",
+        default_opts: [
+          api_key: "fake-offline-key",
+          base_url: "http://127.0.0.1:1",
+          req_http_options: [adapter: OfflineResponses]
+        ]
+      )
+
+    request = %{
+      messages: [
+        %{role: "user", content: "Look it up"},
+        %{"role" => "assistant", "content" => nil, "tool_calls" => [@prior_call]},
+        %{"role" => "tool", "content" => "found it", "tool_call_id" => "call_prior"}
+      ]
+    }
+
+    result = Dspy.context([cache: false], fn -> Dspy.LM.generate(lm, request) end)
+
+    assert_received {:http_request, "/responses", %{"input" => input}}
+
+    assert [
+             %{"role" => "user"},
+             %{
+               "type" => "function_call",
+               "call_id" => "call_prior",
+               "name" => "lookup",
+               "arguments" => ~s({"x":1})
+             },
+             %{
+               "type" => "function_call_output",
+               "call_id" => "call_prior",
+               "output" => "found it"
+             }
+           ] = input
+
+    assert {:ok,
+            %{
+              choices: [
+                %{
+                  message: %{role: "assistant", content: "", tool_calls: [@next_call]},
+                  finish_reason: "tool_calls"
+                }
+              ]
+            }} = result
+  end
+
+  test "preserves multipart text and ordered call metadata and excludes provider builtin calls" do
+    lm = bridge()
+
+    first_call =
+      @prior_call
+      |> put_in([:function, :metadata], %{thought_signature: "original", provider_tag: "test"})
+      |> Map.put(:thought_signature, "fallback")
+
+    second_call = %{
+      "id" => "call_second",
+      "type" => "function",
+      "function" => %{"name" => "lookup", "arguments" => %{"x" => 3}},
+      "thought_signature" => "flat-signature"
+    }
+
+    messages = [
+      %{
+        role: "assistant",
+        content: [%{type: "text", text: "Looking"}],
+        tool_calls: [first_call, second_call]
+      },
+      %{
+        role: "tool",
+        name: "lookup",
+        content: [%{"type" => "text", "text" => "First"}],
+        tool_call_id: "call_prior"
+      },
+      %{role: "tool", content: "Second", tool_call_id: "call_second"}
+    ]
+
+    assert {:ok,
+            %{
+              choices: [
+                %{message: %{role: "assistant", content: "Next", tool_calls: [@next_call]}}
+              ]
+            }} =
+             Bridge.generate(lm, %{messages: messages})
+
+    assert_received {:context,
+                     %ReqLLM.Context{
+                       messages: [
+                         %{
+                           role: :assistant,
+                           content: [%{type: :text, text: "Looking"}],
+                           tool_calls: calls
+                         },
+                         %{
+                           role: :tool,
+                           name: "lookup",
+                           content: [%{type: :text, text: "First"}],
+                           tool_call_id: "call_prior"
+                         },
+                         %{
+                           role: :tool,
+                           content: [%{type: :text, text: "Second"}],
+                           tool_call_id: "call_second"
+                         }
+                       ]
+                     }}
+
+    assert Enum.map(calls, &Map.from_struct/1) == [
+             Map.delete(first_call, :thought_signature),
+             %{
+               id: "call_second",
+               type: "function",
+               function: %{
+                 name: "lookup",
+                 arguments: ~s({"x":3}),
+                 metadata: %{thought_signature: "flat-signature"}
+               }
+             }
+           ]
+  end
+
+  test "rejects malformed explicit tool metadata before reaching the client" do
+    builtin = ReqLLM.ToolCall.new_builtin("ws_builtin", "web_search_call", "{}")
+
+    for message <- [
+          %{role: "tool", content: "result"},
+          %{role: "tool", content: "result", tool_call_id: " "},
+          %{role: "assistant", content: "", tool_calls: [%{id: "call_incomplete"}]},
+          %{
+            role: "assistant",
+            content: "",
+            tool_calls: [put_in(@prior_call, [:function, :arguments], "{invalid")]
+          },
+          %{
+            role: "assistant",
+            content: "",
+            tool_calls: [put_in(@prior_call, [:function, :arguments], "[1]")]
+          },
+          %{role: "assistant", content: "", tool_calls: [builtin]}
+        ] do
+      assert {:error, {:unsupported_message, _reason}} =
+               Bridge.generate(bridge(), %{messages: [message]})
+    end
+
+    refute_received {:context, _}
+  end
+
+  defp bridge, do: Bridge.new(model: "openai:gpt-4.1-mini", client_module: CapturingClient)
+end
