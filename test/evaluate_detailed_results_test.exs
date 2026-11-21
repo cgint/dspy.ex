@@ -77,4 +77,33 @@ defmodule DspyEvaluateDetailedResultsTest do
 
     assert output == ""
   end
+
+  test "cross-validation shuffles with the specified seed without changing the caller's RNG" do
+    dataset = Enum.map(0..9, &Example.new(id: &1, answer: "ok"))
+    metric = fn _example, _prediction -> 1.0 end
+
+    for seed_caller? <- [false, true] do
+      {before, after_call, folds} =
+        Task.async(fn ->
+          if seed_caller?, do: :rand.seed(:exsss, {7, 8, 9})
+          seed_before = :rand.export_seed()
+
+          result = Evaluate.cross_validate(%MaybeFailsProgram{}, dataset, metric, k: 2, seed: 0)
+
+          ids =
+            for fold <- result.fold_results do
+              Enum.map(fold.results, fn {example, _, _} -> example.attrs.id end)
+            end
+
+          {seed_before, :rand.export_seed(), ids}
+        end)
+        |> Task.await()
+
+      assert before == :undefined == not seed_caller?
+      assert after_call == before
+
+      # CPython random.Random(0).shuffle(range(10)), from the M1-e RNG fixture.
+      assert folds == [[7, 8, 1, 5, 3], [4, 2, 0, 9, 6]]
+    end
+  end
 end

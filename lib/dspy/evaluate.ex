@@ -22,7 +22,7 @@ defmodule Dspy.Evaluate do
 
   require Logger
 
-  alias Dspy.{Example, Module, Prediction}
+  alias Dspy.{Example, Module, Prediction, Random}
 
   @type evaluation_error ::
           {:forward_error, term()}
@@ -880,7 +880,7 @@ defmodule Dspy.Evaluate do
   - `opts` - options:
     - `:k` (default 5)
     - `:shuffle` (default true)
-    - `:seed` (default system time)
+    - `:seed` (default system time) for the CPython-compatible shuffle
     - `:progress` (default false)
 
   ## Returns
@@ -910,8 +910,9 @@ defmodule Dspy.Evaluate do
     # Shuffle dataset if requested
     shuffled_dataset =
       if shuffle do
-        :rand.seed(:exsss, {seed, seed + 1, seed + 2})
-        Enum.shuffle(dataset)
+        {state, _} = Random.seed(seed)
+        {_state, shuffled} = Random.shuffle(state, dataset)
+        shuffled
       else
         dataset
       end
