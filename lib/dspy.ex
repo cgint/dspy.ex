@@ -459,7 +459,14 @@ defmodule Dspy do
   Halting the enumeration cancels the run. Streamed calls make one attempt.
   The original enumerating process must resume or halt an active continuation.
 
-  The options are the same per-call options accepted by `call/3`.
+  With ordinary ChatAdapter markers, `stream_listeners: [:answer]` selects
+  declared string outputs and yields `Dspy.StreamResponse` chunks for them in
+  place of raw deltas. The selection must contain unique field atoms. A field
+  can end with empty text marked `is_last_chunk`. A successful call can yield
+  only the final prediction when the parser uses its JSON fallback.
+  Omitting `:stream_listeners` or passing `[]` yields raw deltas.
+
+  The remaining options are the per-call options accepted by `call/3`.
   """
   @spec streamify(Predict.t() | ChainOfThought.t(), keyword()) ::
           (Dspy.Module.inputs() -> Enumerable.t())

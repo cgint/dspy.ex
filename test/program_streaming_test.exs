@@ -3,7 +3,7 @@ defmodule Dspy.ProgramStreamingTest do
 
   import Dspy.TestSupport.StreamingSSE, only: [fixture: 3]
 
-  alias Dspy.{ChainOfThought, Predict, Prediction, Settings}
+  alias Dspy.{ChainOfThought, Predict, Prediction, Settings, StreamResponse}
   alias Dspy.Signature.Adapters.{ChatAdapter, JSONAdapter, TwoStep}
 
   @wait 5_000
@@ -287,6 +287,120 @@ defmodule Dspy.ProgramStreamingTest do
     assert {:error, :closed} = Task.await(fixture, @wait)
   end
 
+  test "listeners emit selected Chat fields across split markers and retain the batch prediction" do
+    deltas = [
+      "[[ ## detail ## ]]Omitted.\n[[ #",
+      "# answer ## ]",
+      "]\n  Four",
+      ". \n[[ ## unknown ## ]]Ignore me\n[[ ## answer ## ]]Duplicate"
+    ]
+
+    lm = scripted("selected", deltas)
+    program = Predict.new("question -> answer, detail", lm: lm, adapter: ChatAdapter)
+    assert {:ok, expected} = Dspy.call(program, @inputs)
+
+    assert [
+             field_event("self", :answer, "Four", false),
+             field_event("self", :answer, ".", true),
+             expected
+           ] ==
+             Enum.to_list(Dspy.streamify(program, stream_listeners: [:answer]).(@inputs))
+
+    assert Enum.map(deltas, &{:delta, &1}) ++ [expected] ==
+             Enum.to_list(Dspy.streamify(program, stream_listeners: []).(@inputs))
+  end
+
+  test "ChainOfThought listeners use the enumeration adapter and predictor name" do
+    lm = scripted("cot", ["[[ ## reasoning ## ]]Two plus two.\n", @answer_header, @answer])
+    program = ChainOfThought.new("question -> answer", lm: lm)
+    stream = Dspy.streamify(program, stream_listeners: [:reasoning, :answer]).(@inputs)
+
+    Dspy.context([adapter: ChatAdapter, cache: false], fn ->
+      assert {:ok, expected} = Dspy.call(program, @inputs)
+
+      assert [
+               field_event("predict", :reasoning, "Two plus two.", false),
+               field_event("predict", :reasoning, "", true),
+               field_event("predict", :answer, @answer, false),
+               field_event("predict", :answer, "", true),
+               expected
+             ] == Enum.to_list(stream)
+    end)
+  end
+
+  test "listeners preserve an ordinary JSON fallback without creating field events" do
+    program = predict(scripted("json-fallback", [~s({"answer":"Four."})]))
+
+    assert [%Prediction{attrs: %{answer: @answer}}] =
+             Enum.to_list(Dspy.streamify(program, stream_listeners: [:answer]).(@inputs))
+  end
+
+  test "listeners reject signatures using Chat's distinct structured-tool marker format" do
+    signature = Dspy.Signature.define("question -> answer")
+
+    tool_calls = %{
+      name: :tool_calls,
+      type: :tool_calls,
+      tool_call_format: :structured,
+      required: false
+    }
+
+    signature = %{signature | output_fields: signature.output_fields ++ [tool_calls]}
+    program = Predict.new(signature, lm: scripted("unused", []), adapter: ChatAdapter)
+
+    assert_raise ArgumentError, ~r/ordinary Chat markers/, fn ->
+      Dspy.streamify(program, stream_listeners: [:answer])
+    end
+
+    refute_received {:stream_call, _, _, _, _}
+  end
+
+  test "an error ends the listener stream without closing the active field" do
+    lm = scripted("incomplete", [@answer_header, @answer])
+    program = Predict.new("question -> answer, detail", lm: lm, adapter: ChatAdapter)
+
+    assert [event, {:error, {:output_parse_failed, _, _}}] =
+             Enum.to_list(Dspy.streamify(program, stream_listeners: [:answer]).(@inputs))
+
+    assert event == field_event("self", :answer, @answer, false)
+  end
+
+  test "invalid listener selections and non-Chat adapters fail before the LM opens" do
+    lm = scripted("unused-listener", [@answer_header, @answer])
+    program = Predict.new("question -> answer, count: int", lm: lm)
+
+    for selection <- [
+          :answer,
+          nil,
+          ["answer"],
+          [:unknown],
+          [:question],
+          [:answer, :answer],
+          [:count]
+        ] do
+      assert_raise ArgumentError, ~r/stream_listeners/, fn ->
+        Dspy.streamify(program, stream_listeners: selection)
+      end
+    end
+
+    stream = Dspy.streamify(program, stream_listeners: [:answer]).(@inputs)
+
+    Dspy.context([adapter: JSONAdapter], fn ->
+      assert [{:error, {:unsupported_streaming_adapter, JSONAdapter}}] = Enum.to_list(stream)
+    end)
+
+    refute_received {:stream_call, _, _, _, _}
+    refute_received {:batch_call, _, _}
+  end
+
+  test "taking one selected field chunk closes the real provider socket" do
+    {fixture, url} = fixture(:close, @answer_header <> @answer, " More text.")
+    stream = Dspy.streamify(loopback_predict(url), stream_listeners: [:answer]).(@inputs)
+
+    assert [field_event("self", :answer, @answer, false)] == Enum.take(stream, 1)
+    assert {:error, :closed} = Task.await(fixture, @wait)
+  end
+
   test "killing a consumer waiting on a real stream closes the provider socket" do
     {fixture, url} = fixture(:close, @answer_header, @answer)
     owner = self()
@@ -314,6 +428,15 @@ defmodule Dspy.ProgramStreamingTest do
     }
 
     %ScriptedLM{owner: self(), model: model, deltas: deltas, result: {:ok, response}}
+  end
+
+  defp field_event(name, field, chunk, last?) do
+    %StreamResponse{
+      predict_name: name,
+      signature_field_name: field,
+      chunk: chunk,
+      is_last_chunk: last?
+    }
   end
 
   defp predict(lm, opts \\ []) do
