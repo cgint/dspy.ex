@@ -70,6 +70,49 @@ defmodule Dspy.Signature.Adapters.XMLValue do
   def shape(%{"oneOf" => choices} = schema) when is_list(choices), do: unwrap(schema, choices)
   def shape(schema), do: schema
 
+  def literal_members(schema) do
+    schema = shape(schema)
+
+    values =
+      case schema do
+        %{"const" => value} -> [value]
+        %{"enum" => values} when is_integer(length(values)) -> values
+        _ -> []
+      end
+
+    Enum.filter(values, &scalar_literal?(&1, schema))
+  end
+
+  defp scalar_literal?(value, %{"type" => "string"}), do: is_binary(value)
+
+  defp scalar_literal?(value, %{"type" => "integer"}),
+    do: is_number(value) and trunc(value) == value
+
+  defp scalar_literal?(value, %{"type" => "number"}), do: is_number(value)
+  defp scalar_literal?(value, %{"type" => "boolean"}), do: is_boolean(value)
+  defp scalar_literal?(value, %{"type" => "null"}), do: is_nil(value)
+  defp scalar_literal?(_value, %{"type" => type}) when type in ["object", "array"], do: false
+
+  defp scalar_literal?(value, _schema),
+    do: is_binary(value) or is_number(value) or is_boolean(value) or is_nil(value)
+
+  def literal_value(raw, schema) do
+    members = literal_members(schema)
+
+    if members == [] or raw in members do
+      raw
+    else
+      case decode_literal(raw) do
+        {:ok, value} -> if Enum.any?(members, &(&1 == value)), do: value, else: raw
+        {:error, _reason} -> raw
+      end
+    end
+  end
+
+  defp decode_literal("True"), do: {:ok, true}
+  defp decode_literal("False"), do: {:ok, false}
+  defp decode_literal(raw), do: Jason.decode(raw)
+
   defp unwrap(schema, choices) do
     case Enum.reject(choices, &match?(%{"type" => "null"}, &1)) do
       [choice] -> shape(choice)
@@ -291,15 +334,22 @@ defmodule Dspy.Signature.Adapters.XMLValue do
     end
   end
 
-  defp cast_scalar(raw, %{"type" => type}, name) when is_map_key(@scalar_types, type) do
+  defp cast_scalar(raw, schema, name) do
+    case literal_value(raw, schema) do
+      ^raw -> cast_scalar_type(raw, schema, name)
+      value -> {:ok, value}
+    end
+  end
+
+  defp cast_scalar_type(raw, %{"type" => type}, name) when is_map_key(@scalar_types, type) do
     case ChatAdapter.cast_output_value(raw, %{type: Map.fetch!(@scalar_types, type)}) do
       {:ok, _decoded} = success -> success
       {:error, reason} -> decode_error({:invalid_xml_value, name, reason})
     end
   end
 
-  defp cast_scalar("null", %{"type" => "null"}, _name), do: {:ok, nil}
-  defp cast_scalar(raw, _schema, _name), do: {:ok, raw}
+  defp cast_scalar_type("null", %{"type" => "null"}, _name), do: {:ok, nil}
+  defp cast_scalar_type(raw, _schema, _name), do: {:ok, raw}
 
   defp nullable?(%{"type" => "null"}), do: true
   defp nullable?(%{"type" => types}) when is_list(types), do: "null" in types

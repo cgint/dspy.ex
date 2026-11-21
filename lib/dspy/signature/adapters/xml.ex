@@ -163,7 +163,7 @@ defmodule Dspy.Signature.Adapters.XMLAdapter do
 
       render_children(value, children)
     else
-      render_json(value)
+      render_container_json(value)
     end
   end
 
@@ -198,16 +198,43 @@ defmodule Dspy.Signature.Adapters.XMLAdapter do
         render_node(name, item, schema, attrs)
       end)
     else
-      render_json(value)
+      render_container_json(value)
     end
   end
 
-  # When a child has no concrete type, literal text alone cannot preserve
-  # the type of a non-string value. The containing tag can still carry JSON.
+  defp render_container_json(value), do: value |> schema_json_value() |> render_json()
+
+  defp schema_json_value(%module{} = value) do
+    if function_exported?(module, :json_schema, 0) and
+         Jason.Encoder.impl_for(value) == Jason.Encoder.Any do
+      value |> Map.from_struct() |> schema_json_value()
+    else
+      value
+    end
+  end
+
+  defp schema_json_value(value) when is_map(value),
+    do: Map.new(value, fn {key, child} -> {key, schema_json_value(child)} end)
+
+  defp schema_json_value(value) when is_integer(length(value)),
+    do: Enum.map(value, &schema_json_value/1)
+
+  defp schema_json_value(value), do: value
+
+  # The containing tag can carry JSON when a non-string value has no literal
+  # spelling that preserves its type.
   defp literal_xml_value?(_value, false), do: false
   defp literal_xml_value?(value, _schema) when is_binary(value) or is_nil(value), do: true
 
   defp literal_xml_value?(value, schema) do
+    if (is_number(value) or is_boolean(value)) and XMLValue.literal_members(schema) != [] do
+      XMLValue.literal_value(render_json(value), schema) === value
+    else
+      ordinary_xml_value?(value, schema)
+    end
+  end
+
+  defp ordinary_xml_value?(value, schema) do
     case XMLValue.shape(schema) do
       %{"type" => "integer"} -> is_integer(value)
       %{"type" => "number"} -> is_number(value)
@@ -238,10 +265,24 @@ defmodule Dspy.Signature.Adapters.XMLAdapter do
         end
 
       :leaf ->
+        sample_leaf(schema)
+    end
+  end
+
+  defp sample_leaf(schema) do
+    case XMLValue.literal_members(schema) do
+      [] ->
         case XMLValue.shape(schema) do
           %{"type" => type} when is_binary(type) -> "{#{type} value}"
           _ -> "{JSON value}"
         end
+
+      [value] ->
+        value
+
+      values ->
+        choices = Enum.map_join(values, ", ", &render_json/1)
+        "one of (#{choices})"
     end
   end
 
