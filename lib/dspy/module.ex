@@ -116,7 +116,7 @@ defmodule Dspy.Module do
     do: normalize_inputs(Dspy.Example.inputs(example))
 
   defp normalize_inputs(inputs) when is_list(inputs),
-    do: if(Keyword.keyword?(inputs), do: Map.new(inputs), else: inputs)
+    do: if(Keyword.keyword?(inputs), do: normalize_inputs(Map.new(inputs)), else: inputs)
 
   defp normalize_inputs(inputs), do: inputs
 
