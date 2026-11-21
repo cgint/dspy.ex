@@ -78,6 +78,31 @@ defmodule Dspy.MultiChainComparisonTest do
     assert Dspy.Settings.get(:temperature) == 0.1
   end
 
+  test "compares a predictor's parsed completion collection in row order" do
+    mcc = Dspy.MultiChainComparison.new("question -> answer", m: 2)
+
+    prediction =
+      Dspy.Prediction.from_completions([
+        %{"reasoning" => "multiply", "answer" => "42"},
+        %{"reasoning" => "guess", "answer" => "41"}
+      ])
+
+    assert {:ok, result} =
+             Dspy.call(mcc, %{
+               question: "What is 6*7?",
+               completions: Dspy.Prediction.parsed_completions(prediction)
+             })
+
+    assert result[:answer] == "42"
+    assert_receive {:request, request}
+    text = prompt_text(request)
+    first_attempt = "«I'm trying to multiply I'm not sure but my prediction is 42»"
+    second_attempt = "«I'm trying to guess I'm not sure but my prediction is 41»"
+    assert [before_first, after_first] = String.split(text, first_attempt, parts: 2)
+    refute before_first =~ second_attempt
+    assert after_first =~ second_attempt
+  end
+
   test "formats attempts without a rationale as answer-only" do
     mcc = Dspy.MultiChainComparison.new("question -> answer", m: 2)
     attempts = [%{answer: "41"}, %{"rationale" => " \t\n ", "answer" => "42\nnoise"}]
@@ -95,6 +120,9 @@ defmodule Dspy.MultiChainComparisonTest do
 
     assert {:error, {:attempt_count_mismatch, %{expected: 2, got: 3}}} =
              Dspy.call(mcc, %{question: "q", completions: completions()})
+
+    assert {:error, {:attempt_count_mismatch, %{expected: 2, got: 1}}} =
+             Dspy.call(mcc, %{question: "q", completions: Dspy.Completions.new([%{answer: 41}])})
 
     refute_receive {:request, _}, 50
   end

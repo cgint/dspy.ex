@@ -16,11 +16,15 @@ defmodule Dspy.MultiChainComparison do
       mcc = Dspy.MultiChainComparison.new(QA, m: 3)
       {:ok, pred} = Dspy.call(mcc, %{question: "...", completions: [c1, c2, c3]})
 
-  Each completion is a map / `%Dspy.Prediction{}` with `:rationale` or
-  `:reasoning`, and the signature's last output field (e.g. `:answer`).
+  Pass a list of maps or predictions, or a parsed `Dspy.Completions`
+  collection from `Dspy.Prediction.parsed_completions/1`. Each row uses
+  `:rationale` or `:reasoning`, and the signature's last output field
+  (e.g. `:answer`).
   """
 
   use Dspy.Module
+
+  alias Dspy.Completions
 
   defstruct [:m, :temperature, :last_key, :predict]
 
@@ -78,7 +82,7 @@ defmodule Dspy.MultiChainComparison do
   def forward(%__MODULE__{} = mcc, inputs) when is_map(inputs) do
     {completions, rest} = Map.pop(inputs, :completions, [])
 
-    attempts = Enum.map(completions, &format_attempt(&1, mcc.last_key))
+    attempts = format_attempts(completions, mcc.last_key)
 
     if length(attempts) != mcc.m do
       {:error, {:attempt_count_mismatch, %{expected: mcc.m, got: length(attempts)}}}
@@ -93,6 +97,17 @@ defmodule Dspy.MultiChainComparison do
         Dspy.Module.forward(mcc.predict, Map.merge(attempt_inputs, rest))
       end)
     end
+  end
+
+  defp format_attempts(%Completions{} = completions, last_key) do
+    for index <- 0..(Completions.size(completions) - 1) do
+      {:ok, row} = Completions.fetch(completions, index)
+      format_attempt(row, last_key)
+    end
+  end
+
+  defp format_attempts(completions, last_key) do
+    Enum.map(completions, &format_attempt(&1, last_key))
   end
 
   defp format_attempt(completion, last_key) do
