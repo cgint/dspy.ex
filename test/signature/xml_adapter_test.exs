@@ -46,6 +46,53 @@ defmodule Dspy.Signature.XMLAdapterTest do
     output_field(:result, :json, "Result", schema: Result)
   end
 
+  defmodule Line do
+    use JSV.Schema
+
+    defschema(%{
+      type: :object,
+      properties: %{number: integer(), description: string()},
+      required: [:number, :description],
+      additionalProperties: false
+    })
+  end
+
+  defmodule Record do
+    use JSV.Schema
+
+    defschema(%{
+      type: :object,
+      properties: %{
+        lines: %{type: :array, items: Line},
+        labels: %{type: :object, additionalProperties: string()}
+      },
+      required: [:lines, :labels],
+      additionalProperties: false
+    })
+  end
+
+  defmodule Nested do
+    use Dspy.Signature
+
+    input_field(:question, :string, "Question")
+    output_field(:result, :json, "Record", schema: Record)
+  end
+
+  defmodule Flexible do
+    use Dspy.Signature
+
+    output_field(:data, :json, "Data",
+      schema: %{
+        type: :object,
+        properties: %{
+          values: %{type: [:array, :null], items: %{type: :integer}},
+          metadata: %{type: :object, additionalProperties: true}
+        },
+        required: [:values, :metadata]
+      }
+    )
+  end
+
   test "parses typed fields and treats markup and closing-tag literals as text" do
     body = "```elixir\nif x < y, do: \"</answer> & R&B\"\n```"
 
@@ -78,7 +125,113 @@ defmodule Dspy.Signature.XMLAdapterTest do
 
     demo = Dspy.Example.new(%{question: "Example", result: %Result{count: 5}})
     request = XMLAdapter.format_request(signature, %{question: "New question"}, [demo])
-    assert List.last(request.messages).content =~ "<result>\n{\"count\":5}\n</result>"
+    assert List.last(request.messages).content =~ "<result>\n<count>\n5\n</count>\n</result>"
+  end
+
+  test "Predict parses nested records and lists and replays the typed value as XML" do
+    key = "quoted \"key\" & more\nsecond line"
+
+    completion = """
+    <result>
+    <lines>
+    <item>
+    <number>3</number>
+    <description>
+    R&B <item>is literal</item>
+    </description>
+    </item>
+    <item><number>4</number><description>last</description></item>
+    </lines>
+    <labels><entry key="quoted &quot;key&quot; &amp; more&#10;second line">Actual & text</entry></labels>
+    </result>
+    """
+
+    expected = %Record{
+      lines: [
+        %Line{number: 3, description: "R&B <item>is literal</item>"},
+        %Line{number: 4, description: "last"}
+      ],
+      labels: %{key => "Actual & text"}
+    }
+
+    lm = recording_lm([completion])
+    predictor = Dspy.Predict.new(Nested, lm: lm, adapter: XMLAdapter)
+
+    assert {:ok, %Dspy.Prediction{attrs: %{result: ^expected}}} =
+             Dspy.call(predictor, %{question: "Find the record"})
+
+    assert_received {:xml_request, %{messages: [%{content: instructions}, _]}}
+    assert instructions =~ "<item>"
+    assert instructions =~ "<entry key=\"example key\">"
+
+    demo = Dspy.Example.new(%{question: "Prior", result: expected})
+    request = XMLAdapter.format_request(Nested.signature(), %{question: "New"}, [demo])
+    user = List.last(request.messages).content
+    assert user =~ "<entry key=\"quoted &quot;key&quot; &amp; more&#10;second line\">"
+    [_, rendered] = Regex.run(~r/(<result>.*<\/result>)/s, user)
+    assert %{result: ^expected} = XMLAdapter.parse_outputs(Nested.signature(), rendered)
+  end
+
+  test "validates nested containers, missing required fields, and duplicate scalar children" do
+    signature = Nested.signature()
+
+    for result <- [
+          "<lines><item><number>wrong</number><description>x</description></item></lines><labels />",
+          "<lines><item><number>3</number></item></lines><labels />",
+          "<lines><item><number>3</number><number>4</number><description>x</description></item></lines><labels />",
+          "<lines><item><number>3</number><description>x</description><extra>y</extra></item></lines><labels />",
+          "<lines></lines><labels><entry key=\"unescaped & bad\">value</entry></labels>"
+        ] do
+      assert {:error, _} = XMLAdapter.parse_outputs(signature, "<result>#{result}</result>")
+    end
+
+    assert %{result: %Record{lines: [], labels: %{}}} =
+             XMLAdapter.parse_outputs(
+               signature,
+               "<result><lines /><labels></labels></result>\nHere are the results."
+             )
+
+    assert {:error, {:output_decode_failed, {:unclosed_xml_field, "description"}}} =
+             XMLAdapter.parse_outputs(
+               signature,
+               "<result><lines><item><number>3</number><description>first</item>" <>
+                 "<item><number>4</number><description>second</description></item>" <>
+                 "</lines><labels /></result>"
+             )
+  end
+
+  test "ignores a nested leaf's apparent close when followed by literal markup" do
+    assert %{result: %Record{lines: [%Line{description: description}]}} =
+             XMLAdapter.parse_outputs(
+               Nested.signature(),
+               "<result><lines><item><number>2</number>" <>
+                 "<description>literal </description><i>markup</i> & text</description>" <>
+                 "</item></lines><labels /></result>"
+             )
+
+    assert description == "literal </description><i>markup</i> & text"
+  end
+
+  test "preserves nullable collections and JSON fallback for open dictionary values" do
+    signature = Flexible.signature()
+
+    for {xml, expected} <- [{"<values />", nil}, {"<values></values>", []}] do
+      assert %{data: %{"values" => ^expected, "metadata" => %{}}} =
+               XMLAdapter.parse_outputs(signature, "<data>#{xml}<metadata /></data>")
+    end
+
+    expected = %{"values" => [1, 3], "metadata" => %{"details" => %{"ready" => true}}}
+
+    assert %{data: ^expected} =
+             XMLAdapter.parse_outputs(
+               signature,
+               ~s(<data><values><item>1</item><item>3</item></values><metadata>{"details":{"ready":true}}</metadata></data>)
+             )
+
+    demo = Dspy.Example.new(%{data: expected})
+    request = XMLAdapter.format_request(signature, %{}, [demo])
+    [_, rendered] = Regex.run(~r/(<data>.*<\/data>)/s, List.last(request.messages).content)
+    assert %{data: ^expected} = XMLAdapter.parse_outputs(signature, rendered)
   end
 
   test "accepts a fenced preamble and trailing prose" do

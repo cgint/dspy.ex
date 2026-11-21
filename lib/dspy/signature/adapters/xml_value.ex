@@ -1,0 +1,335 @@
+defmodule Dspy.Signature.Adapters.XMLValue do
+  @moduledoc false
+
+  alias Dspy.Signature.Adapters.ChatAdapter
+
+  @open_tag ~r/\A<([\p{L}_][\p{L}\p{N}\p{M}_.-]*)[ \t]*(\/?)>/u
+  @entry_tag ~r/\A<entry[ \t]+key[ \t]*=[ \t]*(?:"([^"<\x00-\x1f]*)"|'([^'<\x00-\x1f]*)')[ \t]*(\/?)>/u
+  @opening_newline ~r/\A[ \t]*\r?\n/
+  @closing_newline ~r/\r?\n[ \t]*\z/
+  @scalar_types %{"integer" => :integer, "number" => :number, "boolean" => :boolean}
+
+  def kind(schema) do
+    case shape(schema) do
+      %{"type" => "array"} -> :array
+      %{"type" => "object"} -> :object
+      %{"type" => _other} -> :leaf
+      %{"properties" => properties} when is_map(properties) -> :object
+      %{"additionalProperties" => additional} when is_map(additional) -> :object
+      _ -> :leaf
+    end
+  end
+
+  def empty(schema) do
+    if nullable?(schema) do
+      nil
+    else
+      case kind(schema) do
+        :array -> []
+        :object -> %{}
+        :leaf -> nil
+      end
+    end
+  end
+
+  def shape(%{"type" => ["null", type]} = schema), do: Map.put(schema, "type", type)
+  def shape(%{"type" => [type, "null"]} = schema), do: Map.put(schema, "type", type)
+
+  def shape(%{"type" => _type} = schema), do: schema
+  def shape(%{"anyOf" => choices} = schema) when is_list(choices), do: unwrap(schema, choices)
+  def shape(%{"oneOf" => choices} = schema) when is_list(choices), do: unwrap(schema, choices)
+  def shape(schema), do: schema
+
+  defp unwrap(schema, choices) do
+    case Enum.reject(choices, &match?(%{"type" => "null"}, &1)) do
+      [choice] -> shape(choice)
+      _ -> schema
+    end
+  end
+
+  def property_schema(schema, key) do
+    schema = shape(schema)
+    properties = Map.get(schema, "properties", %{})
+    additional = Map.get(schema, "additionalProperties", true)
+
+    case Map.fetch(properties, key) do
+      {:ok, _child} = child -> child
+      :error when additional == false -> :error
+      :error -> {:ok, additional}
+    end
+  end
+
+  def item_schema(schema, index) do
+    schema = shape(schema)
+    default = Map.get(schema, "items", %{})
+    Enum.at(Map.get(schema, "prefixItems", []), index, default)
+  end
+
+  def container(text, name, schema, boundary) do
+    read_container(text, name, schema, boundary, [])
+  end
+
+  def literal(text, name, boundary), do: read_literal(text, name, boundary, [], true)
+
+  defp read_container(text, name, schema, boundary, ancestors) do
+    schema = shape(schema)
+    kind = kind(schema)
+    closer = Regex.compile!("\\A" <> close_pattern(name))
+
+    if json_container?(String.trim_leading(text), kind) do
+      with {:ok, raw, rest} <- read_literal(text, name, boundary, ancestors, false),
+           {:ok, decoded} <- decode_json(raw, name) do
+        {:ok, decoded, rest}
+      end
+    else
+      scope = fn remainder ->
+        case Regex.run(closer, remainder) do
+          [tag] -> boundary.(String.trim_leading(after_offset(remainder, byte_size(tag))))
+          nil -> false
+        end
+      end
+
+      child_boundary = fn remainder ->
+        scope.(remainder) or child_tag?(remainder, schema, kind)
+      end
+
+      scopes = [{name, scope} | ancestors]
+      initial = if kind == :array, do: {[], 0}, else: %{}
+
+      with {:ok, value, rest} <-
+             read_children(text, schema, closer, child_boundary, scopes, initial) do
+        close_result(value, rest, name)
+      end
+    end
+  end
+
+  defp read_children(text, schema, closer, boundary, scopes, acc) do
+    text = String.trim_leading(text)
+
+    case Regex.run(closer, text) do
+      [tag] ->
+        {:ok, finish(acc), after_offset(text, byte_size(tag))}
+
+      nil ->
+        with {:ok, name, key, self_close?, rest} <- opening_tag(text),
+             {:ok, child_schema} <- child_schema(schema, name, key, acc),
+             {:ok, value, rest} <-
+               read_child(rest, name, self_close?, child_schema, boundary, scopes) do
+          read_children(rest, schema, closer, boundary, scopes, add(acc, key, value))
+        end
+    end
+  end
+
+  defp opening_tag(text) do
+    case Regex.run(@entry_tag, text) do
+      [tag, double, single, slash] ->
+        attribute = if double == "", do: single, else: double
+
+        with {:ok, key} <- decode_key(attribute, []) do
+          {:ok, "entry", key, slash == "/", after_offset(text, byte_size(tag))}
+        end
+
+      nil ->
+        case Regex.run(@open_tag, text) do
+          [tag, name, slash] ->
+            {:ok, name, name, slash == "/", after_offset(text, byte_size(tag))}
+
+          nil ->
+            decode_error(:invalid_xml_field)
+        end
+    end
+  end
+
+  defp child_tag?(text, _schema, :array), do: match?([_, "item", _], Regex.run(@open_tag, text))
+
+  defp child_tag?(text, schema, :object) do
+    with {:ok, _name, key, _self_close?, _rest} <- opening_tag(text),
+         {:ok, _child} <- property_schema(schema, key) do
+      true
+    else
+      _ -> false
+    end
+  end
+
+  defp child_schema(schema, "item", "item", {_items, index}) do
+    {:ok, item_schema(schema, index)}
+  end
+
+  defp child_schema(_schema, _name, key, {_items, _index}),
+    do: decode_error({:unknown_xml_field, key})
+
+  defp child_schema(schema, _name, key, acc) when is_map(acc) do
+    if Map.has_key?(acc, key) do
+      decode_error({:duplicate_xml_field, key})
+    else
+      case property_schema(schema, key) do
+        {:ok, _child} = child -> child
+        :error -> decode_error({:unknown_xml_field, key})
+      end
+    end
+  end
+
+  defp add({items, index}, _key, value), do: {[value | items], index + 1}
+  defp add(acc, key, value), do: Map.put(acc, key, value)
+
+  defp finish({items, _index}), do: Enum.reverse(items)
+  defp finish(acc), do: acc
+
+  defp read_child(text, _name, true, schema, _boundary, _scopes), do: {:ok, empty(schema), text}
+
+  defp read_child(text, name, false, schema, boundary, scopes) do
+    case kind(schema) do
+      :leaf ->
+        with {:ok, raw, rest} <- read_literal(text, name, boundary, scopes, false),
+             {:ok, decoded} <- cast_scalar(raw, shape(schema), name) do
+          {:ok, decoded, rest}
+        end
+
+      _container ->
+        read_container(text, name, schema, boundary, scopes)
+    end
+  end
+
+  defp json_container?(<<"{", _::binary>>, :object), do: true
+  defp json_container?(<<"[", _::binary>>, :array), do: true
+  defp json_container?(<<"null", _::binary>>, kind) when kind in [:object, :array], do: true
+  defp json_container?(_text, _kind), do: false
+
+  defp decode_json(raw, name) do
+    case Jason.decode(raw) do
+      {:ok, _decoded} = success -> success
+      {:error, _reason} -> decode_error({:invalid_xml_value, name, :invalid_json})
+    end
+  end
+
+  defp cast_scalar(raw, %{"type" => type}, name) when is_map_key(@scalar_types, type) do
+    case ChatAdapter.cast_output_value(raw, %{type: Map.fetch!(@scalar_types, type)}) do
+      {:ok, _decoded} = success -> success
+      {:error, reason} -> decode_error({:invalid_xml_value, name, reason})
+    end
+  end
+
+  defp cast_scalar("null", %{"type" => "null"}, _name), do: {:ok, nil}
+  defp cast_scalar(raw, _schema, _name), do: {:ok, raw}
+
+  defp nullable?(%{"type" => "null"}), do: true
+  defp nullable?(%{"type" => types}) when is_list(types), do: "null" in types
+  defp nullable?(%{"type" => _type}), do: false
+
+  defp nullable?(%{"anyOf" => choices}) when is_list(choices),
+    do: Enum.any?(choices, &nullable?/1)
+
+  defp nullable?(%{"oneOf" => choices}) when is_list(choices),
+    do: Enum.any?(choices, &nullable?/1)
+
+  defp nullable?(_schema), do: false
+
+  # A matching close in a literal is structural only when a valid continuation
+  # follows it. A leaf may not run past a recognized enclosing close.
+  defp read_literal(text, name, boundary, scopes, allow_fallback?) do
+    field_close =
+      if Regex.match?(@opening_newline, text) do
+        "</#{Regex.escape(name)}[ \\t]*>(?=[ \\t]*(?:\\r?\\n|\\z))"
+      else
+        close_pattern(name)
+      end
+
+    alternatives = ["(" <> field_close <> ")" | Enum.map(scopes, &close_pattern(elem(&1, 0)))]
+    matcher = Regex.compile!(Enum.join(alternatives, "|"))
+    fallback = if allow_fallback?, do: :keep, else: :none
+
+    case find_close(text, matcher, boundary, scopes, 0, fallback) do
+      {offset, length} ->
+        value = trim_framing(binary_part(text, 0, offset))
+        close_result(value, after_offset(text, offset + length), name)
+
+      _ ->
+        decode_error({:unclosed_xml_field, name})
+    end
+  end
+
+  defp close_result(value, rest, name) do
+    if rest != "" and not String.starts_with?(rest, "<") and rest == String.trim_leading(rest) do
+      decode_error({:invalid_xml_close, name})
+    else
+      {:ok, value, rest}
+    end
+  end
+
+  defp find_close(text, matcher, boundary, scopes, start, fallback) do
+    case Regex.run(matcher, text, return: :index, capture: [0, 1], offset: start) do
+      [{offset, length} = match | groups] ->
+        next = offset + length
+        field? = groups == [match]
+
+        cond do
+          field? and boundary.(String.trim_leading(after_offset(text, next))) ->
+            match
+
+          Enum.any?(scopes, fn {_name, scope} -> scope.(after_offset(text, offset)) end) ->
+            :none
+
+          true ->
+            fallback = if field? and fallback != :none, do: match, else: fallback
+            find_close(text, matcher, boundary, scopes, next, fallback)
+        end
+
+      nil ->
+        fallback
+    end
+  end
+
+  defp close_pattern(name), do: "</#{Regex.escape(name)}\\s*>"
+
+  defp after_offset(text, offset), do: binary_part(text, offset, byte_size(text) - offset)
+
+  defp trim_framing(value) do
+    if Regex.match?(@opening_newline, value) do
+      value
+      |> String.replace(@opening_newline, "")
+      |> String.replace(@closing_newline, "")
+    else
+      String.trim(value)
+    end
+  end
+
+  defp decode_key(text, acc) do
+    case :binary.split(text, "&") do
+      [literal] ->
+        {:ok, IO.iodata_to_binary(Enum.reverse([literal | acc]))}
+
+      [literal, escaped] ->
+        with [entity, rest] <- :binary.split(escaped, ";"),
+             {:ok, value} <- decode_entity(entity) do
+          decode_key(rest, [value, literal | acc])
+        else
+          _ -> decode_error(:invalid_xml_key)
+        end
+    end
+  end
+
+  defp decode_entity("amp"), do: {:ok, "&"}
+  defp decode_entity("lt"), do: {:ok, "<"}
+  defp decode_entity("gt"), do: {:ok, ">"}
+  defp decode_entity("quot"), do: {:ok, "\""}
+  defp decode_entity("apos"), do: {:ok, "'"}
+  defp decode_entity("#x" <> digits), do: decode_codepoint(digits, 16)
+  defp decode_entity("#" <> digits), do: decode_codepoint(digits, 10)
+  defp decode_entity(_entity), do: :error
+
+  defp decode_codepoint(<<first, _::binary>> = digits, base) when first not in [?+, ?-] do
+    case Integer.parse(digits, base) do
+      {point, ""}
+      when point in [9, 10, 13] or point in 0x20..0xD7FF or point in 0xE000..0xFFFD or
+             point in 0x10000..0x10FFFF ->
+        {:ok, <<point::utf8>>}
+
+      _ ->
+        :error
+    end
+  end
+
+  defp decode_codepoint(_digits, _base), do: :error
+
+  defp decode_error(reason), do: {:error, {:output_decode_failed, reason}}
+end
