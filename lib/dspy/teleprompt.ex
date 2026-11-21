@@ -37,31 +37,39 @@ defmodule Dspy.Teleprompt do
   @type metric_fun :: (Example.t() -> number()) | (Example.t(), Dspy.Prediction.t() -> number())
 
   @typedoc """
-  One successful predictor call in a bootstrap teacher attempt.
+  One predictor call in a bootstrap teacher attempt.
 
   Paths use `{:field, atom}` for struct fields, `{:index, index}` for zero-based
   list and tuple positions, and `{:key, key}` for exact map keys.
   A standalone predictor has the empty path `[]`.
+  Opt-in parse failure steps carry the terminal `:error` in place of a prediction.
   """
-  @type trace_step :: %{
-          path: Dspy.Module.PredictorSlots.path(),
-          inputs: map(),
-          prediction: Dspy.Prediction.t()
-        }
+  @type trace_step ::
+          %{
+            path: Dspy.Module.PredictorSlots.path(),
+            inputs: map(),
+            prediction: Dspy.Prediction.t()
+          }
+          | %{path: Dspy.Module.PredictorSlots.path(), inputs: map(), error: parse_failure()}
 
-  @typedoc "Successful predictor calls in one teacher attempt, in completion order."
+  @type parse_failure ::
+          {:output_parse_failed, term(),
+           %{required(:raw_output) => binary(), optional(:choice_index) => non_neg_integer()}}
+
+  @typedoc "Observed predictor calls in one teacher attempt, in completion order."
   @type trace :: [trace_step()]
 
   @typedoc "A metric that receives teacher steps during bootstrapping and nil during evaluation."
   @type trace_metric_fun ::
           (Example.t(), Dspy.Prediction.t(), trace() | nil -> number() | boolean())
 
-  @typedoc "A successful batch trace record with its original position in the dataset."
+  @typedoc "A batch trace record with its original position in the dataset."
   @type trace_data :: %{
           required(:example_index) => non_neg_integer(),
           required(:example) => Example.t(),
-          required(:prediction) => Dspy.Prediction.t(),
+          required(:prediction) => Dspy.Prediction.t() | nil,
           required(:trace) => trace(),
+          optional(:error) => parse_failure(),
           optional(:score) => number()
         }
 
@@ -148,7 +156,7 @@ defmodule Dspy.Teleprompt do
   def compile(tp, _program, _trainset), do: {:error, {:unknown_teleprompt, tp}}
 
   @doc """
-  Collect successful predictor traces over a nonempty dataset.
+  Collect predictor traces over a nonempty dataset.
 
   Mark each example's input fields with `Dspy.Example.with_inputs/2`. An
   empty selection forwards an empty map. The original example goes to the metric.
@@ -160,6 +168,15 @@ defmodule Dspy.Teleprompt do
   - `:raise_on_error` defaults to `true` and raises
     `Dspy.Teleprompt.BootstrapTrace.Error` for the first failed row in dataset order.
     Set it to `false` to omit failed rows.
+  - `:capture_failed_parses` defaults to `false`. Set it to `true` to include
+    terminal parse failures observed at predictor slots. A row that propagates
+    an observed failure has `prediction: nil` and an `:error` with the terminal
+    parse error tuple. Its trace includes earlier successful steps and the
+    failed step with the predictor's path and inputs. Other execution
+    errors still follow `:raise_on_error`. The error includes the raw model
+    output, which can contain sensitive text.
+  - `:format_failure_score` defaults to `-1`. When a metric is supplied,
+    retained failed rows use this number without calling the metric.
   """
   @spec bootstrap_trace_data(program_t(), [Example.t()], keyword()) :: [trace_data()]
   defdelegate bootstrap_trace_data(program, dataset, opts \\ []), to: BootstrapTrace, as: :collect

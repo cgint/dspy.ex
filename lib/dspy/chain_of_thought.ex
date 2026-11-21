@@ -149,7 +149,9 @@ defmodule Dspy.ChainOfThought do
       Dspy.Module.PredictorTrace.record(cot, inputs, prediction)
       {:ok, prediction}
     else
-      {:error, reason} -> {:error, reason}
+      {:error, reason} = error ->
+        Dspy.Module.PredictorTrace.record_parse_failure(cot, inputs, reason)
+        error
     end
   end
 

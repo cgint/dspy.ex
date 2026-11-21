@@ -180,7 +180,7 @@ After this you can …use the stronger optimizers: real GEPA, example selection 
 | S078 | BootstrapFinetune | missing | H | L | 0.75 | <=2.6 | - | N | - | no Elixir equivalent | todo |
 | S081 | GEPA | partial | H | L | 0.75 | 3.0.0 | S031 S087 | Y | - | Reflection LM, five-argument feedback, typed slot mutation, opt-in Pareto selection, and budgeted ancestor-based merges. Additional frontier objectives and full proposer parity remain open. | M6 Pareto instruction search and merge |
 | S074 | BetterTogether | missing | M | L | 0.50 | <=2.6 | - | N | - | no Elixir equivalent | todo |
-| S087 | bootstrap_trace_data | partial | L | M | 0.50 | 3.1.0 | S031 | N | - | Concurrent successful traces with optional scalar scores and original row indices. Failed parse records and crash capture remain open. | M6 batch trace collection |
+| S087 | bootstrap_trace_data | partial | L | M | 0.50 | 3.1.0 | S031 | N | - | Concurrent indexed traces and opt-in typed-slot parse-failure records with a configured score. Crash capture and partial-format scoring remain open. | M6 batch trace collection |
 | S073 | AvatarOptimizer | missing | L | L | 0.25 | <=2.6 | - | N | - | no Elixir equivalent | todo |
 | S076 | BootstrapFewShotWithOptuna | missing | L | L | 0.25 | <=2.6 | S075 | N | - | no Elixir equivalent | todo |
 

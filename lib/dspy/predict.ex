@@ -128,7 +128,9 @@ defmodule Dspy.Predict do
       Dspy.Module.PredictorTrace.record(predict, inputs, prediction)
       {:ok, prediction}
     else
-      {:error, reason} -> {:error, reason}
+      {:error, reason} = error ->
+        Dspy.Module.PredictorTrace.record_parse_failure(predict, inputs, reason)
+        error
     end
   end
 

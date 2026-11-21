@@ -18,14 +18,37 @@ defmodule Dspy.Teleprompt.BootstrapTrace do
     def message(error), do: "could not collect bootstrap trace for example #{error.example_index}"
   end
 
-  defstruct [:program, :metric, :capture?, :strict_metric?]
+  defstruct [
+    :program,
+    :metric,
+    :capture?,
+    :capture_failed_parses?,
+    :format_failure_score,
+    :strict_metric?
+  ]
 
   def collect(program, dataset, opts, controls \\ []) do
-    opts = Keyword.validate!(opts, metric: nil, num_threads: nil, raise_on_error: true)
+    opts =
+      Keyword.validate!(opts,
+        metric: nil,
+        num_threads: nil,
+        raise_on_error: true,
+        capture_failed_parses: false,
+        format_failure_score: -1
+      )
+
     validate_dataset!(dataset)
 
     unless is_boolean(opts[:raise_on_error]) do
       raise ArgumentError, ":raise_on_error must be a boolean"
+    end
+
+    unless is_boolean(opts[:capture_failed_parses]) do
+      raise ArgumentError, ":capture_failed_parses must be a boolean"
+    end
+
+    unless is_number(opts[:format_failure_score]) do
+      raise ArgumentError, ":format_failure_score must be a number"
     end
 
     if opts[:metric] != nil, do: Teleprompt.validate_metric!(opts[:metric], :trace)
@@ -34,6 +57,8 @@ defmodule Dspy.Teleprompt.BootstrapTrace do
       program: program,
       metric: opts[:metric],
       capture?: Keyword.get(controls, :capture?, true),
+      capture_failed_parses?: opts[:capture_failed_parses],
+      format_failure_score: opts[:format_failure_score],
       strict_metric?: Keyword.get(controls, :strict_metric?, false)
     }
 
@@ -61,36 +86,54 @@ defmodule Dspy.Teleprompt.BootstrapTrace do
   # Parallel passes the original example to the attempt so the metric can see its labels.
   def forward(%__MODULE__{} = attempt, %Example{} = example) do
     with {:ok, inputs} <- Example.declared_inputs(example),
-         {:ok, prediction, trace} <- run_program(attempt.program, inputs, attempt.capture?) do
-      record = %{example: example, prediction: prediction, trace: trace}
-      score_record(record, attempt.metric, attempt.strict_metric?)
+         {:ok, record} <- run_program(attempt, inputs) do
+      score_record(Map.put(record, :example, example), attempt)
     end
   end
 
-  defp run_program(program, inputs, true) do
+  defp run_program(%{program: program, capture_failed_parses?: true}, inputs) do
+    case PredictorTrace.capture_with_failed_parses(program, inputs) do
+      {{:error, _reason} = error, trace} ->
+        recover_failed_parse(error, trace)
+
+      {result, trace} ->
+        program_record(result, PredictorTrace.steps(trace))
+    end
+  end
+
+  defp run_program(%{program: program, capture?: true}, inputs) do
     case PredictorTrace.capture(program, inputs) do
       {:ok, %Prediction{} = prediction, trace} ->
-        {:ok, prediction, PredictorTrace.steps(trace)}
-
-      {:error, _reason} = error ->
-        error
+        program_record({:ok, prediction}, PredictorTrace.steps(trace))
 
       result ->
-        {:error, {:unexpected_result, result}}
+        program_record(result, nil)
     end
   end
 
-  defp run_program(program, inputs, false) do
-    case Module.forward(program, inputs) do
-      {:ok, %Prediction{} = prediction} -> {:ok, prediction, nil}
-      {:error, _reason} = error -> error
-      result -> {:error, {:unexpected_result, result}}
+  defp run_program(%{program: program}, inputs),
+    do: program_record(Module.forward(program, inputs), nil)
+
+  defp program_record({:ok, %Prediction{} = prediction}, trace),
+    do: {:ok, %{prediction: prediction, trace: trace}}
+
+  defp program_record({:error, _reason} = error, _trace), do: error
+  defp program_record(result, _trace), do: {:error, {:unexpected_result, result}}
+
+  defp recover_failed_parse({:error, reason} = error, trace) do
+    if Enum.any?(trace, &match?({_, _, _, {:error, ^reason}}, &1)) do
+      {:ok, %{prediction: nil, error: reason, trace: PredictorTrace.steps(trace)}}
+    else
+      error
     end
   end
 
-  defp score_record(record, nil, _strict?), do: {:ok, record}
+  defp score_record(record, %{metric: nil}), do: {:ok, record}
 
-  defp score_record(record, metric, strict?) do
+  defp score_record(%{prediction: nil} = record, %{format_failure_score: score}),
+    do: {:ok, Map.put(record, :score, score)}
+
+  defp score_record(record, %{metric: metric, strict_metric?: strict?}) do
     case Teleprompt.run_metric(metric, record.example, record.prediction, record.trace) do
       score when is_number(score) -> {:ok, Map.put(record, :score, score)}
       :error -> {:error, {:metric_error, :raised}}
