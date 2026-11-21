@@ -28,6 +28,8 @@ defmodule Dspy do
 
   alias Dspy.{Settings, Example, Prediction, Predict, ChainOfThought, Evaluate, Majority}
 
+  @logging_filter :dspy_suppress_application_logs
+
   @type dspy_config :: [
           lm: Dspy.LM.t() | nil,
           adapter: module() | nil,
@@ -105,6 +107,38 @@ defmodule Dspy do
       {:error, reason} -> raise ArgumentError, "failed to configure Dspy: #{inspect(reason)}"
     end
   end
+
+  @doc """
+  Suppress Logger events tagged with the `:dspy` application in this BEAM.
+
+  Repeated calls return `:ok`. Use `enable_logging/0` to remove the filter.
+  """
+  @spec disable_logging() :: :ok | {:error, term()}
+  def disable_logging do
+    # An external function capture keeps the filter valid through code upgrades.
+    case :logger.add_primary_filter(@logging_filter, {&__MODULE__.filter_dspy_log/2, nil}) do
+      {:error, {:already_exist, @logging_filter}} -> :ok
+      result -> result
+    end
+  end
+
+  @doc """
+  Remove DSPy's application log filter in this BEAM.
+
+  Logger's current configuration determines which events are delivered.
+  Repeated calls return `:ok`.
+  """
+  @spec enable_logging() :: :ok | {:error, term()}
+  def enable_logging do
+    case :logger.remove_primary_filter(@logging_filter) do
+      {:error, {:not_found, @logging_filter}} -> :ok
+      result -> result
+    end
+  end
+
+  @doc false
+  def filter_dspy_log(%{meta: %{application: :dspy}}, _args), do: :stop
+  def filter_dspy_log(_event, _args), do: :ignore
 
   @doc """
   Configure a tier of the LM response cache.

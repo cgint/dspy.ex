@@ -8,6 +8,13 @@ This repo ships in **small, user-usable slices**.
 
 ## Consumer notes
 
+### DSPy logging controls
+
+`Dspy.disable_logging/0` silences DSPy diagnostics across the VM.
+`Dspy.enable_logging/0` restores them under the host's Logger configuration.
+Both calls can be repeated safely. Host logs and DSPy lifecycle callbacks
+continue to run while DSPy diagnostics are silenced.
+
 ### Tool lifecycle callbacks
 
 `Dspy.Tools.LifecycleCallback` observes direct tool execution and both ReAct

@@ -102,9 +102,9 @@ After this you can …run against real providers robustly: clear error types, au
 | U026 | BaseCallback | partial | H | M | 1.50 | <=2.6 | U036 | N | P8 | Elixir behaviours cover evaluation, module, LM, adapter, and tool events. Compile and interpreter hooks remain. | todo |
 | U036 | with_callbacks | partial | H | M | 1.50 | <=2.6 | U026 | N | P8 | Settings `:callbacks` and `with_callbacks/2` register evaluation, module, LM, adapter, and tool handlers. Events link observed calls across captured worker contexts. | todo |
 | S025 | configure_cache | partial | H | M | 1.50 | 3.0.0 | S022 | N | P13 | Bounded LRU memory and opt-in, byte-bounded JSON disk storage for the stock OpenAI gpt-4.1-mini Responses route. Wider provider and model eligibility remains. | todo |
-| S110 | configure_dspy_loggers | missing | L | S | 1.00 | <=2.6 | - | N | - | No logger setup API; ad-hoc Logger.info/debug calls only (application.ex:41) | todo |
-| S111 | disable_logging | missing | L | S | 1.00 | <=2.6 | S112 | N | - | No silencing toggle for event logs | todo |
-| S112 | enable_logging | missing | L | S | 1.00 | <=2.6 | S111 | N | - | No enabling toggle for event logs | todo |
+| S110 | configure_dspy_loggers | missing | L | S | 1.00 | <=2.6 | - | N | - | DSPy diagnostics use the host's Elixir Logger levels and handlers. | todo |
+| S111 | disable_logging | done | L | S | 1.00 | <=2.6 | S112 | N | - | `Dspy.disable_logging/0` silences DSPy diagnostics across processes. | Implemented in M3b |
+| S112 | enable_logging | done | L | S | 1.00 | <=2.6 | S111 | N | - | `Dspy.enable_logging/0` restores DSPy diagnostics under the host logger configuration. | Implemented in M3b |
 | S092 | LMAuthError | missing | L | S | 1.00 | 3.3.0 | - | N | - | [reclassified na->missing] Auth failures (401/403) not classified; req_llm {:error, term}  | todo |
 | S093 | LMBillingError | missing | L | S | 1.00 | 3.3.0 | - | N | - | [reclassified na->missing] Billing failures not classified in port | todo |
 | S095 | LMConfigurationError | missing | L | S | 1.00 | 3.3.0 | - | N | - | [reclassified na->missing] Misconfiguration detected at LM construction (ArgumentError); n | todo |
