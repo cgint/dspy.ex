@@ -110,6 +110,23 @@ defmodule Dspy.Teleprompt.GEPAMergeTest do
     end
   end
 
+  test "a tie with the stronger parent admits the merge to full validation" do
+    {optimizer, program, training, validation} = fixture(:tie)
+
+    assert {:ok, result} = GEPA.compile(optimizer, program, training, valset: validation)
+    assert result.slots[1].signature.instructions == @baseline
+    assert result.slots["1"].signature.instructions == @specialist
+    assert_parent_rollouts(validation)
+
+    for row <- validation do
+      question = row[:question]
+      assert_received {:rollout, :merged, ^question}
+    end
+
+    refute_received {:rollout, _, _}
+    refute_received :reflection
+  end
+
   test "merge validates its search strategy and attempt limit" do
     {optimizer, _, _, _} = fixture(true)
 
@@ -145,7 +162,7 @@ defmodule Dspy.Teleprompt.GEPAMergeTest do
     assert_received :reflection
   end
 
-  defp fixture(merge_works?) do
+  defp fixture(merge_result) do
     signature = %{Signature.define("question -> answer") | instructions: @baseline}
     predictor = Predict.new(signature, lm: %RolloutLM{}, adapter: JSONAdapter)
     program = %Program{owner: self(), slots: %{1 => predictor, "1" => predictor}}
@@ -157,8 +174,7 @@ defmodule Dspy.Teleprompt.GEPAMergeTest do
       cond do
         question == "training" -> if variant == :base, do: 0, else: 1
         question == "neutral" -> 0
-        variant == :merged and merge_works? -> 1
-        variant == :merged -> if String.starts_with?(question, "left"), do: 0.9, else: 0
+        variant == :merged -> merged_score(merge_result, question)
         String.starts_with?(question, "left") -> if variant == :left, do: 0.8, else: 0
         variant == :right -> 1
         variant == :base -> 0.4
@@ -183,6 +199,14 @@ defmodule Dspy.Teleprompt.GEPAMergeTest do
 
     {optimizer, program, [row("training")], validation}
   end
+
+  defp merged_score(true, _question), do: 1
+
+  defp merged_score(false, question),
+    do: if(String.starts_with?(question, "left"), do: 0.9, else: 0)
+
+  defp merged_score(:tie, question),
+    do: if(String.starts_with?(question, "left"), do: 0.75, else: 0.25)
 
   defp row(question), do: Example.new(question: question) |> Example.with_inputs(:question)
 end
