@@ -25,8 +25,9 @@ On `main`, evaluation callbacks link model calls to the evaluation that
 started them, including in parallel workers. The
 [offline example](../../examples/offline/evaluation_callbacks_offline.exs)
 shows a successful example and a failed one in the same run. Adapter
-callbacks now report when a phase ends in error and identify the enclosing
-observed call. Wider disk cache support and tool tracing remain open.
+callbacks report when a phase ends in error and identify the enclosing call.
+Tool callbacks also link to the enclosing call and report timeout outcomes.
+Wider disk cache support and call-scoped history remain open.
 
 ## Historical milestone notes from September 2026
 

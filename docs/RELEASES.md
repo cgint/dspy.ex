@@ -8,6 +8,17 @@ This repo ships in **small, user-usable slices**.
 
 ## Consumer notes
 
+### Tool lifecycle callbacks
+
+`Dspy.Tools.LifecycleCallback` observes direct tool execution and both ReAct
+paths through Settings and per-call callback registrations. End events report
+timeouts and other failures after the tool task settles. Nested LM calls link
+back to the tool call ID. These events contain lifecycle metadata without tool
+arguments, results, or failure text.
+
+Legacy ReAct observers keep their callback arities and event data. Catchable
+interruptions from those observers are isolated from the tool result.
+
 ### Adapter callback completion
 
 Adapter format, call, and parse phases emit an end event when they fail after

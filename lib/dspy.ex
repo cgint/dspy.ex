@@ -296,7 +296,7 @@ defmodule Dspy do
   end
 
   @doc """
-  Run `fun` with module, LM, evaluation, and signature-adapter callbacks enabled
+  Run `fun` with module, LM, evaluation, tool, and signature-adapter callbacks enabled
   for this process.
 
   This mirrors Python DSPy’s `with_callbacks(...)` usage, adapted to Elixir’s
@@ -311,7 +311,7 @@ defmodule Dspy do
   Convenience wrapper around `forward/2` with per-call options.
 
   Currently supported options:
-  - `:callbacks` — module, LM, and signature-adapter callbacks (`[{module, state}]`)
+  - `:callbacks` — lifecycle callbacks (`[{module, state}]`)
   - `:config` — generation options for this call to a Predict or ChainOfThought program
   """
   @spec forward(Dspy.Module.t(), Dspy.Module.inputs(), keyword()) ::
