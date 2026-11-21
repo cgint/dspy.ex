@@ -116,11 +116,14 @@ defmodule Dspy.Signature.XMLAdapterTest do
       type: :object,
       properties: %{
         code: %{enum: [-1, 2]},
+        amount: %{type: :number, enum: [9_007_199_254_740_993]},
+        regular_number: %{type: :number},
         urgent: %{anyOf: [%{const: false}, %{type: :null}]},
         choice: %{enum: [2, "2"]},
-        flag: %{enum: [true, "True"]}
+        flag: %{enum: [true, "True", "true"]},
+        line: Line
       },
-      required: [:code, :urgent, :choice, :flag]
+      required: [:code, :amount, :regular_number, :urgent, :choice, :flag, :line]
     })
   end
 
@@ -169,10 +172,21 @@ defmodule Dspy.Signature.XMLAdapterTest do
     completion = """
     <record>
     <code>2</code><urgent>False</urgent><choice>2</choice><flag>True</flag>
+    <amount>9007199254740993</amount><regular_number>3</regular_number>
+    <line><number>7</number><description>Preserved</description></line>
     </record>
     """
 
-    expected = %LiteralRecord{code: 2, urgent: false, choice: "2", flag: "True"}
+    expected = %LiteralRecord{
+      code: 2,
+      amount: 9_007_199_254_740_993,
+      regular_number: 3.0,
+      urgent: false,
+      choice: "2",
+      flag: "True",
+      line: %Line{number: 7, description: "Preserved"}
+    }
+
     predictor = Dspy.Predict.new(Literals, lm: recording_lm([completion]), adapter: XMLAdapter)
 
     assert {:ok, %Dspy.Prediction{attrs: %{record: ^expected}}} =
@@ -189,20 +203,31 @@ defmodule Dspy.Signature.XMLAdapterTest do
              )
   end
 
-  test "literal demos use native XML when unambiguous and retain JSON for an ambiguous number" do
-    record = %LiteralRecord{code: -1, urgent: false, choice: "2", flag: true}
+  test "literal demos use native XML when unambiguous and retain typed JSON for collisions" do
+    record = %LiteralRecord{
+      code: -1,
+      amount: 9_007_199_254_740_993,
+      regular_number: 3.0,
+      urgent: false,
+      choice: "2",
+      flag: "True",
+      line: %Line{number: 7, description: "Preserved"}
+    }
 
-    for value <- [record, %{record | choice: 2}] do
+    for value <- [record, %{record | choice: 2, flag: true}] do
       demo = Dspy.Example.new(%{record: value})
       request = XMLAdapter.format_request(Literals.signature(), %{}, [demo])
       [_, rendered] = Regex.run(~r/(<record>.*<\/record>)/s, List.last(request.messages).content)
 
       if is_binary(value.choice) do
         assert rendered =~ "<code>\n-1\n</code>"
+        assert rendered =~ "<amount>\n9007199254740993\n</amount>"
         assert rendered =~ "<urgent>\nfalse\n</urgent>"
-        assert rendered =~ "<flag>\ntrue\n</flag>"
+        assert rendered =~ "<flag>\nTrue\n</flag>"
       else
         assert rendered =~ ~s("choice":2)
+        assert rendered =~ ~s("flag":true)
+        assert rendered =~ ~s("line":{)
       end
 
       assert %{record: ^value} = XMLAdapter.parse_outputs(Literals.signature(), rendered)

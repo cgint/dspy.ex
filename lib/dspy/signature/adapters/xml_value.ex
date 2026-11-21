@@ -71,19 +71,29 @@ defmodule Dspy.Signature.Adapters.XMLValue do
   def shape(schema), do: schema
 
   def literal_members(schema) do
-    case shape(schema) do
-      %{"const" => value} ->
-        Enum.filter([value], &scalar_literal?/1)
+    schema = shape(schema)
 
-      %{"enum" => values} when is_integer(length(values)) ->
-        Enum.filter(values, &scalar_literal?/1)
+    values =
+      case schema do
+        %{"const" => value} -> [value]
+        %{"enum" => values} when is_integer(length(values)) -> values
+        _ -> []
+      end
 
-      _ ->
-        []
-    end
+    Enum.filter(values, &scalar_literal?(&1, schema))
   end
 
-  defp scalar_literal?(value),
+  defp scalar_literal?(value, %{"type" => "string"}), do: is_binary(value)
+
+  defp scalar_literal?(value, %{"type" => "integer"}),
+    do: is_number(value) and trunc(value) == value
+
+  defp scalar_literal?(value, %{"type" => "number"}), do: is_number(value)
+  defp scalar_literal?(value, %{"type" => "boolean"}), do: is_boolean(value)
+  defp scalar_literal?(value, %{"type" => "null"}), do: is_nil(value)
+  defp scalar_literal?(_value, %{"type" => type}) when type in ["object", "array"], do: false
+
+  defp scalar_literal?(value, _schema),
     do: is_binary(value) or is_number(value) or is_boolean(value) or is_nil(value)
 
   def literal_value(raw, schema) do
@@ -324,16 +334,22 @@ defmodule Dspy.Signature.Adapters.XMLValue do
     end
   end
 
-  defp cast_scalar(raw, %{"type" => type}, name) when is_map_key(@scalar_types, type) do
+  defp cast_scalar(raw, schema, name) do
+    case literal_value(raw, schema) do
+      ^raw -> cast_scalar_type(raw, schema, name)
+      value -> {:ok, value}
+    end
+  end
+
+  defp cast_scalar_type(raw, %{"type" => type}, name) when is_map_key(@scalar_types, type) do
     case ChatAdapter.cast_output_value(raw, %{type: Map.fetch!(@scalar_types, type)}) do
       {:ok, _decoded} = success -> success
       {:error, reason} -> decode_error({:invalid_xml_value, name, reason})
     end
   end
 
-  defp cast_scalar("null", %{"type" => "null"}, _name), do: {:ok, nil}
-  defp cast_scalar(raw, %{"type" => "string"}, _name), do: {:ok, raw}
-  defp cast_scalar(raw, schema, _name), do: {:ok, literal_value(raw, schema)}
+  defp cast_scalar_type("null", %{"type" => "null"}, _name), do: {:ok, nil}
+  defp cast_scalar_type(raw, _schema, _name), do: {:ok, raw}
 
   defp nullable?(%{"type" => "null"}), do: true
   defp nullable?(%{"type" => types}) when is_list(types), do: "null" in types
