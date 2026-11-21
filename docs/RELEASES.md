@@ -17,6 +17,9 @@ Equal predictor values in separate slots still have separate names.
 applies a function to each predictor in discovery order and returns an updated program.
 `Dspy.Module.set_lm/2` binds a language model across those slots. Use
 `Dspy.Module.get_lm/1` to read their shared stored binding.
+`Dspy.Module.reset_copy/1` returns a program with demos and stored LM bindings
+cleared across the named predictors. `Predict.reset/1` and `ChainOfThought.reset/1`
+provide the same operation for standalone predictors.
 
 ### Predictor generation config
 

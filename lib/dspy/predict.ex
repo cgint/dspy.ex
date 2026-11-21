@@ -65,6 +65,10 @@ defmodule Dspy.Predict do
   @spec update_config(t(), PredictorConfig.t() | keyword()) :: t()
   def update_config(%__MODULE__{} = predict, config), do: PredictorConfig.update(predict, config)
 
+  @doc "Return a predictor with its demos and stored LM binding cleared."
+  @spec reset(t()) :: t()
+  def reset(%__MODULE__{} = predict), do: Dspy.Module.reset_copy(predict)
+
   @impl true
   def parameters(%__MODULE__{} = predict) do
     base = [

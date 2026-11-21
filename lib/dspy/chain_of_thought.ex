@@ -89,6 +89,10 @@ defmodule Dspy.ChainOfThought do
   @spec update_config(t(), PredictorConfig.t() | keyword()) :: t()
   def update_config(%__MODULE__{} = cot, config), do: PredictorConfig.update(cot, config)
 
+  @doc "Return a predictor with its demos and stored LM binding cleared."
+  @spec reset(t()) :: t()
+  def reset(%__MODULE__{} = cot), do: Dspy.Module.reset_copy(cot)
+
   @impl true
   def parameters(%__MODULE__{} = cot) do
     base = [Parameter.new("predict.examples", :examples, cot.examples)]
