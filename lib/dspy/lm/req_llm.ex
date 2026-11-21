@@ -161,6 +161,7 @@ defmodule Dspy.LM.ReqLLM do
         |> maybe_put(:temperature, request[:temperature])
         |> maybe_put(:max_tokens, request[:max_tokens])
         |> maybe_put(:max_completion_tokens, request[:max_completion_tokens])
+        |> maybe_put(:n, if(request[:n] === 1, do: 1))
         |> maybe_put(:stop, request[:stop])
         |> maybe_put(:tools, request[:tools])
 

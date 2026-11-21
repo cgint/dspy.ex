@@ -108,6 +108,33 @@ defmodule DspyReqLLMAdapterTest do
     refute Keyword.has_key?(opts, :rollout_id)
   end
 
+  test "an explicit single choice overrides the ReqLLM choice-count default" do
+    lm =
+      Dspy.LM.ReqLLM.new(
+        model: "google:gemini",
+        default_opts: [n: 3],
+        client_module: FakeReqLLM,
+        context_module: FakeContext,
+        response_module: FakeResponse,
+        generation_module: FakeGeneration
+      )
+
+    predictor =
+      Dspy.predict("question -> result", lm: lm, adapter: Dspy.Signature.Adapters.JSONAdapter)
+
+    Dspy.context([cache: false], fn ->
+      assert {:ok, ordinary} = Dspy.call(predictor, %{question: "q"})
+      assert Dspy.Prediction.parsed_completions(ordinary) == nil
+      assert_received {:req_llm_object_call, "google:gemini", _, _, opts}
+      assert opts[:n] == 3
+
+      assert {:ok, prediction} = Dspy.call(predictor, %{question: "q"}, config: [n: 1])
+      assert_received {:req_llm_object_call, "google:gemini", _, _, opts}
+      assert opts[:n] == 1
+      assert Dspy.Completions.size(Dspy.Prediction.parsed_completions(prediction)) == 1
+    end)
+  end
+
   defmodule FailingGeneration do
     def generate_object(_model, _input, _schema, _opts), do: {:error, :timeout}
   end
