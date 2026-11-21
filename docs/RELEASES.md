@@ -8,6 +8,14 @@ This repo ships in **small, user-usable slices**.
 
 ## Consumer notes
 
+### Typed conversation replay
+
+`Dspy.History.Turn` stores declared input and output fields and completed tool
+exchanges. ChatAdapter replays user image and attachment parts through the
+live formatter and associates each tool result with its original call ID.
+Tool-only turns can omit user inputs. Built-in adapters with flat history
+formatting require flat map entries.
+
 ### Opt-in XML field adapter
 
 Select `Dspy.Signature.Adapters.XMLAdapter` on a predictor to format field

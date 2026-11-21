@@ -17,6 +17,9 @@ defmodule Dspy.Signature.Adapters.ChatAdapter do
 
   @behaviour Dspy.Signature.Adapter
 
+  alias Dspy.History
+  alias Dspy.Signature.AdapterPipeline
+
   @marker_regex ~r/\[\[\s*##\s*([A-Za-z0-9_]+)\s*##\s*\]\]/
 
   @impl true
@@ -34,30 +37,24 @@ defmodule Dspy.Signature.Adapters.ChatAdapter do
   @impl true
   def format_request(%Dspy.Signature{} = signature, inputs, demos, opts \\ [])
       when is_map(inputs) and is_list(demos) and is_list(opts) do
-    with {:ok, %{inputs: filtered_inputs, messages: history_messages}} <-
-           Dspy.History.extract_messages(signature, inputs) do
-      filtered_signature = %{
-        signature
-        | input_fields: Enum.reject(signature.input_fields, &(&1.type == :history))
-      }
+    filtered_signature = %{
+      signature
+      | input_fields: Enum.reject(signature.input_fields, &(&1.type == :history))
+    }
 
+    render_turn = &render_history_turn(filtered_signature, demos, &1)
+
+    with {:ok, %{inputs: filtered_inputs, messages: history_messages}} <-
+           History.extract_messages(signature, inputs, render_turn) do
       system =
         [instruction_line(filtered_signature), format_instructions(filtered_signature, opts)]
         |> Enum.reject(&is_nil/1)
         |> Enum.join("\n\n")
 
-      user =
-        [
-          render_demos(filtered_signature, demos),
-          render_inputs(filtered_signature, filtered_inputs)
-        ]
-        |> Enum.reject(&(&1 == ""))
-        |> Enum.join("\n\n")
-
       %{
         messages:
           [%{role: "system", content: system}] ++
-            history_messages ++ [%{role: "user", content: user}]
+            history_messages ++ [user_message(filtered_signature, filtered_inputs, demos)]
       }
     end
   end
@@ -81,6 +78,79 @@ defmodule Dspy.Signature.Adapters.ChatAdapter do
 
   defp instruction_line(%Dspy.Signature{instructions: instructions}),
     do: "Instructions: #{instructions}"
+
+  defp user_message(signature, inputs, demos) do
+    content =
+      [render_demos(signature, demos), render_inputs(signature, inputs)]
+      |> Enum.reject(&(&1 == ""))
+      |> Enum.join("\n\n")
+
+    %{role: "user", content: content}
+  end
+
+  defp render_history_turn(signature, demos, %History.Turn{} = turn) do
+    with {:ok, users} <- render_history_user(signature, turn.inputs, demos) do
+      outputs =
+        Enum.filter(signature.output_fields, fn field ->
+          field.type != :tool_calls and fetch_map_key(turn.outputs, field.name) != :__missing__
+        end)
+
+      {:ok,
+       users ++
+         history_assistant_messages(outputs, turn.outputs, turn.tool_exchanges) ++
+         Enum.map(turn.tool_exchanges, &history_tool_message/1)}
+    end
+  end
+
+  defp render_history_user(signature, inputs, demos) do
+    if Enum.any?(signature.input_fields, &(fetch_map_key(inputs, &1.name) != :__missing__)) do
+      request = %{messages: [user_message(signature, inputs, demos)]}
+
+      with {:ok, %{messages: messages}} <-
+             AdapterPipeline.merge_input_media(signature, inputs, request) do
+        {:ok, messages}
+      end
+    else
+      {:ok, []}
+    end
+  end
+
+  defp history_assistant_messages([], _outputs, []), do: []
+
+  defp history_assistant_messages(fields, outputs, exchanges) do
+    assistant = %{role: "assistant", content: render_field_sections(fields, outputs)}
+
+    case exchanges do
+      [] -> [assistant]
+      exchanges -> [Map.put(assistant, :tool_calls, Enum.map(exchanges, &history_tool_call/1))]
+    end
+  end
+
+  defp history_tool_call(exchange) do
+    %{
+      id: exchange.id,
+      type: "function",
+      function: %{name: exchange.name, arguments: exchange.arguments}
+    }
+  end
+
+  defp history_tool_message(exchange) do
+    %{
+      role: "tool",
+      tool_call_id: exchange.id,
+      name: exchange.name,
+      content: tool_result_text(exchange.result)
+    }
+  end
+
+  defp tool_result_text(value) when is_binary(value), do: value
+
+  defp tool_result_text(value) do
+    case Jason.encode(value) do
+      {:ok, encoded} -> encoded
+      {:error, _} -> format_value_for_prompt(value)
+    end
+  end
 
   defp render_demos(_signature, []), do: ""
 

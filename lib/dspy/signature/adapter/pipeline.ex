@@ -169,7 +169,7 @@ defmodule Dspy.Signature.Adapter.Pipeline do
       complete_phase(callbacks, :format_end, meta, fn ->
         with {:ok, request0} <-
                AdapterPipeline.format_request(signature, inputs, demos, adapter: adapter),
-             {:ok, request} <- merge_media_parts(signature, inputs, request0),
+             {:ok, request} <- AdapterPipeline.merge_input_media(signature, inputs, request0),
              {:ok, base_prompt} <- AdapterPipeline.primary_prompt_text(request) do
           request = Map.merge(request, lm_options.request_options)
           {{:ok, request, base_prompt}, %{request: request_summary(request, lm)}}
@@ -688,44 +688,6 @@ defmodule Dspy.Signature.Adapter.Pipeline do
 
   defp retry_sleep_ms do
     Application.get_env(:dspy, :predict_retry_sleep_ms, 1000)
-  end
-
-  defp all_images?(list) when is_list(list),
-    do: list != [] and Enum.all?(list, &match?(%Dspy.Image{}, &1))
-
-  defp merge_media_parts(%Signature{} = signature, inputs, request)
-       when is_map(inputs) and is_map(request) do
-    {image_parts, attachment_parts} = extract_media_parts(signature, inputs)
-    AdapterPipeline.merge_media(request, attachment_parts, image_parts)
-  end
-
-  defp extract_media_parts(%Signature{} = signature, inputs) when is_map(inputs) do
-    Enum.reduce(signature.input_fields, {[], []}, fn %{name: name}, {images, attachments} ->
-      case fetch_input(inputs, name) do
-        {:ok, %Dspy.Attachments{} = a} ->
-          {images, attachments ++ Dspy.Attachments.to_message_parts(a)}
-
-        {:ok, %Dspy.Image{} = image} ->
-          {images ++ Dspy.Image.format(image), attachments}
-
-        {:ok, list} when is_list(list) ->
-          if all_images?(list) do
-            {images ++ Enum.flat_map(list, &Dspy.Image.format/1), attachments}
-          else
-            {images, attachments}
-          end
-
-        _ ->
-          {images, attachments}
-      end
-    end)
-  end
-
-  defp fetch_input(inputs, name) when is_map(inputs) and is_atom(name) do
-    case Map.fetch(inputs, name) do
-      {:ok, value} -> {:ok, value}
-      :error -> Map.fetch(inputs, Atom.to_string(name))
-    end
   end
 
   defp extract_usage(%{usage: usage}), do: usage

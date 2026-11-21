@@ -238,6 +238,9 @@ defmodule Dspy.Example do
   defp dictionary_value(%Dspy.History{messages: messages}),
     do: %{messages: dictionary_value(messages)}
 
+  defp dictionary_value(%Dspy.History.Turn{} = turn),
+    do: dictionary_value(Map.from_struct(turn))
+
   defp dictionary_value(map) when is_map(map) and not is_struct(map) do
     Map.new(map, fn {key, value} -> {key, dictionary_value(value)} end)
   end
