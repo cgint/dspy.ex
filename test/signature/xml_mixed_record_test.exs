@@ -135,15 +135,44 @@ defmodule Dspy.Signature.XMLMixedRecordTest do
     end
   end
 
-  test "a valid explicit JSON token that fails validation is not reinterpreted as literal text" do
+  test "an explicit outer object type keeps compact children structural after a newline" do
+    record = %{
+      type: :object,
+      properties: %{name: %{type: :string}},
+      required: [:name],
+      additionalProperties: false
+    }
+
+    signature = signature(%{type: :object, anyOf: [%{type: :string}, record]})
+
+    assert %{answer: %{"name" => "Ada"}} =
+             XMLAdapter.parse_outputs(signature, "<answer>\n<name>Ada</name>\n</answer>")
+  end
+
+  test "explicit JSON values preserve decoding and validation errors" do
     signature = signature(%{anyOf: [%{type: :string, minLength: 3}, Person]})
 
     for body <- [~s("x"), ~s({"name":"Ada","age":"invalid"})] do
       assert {:error, _reason} = XMLAdapter.parse_outputs(signature, "<answer>#{body}</answer>")
     end
 
+    assert {:error, {:output_decode_failed, {:invalid_xml_value, "answer", :invalid_json}}} =
+             XMLAdapter.parse_outputs(signature, ~s(<answer>{"name":}</answer>))
+
     assert %{answer: "plain literal"} =
              XMLAdapter.parse_outputs(signature, "<answer>plain literal</answer>")
+  end
+
+  test "bare null is text when the original schema only admits a string or record" do
+    for shared <- [%{}, %{type: [:null, :string, :object]}] do
+      schema = Map.merge(shared, %{oneOf: [%{type: :string}, Person]})
+      signature = signature(schema)
+
+      assert %{answer: "null"} =
+               XMLAdapter.parse_outputs(signature, "<answer>null</answer>")
+
+      assert {:error, _reason} = XMLAdapter.parse_outputs(signature, "<answer />")
+    end
   end
 
   test "nested alternatives preserve repeated list items, ordinary text, and explicit JSON types" do

@@ -10,6 +10,7 @@ defmodule Dspy.Signature.Adapters.XMLValue do
   @closing_newline ~r/\r?\n[ \t]*\z/
   @opening_tag_start ~r/\A<[\p{L}_]/u
   @opening_tag_line ~r/\A<[\p{L}_](?:"[^"\r\n]*"|'[^'\r\n]*'|[^"'>\r\n])*+>[ \t]*(?:\r?\n|\z)/u
+  @json_object_start ~r/\A\{\s*(?:"|\})/
   @json_string ~S/"(?:[^"\\]++|\\[\s\S])*+"/
   @bounded_json_string ~S/"(?:[^"\\\x00-\x1f]++|\\[^\x00-\x1f])*+"/
   @scalar_types %{"integer" => :integer, "number" => :number, "boolean" => :boolean}
@@ -85,11 +86,11 @@ defmodule Dspy.Signature.Adapters.XMLValue do
     shared = Map.delete(schema, keyword)
     non_null = Enum.reject(choices, &match?(%{"type" => "null"}, &1))
     {records, other} = Enum.split_with(non_null, &record_branch?/1)
-    shared_type = Map.get(schema, "type", "object")
+    shared_type = Map.get(schema, "type")
 
     kind =
       case {records, other, shared_type} do
-        {[_, _ | _], [], "object"} ->
+        {[_, _ | _], [], type} when type in [nil, "object"] ->
           :record_union
 
         {[_ | _], [_ | _], type} ->
@@ -113,7 +114,7 @@ defmodule Dspy.Signature.Adapters.XMLValue do
 
   defp record_union_branches(_schema, _keyword, _choices), do: nil
 
-  defp mixed_union_type?("object"), do: true
+  defp mixed_union_type?(nil), do: true
 
   defp mixed_union_type?(types) when is_integer(length(types)),
     do: Enum.sort(types) in [["object", "string"], ["null", "object", "string"]]
@@ -415,7 +416,7 @@ defmodule Dspy.Signature.Adapters.XMLValue do
     end
   end
 
-  defp read_mixed_record_union(text, name, union, boundary, ancestors) do
+  defp read_mixed_record_union(text, name, {schema, _branches} = union, boundary, ancestors) do
     body = String.trim_leading(text)
 
     structural? =
@@ -426,23 +427,27 @@ defmodule Dspy.Signature.Adapters.XMLValue do
     if structural? do
       read_record_union(text, name, union, boundary, ancestors)
     else
-      case mixed_json_candidate(body, name, boundary, ancestors) do
-        {:ok, _value, _rest} = json -> json
-        :error -> read_literal(text, name, boundary, ancestors, false, :text)
+      case mixed_json_candidate(body, name, schema, boundary, ancestors) do
+        :literal -> read_literal(text, name, boundary, ancestors, false, :text)
+        result -> result
       end
     end
   end
 
-  defp mixed_json_candidate(body, name, boundary, ancestors) do
+  defp mixed_json_candidate(body, name, schema, boundary, ancestors) do
     # JSON takes precedence only after a complete value and a structural close.
     # Its field close can be followed by an enclosing close on the same line.
-    # A malformed quote falls back to the ordinary literal reader.
     with true <- String.starts_with?(body, ["{", "\"", "null"]),
          {:ok, raw, rest} <- read_literal(body, name, boundary, ancestors, false, :bounded_json),
-         {:ok, decoded} <- Jason.decode(String.trim(raw)) do
+         {:ok, decoded} <- decode_json(raw, name),
+         true <- not is_nil(decoded) or match?({:ok, _}, TypedOutputs.validate_term(nil, schema)) do
       {:ok, decoded, rest}
     else
-      _ -> :error
+      {:error, _} = error ->
+        if Regex.match?(@json_object_start, body), do: error, else: :literal
+
+      false ->
+        :literal
     end
   end
 
