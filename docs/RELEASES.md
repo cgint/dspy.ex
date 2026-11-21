@@ -8,6 +8,12 @@ This repo ships in **small, user-usable slices**.
 
 ## Consumer notes
 
+### Named predictor inspection
+
+`Dspy.Module.named_predictors/1` lists predictor values by their program slots.
+It covers immediate list, tuple, and map entries as well as nested modules.
+Equal predictor values in separate slots still have separate names.
+
 ### Random search for few-shot demos
 
 `Dspy.Teleprompt.new(:bootstrap_rs, metric: metric)` creates the seeded search
