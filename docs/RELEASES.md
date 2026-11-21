@@ -58,6 +58,11 @@ validation. Parent sampling uses per-example validation leaders, so a
 specialist can remain eligible with a lower mean. Failed rows retain
 their positions and use the configured `:failure_score`.
 
+With Pareto selection, `use_merge: true` combines compatible instructions
+from candidates with a common ancestor. A merge must match or beat both
+parents on the same validation subset. Its subset scores count toward
+the full validation result and each row is charged once.
+
 ### Streaming progress messages
 
 Pass a `status_message_provider:` module to `Dspy.streamify/2` to turn

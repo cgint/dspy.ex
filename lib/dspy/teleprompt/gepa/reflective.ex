@@ -6,7 +6,7 @@ defmodule Dspy.Teleprompt.GEPA.Reflective do
   alias Dspy.Signature.Adapters.JSONAdapter
   alias Dspy.Signature.PromptPreview
   alias Dspy.Teleprompt.BootstrapTrace
-  alias Dspy.Teleprompt.GEPA.CandidatePool
+  alias Dspy.Teleprompt.GEPA.{CandidatePool, Merger}
 
   @report_bytes 16_384
   @instruction_bytes 4_096
@@ -24,7 +24,9 @@ defmodule Dspy.Teleprompt.GEPA.Reflective do
         pool: CandidatePool.new(program, validation_scores(optimizer, program, valset)),
         remaining: optimizer.max_metric_calls - length(valset),
         random: random,
-        paths: paths
+        paths: paths,
+        merge_pending?: false,
+        attempted_merges: MapSet.new()
       }
 
       search(optimizer, trainset, valset, state)
@@ -35,27 +37,35 @@ defmodule Dspy.Teleprompt.GEPA.Reflective do
   end
 
   defp search(optimizer, trainset, valset, state) do
+    case maybe_merge(optimizer, valset, state) do
+      {:attempted, state} -> search(optimizer, trainset, valset, state)
+      {:skip, state} -> search_reflection(optimizer, trainset, valset, state)
+    end
+  end
+
+  defp search_reflection(optimizer, trainset, valset, state) do
     count = min(optimizer.reflection_minibatch_size, length(trainset))
     available = div(max(0, state.remaining - length(valset)), batch_passes(optimizer))
     count = min(count, available)
 
     if count <= 0 do
-      {:ok, state.pool.best}
+      {:ok, CandidatePool.best(state.pool)}
     else
-      {random, parent} =
+      {random, parent_id} =
         CandidatePool.parent(state.pool, optimizer.candidate_selection_strategy, state.random)
 
+      parent = CandidatePool.fetch(state.pool, parent_id).program
       {random, batch} = Random.sample(random, trainset, count)
       records = collect(optimizer, parent, batch, true)
       state = %{state | random: random, remaining: state.remaining - count}
-      round = %{parent: parent, batch: batch, records: records}
+      round = %{parent: parent, parent_id: parent_id, batch: batch, records: records}
 
       case select_slot(optimizer, state.paths, records) do
         nil when optimizer.candidate_selection_strategy == :pareto or count < length(trainset) ->
           search(optimizer, trainset, valset, state)
 
         nil ->
-          {:ok, state.pool.best}
+          {:ok, CandidatePool.best(state.pool)}
 
         {path, observations} ->
           improve(optimizer, trainset, valset, state, round, path, observations)
@@ -92,17 +102,95 @@ defmodule Dspy.Teleprompt.GEPA.Reflective do
       scores = validation_scores(optimizer, candidate, valset)
       state = %{state | remaining: state.remaining - length(valset)}
 
-      update_pool(optimizer.candidate_selection_strategy, state, candidate, scores)
+      update_pool(optimizer, state, candidate, scores, round.parent_id)
     else
       state
     end
   end
 
-  defp update_pool(:pareto, state, candidate, scores),
-    do: %{state | pool: CandidatePool.add(state.pool, candidate, scores)}
+  defp update_pool(
+         %{candidate_selection_strategy: :pareto} = optimizer,
+         state,
+         candidate,
+         scores,
+         parent_id
+       ) do
+    %{
+      state
+      | pool: CandidatePool.add(state.pool, candidate, scores, [parent_id]),
+        merge_pending?: optimizer.use_merge
+    }
+  end
 
-  defp update_pool(:current_best, state, candidate, scores),
-    do: %{state | pool: CandidatePool.keep_best(state.pool, candidate, scores)}
+  defp update_pool(
+         %{candidate_selection_strategy: :current_best},
+         state,
+         candidate,
+         scores,
+         _parent_id
+       ),
+       do: %{state | pool: CandidatePool.keep_best(state.pool, candidate, scores)}
+
+  defp maybe_merge(_optimizer, _valset, %{merge_pending?: false} = state), do: {:skip, state}
+
+  defp maybe_merge(optimizer, valset, state) do
+    state = %{state | merge_pending?: false}
+
+    if state.remaining >= length(valset) and
+         MapSet.size(state.attempted_merges) < optimizer.max_merge_invocations do
+      case Merger.propose(state.pool, state.attempted_merges, state.random) do
+        nil -> {:skip, state}
+        proposal -> {:attempted, evaluate_merge(optimizer, valset, state, proposal)}
+      end
+    else
+      {:skip, state}
+    end
+  end
+
+  defp evaluate_merge(optimizer, valset, state, proposal) do
+    [left_id, right_id] = proposal.parents
+    left = CandidatePool.fetch(state.pool, left_id).scores
+    right = CandidatePool.fetch(state.pool, right_id).scores
+    {random, indices} = Merger.validation_sample(proposal.random, left, right)
+    selected = MapSet.new(indices)
+
+    {sample, rest} =
+      valset
+      |> Enum.with_index()
+      |> Enum.split_with(fn {_example, index} -> MapSet.member?(selected, index) end)
+
+    sample_scores = validation_scores(optimizer, proposal.program, Enum.map(sample, &elem(&1, 0)))
+    left_total = Enum.sum_by(sample, fn {_example, index} -> elem(left, index) end)
+    right_total = Enum.sum_by(sample, fn {_example, index} -> elem(right, index) end)
+
+    state = %{
+      state
+      | random: random,
+        remaining: state.remaining - length(sample),
+        attempted_merges: MapSet.put(state.attempted_merges, proposal.key)
+    }
+
+    if Enum.sum(sample_scores) >= max(left_total, right_total) do
+      scores = finish_merge_validation(optimizer, proposal, sample, sample_scores, rest)
+      pool = CandidatePool.add(state.pool, proposal.program, scores, proposal.parents)
+      %{state | pool: pool, remaining: state.remaining - length(rest), merge_pending?: true}
+    else
+      state
+    end
+  end
+
+  defp finish_merge_validation(_optimizer, _proposal, _sample, sample_scores, []),
+    do: sample_scores
+
+  defp finish_merge_validation(optimizer, proposal, sample, sample_scores, rest) do
+    rest_scores = validation_scores(optimizer, proposal.program, Enum.map(rest, &elem(&1, 0)))
+
+    sample
+    |> Enum.zip(sample_scores)
+    |> Kernel.++(Enum.zip(rest, rest_scores))
+    |> Enum.sort_by(fn {{_example, index}, _score} -> index end)
+    |> Enum.map(&elem(&1, 1))
+  end
 
   defp passes_minibatch?(
          %{candidate_selection_strategy: :current_best},

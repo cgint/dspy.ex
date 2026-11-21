@@ -194,7 +194,8 @@ defmodule Dspy.Teleprompt.GEPAParetoTest do
       {state, _seed} = Random.seed(seed)
       {next, draw} = Random.randbelow(state, 3)
       expected = if draw < 2, do: :baseline, else: :specialist
-      assert CandidatePool.parent(pool, :pareto, state) == {next, expected}
+      assert {^next, id} = CandidatePool.parent(pool, :pareto, state)
+      assert CandidatePool.fetch(pool, id).program == expected
     end
   end
 

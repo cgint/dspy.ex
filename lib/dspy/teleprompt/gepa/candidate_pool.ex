@@ -3,23 +3,20 @@ defmodule Dspy.Teleprompt.GEPA.CandidatePool do
 
   alias Dspy.Random
 
-  @enforce_keys [:best, :best_mean, :candidates, :leaders]
-  defstruct [:best, :best_mean, :candidates, :leaders]
+  @enforce_keys [:best_id, :candidates, :leaders]
+  defstruct [:best_id, :candidates, :leaders]
 
   def new(program, scores) do
-    mean = mean(scores)
-
     %__MODULE__{
-      best: program,
-      best_mean: mean,
-      candidates: %{0 => {program, mean}},
+      best_id: 0,
+      candidates: %{0 => entry(program, scores, MapSet.new())},
       leaders: Enum.map(scores, &{&1, MapSet.new([0])})
     }
   end
 
-  def add(pool, program, scores) do
+  def add(pool, program, scores, parents \\ []) do
     index = map_size(pool.candidates)
-    mean = mean(scores)
+    entry = entry(program, scores, ancestors(pool, parents))
 
     leaders =
       Enum.zip_with(pool.leaders, scores, fn {best_score, ids} = leader, score ->
@@ -30,28 +27,35 @@ defmodule Dspy.Teleprompt.GEPA.CandidatePool do
         end
       end)
 
-    pool = %{
+    best_id = if entry.mean > fetch(pool, pool.best_id).mean, do: index, else: pool.best_id
+
+    %{
       pool
-      | candidates: Map.put(pool.candidates, index, {program, mean}),
+      | best_id: best_id,
+        candidates: Map.put(pool.candidates, index, entry),
         leaders: leaders
     }
-
-    if mean > pool.best_mean, do: %{pool | best: program, best_mean: mean}, else: pool
   end
 
   def keep_best(pool, program, scores) do
-    if mean(scores) > pool.best_mean, do: new(program, scores), else: pool
+    if mean(scores) > fetch(pool, pool.best_id).mean, do: new(program, scores), else: pool
   end
 
-  def parent(pool, :current_best, random), do: {random, pool.best}
+  def fetch(pool, id), do: Map.fetch!(pool.candidates, id)
+  def best(pool), do: fetch(pool, pool.best_id).program
+
+  def known?(pool, program),
+    do: Enum.any?(pool.candidates, fn {_id, entry} -> entry.program === program end)
+
+  def parent(pool, :current_best, random), do: {random, pool.best_id}
 
   def parent(pool, :pareto, random) do
     weights = frontier_weights(pool)
     {random, draw} = Random.randbelow(random, Enum.sum_by(weights, &elem(&1, 1)))
-    index = choose(weights, draw)
-    {program, _mean} = Map.fetch!(pool.candidates, index)
-    {random, program}
+    {random, choose(weights, draw)}
   end
+
+  def frontier(pool), do: Enum.map(frontier_weights(pool), &elem(&1, 0))
 
   defp frontier_weights(pool) do
     rows = Enum.map(pool.leaders, &elem(&1, 1))
@@ -66,8 +70,7 @@ defmodule Dspy.Teleprompt.GEPA.CandidatePool do
 
     ordered =
       Enum.sort_by(support, fn {id, _rows} ->
-        {_program, mean} = Map.fetch!(pool.candidates, id)
-        {mean, id}
+        {fetch(pool, id).mean, id}
       end)
 
     # Remove a candidate only if all the rows it leads still have another
@@ -86,6 +89,16 @@ defmodule Dspy.Teleprompt.GEPA.CandidatePool do
 
   defp choose([{id, weight} | _], draw) when draw < weight, do: id
   defp choose([{_id, weight} | rest], draw), do: choose(rest, draw - weight)
+
+  defp entry(program, scores, ancestors) do
+    %{program: program, scores: List.to_tuple(scores), mean: mean(scores), ancestors: ancestors}
+  end
+
+  defp ancestors(pool, parents) do
+    Enum.reduce(parents, MapSet.new(), fn parent, ancestors ->
+      ancestors |> MapSet.union(fetch(pool, parent).ancestors) |> MapSet.put(parent)
+    end)
+  end
 
   defp mean(scores), do: Enum.sum(scores) / length(scores)
 end
