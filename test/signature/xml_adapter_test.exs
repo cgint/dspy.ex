@@ -377,6 +377,18 @@ defmodule Dspy.Signature.XMLAdapterTest do
     end
   end
 
+  test "accepts empty multiline wrappers adjacent to another tag" do
+    signature = Repeated.signature()
+    [values | fields] = signature.output_fields
+    values = %{values | schema: Map.delete(values.schema, :minItems)}
+    signature = %{signature | output_fields: [values | fields]}
+
+    xml = "<values>\n</values><summary>ok</summary><counts><empty>\n</empty></counts>"
+
+    assert %{values: [], summary: "ok", counts: %{"empty" => []}} =
+             XMLAdapter.parse_outputs(signature, xml)
+  end
+
   test "validates the complete array and rejects repeats of scalar or complete fields" do
     signature = Repeated.signature()
 

@@ -110,12 +110,12 @@ defmodule Dspy.Signature.Adapters.XMLValue do
     body = String.trim_leading(text)
 
     not String.starts_with?(body, "[") and not child_tag?(body, nil, :array) and
-      not empty_list_body?(text, name, schema, boundary, body)
+      not empty_list_body?(body, name, schema, boundary)
   end
 
-  defp empty_list_body?(text, name, schema, boundary, body) do
+  defp empty_list_body?(body, name, schema, boundary) do
     null_literal = if nullable?(schema), do: "(?:null\\s*)?", else: ""
-    close = Regex.compile!("\\A" <> null_literal <> literal_close_pattern(text, name))
+    close = Regex.compile!("\\A" <> null_literal <> close_pattern(name))
 
     case Regex.run(close, body) do
       [tag] -> boundary.(String.trim_leading(after_offset(body, byte_size(tag))))
@@ -316,7 +316,13 @@ defmodule Dspy.Signature.Adapters.XMLValue do
   # A matching close in a literal is structural only when a valid continuation
   # follows it. A leaf may not run past a recognized enclosing close.
   defp read_literal(text, name, boundary, scopes, allow_fallback?, mode) do
-    field_close = literal_close_pattern(text, name)
+    field_close =
+      if Regex.match?(@opening_newline, text) do
+        "</#{Regex.escape(name)}[ \\t]*>(?=[ \\t]*(?:\\r?\\n|\\z))"
+      else
+        close_pattern(name)
+      end
+
     alternatives = ["(" <> field_close <> ")" | Enum.map(scopes, &close_pattern(elem(&1, 0)))]
     # Skip quoted JSON tokens before looking for any of the XML closing tags.
     alternatives = if mode == :json, do: [@json_string | alternatives], else: alternatives
@@ -365,14 +371,6 @@ defmodule Dspy.Signature.Adapters.XMLValue do
   end
 
   defp close_pattern(name), do: "</#{Regex.escape(name)}\\s*>"
-
-  defp literal_close_pattern(text, name) do
-    if Regex.match?(@opening_newline, text) do
-      "</#{Regex.escape(name)}[ \\t]*>(?=[ \\t]*(?:\\r?\\n|\\z))"
-    else
-      close_pattern(name)
-    end
-  end
 
   defp after_offset(text, offset), do: binary_part(text, offset, byte_size(text) - offset)
 
