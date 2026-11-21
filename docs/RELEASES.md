@@ -8,6 +8,15 @@ This repo ships in **small, user-usable slices**.
 
 ## Consumer notes
 
+### Parsed completions
+
+`Dspy.Prediction.from_completions/1,2` accepts ordered output rows or parallel
+field columns. Ordinary attributes come from the first row. Use
+`Dspy.Prediction.parsed_completions/1` and `Dspy.Completions.fetch/2` to read
+other rows or all values for a field. `Dspy.Prediction.completions/1` continues
+to expose raw completion metadata. The constructor rejects empty or ragged
+inputs and ambiguous atom and string spellings for the same field.
+
 ### Example fields and dictionaries
 
 `Dspy.Example.labels/1` builds an example from the fields outside the selection

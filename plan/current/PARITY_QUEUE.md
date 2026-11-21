@@ -44,7 +44,7 @@ After this you can …measure your program reliably: failed examples count again
 
 | id | symbol | status | V | E | score | introduced | deps | breaking | old P | gap | queue status |
 |---|---|---|---|---|---|---|---|---|---|---|---|
-| S044 | majority | missing | H | S | 3.00 | <=2.6 | - | N | - | No Dspy.majority; ensemble :majority_vote is a different teleprompter mechanism | done 2026-09-29 v0.4.2 (M1-c) |
+| S044 | majority | partial | H | S | 3.00 | <=2.6 | S050 | N | - | List voting shipped in v0.4.2. DSPy 3.5.0 collection inputs, signature-based field selection, and default voting on non-text values remain. Multi-field maps without a signature need explicit field selection. | 3.5.0 alignment pending |
 | S031 | Evaluate | partial | H | S | 3.00 | <=2.6 | U008 | N | - | [reclassified done->partial] missing display_table/max_errors/failure_score/save_as_csv+js | done 2026-09-29 v0.4.0 (M1-a; failure_score/max_errors since v0.3.48) |
 | U010 | answer_exact_match | partial | H | S | 3.00 | <=2.6 | U011 U012 | N | - | add frac param + list-of-answers dispatch | done v0.4.1 (M1-b) |
 | U011 | answer_passage_match | missing | M | S | 2.00 | <=2.6 | U012 | N | - | no Elixir equivalent | done v0.4.1 (M1-b) |
@@ -66,13 +66,13 @@ After this you can …optimize a program once, save it, load it later or elsewhe
 | S002 | configure | partial | H | S | 3.00 | <=2.6 | - | N | - | [facet rule: done->partial] Parsimonious keys unported: rm/trace/num_threads/max_errors/ma | todo |
 | S051 | Example | partial | H | S | 3.00 | <=2.6 | - | N | - | Labels, field removal, and recursive dictionaries for `Example`, `Prediction`, and `History` are implemented. Legacy `inputs/1` still falls back to all attributes when inputs are unset or empty. | M2 example slices implemented. Release pending. |
 | S054 | Module | partial | H | S | 3.00 | <=2.6 | - | N | P5 (Module.inspect_history = facet S054.f7), P4 | Named discovery, immutable slot updates, shared LM bindings, and reset copies implemented. BootstrapRS records private teacher traces. Public history remains. | M2 traversal and reset slices implemented. Release pending. |
-| S055 | Prediction | partial | H | S | 3.00 | <=2.6 | S051 | N | - | [facet rule: done->partial] score float()/arithmetic/comparison ops and from_completions m | todo |
+| S055 | Prediction | partial | H | S | 3.00 | <=2.6 | S051 | N | - | `from_completions` exposes the first row and retains parsed alternatives. Score conversion, arithmetic and comparisons remain. | M2 parsed-completion slice implemented. Release pending. |
 | S067 | Signature | partial | H | S | 3.00 | <=2.6 | - | N | - | [facet rule: done->partial] pydantic-model validation, annotated types, and field constrai | todo |
 | S077 | BootstrapFewShotWithRandomSearch | partial | H | S | 3.00 | <=2.6 | S075 | N | P7 | Search, ranking, and per-slot teacher demos work for composite programs. Custom programs can still use `predict.examples`. Trace-aware metrics remain. | M2 composite slice implemented. Release pending. |
 | S060 | EmbeddingsWithScores | partial | M | S | 2.00 | 3.2.0 | S059 | N | - | No EmbeddingsWithScores class; closest: InMemoryRetriever Document.score (cosine) | todo |
 | S038 | Predict | partial | H | M | 1.50 | <=2.6 | S033 | N | - | Stored and call config support temperature, token limits, and rollout IDs. Native predictors can reset their demos and LM binding. Generation counts, dump/load_state, and criteria remain. | M2 config and reset slices implemented. Release pending. |
 | S113 | load | partial | H | M | 1.50 | <=2.6 | S059 | N | P4 | No program-level load (upstream cloudpickle); only parameter-state JSON persistence; no ve | todo |
-| S050 | Completions | partial | L | S | 1.00 | <=2.6 | S055 | N | - | No standalone Completions type: just a list on Prediction; from_completions, int-index, cr | todo |
+| S050 | Completions | partial | L | S | 1.00 | <=2.6 | S055 | N | - | Standalone parsed collection supports ordered rows, indexed access, field columns and a signature. Predictor generation counts and Majority integration remain. | M2 parsed-completion slice implemented. Release pending. |
 | S021 | Embedder | partial | M | M | 1.00 | <=2.6 | S022 | N | - | provider behaviour exists but no Dspy.Embedder facade, no batch_size, no caching, no calla | todo |
 | S004 | load_settings | missing | L | S | 1.00 | 3.2.0 | - | N | - | Dspy.Settings.save/load (upstream settings.py:266,299) not ported | todo |
 | S001 | *also:* `:bootstrap_rs` optimizer alias | idiom | | | | | S077 | N | P7 | Routes to `Dspy.Teleprompt.BootstrapFewShotWithRandomSearch`. | M2 first slice implemented. Release pending. |

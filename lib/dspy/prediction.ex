@@ -6,7 +6,9 @@ defmodule Dspy.Prediction do
   including the generated content and metadata about the generation process.
   """
 
-  defstruct [:attrs, :completions, :metadata]
+  alias Dspy.Completions
+
+  defstruct [:attrs, :completions, :metadata, :parsed_completions]
 
   @type completion :: %{
           text: String.t(),
@@ -18,7 +20,8 @@ defmodule Dspy.Prediction do
   @type t :: %__MODULE__{
           attrs: map(),
           completions: [completion()],
-          metadata: map()
+          metadata: map(),
+          parsed_completions: Completions.t() | nil
         }
 
   @doc """
@@ -43,6 +46,28 @@ defmodule Dspy.Prediction do
       metadata: metadata
     }
   end
+
+  @doc """
+  Create a prediction from ordered parsed rows or parallel field columns.
+
+  Ordinary attribute access reads the first row. Use `parsed_completions/1`
+  to read other rows or all values for a field.
+  """
+  @spec from_completions(Completions.input(), term()) :: t()
+  def from_completions(input, signature \\ nil) do
+    parsed = Completions.new(input, signature)
+    {:ok, first} = Completions.fetch(parsed, 0)
+    %{first | parsed_completions: parsed}
+  end
+
+  @doc """
+  Return the parsed collection from `from_completions/2`, or `nil`.
+
+  This accessor corresponds to Python DSPy's parsed `Prediction.completions`.
+  Use `completions/1` for Elixir's raw completion metadata.
+  """
+  @spec parsed_completions(t()) :: Completions.t() | nil
+  def parsed_completions(%__MODULE__{} = prediction), do: Map.get(prediction, :parsed_completions)
 
   @doc """
   Get an attribute from the prediction.
