@@ -149,6 +149,20 @@ defmodule Dspy.ParallelTest do
     end
   end
 
+  defmodule GatedModule do
+    @moduledoc false
+
+    defstruct [:observer]
+
+    def forward(%__MODULE__{observer: observer}, %{question: question}) do
+      send(observer, {:started_pair, question, self()})
+
+      receive do
+        :finish_pair -> {:ok, Prediction.new(%{input: question})}
+      end
+    end
+  end
+
   # A module that only works when the input is a raw %Dspy.Example{} (i.e.
   # access_examples: false), and fails on a map.
   defmodule RawExampleModule do
@@ -245,6 +259,50 @@ defmodule Dspy.ParallelTest do
 
     {:ok, _results} = Parallel.run(Parallel.new(num_threads: 4), pairs)
     assert ConcurrencyTracker.peak(tracker) >= 4
+  end
+
+  test "run/3 overrides concurrency for one call and keeps results in input order" do
+    executor = Parallel.new(num_threads: 1, timeout: 5_000)
+    module = %GatedModule{observer: self()}
+    pairs = [{module, %{question: "first"}}, {module, %{question: "second"}}]
+
+    overridden = Task.async(fn -> Parallel.run(executor, pairs, num_threads: 2) end)
+    assert_receive {:started_pair, "first", first}, 1_000
+    assert_receive {:started_pair, "second", second}, 1_000
+
+    second_monitor = Process.monitor(second)
+    send(second, :finish_pair)
+    assert_receive {:DOWN, ^second_monitor, :process, ^second, :normal}, 1_000
+    send(first, :finish_pair)
+
+    assert {:ok, [%Prediction{attrs: %{input: "first"}}, %Prediction{attrs: %{input: "second"}}]} =
+             Task.await(overridden)
+
+    for opts <- [[], [num_threads: nil]] do
+      inherited = Task.async(fn -> Parallel.run(executor, pairs, opts) end)
+      assert_receive {:started_pair, "first", serial_first}, 1_000
+      refute_receive {:started_pair, "second", _}
+      send(serial_first, :finish_pair)
+      assert_receive {:started_pair, "second", serial_second}, 1_000
+      send(serial_second, :finish_pair)
+
+      assert {:ok,
+              [%Prediction{attrs: %{input: "first"}}, %Prediction{attrs: %{input: "second"}}]} =
+               Task.await(inherited)
+    end
+  end
+
+  test "run/3 rejects invalid concurrency before any task starts" do
+    executor = Parallel.new(num_threads: 1, timeout: 5_000)
+    pairs = [{%CountingErrorModule{pid: self()}, %{question: "q"}}]
+
+    for count <- [0, -1, false, 1.5, "2"] do
+      assert_raise ArgumentError, ~r/num_threads must be a positive integer/, fn ->
+        Parallel.run(executor, pairs, num_threads: count)
+      end
+    end
+
+    refute_received :ran
   end
 
   test "run/3 propagates process-scoped settings overrides into every task" do

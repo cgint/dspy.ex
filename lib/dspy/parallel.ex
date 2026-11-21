@@ -120,6 +120,9 @@ defmodule Dspy.Parallel do
   `Task.async_stream` (`max_concurrency: :num_threads`, `ordered: true` so
   results come back in input order).
 
+  Pass a positive `num_threads:` count to override concurrency for this run.
+  Omit it or pass `nil` to use the executor's stored count.
+
   ## Returns
 
   - `{:ok, results}` - `results` is index-aligned with `exec_pairs`; each
@@ -139,7 +142,14 @@ defmodule Dspy.Parallel do
           | {:error,
              {:max_errors_exceeded,
               %{errors: non_neg_integer(), failed_indices: [non_neg_integer()]}}}
-  def run(%__MODULE__{} = parallel, exec_pairs, _opts \\ []) when is_list(exec_pairs) do
+  def run(%__MODULE__{} = parallel, exec_pairs, opts \\ []) when is_list(exec_pairs) do
+    num_threads =
+      case Keyword.get(opts, :num_threads) do
+        nil -> parallel.num_threads
+        count when is_integer(count) and count > 0 -> count
+        _ -> raise ArgumentError, ":num_threads must be a positive integer"
+      end
+
     # Process-local DSPy state (overrides + callback stack) lives in the caller's
     # process dictionary; capture it here and reinstall it inside every task
     # (tasks do not inherit the dictionary).
@@ -150,7 +160,7 @@ defmodule Dspy.Parallel do
       fn {module, input} ->
         Context.with_context(ctx, fn -> run_pair(module, input, parallel) end)
       end,
-      max_concurrency: parallel.num_threads,
+      max_concurrency: num_threads,
       ordered: true,
       timeout: parallel.timeout,
       on_timeout: :kill_task
