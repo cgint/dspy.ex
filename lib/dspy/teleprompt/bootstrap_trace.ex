@@ -1,7 +1,7 @@
 defmodule Dspy.Teleprompt.BootstrapTrace do
   @moduledoc false
 
-  alias Dspy.{Example, Parallel, Prediction, Teleprompt}
+  alias Dspy.{Example, Module, Parallel, Prediction, Teleprompt}
   alias Dspy.Module.PredictorTrace
 
   defmodule Error do
@@ -18,9 +18,9 @@ defmodule Dspy.Teleprompt.BootstrapTrace do
     def message(error), do: "could not collect bootstrap trace for example #{error.example_index}"
   end
 
-  defstruct [:program, :metric]
+  defstruct [:program, :metric, :capture?, :strict_metric?]
 
-  def collect(program, dataset, opts) do
+  def collect(program, dataset, opts, controls \\ []) do
     opts = Keyword.validate!(opts, metric: nil, num_threads: nil, raise_on_error: true)
     validate_dataset!(dataset)
 
@@ -30,7 +30,13 @@ defmodule Dspy.Teleprompt.BootstrapTrace do
 
     if opts[:metric] != nil, do: Teleprompt.validate_metric!(opts[:metric], :trace)
 
-    attempt = %__MODULE__{program: program, metric: opts[:metric]}
+    attempt = %__MODULE__{
+      program: program,
+      metric: opts[:metric],
+      capture?: Keyword.get(controls, :capture?, true),
+      strict_metric?: Keyword.get(controls, :strict_metric?, false)
+    }
+
     pairs = Enum.map(dataset, &{attempt, &1})
 
     parallel =
@@ -48,20 +54,20 @@ defmodule Dspy.Teleprompt.BootstrapTrace do
       end
 
     for {record, index} <- Enum.with_index(results), record != nil do
-      Map.put(record, :example_index, index)
+      index_record(record, index)
     end
   end
 
   # Parallel passes the original example to the attempt so the metric can see its labels.
   def forward(%__MODULE__{} = attempt, %Example{} = example) do
     with {:ok, inputs} <- Example.declared_inputs(example),
-         {:ok, prediction, trace} <- capture(attempt.program, inputs) do
+         {:ok, prediction, trace} <- run_program(attempt.program, inputs, attempt.capture?) do
       record = %{example: example, prediction: prediction, trace: trace}
-      score_record(record, attempt.metric)
+      score_record(record, attempt.metric, attempt.strict_metric?)
     end
   end
 
-  defp capture(program, inputs) do
+  defp run_program(program, inputs, true) do
     case PredictorTrace.capture(program, inputs) do
       {:ok, %Prediction{} = prediction, trace} ->
         {:ok, prediction, PredictorTrace.steps(trace)}
@@ -74,15 +80,30 @@ defmodule Dspy.Teleprompt.BootstrapTrace do
     end
   end
 
-  defp score_record(record, nil), do: {:ok, record}
+  defp run_program(program, inputs, false) do
+    case Module.forward(program, inputs) do
+      {:ok, %Prediction{} = prediction} -> {:ok, prediction, nil}
+      {:error, _reason} = error -> error
+      result -> {:error, {:unexpected_result, result}}
+    end
+  end
 
-  defp score_record(record, metric) do
+  defp score_record(record, nil, _strict?), do: {:ok, record}
+
+  defp score_record(record, metric, strict?) do
     case Teleprompt.run_metric(metric, record.example, record.prediction, record.trace) do
       score when is_number(score) -> {:ok, Map.put(record, :score, score)}
       :error -> {:error, {:metric_error, :raised}}
+      score when strict? -> {:ok, {:invalid_metric_result, score}}
       score -> {:error, {:invalid_metric_result, score}}
     end
   end
+
+  defp index_record({:invalid_metric_result, value}, index) do
+    raise Dspy.Evaluate.InvalidMetricResult, value: value, example_index: index
+  end
+
+  defp index_record(record, index), do: Map.put(record, :example_index, index)
 
   defp raise_row_error(results, reason) do
     index = Enum.find_index(results, &is_nil/1)
