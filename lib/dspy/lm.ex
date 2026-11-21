@@ -6,6 +6,9 @@ defmodule Dspy.LM do
   like OpenAI, Anthropic, local models, etc.
   """
 
+  alias Dspy.Lifecycle
+  alias Dspy.Signature.Adapter.Callbacks
+
   @type content_part :: map()
 
   @type content :: String.t() | [content_part()]
@@ -296,22 +299,12 @@ defmodule Dspy.LM do
 
   defp generate_request(lm, request, opts) do
     with %{__struct__: type} when is_atom(type) <- lm,
-         [_ | _] = handlers <- Dspy.Signature.Adapter.Callbacks.lm_handlers(lm_callbacks()) do
-      Dspy.Lifecycle.run(type, handlers, {:lm_start, :lm_end}, fn ->
+         [_ | _] = handlers <- Callbacks.lm_handlers(Callbacks.settings_callbacks()) do
+      Lifecycle.run(type, handlers, {:lm_start, :lm_end}, fn ->
         do_generate_request(lm, request, opts)
       end)
     else
       _ -> do_generate_request(lm, request, opts)
-    end
-  end
-
-  defp lm_callbacks do
-    case Dspy.Settings.current_overrides() do
-      %{callbacks: callbacks} ->
-        callbacks
-
-      _ ->
-        if Process.whereis(Dspy.Settings), do: Dspy.Settings.get(:callbacks), else: []
     end
   end
 

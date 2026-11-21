@@ -8,6 +8,16 @@ This repo ships in **small, user-usable slices**.
 
 ## Consumer notes
 
+### Evaluation lifecycle callbacks
+
+`Dspy.Evaluate.Callback` adds an optional start and end event around each
+evaluation. Module and LM events include the parent call ID when their
+enclosing call is observed. A completed evaluation reports the number of
+examples and failures. If an evaluation reaches its error budget, pending
+workers are stopped before the caller receives the exception and its end
+event. The [offline example](../examples/offline/evaluation_callbacks_offline.exs)
+traces a successful example and a failed example in the same parallel run.
+
 ### LM lifecycle callbacks
 
 `Dspy.LM.Callback` adds optional start and end handlers for resolved LM

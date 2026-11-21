@@ -21,6 +21,7 @@ examples=(
   examples/offline/react_tool_logging_offline.exs
   examples/offline/request_defaults_offline.exs
   examples/offline/semantic_f1_evaluation_offline.exs
+  examples/offline/evaluation_callbacks_offline.exs
   examples/offline/provider_retry_disk_cache_offline.exs
 )
 

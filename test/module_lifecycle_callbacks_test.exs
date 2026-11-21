@@ -114,11 +114,14 @@ defmodule Dspy.ModuleLifecycleCallbacksTest do
 
     outer = assert_start(:settings, Program)
     assert_start(:outer, Program, outer)
-    child = assert_start(:settings, Dspy.Predict)
+    child = assert_start(:settings, Dspy.Predict, nil, nil, outer)
     refute child == outer
 
-    for label <- [:native, :outer, :inner], do: assert_start(label, Dspy.Predict, child)
-    for label <- [:settings, :native, :outer, :inner], do: assert_end(label, Dspy.Predict, child)
+    for label <- [:native, :outer, :inner],
+        do: assert_start(label, Dspy.Predict, child, nil, outer)
+
+    for label <- [:settings, :native, :outer, :inner],
+        do: assert_end(label, Dspy.Predict, child, :ok, nil, outer)
 
     assert_end(:settings, Program, outer)
     assert_end(:outer, Program, outer)
@@ -159,12 +162,12 @@ defmodule Dspy.ModuleLifecycleCallbacksTest do
       assert_outcome(result, kind, reason)
 
       parent = assert_start(:scope, Program, nil, nil)
-      child = assert_start(:scope, Interrupt, nil, 1)
+      child = assert_start(:scope, Interrupt, nil, 1, parent)
 
       assert_received {:broken_start, ^parent, ^observer_failure}
       assert_received {:broken_start, ^child, ^observer_failure}
       assert_received {:broken_end, ^child, ^observer_failure}
-      assert_end(:scope, Interrupt, child, status, 1)
+      assert_end(:scope, Interrupt, child, status, 1, parent)
       assert_received {:end_only, %{call_id: ^child, module: Interrupt}, %{status: ^status}}
       assert_received {:broken_end, ^parent, ^observer_failure}
       assert_end(:scope, Program, parent, status, nil)
@@ -205,12 +208,12 @@ defmodule Dspy.ModuleLifecycleCallbacksTest do
            }
 
     outer = assert_start(:scope, Program, nil, nil)
-    inner = assert_start(:scope, Program, nil, 1)
-    first = assert_start(:scope, Dspy.Predict, nil, 2)
-    assert_end(:scope, Dspy.Predict, first, :ok, 2)
-    assert_end(:scope, Program, inner, :throw, 1)
-    second = assert_start(:scope, Dspy.Predict, nil, 1)
-    assert_end(:scope, Dspy.Predict, second, :ok, 1)
+    inner = assert_start(:scope, Program, nil, 1, outer)
+    first = assert_start(:scope, Dspy.Predict, nil, 2, inner)
+    assert_end(:scope, Dspy.Predict, first, :ok, 2, inner)
+    assert_end(:scope, Program, inner, :throw, 1, outer)
+    second = assert_start(:scope, Dspy.Predict, nil, 1, outer)
+    assert_end(:scope, Dspy.Predict, second, :ok, 1, outer)
     assert_end(:scope, Program, outer, :ok, nil)
   end
 
@@ -361,26 +364,31 @@ defmodule Dspy.ModuleLifecycleCallbacksTest do
     assert [{Interrupt, :forward, 2, _} | _] = stacktrace
   end
 
-  defp assert_start(label, module, id \\ nil, depth \\ nil) do
+  defp assert_start(label, module, id \\ nil, depth \\ nil, parent \\ nil) do
     assert {:module_event, ^label, :start, meta, %{} = payload, :registered, ^depth} =
              next_event()
 
     assert %{call_id: call_id, module: ^module} = meta
     assert is_reference(call_id)
-    assert meta == %{call_id: call_id, module: module}
+    assert meta == expected_meta(call_id, module, parent)
     assert payload == %{}
     if id, do: assert(call_id == id)
     call_id
   end
 
-  defp assert_end(label, module, id, status \\ :ok, depth \\ nil) do
-    meta = %{call_id: id, module: module}
+  defp assert_end(label, module, id, status \\ :ok, depth \\ nil, parent \\ nil) do
+    meta = expected_meta(id, module, parent)
 
     assert {:module_event, ^label, :end, ^meta, payload, {:started, ^id}, ^depth} = next_event()
     assert %{status: ^status, duration_us: duration} = payload
     assert is_integer(duration) and duration >= 0
     assert payload == %{status: status, duration_us: duration}
   end
+
+  defp expected_meta(id, module, nil), do: %{call_id: id, module: module}
+
+  defp expected_meta(id, module, parent),
+    do: %{call_id: id, module: module, parent_call_id: parent}
 
   defp next_event do
     receive do
