@@ -1,6 +1,7 @@
 defmodule Dspy.Teleprompt.BootstrapFewShotWithRandomSearch do
   @moduledoc """
-  Search for demonstrations for a program exposing the `predict.examples` parameter.
+  Search for demonstrations for programs with named predictors or a
+  `predict.examples` parameter.
 
   The search compares three baseline candidates and then seeded permutations of
   the training set. Candidate scores are percentages on the validation set.
@@ -17,10 +18,12 @@ defmodule Dspy.Teleprompt.BootstrapFewShotWithRandomSearch do
     Prediction,
     Random,
     Settings,
+    Signature,
     Teleprompt,
     Trainset
   }
 
+  alias Dspy.Module.{PredictorSlots, PredictorTrace}
   alias Dspy.Teleprompt.Util
 
   @enforce_keys [:metric]
@@ -95,8 +98,10 @@ defmodule Dspy.Teleprompt.BootstrapFewShotWithRandomSearch do
   `:restrict` selects candidate seeds. `:labeled_sample` controls sampling for
   the labeled-only baseline and defaults to `true`.
 
-  A teacher with a demo parameter receives labeled demos from each candidate's
-  training order. Pass `teacher_compiled: true` to use its existing demos.
+  Teachers receive labeled demos from each candidate's training order when their
+  demos are configurable. Pass `teacher_compiled: true` to use their existing demos.
+  Composite bootstrapping requires matching teacher and student predictor slots
+  and signatures. Zero-shot and labeled-only searches skip that teacher check.
 
   The result contains `:program` and `:candidates`. Each candidate has `:seed`,
   `:score`, `:subscores`, and `:program` fields. Ties keep the search order.
@@ -107,12 +112,14 @@ defmodule Dspy.Teleprompt.BootstrapFewShotWithRandomSearch do
     opts =
       Keyword.validate!(opts, [:teacher, :teacher_compiled, :valset, :restrict, :labeled_sample])
 
+    teacher = Keyword.get(opts, :teacher) || student
+
     with {:ok, seeds} <-
            select_seeds(optimizer.num_candidate_programs, Keyword.get(opts, :restrict)),
          {:ok, trainset} <- Trainset.validate(trainset),
          {:ok, valset} <- resolve_valset(Keyword.get(opts, :valset), trainset),
-         {:ok, zero_shot} <- Util.set_predict_examples(student, []) do
-      teacher = Keyword.get(opts, :teacher) || student
+         {:ok, zero_shot} <- prepare_student(student),
+         :ok <- validate_teacher(zero_shot, teacher, seeds) do
       optimizer = %{optimizer | max_errors: optimizer.max_errors || Settings.get(:max_errors)}
 
       search(optimizer, zero_shot, teacher, trainset, valset, seeds, opts)
@@ -132,6 +139,70 @@ defmodule Dspy.Teleprompt.BootstrapFewShotWithRandomSearch do
 
   defp resolve_valset(valset, trainset) when valset in [nil, []], do: {:ok, trainset}
   defp resolve_valset(valset, _trainset), do: Trainset.validate(valset)
+
+  defp prepare_student(student) do
+    case Util.set_predict_examples(student, []) do
+      {:ok, program} ->
+        {:ok, {program, :parameter}}
+
+      {:error, {:unsupported_program, _}} = error ->
+        prepare_named_student(student, error)
+
+      {:error, {:parameter_not_applied, "predict.examples"}} = error ->
+        prepare_named_student(student, error)
+
+      {:error, _} = error ->
+        error
+    end
+  end
+
+  defp prepare_named_student(student, error) do
+    if module_program?(student) do
+      {program, found?} =
+        PredictorSlots.map_reduce(student, false, fn _path, predictor, _found? ->
+          {%{predictor | examples: []}, true}
+        end)
+
+      if found?, do: {:ok, {program, :named}}, else: error
+    else
+      error
+    end
+  end
+
+  defp validate_teacher({_student, :parameter}, _teacher, _seeds), do: :ok
+
+  defp validate_teacher({student, :named}, teacher, seeds) do
+    if Enum.any?(seeds, &(&1 >= -1)) do
+      if module_program?(teacher) and matching_slots?(student, teacher),
+        do: :ok,
+        else: {:error, :teacher_predictor_mismatch}
+    else
+      :ok
+    end
+  end
+
+  defp module_program?(%module{}) do
+    Code.ensure_loaded?(module) and function_exported?(module, :__struct__, 0) and
+      function_exported?(module, :forward, 2)
+  end
+
+  defp module_program?(_program), do: false
+
+  defp matching_slots?(student, teacher) do
+    student_slots = PredictorSlots.list(student)
+    teacher_slots = PredictorSlots.list(teacher)
+
+    length(student_slots) == length(teacher_slots) and
+      Enum.all?(Enum.zip(student_slots, teacher_slots), fn
+        {{student_path, %kind{signature: %Signature{} = student_signature}},
+         {teacher_path, %kind{signature: %Signature{} = teacher_signature}}} ->
+          student_path === teacher_path and
+            Map.delete(student_signature, :name) === Map.delete(teacher_signature, :name)
+
+        _ ->
+          false
+      end)
+  end
 
   defp search(optimizer, student, teacher, trainset, valset, seeds, opts) do
     eval_opts = [max_errors: optimizer.max_errors]
@@ -176,24 +247,20 @@ defmodule Dspy.Teleprompt.BootstrapFewShotWithRandomSearch do
     end
   end
 
-  defp build_candidate(-3, _optimizer, student, _teacher, _trainset, _opts), do: {:ok, student}
+  defp build_candidate(-3, _optimizer, {student, _mode}, _teacher, _trainset, _opts),
+    do: {:ok, student}
 
   defp build_candidate(-2, optimizer, student, _teacher, trainset, opts) do
     count = min(optimizer.max_labeled_demos, length(trainset))
-
-    demos =
-      if Keyword.get(opts, :labeled_sample, true),
-        do: sample_labels(trainset, count),
-        else: Enum.take(trainset, count)
-
-    Util.set_predict_examples(student, demos)
+    set_labeled_demos(student, trainset, count, Keyword.get(opts, :labeled_sample, true))
   end
 
-  defp build_candidate(seed, optimizer, student, teacher, trainset, opts) do
+  defp build_candidate(seed, optimizer, {student, mode}, teacher, trainset, opts) do
     {ordered, limit} = bootstrap_inputs(seed, trainset, optimizer.max_bootstrapped_demos)
 
-    with {:ok, teacher} <- prepare_teacher(teacher, ordered, optimizer.max_labeled_demos, opts),
-         {:ok, accepted} <- collect_demos(ordered, limit, optimizer, teacher) do
+    with {:ok, teacher} <-
+           prepare_teacher(teacher, mode, ordered, optimizer.max_labeled_demos, opts),
+         {:ok, accepted} <- collect_demos(ordered, limit, optimizer, {teacher, mode}) do
       {indices, augmented} = Enum.unzip(accepted)
       indices = MapSet.new(indices)
 
@@ -204,8 +271,86 @@ defmodule Dspy.Teleprompt.BootstrapFewShotWithRandomSearch do
 
       {seed_state, _} = Random.seed(0)
       {_state, labels} = Random.shuffle(seed_state, labels)
-      count = min(max(0, optimizer.max_labeled_demos - length(augmented)), length(labels))
-      Util.set_predict_examples(student, augmented ++ sample_labels(labels, count))
+      set_bootstrap_demos({student, mode}, augmented, labels, optimizer.max_labeled_demos)
+    end
+  end
+
+  defp set_labeled_demos({student, :parameter}, trainset, count, sample?) do
+    demos = if sample?, do: sample_labels(trainset, count), else: Enum.take(trainset, count)
+    Util.set_predict_examples(student, demos)
+  end
+
+  defp set_labeled_demos({student, :named}, trainset, count, sample?)
+       when sample? not in [false, nil] do
+    {state, _} = Random.seed(0)
+
+    {program, _state} =
+      PredictorSlots.map_reduce(student, state, fn _path, predictor, state ->
+        {state, demos} = Random.sample(state, trainset, count)
+        {%{predictor | examples: demos}, state}
+      end)
+
+    {:ok, program}
+  end
+
+  defp set_labeled_demos({student, :named}, trainset, count, _sample?) do
+    demos = Enum.take(trainset, count)
+    {:ok, Module.map_named_predictors(student, &%{&1 | examples: demos})}
+  end
+
+  defp set_bootstrap_demos({student, :parameter}, augmented, labels, max_labeled) do
+    count = label_count(labels, max_labeled, length(augmented))
+    Util.set_predict_examples(student, augmented ++ sample_labels(labels, count))
+  end
+
+  defp set_bootstrap_demos({student, :named}, accepted, labels, max_labeled) do
+    names =
+      Map.new(PredictorSlots.list(student), fn {path, predictor} ->
+        {path, PredictorSlots.name(path, predictor)}
+      end)
+
+    demos = Enum.reduce(accepted, %{}, &add_attempt_demos(&1, &2, names))
+    {state, _} = Random.seed(0)
+
+    {program, _state} =
+      PredictorSlots.map_reduce(student, state, fn path, predictor, state ->
+        {count, reversed} = Map.get(demos, path, {0, []})
+        {state, labeled} = Random.sample(state, labels, label_count(labels, max_labeled, count))
+        {%{predictor | examples: Enum.reverse(reversed, labeled)}, state}
+      end)
+
+    {:ok, program}
+  end
+
+  defp label_count(labels, max_labeled, augmented_count) do
+    min(max(0, max_labeled - augmented_count), length(labels))
+  end
+
+  defp add_attempt_demos(steps, demos, names) do
+    steps
+    |> Enum.group_by(fn {_index, path, _inputs, _prediction} -> path end)
+    |> Enum.reduce(demos, fn {path, steps}, acc ->
+      {count, previous} = Map.get(acc, path, {0, []})
+      {_index, _path, inputs, prediction} = choose_step(steps, Map.fetch!(names, path), count)
+      output_names = for key <- Map.keys(prediction.attrs), is_atom(key), do: Atom.to_string(key)
+      demo = Example.new(inputs |> Map.drop(output_names) |> Map.merge(prediction.attrs))
+      Map.put(acc, path, {count + 1, [demo | previous]})
+    end)
+  end
+
+  defp choose_step([step], _name, _count), do: step
+
+  defp choose_step(steps, name, count) do
+    text = "#{name}:#{count}"
+    seed = :binary.decode_unsigned(text <> :crypto.hash(:sha512, text))
+    {state, _} = Random.seed(seed)
+    {state, draw} = Random.random(state)
+
+    if draw < 0.5 do
+      {_state, step} = Random.choice(state, Enum.drop(steps, -1))
+      step
+    else
+      List.last(steps)
     end
   end
 
@@ -224,14 +369,15 @@ defmodule Dspy.Teleprompt.BootstrapFewShotWithRandomSearch do
     selected
   end
 
-  defp prepare_teacher(teacher, _trainset, 0, _opts), do: {:ok, teacher}
+  defp prepare_teacher(teacher, _mode, _trainset, 0, _opts), do: {:ok, teacher}
 
-  defp prepare_teacher(teacher, trainset, max_demos, opts) do
-    if Keyword.get(opts, :teacher_compiled, false) or is_nil(teacher_demos(teacher)) do
+  defp prepare_teacher(teacher, mode, trainset, max_demos, opts) do
+    if Keyword.get(opts, :teacher_compiled, false) or
+         (mode == :parameter and is_nil(teacher_demos(teacher))) do
       {:ok, teacher}
     else
       count = min(max_demos, length(trainset))
-      Util.set_predict_examples(teacher, sample_labels(trainset, count))
+      set_labeled_demos({teacher, mode}, trainset, count, true)
     end
   end
 
@@ -259,11 +405,11 @@ defmodule Dspy.Teleprompt.BootstrapFewShotWithRandomSearch do
     end
   end
 
-  defp try_example(optimizer, teacher, example, errors) do
-    with {:ok, teacher} <- without_demo(teacher, example) do
+  defp try_example(optimizer, {teacher, mode}, example, errors) do
+    with {:ok, teacher} <- without_demo(teacher, mode, example) do
       Enum.reduce_while(0..(optimizer.max_rounds - 1), {:rejected, errors}, fn round,
                                                                                {:rejected, errors} ->
-        case attempt(optimizer, teacher, example, round) do
+        case attempt(optimizer, teacher, mode, example, round) do
           {:ok, demo} -> {:halt, {:ok, demo, errors}}
           :rejected -> {:cont, {:rejected, errors}}
           {:error, reason} when errors + 1 >= optimizer.max_errors -> {:halt, {:error, reason}}
@@ -273,7 +419,18 @@ defmodule Dspy.Teleprompt.BootstrapFewShotWithRandomSearch do
     end
   end
 
-  defp without_demo(teacher, example) do
+  defp without_demo(teacher, :named, example) do
+    {:ok,
+     Module.map_named_predictors(teacher, fn
+       %{examples: examples} = predictor when is_list(examples) ->
+         %{predictor | examples: Enum.reject(examples, &(&1 == example))}
+
+       predictor ->
+         predictor
+     end)}
+  end
+
+  defp without_demo(teacher, :parameter, example) do
     case teacher_demos(teacher) do
       %Parameter{value: examples} when is_list(examples) ->
         remaining = Enum.reject(examples, &(&1 == example))
@@ -291,7 +448,15 @@ defmodule Dspy.Teleprompt.BootstrapFewShotWithRandomSearch do
     Enum.find(Module.parameters(teacher), &match?(%Parameter{name: "predict.examples"}, &1))
   end
 
-  defp attempt(optimizer, teacher, example, round) do
+  defp forward_teacher(teacher, :named, example), do: PredictorTrace.capture(teacher, example)
+
+  defp forward_teacher(teacher, :parameter, example) do
+    with {:ok, %Prediction{} = prediction} <- Module.forward(teacher, example) do
+      {:ok, prediction, nil}
+    end
+  end
+
+  defp attempt(optimizer, teacher, mode, example, round) do
     overrides =
       if round == 0 do
         optimizer.teacher_settings
@@ -300,11 +465,11 @@ defmodule Dspy.Teleprompt.BootstrapFewShotWithRandomSearch do
       end
 
     Dspy.context(overrides, fn ->
-      with {:ok, %Prediction{} = prediction} <- Module.forward(teacher, example) do
+      with {:ok, prediction, traces} <- forward_teacher(teacher, mode, example) do
         case Teleprompt.run_metric(optimizer.metric, example, prediction) do
           score when is_number(score) ->
             if accepted?(score, optimizer.metric_threshold) do
-              {:ok, Example.new(Map.merge(Example.inputs(example), prediction.attrs))}
+              {:ok, traces || Example.new(Map.merge(Example.inputs(example), prediction.attrs))}
             else
               :rejected
             end
