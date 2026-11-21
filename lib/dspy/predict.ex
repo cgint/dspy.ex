@@ -38,7 +38,8 @@ defmodule Dspy.Predict do
   Options:
   - `:examples` (default: [])
   - `:lm` — a `Dspy.LM` struct for this predictor. Defaults to the configured LM at call time.
-  - `:config` — stored generation options as a map or keyword list
+  - `:config` — stored generation options as a map or keyword list. Set `:n`
+    to a positive integer to return parsed choices from a compatible LM.
   - `:max_retries` (default: 3) — retry LM call on provider errors
   - `:max_output_retries` (default: `Dspy.Settings.max_output_retries` or `0`) — retry when adapter outputs fail to parse/validate (e.g. inner reason `{:missing_required_outputs, ...}`); terminal pipeline failures return `{:output_parse_failed, reason, %{raw_output: response_text}}`
   - `:adapter` — optional signature adapter override
@@ -104,8 +105,8 @@ defmodule Dspy.Predict do
     adapter = Dspy.Signature.AdapterPipeline.active_adapter(adapter: predict.adapter)
 
     with :ok <- Dspy.Signature.validate_inputs(predict.signature, inputs),
-         {:ok, outputs} <-
-           Dspy.Signature.Adapter.Pipeline.run(
+         {:ok, prediction} <-
+           Dspy.Signature.Adapter.Pipeline.run_prediction(
              predict.signature,
              normalize_inputs(inputs),
              predict.examples,
@@ -116,7 +117,6 @@ defmodule Dspy.Predict do
              max_retries: predict.max_retries,
              max_output_retries: predict.max_output_retries
            ) do
-      prediction = Dspy.Prediction.new(outputs)
       Dspy.Module.PredictorTrace.record(predict, inputs, prediction)
       {:ok, prediction}
     else

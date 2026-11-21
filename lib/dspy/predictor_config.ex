@@ -1,13 +1,14 @@
 defmodule Dspy.PredictorConfig do
   @moduledoc false
 
-  @keys [:temperature, :max_tokens, :max_completion_tokens, :rollout_id]
+  @keys [:temperature, :max_tokens, :max_completion_tokens, :rollout_id, :n]
 
   @type t :: %{
           optional(:temperature) => number() | nil,
           optional(:max_tokens) => pos_integer() | nil,
           optional(:max_completion_tokens) => pos_integer() | nil,
-          optional(:rollout_id) => integer() | nil
+          optional(:rollout_id) => integer() | nil,
+          optional(:n) => pos_integer() | nil
         }
 
   def new!(config), do: config |> normalize!() |> drop_nil_request_fields()
@@ -56,7 +57,7 @@ defmodule Dspy.PredictorConfig do
   defp validate!(:temperature, value) when is_number(value), do: :ok
 
   defp validate!(key, value)
-       when key in [:max_tokens, :max_completion_tokens] and is_integer(value) and value > 0,
+       when key in [:max_tokens, :max_completion_tokens, :n] and is_integer(value) and value > 0,
        do: :ok
 
   defp validate!(:rollout_id, value) when is_integer(value), do: :ok
@@ -64,6 +65,6 @@ defmodule Dspy.PredictorConfig do
 
   defp invalid_config! do
     raise ArgumentError,
-          "invalid predictor config. Expected a map or keyword list of temperature, token limits, or rollout_id"
+          "invalid predictor config. Expected a map or keyword list of temperature, token limits, rollout_id, or n"
   end
 end

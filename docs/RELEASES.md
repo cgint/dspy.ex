@@ -50,12 +50,18 @@ provide the same operation for standalone predictors.
 ### Predictor generation config
 
 `Dspy.Predict` and `Dspy.ChainOfThought` accept a `config:` map or keyword list
-with `:temperature`, `:max_tokens`, `:max_completion_tokens`, or `:rollout_id`.
+with `:temperature`, `:max_tokens`, `:max_completion_tokens`, `:rollout_id`, or `:n`.
 Use `get_config/1` to read the stored options, `update_config/2` to merge a patch
 into a predictor, or `Dspy.call/3` with `config:` to override options for one call.
 Nil request options inherit settings and LM defaults. An explicit nil rollout
 selects the unpartitioned cache. BootstrapRS and BestOfN apply their sampling
 options to temporary predictor copies for retries.
+
+An explicit `config: [n: count]` asks a compatible LM for an ordered collection
+of parsed choices from one request. This includes `n: 1`. Set `n: nil` to return
+to the default single-choice path. The existing temperature precedence applies
+to these requests. ReqLLM, Bumblebee, TwoStep, and tool-call signatures currently
+support one choice in this path.
 
 ### Random search for few-shot demos
 

@@ -151,6 +151,7 @@ defmodule Dspy.LM.ReqLLM do
   def supports?(%__MODULE__{model: model}, :structured_output),
     do: native_structured_model?(model)
 
+  def supports?(_lm, :multiple_choices), do: false
   def supports?(_lm, _feature), do: true
 
   defp to_req_llm_input_and_opts(%__MODULE__{} = lm, request) do
@@ -160,6 +161,7 @@ defmodule Dspy.LM.ReqLLM do
         |> maybe_put(:temperature, request[:temperature])
         |> maybe_put(:max_tokens, request[:max_tokens])
         |> maybe_put(:max_completion_tokens, request[:max_completion_tokens])
+        |> maybe_put(:n, if(request[:n] === 1, do: 1))
         |> maybe_put(:stop, request[:stop])
         |> maybe_put(:tools, request[:tools])
 

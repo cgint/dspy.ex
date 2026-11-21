@@ -55,7 +55,8 @@ defmodule Dspy.ChainOfThought do
   Options:
   - `:examples` (default: [])
   - `:lm` — a `Dspy.LM` struct for this predictor. Defaults to the configured LM at call time.
-  - `:config` — stored generation options as a map or keyword list
+  - `:config` — stored generation options as a map or keyword list. Set `:n`
+    to a positive integer to return parsed choices from a compatible LM.
   - `:max_retries` (default: 3)
   - `:max_output_retries` (default: `Dspy.Settings.max_output_retries` or `0`) — retry when adapter outputs fail to parse/validate (e.g. inner reason `{:missing_required_outputs, ...}`); terminal pipeline failures return `{:output_parse_failed, reason, %{raw_output: response_text}}`
   - `:reasoning_field` (default: :reasoning)
@@ -127,19 +128,19 @@ defmodule Dspy.ChainOfThought do
     adapter = Dspy.Signature.AdapterPipeline.active_adapter(adapter: cot.adapter)
 
     with :ok <- Dspy.Signature.validate_inputs(signature_for_call, inputs),
-         {:ok, outputs} <-
-           Dspy.Signature.Adapter.Pipeline.run(
+         {:ok, prediction} <-
+           Dspy.Signature.Adapter.Pipeline.run_prediction(
              signature_for_call,
              normalize_inputs(inputs),
              cot.examples,
              adapter: adapter,
+             prediction_signature: cot.signature,
              lm: Map.get(cot, :lm),
              config: get_config(cot),
              callbacks: cot.callbacks,
              max_retries: cot.max_retries,
              max_output_retries: cot.max_output_retries
            ) do
-      prediction = Dspy.Prediction.new(outputs)
       Dspy.Module.PredictorTrace.record(cot, inputs, prediction)
       {:ok, prediction}
     else

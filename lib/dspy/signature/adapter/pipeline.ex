@@ -11,7 +11,7 @@ defmodule Dspy.Signature.Adapter.Pipeline do
   It is used by `Dspy.Predict` and `Dspy.ChainOfThought`.
   """
 
-  alias Dspy.{PredictorConfig, Signature}
+  alias Dspy.{LM, Prediction, PredictorConfig, Settings, Signature}
   alias Dspy.Signature.Adapter.Callbacks
   alias Dspy.Signature.AdapterPipeline
   require Logger
@@ -23,12 +23,23 @@ defmodule Dspy.Signature.Adapter.Pipeline do
           adapter: module() | nil,
           lm: Dspy.LM.t() | nil,
           config: PredictorConfig.t(),
+          prediction_signature: Signature.t(),
           callbacks: Callbacks.callbacks(),
           max_retries: non_neg_integer(),
           max_output_retries: non_neg_integer()
         ]
 
-  @spec run(Signature.t(), map(), [Dspy.Example.t()], opts()) :: {:ok, map()} | {:error, term()}
+  @doc false
+  def run_prediction(signature, inputs, demos, opts) do
+    case run(signature, inputs, demos, opts) do
+      {:ok, {:parsed_choices, prediction}} -> {:ok, prediction}
+      {:ok, outputs} -> {:ok, Prediction.new(outputs)}
+      {:error, _} = error -> error
+    end
+  end
+
+  @spec run(Signature.t(), map(), [Dspy.Example.t()], opts()) ::
+          {:ok, map() | {:parsed_choices, Prediction.t()}} | {:error, term()}
   def run(%Signature{} = signature, inputs, demos, opts \\ [])
       when is_map(inputs) and is_list(demos) and is_list(opts) do
     adapter = AdapterPipeline.active_adapter(adapter: Keyword.get(opts, :adapter))
@@ -47,8 +58,13 @@ defmodule Dspy.Signature.Adapter.Pipeline do
     {request_options, cache_options} =
       opts |> Keyword.get(:config, %{}) |> PredictorConfig.execution_options()
 
+    count = Map.get(request_options, :n)
+    lm = choice_lm(Keyword.get(opts, :lm), count)
+
     lm_options = %{
-      lm: Keyword.get(opts, :lm),
+      lm: lm,
+      count: count,
+      prediction_signature: Keyword.get(opts, :prediction_signature, signature),
       max_retries: Keyword.get(opts, :max_retries, 3),
       request_options: request_options,
       cache_options: cache_options
@@ -71,19 +87,51 @@ defmodule Dspy.Signature.Adapter.Pipeline do
     call_id = make_ref()
     max_output_attempts = max_output_retries + 1
 
-    do_run_attempt(
-      signature,
-      inputs,
-      demos,
-      adapter,
-      callbacks,
-      call_id,
-      1,
-      lm_options,
-      max_output_retries,
-      max_output_attempts
-    )
+    with :ok <- validate_choice_request(count, lm, adapter, signature) do
+      do_run_attempt(
+        signature,
+        inputs,
+        demos,
+        adapter,
+        callbacks,
+        call_id,
+        1,
+        lm_options,
+        max_output_retries,
+        max_output_attempts
+      )
+    end
   end
+
+  defp choice_lm(nil, count) when is_integer(count) and count > 1 do
+    if Process.whereis(Settings), do: Settings.get(:lm)
+  end
+
+  defp choice_lm(lm, _count), do: lm
+
+  defp validate_choice_request(count, lm, adapter, signature)
+       when is_integer(count) and count > 1 do
+    cond do
+      adapter == Dspy.Signature.Adapters.TwoStep ->
+        {:error, {:multiple_choices_unsupported, {:adapter, adapter}}}
+
+      Enum.any?(signature.output_fields, &(&1.type == :tool_calls)) ->
+        {:error, {:multiple_choices_unsupported, :tool_calls}}
+
+      is_nil(lm) ->
+        {:error, :no_lm_configured}
+
+      is_struct(lm) and Code.ensure_loaded?(lm.__struct__) and
+        function_exported?(lm.__struct__, :supports?, 2) and
+          LM.supports?(lm, :multiple_choices) == false ->
+        {:error, {:multiple_choices_unsupported, {:lm, lm.__struct__}}}
+
+      true ->
+        :ok
+    end
+  end
+
+  defp validate_choice_request(_count, _lm, _adapter, _signature), do: :ok
 
   defp do_run_attempt(
          %Signature{} = signature,
@@ -145,7 +193,7 @@ defmodule Dspy.Signature.Adapter.Pipeline do
          callbacks,
          call_id,
          attempt,
-         %{lm: lm, max_retries: max_retries} = lm_options,
+         %{lm: lm, max_retries: max_retries, count: count} = lm_options,
          output_retries_left,
          max_output_attempts,
          request,
@@ -169,71 +217,33 @@ defmodule Dspy.Signature.Adapter.Pipeline do
             usage: normalize_usage(usage_raw)
           })
 
-        with {:ok, choice} <- Dspy.LM.choice_from_response(response),
-             {:ok, response_text} <- Dspy.LM.text_from_response(response) do
+        with {:ok, choices} <- response_choices(response, count) do
+          response_chars = Enum.sum(Enum.map(choices, &String.length(&1.text)))
+
           callbacks =
-            Callbacks.emit(callbacks, :parse_start, meta, %{
-              response_chars: String.length(response_text)
-            })
+            Callbacks.emit(
+              callbacks,
+              :parse_start,
+              meta,
+              with_choice_count(%{response_chars: response_chars}, count)
+            )
 
-          parse_signature = drop_tool_call_outputs(signature)
-          result = adapter.parse_outputs(parse_signature, response_text, choice: choice)
-
-          case result do
-            outputs when is_map(outputs) ->
-              case merge_tool_call_outputs(signature, outputs, choice) do
-                {:ok, merged_outputs} ->
-                  _callbacks =
-                    Callbacks.emit(callbacks, :parse_end, meta, %{
-                      outputs_keys: Map.keys(merged_outputs)
-                    })
-
-                  {:ok, merged_outputs}
-
-                {:error, reason} ->
-                  _callbacks = Callbacks.emit(callbacks, :parse_end, meta, %{error: reason})
-
-                  maybe_retry_output(
-                    signature,
-                    inputs,
-                    demos,
-                    adapter,
-                    callbacks,
-                    call_id,
-                    attempt,
-                    lm_options,
-                    output_retries_left,
-                    max_output_attempts,
-                    base_request,
-                    base_prompt,
-                    response_text,
-                    reason
-                  )
-              end
-
-            {:error, reason} ->
-              _callbacks = Callbacks.emit(callbacks, :parse_end, meta, %{error: reason})
-
-              maybe_retry_output(
-                signature,
-                inputs,
-                demos,
-                adapter,
-                callbacks,
-                call_id,
-                attempt,
-                lm_options,
-                output_retries_left,
-                max_output_attempts,
-                base_request,
-                base_prompt,
-                response_text,
-                reason
-              )
-
-            other ->
+          case parse_choices(signature, adapter, choices, lm_options) do
+            {:ok, result, keys} ->
               _callbacks =
-                Callbacks.emit(callbacks, :parse_end, meta, %{error: {:parse_failed, other}})
+                Callbacks.emit(
+                  callbacks,
+                  :parse_end,
+                  meta,
+                  with_choice_count(%{outputs_keys: keys}, count)
+                )
+
+              {:ok, result}
+
+            {:error, reason, response_text, index} ->
+              choice_index = if is_integer(count) and count > 1, do: index
+              payload = with_choice_index(%{error: reason}, choice_index)
+              _callbacks = Callbacks.emit(callbacks, :parse_end, meta, payload)
 
               maybe_retry_output(
                 signature,
@@ -249,7 +259,8 @@ defmodule Dspy.Signature.Adapter.Pipeline do
                 base_request,
                 base_prompt,
                 response_text,
-                {:parse_failed, other}
+                reason,
+                choice_index
               )
           end
         end
@@ -262,6 +273,84 @@ defmodule Dspy.Signature.Adapter.Pipeline do
         {:error, reason}
     end
   end
+
+  defp response_choices(response, nil) do
+    with {:ok, choice} <- LM.choice_from_response(response),
+         {:ok, text} <- LM.text_from_response(response) do
+      {:ok, [%{choice | text: text}]}
+    end
+  end
+
+  defp response_choices(response, count), do: LM.choices_from_response(response, count)
+
+  defp parse_choices(signature, adapter, choices, %{count: count} = lm_options) do
+    parse_signature = drop_tool_call_outputs(signature)
+
+    choices
+    |> Enum.with_index()
+    |> Enum.reduce_while({:ok, []}, fn {choice, index}, {:ok, rows} ->
+      with {:ok, parsed} <- parse_choice(adapter, signature, parse_signature, choice),
+           row = align_optional_fields(parsed, signature, count),
+           :ok <- validate_row_shape(row, rows) do
+        {:cont, {:ok, [row | rows]}}
+      else
+        {:error, reason} -> {:halt, {:error, reason, choice.text, index}}
+      end
+    end)
+    |> case do
+      {:ok, [outputs]} when is_nil(count) ->
+        {:ok, outputs, Map.keys(outputs)}
+
+      {:ok, rows} ->
+        parsed_prediction(Enum.reverse(rows), lm_options.prediction_signature, hd(choices).text)
+
+      {:error, _, _, _} = error ->
+        error
+    end
+  end
+
+  defp parse_choice(adapter, signature, parse_signature, choice) do
+    case adapter.parse_outputs(parse_signature, choice.text, choice: choice) do
+      outputs when is_map(outputs) -> merge_tool_call_outputs(signature, outputs, choice)
+      {:error, _} = error -> error
+      other -> {:error, {:parse_failed, other}}
+    end
+  end
+
+  defp align_optional_fields(outputs, _signature, nil), do: outputs
+
+  defp align_optional_fields(outputs, signature, _count) do
+    Enum.reduce(signature.output_fields, outputs, fn field, row ->
+      if Map.get(field, :required, true) || Dspy.Attrs.resolve_key(row, field.name) do
+        row
+      else
+        Map.put_new(row, field.name, Map.get(field, :default))
+      end
+    end)
+  end
+
+  defp validate_row_shape(_row, []), do: :ok
+
+  defp validate_row_shape(row, [previous | _]) do
+    if MapSet.new(Map.keys(row)) == MapSet.new(Map.keys(previous)),
+      do: :ok,
+      else: {:error, {:invalid_outputs, :inconsistent_completion_fields}}
+  end
+
+  defp parsed_prediction([first | _] = rows, signature, first_text) do
+    prediction = Prediction.from_completions(rows, signature)
+    {:ok, {:parsed_choices, prediction}, Map.keys(first)}
+  rescue
+    ArgumentError -> {:error, {:invalid_outputs, :invalid_completion_fields}, first_text, 0}
+  end
+
+  defp with_choice_count(payload, count) when is_integer(count) and count > 1,
+    do: Map.put(payload, :choices_count, count)
+
+  defp with_choice_count(payload, _count), do: payload
+
+  defp with_choice_index(payload, nil), do: payload
+  defp with_choice_index(payload, index), do: Map.put(payload, :choice_index, index)
 
   defp maybe_retry_output(
          signature,
@@ -277,7 +366,8 @@ defmodule Dspy.Signature.Adapter.Pipeline do
          base_request,
          base_prompt,
          response_text,
-         reason
+         reason,
+         choice_index
        )
        when is_map(base_request) and is_binary(base_prompt) and is_integer(max_output_attempts) and
               max_output_attempts >= 1 do
@@ -325,12 +415,12 @@ defmodule Dspy.Signature.Adapter.Pipeline do
           "dspy.adapter_exhausted kind=output call_id=#{inspect(call_id)} attempts_used=#{max_output_attempts} last_reason=#{Dspy.LogReason.format(reason)}"
         )
 
-        {:error, output_parse_failure(reason, response_text)}
+        {:error, output_parse_failure(reason, response_text, choice_index)}
     end
   end
 
-  defp output_parse_failure(reason, response_text) when is_binary(response_text) do
-    {:output_parse_failed, reason, %{raw_output: response_text}}
+  defp output_parse_failure(reason, response_text, choice_index) when is_binary(response_text) do
+    {:output_parse_failed, reason, with_choice_index(%{raw_output: response_text}, choice_index)}
   end
 
   defp meta(call_id, attempt, adapter, %Signature{} = signature)
