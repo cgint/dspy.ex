@@ -231,6 +231,25 @@ defmodule Dspy.ModuleProgramStateTest do
     assert_raise ArgumentError, fn -> String.to_existing_atom(never_seen) end
   end
 
+  test "shared labeled demos can use fields declared by different slots", %{tmp_dir: dir} do
+    path = Path.join(dir, "checkpoint")
+
+    demo =
+      Example.new(question: "Where?", answer: "There", context: "Evidence", summary: "Result")
+      |> Example.with_inputs([:question, :context])
+
+    target = %Program{
+      items: [Predict.new("question -> answer"), Predict.new("context -> summary")]
+    }
+
+    source = %{target | items: Enum.map(target.items, &%{&1 | examples: [demo]})}
+
+    assert :ok = Module.save_state(source, path)
+    assert {:ok, %Program{items: [first, second]}} = Module.load_state(target, path)
+    assert first.examples === [demo]
+    assert second.examples === [demo]
+  end
+
   test "stores only LM names, restores through the caller and clears null bindings", %{
     tmp_dir: dir
   } do

@@ -187,7 +187,8 @@ defmodule Dspy.Module do
 
   Demos are `Dspy.Example` values with portable attributes and metadata. Values
   can contain numbers, booleans, nil, UTF-8 strings, lists, and plain maps.
-  Attribute map keys can be strings or atoms declared by the signature.
+  Attribute map keys can be strings or atoms declared by any predictor signature
+  in the program.
   Metadata keys can be strings and the top-level `:inputs` atom. Slots in
   maps support atoms, UTF-8 strings, and integer keys.
 

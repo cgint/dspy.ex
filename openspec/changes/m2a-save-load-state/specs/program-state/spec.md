@@ -45,7 +45,12 @@ The file and target SHALL have identical sets of predictor slots. At each slot t
 
 ### Requirement: Learned state round trip
 
-The checkpoint SHALL preserve each predictor's instructions, ordered demos, and stored generation config. Supported demos are `Dspy.Example` values with portable attributes and metadata. The codec SHALL preserve the exact type of supported keys and values. Config SHALL preserve explicit `rollout_id: nil` independently of omission and preserve `n`.
+The checkpoint SHALL preserve each predictor's instructions, ordered demos, and stored generation config. Supported demos are `Dspy.Example` values with portable attributes and metadata. Attribute keys may use atoms declared by any predictor signature in the program. The codec SHALL preserve the exact type of supported keys and values. Config SHALL preserve explicit `rollout_id: nil` independently of omission and preserve `n`.
+
+#### Scenario: Shared labeled demos in a composite
+
+- **WHEN** a demo shared by multiple slots uses atom field keys declared across their signatures
+- **THEN** each slot SHALL recover the full demo with the same runtime key types
 
 #### Scenario: Typed example and metadata
 

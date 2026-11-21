@@ -14,7 +14,8 @@ defmodule Dspy.Module.ProgramState do
     with {:ok, lms} <- lm_registry(opts),
          {:ok, path} <- path_string(path, :write),
          {:ok, slots} <- program_slots(program),
-         {:ok, records} <- map_indexed(slots, &encode_slot(&1, &2, lms)),
+         atoms = program_field_atoms(slots),
+         {:ok, records} <- map_indexed(slots, &encode_slot(&1, &2, lms, atoms)),
          {:ok, json} <-
            encode_json(%{"format" => @format, "version" => @version, "slots" => records}) do
       write_checkpoint(path, json)
@@ -56,6 +57,12 @@ defmodule Dspy.Module.ProgramState do
     {:ok, PredictorSlots.list(program)}
   rescue
     ArgumentError -> {:error, :invalid_program}
+  end
+
+  defp program_field_atoms(slots) do
+    Enum.reduce(slots, %{}, fn {_path, _wire_path, _predictor, {_kind, _in, _out, atoms}}, acc ->
+      Map.merge(acc, atoms)
+    end)
   end
 
   defp shape(predictor, location) do
@@ -105,7 +112,12 @@ defmodule Dspy.Module.ProgramState do
 
   defp encode_segment(_segment, location), do: {:error, {:unsupported_slot_key, location}}
 
-  defp encode_slot({_path, wire_path, predictor, {kind, inputs, outputs, atoms}}, index, lms) do
+  defp encode_slot(
+         {_path, wire_path, predictor, {kind, inputs, outputs, _atoms}},
+         index,
+         lms,
+         atoms
+       ) do
     location = ["slots", index]
 
     with {:ok, instructions} <-
@@ -338,16 +350,18 @@ defmodule Dspy.Module.ProgramState do
   end
 
   defp prepare_states(slots, records, lms) do
+    atoms = program_field_atoms(slots)
+
     map_indexed(slots, fn {path, wire_path, _predictor, shape}, _index ->
       {record, location} = Map.fetch!(records, wire_path)
 
-      with {:ok, state} <- decode_slot(record, shape, lms, location) do
+      with {:ok, state} <- decode_slot(record, shape, lms, atoms, location) do
         {:ok, {path, state}}
       end
     end)
   end
 
-  defp decode_slot(record, {kind, inputs, outputs, atoms}, lms, location) do
+  defp decode_slot(record, {kind, inputs, outputs, _atoms}, lms, atoms, location) do
     path = record["path"]
 
     with :ok <- match_shape(record, kind, inputs, outputs),
