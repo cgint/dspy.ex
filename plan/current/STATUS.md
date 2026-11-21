@@ -25,7 +25,10 @@
 > keeps candidates that improve held-out scores. The offline example
 > verifies that improvement. Opt-in Pareto selection can revisit a
 > lower-mean validation specialist after it improves a shared training
-> minibatch. Merge, richer proposals, and parse-failure feedback remain open.
+> minibatch. Opt-in merges combine compatible candidates with a common
+> ancestor and compare both parents on a shared validation subset.
+> Additional frontier objectives, richer proposals, and parse-failure
+> feedback remain open.
 
 > **M5, status messages and exit example.** `streamify/2` accepts a
 > lifecycle status provider. The [offline ChainOfThought example](../../examples/offline/chain_of_thought_streaming_offline.exs)

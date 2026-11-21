@@ -20,6 +20,11 @@ defmodule Dspy.Teleprompt.GEPA do
   per round, defaulting to three. Feedback skips training examples that
   reach `:perfect_score` (default 1), unless `:skip_perfect_score` is false.
   Failed rows contribute `:failure_score` (default 0) to comparisons.
+  With Pareto search, set `:use_merge` to combine compatible instruction
+  changes from descendants of a common ancestor. A merge must match or
+  beat both parents on a shared validation subset. `:max_merge_invocations`
+  defaults to five and limits attempted merges. A merge reserves enough
+  budget for one validation pass and reuses the subset scores it collects.
   Reflection sends previews of the selected predictor's declared fields
   and metric feedback to the configured reflection LM.
 
@@ -37,7 +42,9 @@ defmodule Dspy.Teleprompt.GEPA do
     candidate_selection_strategy: :current_best,
     failure_score: 0,
     perfect_score: 1,
-    skip_perfect_score: true
+    skip_perfect_score: true,
+    use_merge: false,
+    max_merge_invocations: 5
   ]
 
   defstruct [
@@ -61,7 +68,9 @@ defmodule Dspy.Teleprompt.GEPA do
           candidate_selection_strategy: :current_best | :pareto,
           failure_score: number(),
           perfect_score: number(),
-          skip_perfect_score: boolean()
+          skip_perfect_score: boolean(),
+          use_merge: boolean(),
+          max_merge_invocations: non_neg_integer()
         }
 
   @impl Dspy.Teleprompt
@@ -145,7 +154,9 @@ defmodule Dspy.Teleprompt.GEPA do
       candidate_selection_strategy: opts[:candidate_selection_strategy],
       failure_score: opts[:failure_score],
       perfect_score: opts[:perfect_score],
-      skip_perfect_score: opts[:skip_perfect_score]
+      skip_perfect_score: opts[:skip_perfect_score],
+      use_merge: opts[:use_merge],
+      max_merge_invocations: opts[:max_merge_invocations]
     }
   end
 
@@ -160,6 +171,18 @@ defmodule Dspy.Teleprompt.GEPA do
 
     unless is_boolean(opts[:skip_perfect_score]) do
       raise ArgumentError, ":skip_perfect_score must be a boolean"
+    end
+
+    unless is_boolean(opts[:use_merge]) do
+      raise ArgumentError, ":use_merge must be a boolean"
+    end
+
+    if opts[:use_merge] and opts[:candidate_selection_strategy] != :pareto do
+      raise ArgumentError, ":use_merge requires candidate_selection_strategy: :pareto"
+    end
+
+    unless is_integer(opts[:max_merge_invocations]) and opts[:max_merge_invocations] >= 0 do
+      raise ArgumentError, ":max_merge_invocations must be a nonnegative integer"
     end
   end
 
