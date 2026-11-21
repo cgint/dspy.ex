@@ -8,6 +8,12 @@ This repo ships in **small, user-usable slices**.
 
 ## Consumer notes
 
+### Comparing parsed completions
+
+`Dspy.MultiChainComparison` accepts the ordered collection from
+`Dspy.Prediction.parsed_completions/1` as its `:completions` input, alongside
+lists of completion maps and predictions.
+
 ### Multipart output retries
 
 Output retries update the primary text of the final user message. Images,
