@@ -23,6 +23,7 @@ defmodule Dspy.ChainOfThought do
   defstruct [
     :signature,
     :examples,
+    :lm,
     :max_retries,
     :max_output_retries,
     :reasoning_field,
@@ -33,6 +34,7 @@ defmodule Dspy.ChainOfThought do
   @type t :: %__MODULE__{
           signature: Dspy.Signature.t(),
           examples: [Dspy.Example.t()],
+          lm: Dspy.LM.t() | nil,
           max_retries: non_neg_integer(),
           max_output_retries: non_neg_integer(),
           reasoning_field: atom(),
@@ -50,6 +52,7 @@ defmodule Dspy.ChainOfThought do
 
   Options:
   - `:examples` (default: [])
+  - `:lm` — a `Dspy.LM` struct for this predictor. Defaults to the configured LM at call time.
   - `:max_retries` (default: 3)
   - `:max_output_retries` (default: `Dspy.Settings.max_output_retries` or `0`) — retry when adapter outputs fail to parse/validate (e.g. inner reason `{:missing_required_outputs, ...}`); terminal pipeline failures return `{:output_parse_failed, reason, %{raw_output: response_text}}`
   - `:reasoning_field` (default: :reasoning)
@@ -65,6 +68,7 @@ defmodule Dspy.ChainOfThought do
     %__MODULE__{
       signature: augmented_signature,
       examples: Keyword.get(opts, :examples, []),
+      lm: Dspy.LM.validate_binding!(Keyword.get(opts, :lm)),
       max_retries: Keyword.get(opts, :max_retries, 3),
       max_output_retries: Keyword.get(opts, :max_output_retries, default_max_output_retries()),
       reasoning_field: reasoning_field,
@@ -113,6 +117,7 @@ defmodule Dspy.ChainOfThought do
              normalize_inputs(inputs),
              cot.examples,
              adapter: adapter,
+             lm: Map.get(cot, :lm),
              callbacks: cot.callbacks,
              max_retries: cot.max_retries,
              max_output_retries: cot.max_output_retries
