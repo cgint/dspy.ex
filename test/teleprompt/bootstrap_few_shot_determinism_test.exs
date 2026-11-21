@@ -213,4 +213,22 @@ defmodule Dspy.Teleprompt.BootstrapFewShotDeterminismTest do
     assert [%Example{attrs: demo, metadata: %{}}] = optimized.examples
     assert demo == %{question: "accepted", answer: "4", source: :teacher}
   end
+
+  test "malformed input selection fails before starting teacher workers" do
+    row = Example.new(%{question: "q", answer: "4"}, %{"inputs" => ["question" | :invalid]})
+    student = %RecordingStudent{test_pid: self()}
+
+    optimizer =
+      BootstrapFewShot.new(
+        metric: fn _example, _prediction -> 1.0 end,
+        teacher: %ProjectedTeacher{test_pid: self()},
+        seed: -1
+      )
+
+    assert_raise FunctionClauseError, fn ->
+      BootstrapFewShot.compile(optimizer, student, [row])
+    end
+
+    refute_received {:teacher_inputs, _inputs}
+  end
 end

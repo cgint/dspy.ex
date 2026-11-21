@@ -3,13 +3,17 @@ defmodule Dspy.Teleprompt.KNNFewShot.Program do
 
   use Dspy.Module
 
-  alias Dspy.KNN
+  alias Dspy.{Example, KNN}
   alias Dspy.Teleprompt.BootstrapFewShot
 
   @enforce_keys [:index, :student, :bootstrap]
   defstruct [:index, :student, :bootstrap]
 
   @impl true
+  def forward(%__MODULE__{} = program, %Example{} = example) do
+    with {:ok, inputs} <- KNN.example_inputs(example), do: forward(program, inputs)
+  end
+
   def forward(%__MODULE__{} = program, inputs) do
     with {:ok, neighbors} <- KNN.query(program.index, inputs),
          {:ok, child} <-
@@ -26,6 +30,8 @@ defmodule Dspy.Teleprompt.KNNFewShot do
   Compilation builds one `Dspy.KNN` index. Each call retrieves neighbors,
   prepares one set of demos with `Dspy.Teleprompt.BootstrapFewShot`, and runs
   the student with those demos. The caller's student keeps its original demos.
+  When calling the compiled program with an `Example`, declare which fields
+  are inputs with `Dspy.Example.with_inputs/2`.
   """
 
   @behaviour Dspy.Teleprompt
@@ -64,8 +70,9 @@ defmodule Dspy.Teleprompt.KNNFewShot do
   Bootstrap options include `:teacher`, `:metric`, `:metric_threshold`,
   `:max_bootstrapped_demos`, `:max_labeled_demos`, `:max_rounds`, `:max_errors`,
   `:num_threads`, `:seed`, and `:verbose`. A missing or `nil` metric accepts all
-  successful teacher predictions. Defaults are 16 labeled demos and `seed: -1`
-  to keep neighbor order during bootstrap sampling.
+  successful teacher predictions. Labeled demos come from the closest neighbors,
+  up to a default of 16. Bootstrap sampling defaults to `seed: -1` to keep
+  neighbor order.
   """
   @impl true
   @spec new(keyword()) :: t()

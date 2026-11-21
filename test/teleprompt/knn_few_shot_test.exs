@@ -5,6 +5,10 @@ defmodule Dspy.Teleprompt.KNNFewShotTest do
   alias Dspy.Signature.Adapters.ChatAdapter
   alias Dspy.Teleprompt.KNNFewShot
 
+  defmodule ExampleAttrs do
+    defstruct [:question, :answer, :other]
+  end
+
   defmodule RecordingLM do
     @behaviour Dspy.LM
     defstruct [:owner, :role, :content]
@@ -113,7 +117,7 @@ defmodule Dspy.Teleprompt.KNNFewShotTest do
   end
 
   test "an explicit metric sees gold and can reject the teacher before a Predict result" do
-    expected = row("nearest", "gold")
+    expected = row("nearest", "  gold  ") |> Example.put(:other, nil)
     embedder = embedding(%{"question: nearest" => [1], "question: query" => [1]})
     teacher = Predict.new("question -> answer", lm: lm(:teacher, "wrong"), adapter: ChatAdapter)
     student = Predict.new("question -> answer", lm: lm(:student, "student"), adapter: ChatAdapter)
@@ -146,6 +150,33 @@ defmodule Dspy.Teleprompt.KNNFewShotTest do
     refute_received {:generated, _, _, _}
   end
 
+  test "struct-backed neighbors contribute demos with their original attributes" do
+    owner = self()
+
+    neighbor =
+      Example.new(%ExampleAttrs{question: "nearest", answer: "teacher answer"})
+      |> Example.with_inputs(:question)
+
+    optimizer =
+      KNNFewShot.new(
+        k: 1,
+        vectorizer: embedding(%{"question: nearest" => [1], "question: query" => [1]}),
+        teacher: %RecordingTeacher{owner: owner},
+        metric: fn example, prediction ->
+          send(owner, {:metric, example})
+          example[:answer] == prediction[:answer]
+        end,
+        max_labeled_demos: 0
+      )
+
+    student = Predict.new("question -> answer", lm: lm(:student, "student"), adapter: ChatAdapter)
+    assert {:ok, program} = KNNFewShot.compile(optimizer, student, [neighbor])
+    assert {:ok, %Prediction{}} = Dspy.call(program, question: "query")
+    assert_received {:metric, ^neighbor}
+    assert_received {:generated, :student, _, request}
+    assert user_prompt(request) =~ "Example 1:\n[[ ## question ## ]]\nnearest"
+  end
+
   test "the default includes up to sixteen labeled neighbors" do
     trainset = for id <- 1..18, do: row("row #{id}", "label #{id}")
     embedder = Embedder.new(fn texts -> Enum.map(texts, fn _ -> [1] end) end)
@@ -160,8 +191,35 @@ defmodule Dspy.Teleprompt.KNNFewShotTest do
     refute_received {:generated, _, _, _}
   end
 
+  test "a labeled demo cap uses the closest rows and preserves typed outputs" do
+    trainset = for distance <- 1..3, do: row("row #{distance}", %{value: distance})
+
+    embedder =
+      embedding(%{
+        "question: row 1" => [3],
+        "question: row 2" => [2],
+        "question: row 3" => [1],
+        "question: query" => [1]
+      })
+
+    student = Predict.new("question -> answer", lm: lm(:student, "student"), adapter: ChatAdapter)
+
+    optimizer =
+      KNNFewShot.new(k: 3, vectorizer: embedder, max_labeled_demos: 2, max_bootstrapped_demos: 0)
+
+    assert {:ok, program} = KNNFewShot.compile(optimizer, student, trainset)
+    assert {:ok, %Prediction{}} = Dspy.call(program, question: "query")
+    assert_received {:generated, :student, _, request}
+    prompt = user_prompt(request)
+    assert prompt =~ "Example 1:\n[[ ## question ## ]]\nrow 1"
+    assert prompt =~ "Example 2:\n[[ ## question ## ]]\nrow 2"
+    assert prompt =~ "[[ ## answer ## ]]\n%{value: 1}"
+    assert prompt =~ "[[ ## answer ## ]]\n%{value: 2}"
+    refute prompt =~ "row 3"
+  end
+
   test "an explicit empty neighbor projection sends an empty map to the teacher" do
-    embedder = embedding(%{"" => [1]})
+    embedder = embedding(%{"" => [1], "answer: private query label" => [1]})
     row = Example.new(answer: "gold label") |> Example.with_inputs([])
 
     signature =
@@ -182,9 +240,19 @@ defmodule Dspy.Teleprompt.KNNFewShotTest do
       )
 
     assert {:ok, program} = KNNFewShot.compile(optimizer, student, [row])
+    assert_received {:embedded, [""]}
     assert {:ok, %Prediction{attrs: %{answer: "student"}}} = Dspy.call(program, %{})
+    assert_received {:embedded, [""]}
     assert_received {:knn_teacher_inputs, inputs}
     assert inputs == %{}
+
+    query = Example.new(answer: "private query label")
+    assert Dspy.call(program, query) == {:error, :missing_input_keys}
+    refute_received {:embedded, _}
+
+    assert {:ok, %Prediction{}} = Dspy.call(program, Example.with_inputs(query, []))
+    assert_received {:embedded, [""]}
+    refute_received {:embedded, _}
   end
 
   test "default bootstrap sampling follows nearest-first order with the student as teacher" do

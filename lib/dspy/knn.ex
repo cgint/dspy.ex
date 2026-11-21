@@ -99,12 +99,21 @@ defmodule Dspy.KNN do
     end
   end
 
-  defp training_text(%Example{attrs: attrs} = example) when is_map(attrs) do
-    with {:ok, selection} <- declared_inputs(example),
-         do: serialize_inputs(Map.to_list(attrs), selection)
+  defp training_text(example) do
+    with {:ok, inputs} <- example_inputs(example), do: serialize_inputs(inputs)
   end
 
-  defp training_text(_value), do: {:error, :expected_example}
+  @doc false
+  def example_inputs(%Example{attrs: attrs} = example) when is_map(attrs) do
+    with {:ok, selection} <- declared_inputs(example) do
+      inputs =
+        Map.filter(attrs, fn {key, _value} -> MapSet.member?(selection, field_name(key)) end)
+
+      {:ok, inputs}
+    end
+  end
+
+  def example_inputs(_value), do: {:error, :expected_example}
 
   defp declared_inputs(%Example{metadata: nil}), do: {:error, :missing_input_keys}
 
@@ -128,23 +137,20 @@ defmodule Dspy.KNN do
   defp declared_inputs(_example), do: {:error, :invalid_input_keys}
 
   defp query_text(inputs) when is_map(inputs) and not is_struct(inputs),
-    do: serialize_inputs(inputs, :all)
+    do: serialize_inputs(inputs)
 
   defp query_text(inputs) do
     if Keyword.keyword?(inputs),
-      do: serialize_inputs(inputs, :all),
+      do: serialize_inputs(inputs),
       else: {:error, :invalid_query_inputs}
   end
 
-  defp serialize_inputs(inputs, selection) do
+  defp serialize_inputs(inputs) do
     fields =
       Enum.reduce_while(inputs, {:ok, %{}}, fn {key, value}, {:ok, fields} ->
         name = field_name(key)
 
         cond do
-          selection != :all and not MapSet.member?(selection, name) ->
-            {:cont, {:ok, fields}}
-
           is_nil(name) ->
             {:halt, {:error, :invalid_query_inputs}}
 

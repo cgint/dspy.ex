@@ -14,6 +14,8 @@ This repo ships in **small, user-usable slices**.
 index when compiled with a student and training set. Each call uses its
 own neighbor subset to prepare one student program. Bootstrap metrics
 receive the original training example and the teacher's prediction.
+The labeled-demo cap takes the closest rows, including structured labels.
+For an `Example` query, declare its inputs with `Dspy.Example.with_inputs/2`.
 The [offline KNNFewShot example](../examples/offline/knn_few_shot_offline.exs)
 verifies that two queries use different demonstrations from one index.
 

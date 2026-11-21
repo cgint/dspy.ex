@@ -102,8 +102,8 @@ defmodule Dspy.Module do
     do: forward_untracked(module, inputs, on_delta)
 
   defp forward_untracked(module, inputs, on_delta) do
-    inputs = normalize_inputs(inputs)
     type = module.__struct__
+    inputs = normalize_inputs(type, inputs)
 
     if type in [Predict, ChainOfThought] and is_function(on_delta, 1) do
       type.forward(module, inputs, on_delta)
@@ -111,6 +111,12 @@ defmodule Dspy.Module do
       type.forward(module, inputs)
     end
   end
+
+  # The neighbor lookup needs the declared fields before Example normalization.
+  defp normalize_inputs(Dspy.Teleprompt.KNNFewShot.Program, %Dspy.Example{} = example),
+    do: example
+
+  defp normalize_inputs(_type, inputs), do: normalize_inputs(inputs)
 
   defp normalize_inputs(%Dspy.Example{} = example),
     do: normalize_inputs(Dspy.Example.inputs(example))
