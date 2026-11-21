@@ -1,0 +1,18 @@
+direction: down
+
+save: Save a checkpoint {
+  direction: down
+  program: Optimized program and LM registry
+  encode: Validate and encode typed state
+  temporary: Write and close an exclusive temporary file
+  publish: Publish by rename
+  program -> encode -> temporary -> publish
+}
+
+load: Restore a checkpoint {
+  direction: down
+  inputs: JSON file and caller program and LM registry
+  validate: Validate records, slot identity, and bindings
+  restore: Return the hydrated program
+  inputs -> validate -> restore
+}
