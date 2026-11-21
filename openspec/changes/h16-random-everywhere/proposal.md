@@ -1,6 +1,6 @@
 # H16 — All library sampling through `Dspy.Random`
 
-Status: **DRAFT (Greta 2026-10-03)** — needs Horst's rulings **R1–R5**. Paper only. Queue H16 (ruled T2, 2026-09-30). Base: `main` at `40c779b` (v0.4.6).
+Current decisions and verification are tracked in [design.md](design.md) and [tasks.md](tasks.md). The following is Greta's original draft from 2026-10-03, based on `main` at `40c779b` (v0.4.6).
 Harness: `plan/research/upstream_golden/mutate_h16.py` on `mutlib.py`, writing to `plan/research/pi_handoffs/h16/mutation_report.json`. `CONTRACT_IDS` is a literal list in the harness (below), enforced. No `kind: any`. Every `also` = observed failures − `expect`. A test killed by a mutation sits in that mutation's `expect` (a different `kind` → a twin ID, the MG3b/MX1b pattern), never in `exempt` or only in `also`.
 
 ## Why

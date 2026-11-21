@@ -69,6 +69,16 @@ defmodule DspyTrainsetTest do
     assert Enum.all?(sample1, &MapSet.member?(data_set, &1))
   end
 
+  test "random sample uses the CPython pool and set selections" do
+    # M1-e fixture vectors, including the set branch just beyond the pool limit.
+    for {size, seed, indices} <- [{10, 0, [6, 9, 0]}, {22, 2, [1, 2, 11, 5, 21]}] do
+      data = dataset(size)
+
+      assert Trainset.sample(data, length(indices), seed: seed) ==
+               Enum.map(indices, &Enum.at(data, &1))
+    end
+  end
+
   defp labeled_dataset do
     [
       Example.new(%{id: 1, question: "q1", answer: "A"}),
@@ -140,5 +150,36 @@ defmodule DspyTrainsetTest do
 
     assert sample1 == sample2
     assert length(sample1) == 6
+    # CPython random.Random(42).choice over this population, repeated six times.
+    assert Enum.map(sample1, & &1.attrs.id) == [1, 1, 3, 2, 2, 2]
+    assert_raise Enum.EmptyError, fn -> Trainset.bootstrap_sample([], 1, seed: 42) end
+  end
+
+  test "trainset sampling preserves seeded and unseeded caller RNG state" do
+    rows = labeled_dataset()
+
+    samplers = [
+      split: fn -> Trainset.split(rows, seed: 42) end,
+      bootstrap: fn -> Trainset.bootstrap_sample(rows, 6, seed: 42) end,
+      stratified: fn -> Trainset.stratified_sample(rows, 3) end
+    ]
+
+    strategies =
+      for strategy <- [:random, :diverse, :hard, :balanced, :uncertainty] do
+        {strategy, fn -> Trainset.sample(rows, 3, strategy: strategy, seed: 42) end}
+      end
+
+    for {name, sample} <- samplers ++ strategies, seeded? <- [false, true] do
+      {before, after_call} =
+        Task.async(fn ->
+          if seeded?, do: :rand.seed(:exsss, {7, 8, 9})
+          before = :rand.export_seed()
+          sample.()
+          {before, :rand.export_seed()}
+        end)
+        |> Task.await()
+
+      assert after_call == before, "#{name} changed caller RNG state (seeded=#{seeded?})"
+    end
   end
 end

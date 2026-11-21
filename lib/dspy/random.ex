@@ -35,6 +35,9 @@ defmodule Dspy.Random do
 
   defstruct mt: %{}, mti: 0
 
+  @doc false
+  def fresh_seed, do: :binary.decode_unsigned(:crypto.strong_rand_bytes(8))
+
   @doc """
   Create a generator seeded exactly like CPython's `random.Random(seed)`.
 
@@ -62,6 +65,21 @@ defmodule Dspy.Random do
   def getrandbits(state, k) when is_integer(k) and k >= 1 and k <= 32 do
     {state, word} = genrand_uint32(state)
     {state, word >>> (32 - k)}
+  end
+
+  @doc "A 53-bit float in [0, 1), matching CPython's random()."
+  def random(state) do
+    {state, high} = getrandbits(state, 27)
+    {state, low} = getrandbits(state, 26)
+    {state, ((high <<< 26) + low) / (1 <<< 53)}
+  end
+
+  @doc "Select one element using CPython's choice algorithm."
+  def choice(_state, []), do: raise(ArgumentError, "cannot choose from an empty list")
+
+  def choice(state, population) when is_list(population) do
+    {state, index} = randbelow(state, length(population))
+    {state, Enum.at(population, index)}
   end
 
   @doc """
@@ -117,6 +135,10 @@ defmodule Dspy.Random do
   the power with integer arithmetic).
   """
   def sample(state, population, k) when is_list(population) and is_integer(k) do
+    if k < 0 do
+      raise ArgumentError, "sample size must be non-negative, got: #{k}"
+    end
+
     n = length(population)
 
     if k > n do

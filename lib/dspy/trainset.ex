@@ -20,7 +20,7 @@ defmodule Dspy.Trainset do
 
   """
 
-  alias Dspy.{Example, Signature}
+  alias Dspy.{Example, Random, Signature}
 
   @type split_options :: [
           train: float(),
@@ -67,6 +67,8 @@ defmodule Dspy.Trainset do
   @doc """
   Split a dataset into train/validation/test sets.
 
+  See `Dspy.DataLoader.train_test_split/2` for a two-way train/test split.
+
   ## Parameters
 
   - `dataset` - Full dataset to split
@@ -88,7 +90,6 @@ defmodule Dspy.Trainset do
     val_ratio = Keyword.get(opts, :val, 0.1)
     test_ratio = Keyword.get(opts, :test, 0.1)
     shuffle = Keyword.get(opts, :shuffle, true)
-    seed = Keyword.get(opts, :seed, :os.system_time(:microsecond))
 
     # Validate ratios
     total_ratio = train_ratio + val_ratio + test_ratio
@@ -100,8 +101,10 @@ defmodule Dspy.Trainset do
     # Shuffle if requested
     shuffled =
       if shuffle do
-        :rand.seed(:exsss, {seed, seed + 1, seed + 2})
-        Enum.shuffle(dataset)
+        seed = Keyword.get_lazy(opts, :seed, &Random.fresh_seed/0)
+        {state, _} = Random.seed(seed)
+        {_state, shuffled} = Random.shuffle(state, dataset)
+        shuffled
       else
         dataset
       end
@@ -129,7 +132,7 @@ defmodule Dspy.Trainset do
 
   ## Sampling Strategies
 
-  - `:random` - Random sampling
+  - `:random` - CPython-compatible sampling without replacement. See also `Dspy.DataLoader.sample/3`.
   - `:diverse` - Maximize diversity in examples
   - `:hard` - Select challenging examples
   - `:balanced` - Balance across categories/labels
@@ -139,30 +142,31 @@ defmodule Dspy.Trainset do
   @spec sample(list(Example.t()), pos_integer(), keyword()) :: list(Example.t())
   def sample(trainset, num_samples, opts \\ []) do
     strategy = Keyword.get(opts, :strategy, :random)
-    seed = Keyword.get(opts, :seed, :os.system_time(:microsecond))
+    seed = Keyword.get_lazy(opts, :seed, &Random.fresh_seed/0)
 
-    :rand.seed(:exsss, {seed, seed + 1, seed + 2})
+    {state, _} = Random.seed(seed)
 
     available_samples = min(num_samples, length(trainset))
 
     case strategy do
       :random ->
-        random_sample(trainset, available_samples)
+        random_sample(trainset, available_samples, state)
 
       :diverse ->
-        diverse_sample(trainset, available_samples, opts)
+        diverse_sample(trainset, available_samples, state)
 
       :hard ->
-        hard_sample(trainset, available_samples, opts)
+        hard_sample(trainset, available_samples, opts, state)
 
       :balanced ->
-        balanced_sample(trainset, available_samples, opts)
+        field = Keyword.get(opts, :balance_field, :answer)
+        stratified_sample(trainset, available_samples, field, state)
 
       :uncertainty ->
-        uncertainty_sample(trainset, available_samples, opts)
+        uncertainty_sample(trainset, available_samples, opts, state)
 
       _ ->
-        random_sample(trainset, available_samples)
+        random_sample(trainset, available_samples, state)
     end
   end
 
@@ -179,13 +183,22 @@ defmodule Dspy.Trainset do
 
   """
   @spec bootstrap_sample(list(Example.t()), pos_integer(), keyword()) :: list(Example.t())
-  def bootstrap_sample(trainset, num_samples, opts \\ []) do
-    seed = Keyword.get(opts, :seed, :os.system_time(:microsecond))
-    :rand.seed(:exsss, {seed, seed + 1, seed + 2})
+  def bootstrap_sample(trainset, num_samples, opts \\ [])
 
-    for _ <- 1..num_samples do
-      Enum.random(trainset)
-    end
+  def bootstrap_sample([], _num_samples, _opts), do: raise(Enum.EmptyError)
+
+  def bootstrap_sample(trainset, num_samples, opts) do
+    seed = Keyword.get_lazy(opts, :seed, &Random.fresh_seed/0)
+    {state, _} = Random.seed(seed)
+    rows = List.to_tuple(trainset)
+
+    {samples, _state} =
+      Enum.map_reduce(1..num_samples, state, fn _, state ->
+        {state, index} = Random.randbelow(state, tuple_size(rows))
+        {elem(rows, index), state}
+      end)
+
+    samples
   end
 
   @doc """
@@ -200,6 +213,11 @@ defmodule Dspy.Trainset do
   """
   @spec stratified_sample(list(Example.t()), pos_integer(), atom()) :: list(Example.t())
   def stratified_sample(trainset, num_samples, field \\ :answer) do
+    {state, _} = Random.seed(Random.fresh_seed())
+    stratified_sample(trainset, num_samples, field, state)
+  end
+
+  defp stratified_sample(trainset, num_samples, field, state) do
     # Group by field value
     groups =
       trainset
@@ -215,16 +233,16 @@ defmodule Dspy.Trainset do
     remaining_samples = rem(num_samples, total_groups)
 
     # Sample from each group (stable group order for determinism)
-    {samples, _} =
-      groups
-      |> Enum.reduce({[], remaining_samples}, fn {_label, group_examples}, {acc, remaining} ->
+    {samples, _, _state} =
+      Enum.reduce(groups, {[], remaining_samples, state}, fn {_label, group_examples},
+                                                             {acc, remaining, state} ->
         group_sample_size = if remaining > 0, do: samples_per_group + 1, else: samples_per_group
         new_remaining = if remaining > 0, do: remaining - 1, else: 0
 
-        group_samples =
-          random_sample(group_examples, min(group_sample_size, length(group_examples)))
+        {state, group_samples} =
+          take_shuffled(state, group_examples, min(group_sample_size, length(group_examples)))
 
-        {acc ++ group_samples, new_remaining}
+        {acc ++ group_samples, new_remaining, state}
       end)
 
     samples
@@ -375,22 +393,34 @@ defmodule Dspy.Trainset do
 
   defp normalize_example(_), do: nil
 
-  defp random_sample(trainset, num_samples) do
-    trainset |> Enum.shuffle() |> Enum.take(num_samples)
+  defp take_shuffled(state, trainset, num_samples) do
+    {state, shuffled} = Random.shuffle(state, trainset)
+    {state, Enum.take(shuffled, num_samples)}
   end
 
-  defp diverse_sample(trainset, num_samples, _opts) do
+  defp random_sample(trainset, num_samples, state) when num_samples >= 0 do
+    {_state, sample} = Random.sample(state, trainset, num_samples)
+    sample
+  end
+
+  defp random_sample(trainset, num_samples, state) do
+    {_state, sample} = take_shuffled(state, trainset, num_samples)
+    sample
+  end
+
+  defp diverse_sample(trainset, num_samples, state) do
     # Simple diversity based on text similarity
     # Start with a random example, then select the most dissimilar.
     cond do
       num_samples <= 1 ->
-        trainset |> Enum.shuffle() |> Enum.take(num_samples)
+        {_state, sample} = take_shuffled(state, trainset, num_samples)
+        sample
 
       length(trainset) <= num_samples ->
         trainset
 
       true ->
-        [first | remaining] = Enum.shuffle(trainset)
+        {_state, [first | remaining]} = Random.shuffle(state, trainset)
 
         Enum.reduce(1..(num_samples - 1), [first], fn _, selected ->
           candidate =
@@ -406,7 +436,7 @@ defmodule Dspy.Trainset do
     end
   end
 
-  defp hard_sample(trainset, num_samples, opts) do
+  defp hard_sample(trainset, num_samples, opts, state) do
     # Requires difficulty scores - fallback to random if not available
     difficulty_field = Keyword.get(opts, :difficulty_field, :difficulty)
 
@@ -424,16 +454,11 @@ defmodule Dspy.Trainset do
     if length(scored_examples) >= num_samples do
       scored_examples
     else
-      random_sample(trainset, num_samples)
+      random_sample(trainset, num_samples, state)
     end
   end
 
-  defp balanced_sample(trainset, num_samples, opts) do
-    field = Keyword.get(opts, :balance_field, :answer)
-    stratified_sample(trainset, num_samples, field)
-  end
-
-  defp uncertainty_sample(trainset, num_samples, opts) do
+  defp uncertainty_sample(trainset, num_samples, opts, state) do
     # Requires uncertainty scores - fallback to random if not available  
     uncertainty_field = Keyword.get(opts, :uncertainty_field, :uncertainty)
 
@@ -451,7 +476,7 @@ defmodule Dspy.Trainset do
     if length(scored_examples) >= num_samples do
       scored_examples
     else
-      random_sample(trainset, num_samples)
+      random_sample(trainset, num_samples, state)
     end
   end
 

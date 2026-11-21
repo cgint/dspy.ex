@@ -22,7 +22,7 @@ defmodule Dspy.Evaluate do
 
   require Logger
 
-  alias Dspy.{Example, Module, Prediction}
+  alias Dspy.{Example, Module, Prediction, Random}
 
   @type evaluation_error ::
           {:forward_error, term()}
@@ -880,7 +880,7 @@ defmodule Dspy.Evaluate do
   - `opts` - options:
     - `:k` (default 5)
     - `:shuffle` (default true)
-    - `:seed` (default system time)
+    - `:seed` for the CPython-compatible shuffle (default fresh entropy)
     - `:progress` (default false)
 
   ## Returns
@@ -892,7 +892,6 @@ defmodule Dspy.Evaluate do
   def cross_validate(program, dataset, metric_fn, opts \\ []) do
     k = Keyword.get(opts, :k, 5)
     shuffle = Keyword.get(opts, :shuffle, true)
-    seed = Keyword.get(opts, :seed, :os.system_time(:microsecond))
     progress = Keyword.get(opts, :progress, false)
 
     cond do
@@ -910,8 +909,10 @@ defmodule Dspy.Evaluate do
     # Shuffle dataset if requested
     shuffled_dataset =
       if shuffle do
-        :rand.seed(:exsss, {seed, seed + 1, seed + 2})
-        Enum.shuffle(dataset)
+        seed = Keyword.get_lazy(opts, :seed, &Random.fresh_seed/0)
+        {state, _} = Random.seed(seed)
+        {_state, shuffled} = Random.shuffle(state, dataset)
+        shuffled
       else
         dataset
       end

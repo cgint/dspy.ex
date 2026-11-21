@@ -47,6 +47,24 @@ defmodule Dspy.Teleprompt.BootstrapFewShotDeterminismTest do
     end
   end
 
+  defmodule RecordingStudent do
+    @behaviour Dspy.Module
+    defstruct [:test_pid, examples: []]
+
+    @impl true
+    def forward(_student, _inputs), do: {:ok, Dspy.Prediction.new(answer: "4")}
+
+    @impl true
+    def parameters(student),
+      do: [Dspy.Parameter.new("predict.examples", :examples, student.examples)]
+
+    @impl true
+    def update_parameters(student, [%Dspy.Parameter{name: "predict.examples", value: examples}]) do
+      send(student.test_pid, {:candidate_demos, Enum.map(examples, & &1.attrs.question)})
+      %{student | examples: examples}
+    end
+  end
+
   defmodule TestQA do
     use Dspy.Signature
 
@@ -91,5 +109,51 @@ defmodule Dspy.Teleprompt.BootstrapFewShotDeterminismTest do
     ex2 = Enum.map(optimized2.examples, & &1.attrs)
 
     assert ex1 == ex2
+  end
+
+  test "BootstrapFewShot draws repeatable candidate demos without altering caller RNG" do
+    student = %RecordingStudent{test_pid: self()}
+    trainset = for id <- 1..4, do: Dspy.Example.new(question: "q#{id}", answer: "4")
+
+    optimizer =
+      BootstrapFewShot.new(
+        metric: fn _example, _prediction -> 1.0 end,
+        teacher: %Teacher{},
+        max_bootstrapped_demos: 2,
+        max_labeled_demos: 0,
+        max_rounds: 1,
+        num_candidate_programs: 6,
+        num_threads: 1,
+        seed: -1,
+        verbose: false
+      )
+
+    # The first candidate keeps trainset order. Later demo counts and shuffles
+    # come from CPython random.Random(999), including the empty labeled draws.
+    expected = [["q1", "q2"], ["q1", "q2"], ["q1"], ["q2", "q1"], [], ["q1", "q2"]]
+
+    for seeded? <- [false, true] do
+      {before, after_call, result} =
+        Task.async(fn ->
+          if seeded?, do: :rand.seed(:exsss, {7, 8, 9})
+          before = :rand.export_seed()
+          result = Dspy.Teleprompt.compile(optimizer, student, trainset)
+          {before, :rand.export_seed(), result}
+        end)
+        |> Task.await()
+
+      assert {:ok, %RecordingStudent{}} = result
+      assert after_call == before
+      assert_received {:candidate_demos, []}
+
+      actual =
+        for _ <- expected do
+          assert_received {:candidate_demos, demos}
+          demos
+        end
+
+      assert actual == expected
+      refute_received {:candidate_demos, _}
+    end
   end
 end
