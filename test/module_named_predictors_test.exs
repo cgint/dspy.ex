@@ -15,6 +15,17 @@ defmodule Dspy.ModuleNamedPredictorsTest do
     defstruct [:predictor]
   end
 
+  defmodule RecordingLM do
+    @behaviour Dspy.LM
+    defstruct [:model]
+
+    @impl true
+    def generate(lm, _request) do
+      content = Jason.encode!(%{answer: lm.model})
+      {:ok, %{choices: [%{message: %{role: "assistant", content: content}}]}}
+    end
+  end
+
   defmodule QA do
     use Dspy.Signature
     input_field(:question, :string, "Question")
@@ -232,5 +243,70 @@ defmodule Dspy.ModuleNamedPredictorsTest do
 
     assert Module.map_named_predictors(mapped, fn _ -> flunk("unexpected predictor") end) ==
              mapped
+  end
+
+  test "set_lm binds every discovered slot and preserves predictor state and the original" do
+    original = %RecordingLM{model: "original"}
+    selected = %RecordingLM{model: "selected"}
+    demo = Example.new(question: "Example", answer: "Example answer")
+    predict = Predict.new(QA, lm: original, examples: [demo])
+    cot = ChainOfThought.new(QA, reasoning_field: :rationale)
+    legacy = Map.delete(predict, :lm)
+
+    program = %Program{
+      branch: %Program{left: cot},
+      items: [predict, legacy],
+      mapping: %{1 => predict, "1" => predict},
+      data: %Data{predictor: predict}
+    }
+
+    updated = Module.set_lm(program, selected)
+    bound = %{predict | lm: selected}
+
+    assert updated == %{
+             program
+             | branch: %Program{left: %{cot | lm: selected}},
+               items: [bound, bound],
+               mapping: %{1 => bound, "1" => bound}
+           }
+
+    assert Module.get_lm(updated) == selected
+    assert Module.get_lm(Module.set_lm(updated, nil)) == nil
+    assert program.items == [predict, legacy]
+    assert Module.set_lm(%Program{}, selected) == %Program{}
+  end
+
+  test "get_lm reads the stored binding even inside a different LM context" do
+    selected = %RecordingLM{model: "selected"}
+    ambient = %RecordingLM{model: "ambient"}
+    predict = Predict.new(QA, adapter: Dspy.Signature.Adapters.JSONAdapter)
+
+    Dspy.context([lm: ambient], fn ->
+      rebound = Module.set_lm(predict, selected)
+      assert Module.get_lm(predict) == nil
+      assert Module.get_lm(Map.delete(predict, :lm)) == nil
+      assert Module.get_lm(rebound) == selected
+
+      assert {:ok, %{attrs: %{answer: "selected"}}} =
+               Module.forward(rebound, question: "Which LM?")
+    end)
+  end
+
+  test "LM traversal rejects conflicting bindings and validates new ones" do
+    left = Predict.new(QA, lm: %RecordingLM{model: "first"})
+    unbound = Predict.new(QA)
+    other = %{left | lm: %RecordingLM{model: "second"}}
+
+    for right <- [unbound, other] do
+      assert_raise ArgumentError, ~r/different LM bindings/, fn ->
+        Module.get_lm(%Program{left: left, right: right})
+      end
+    end
+
+    assert_raise ArgumentError, ~r/no predictors/, fn -> Module.get_lm(%Program{}) end
+
+    assert_raise ArgumentError, ~r/lm:.*Dspy.LM/, fn ->
+      Module.set_lm(left, "provider/model")
+    end
   end
 end
