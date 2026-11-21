@@ -21,7 +21,7 @@ defmodule Dspy.ProgramStream do
     raise ArgumentError, "streamify requires a standalone Predict or ChainOfThought"
   end
 
-  def current_delta, do: Process.get(@delta_key)
+  def take_delta, do: Process.delete(@delta_key)
 
   defp start(program, inputs, opts) do
     consumer = self()

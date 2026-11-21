@@ -11,17 +11,7 @@ defmodule Dspy.Signature.Adapter.Pipeline do
   It is used by `Dspy.Predict` and `Dspy.ChainOfThought`.
   """
 
-  alias Dspy.{
-    Lifecycle,
-    LM,
-    Prediction,
-    PredictorConfig,
-    ProgramStream,
-    Settings,
-    Signature,
-    Telemetry
-  }
-
+  alias Dspy.{Lifecycle, LM, Prediction, PredictorConfig, Settings, Signature, Telemetry}
   alias Dspy.Refine.Advice
   alias Dspy.Signature.Adapter.Callbacks
   alias Dspy.Signature.AdapterPipeline
@@ -43,8 +33,12 @@ defmodule Dspy.Signature.Adapter.Pipeline do
         ]
 
   @doc false
-  def run_prediction(signature, inputs, demos, opts) do
-    case run(signature, inputs, demos, opts) do
+  def run_prediction(signature, inputs, demos, opts),
+    do: run_prediction(signature, inputs, demos, nil, opts)
+
+  @doc false
+  def run_prediction(signature, inputs, demos, on_delta, opts) do
+    case run(signature, inputs, demos, on_delta, opts) do
       {:ok, {:parsed_choices, prediction}} -> {:ok, prediction}
       {:ok, outputs} -> {:ok, Prediction.new(outputs)}
       {:error, _} = error -> error
@@ -54,7 +48,11 @@ defmodule Dspy.Signature.Adapter.Pipeline do
   @spec run(Signature.t(), map(), [Dspy.Example.t()], opts()) ::
           {:ok, map() | {:parsed_choices, Prediction.t()}} | {:error, term()}
   def run(%Signature{} = signature, inputs, demos, opts \\ [])
-      when is_map(inputs) and is_list(demos) and is_list(opts) do
+      when is_map(inputs) and is_list(demos) and is_list(opts),
+      do: run(signature, inputs, demos, nil, opts)
+
+  defp run(%Signature{} = signature, inputs, demos, on_delta, opts)
+       when is_map(inputs) and is_list(demos) and is_list(opts) do
     adapter = AdapterPipeline.active_adapter(adapter: Keyword.get(opts, :adapter))
 
     {global_callbacks, telemetry?} = Settings.lifecycle_observability()
@@ -68,7 +66,6 @@ defmodule Dspy.Signature.Adapter.Pipeline do
 
     count = Map.get(request_options, :n)
     lm = choice_lm(Keyword.get(opts, :lm), count)
-    on_delta = ProgramStream.current_delta()
 
     lm_options = %{
       lm: lm,

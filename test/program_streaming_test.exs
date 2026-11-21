@@ -42,9 +42,11 @@ defmodule Dspy.ProgramStreamingTest do
 
   defmodule BatchLM do
     @behaviour Dspy.LM
-    defstruct [:owner]
+    defstruct [:owner, :result]
 
     @impl true
+    def generate(%__MODULE__{result: {:ok, _response} = result}, _request), do: result
+
     def generate(lm, _request) do
       send(lm.owner, :unexpected_batch_generation)
       {:error, :unexpected_batch_generation}
@@ -74,6 +76,16 @@ defmodule Dspy.ProgramStreamingTest do
     @impl true
     def on_module_start(_meta, _payload, owner) do
       send(owner, :observed_module_start)
+      :ok
+    end
+  end
+
+  defmodule NestedProgramObserver do
+    @behaviour Dspy.Module.Callback
+
+    @impl true
+    def on_module_start(_meta, _payload, {owner, program, inputs}) do
+      send(owner, {:nested_prediction, Dspy.call(program, inputs)})
       :ok
     end
   end
@@ -175,6 +187,21 @@ defmodule Dspy.ProgramStreamingTest do
 
     assert [_, _, %Prediction{}] = Enum.to_list(Dspy.streamify(program).(inputs))
     assert_received :observed_module_start
+  end
+
+  test "a module-start callback can run a nested batch-only predictor while the root streams" do
+    nested_text = "Nested batch answer."
+    nested = predict(%BatchLM{result: scripted("nested", [@answer_header, nested_text]).result})
+
+    root =
+      predict(scripted("root", [@answer_header, @answer]),
+        callbacks: [{NestedProgramObserver, {self(), nested, @inputs}}]
+      )
+
+    assert [{:delta, @answer_header}, {:delta, @answer}, %Prediction{attrs: %{answer: @answer}}] =
+             Enum.to_list(Dspy.streamify(root).(@inputs))
+
+    assert_received {:nested_prediction, {:ok, %Prediction{attrs: %{answer: ^nested_text}}}}
   end
 
   test "invalid output and a transport error each end the stream after one attempt" do

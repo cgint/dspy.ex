@@ -123,7 +123,10 @@ defmodule Dspy.ChainOfThought do
   end
 
   @impl true
-  def forward(%__MODULE__{} = cot, inputs) do
+  def forward(%__MODULE__{} = cot, inputs), do: forward(cot, inputs, nil)
+
+  @doc false
+  def forward(%__MODULE__{} = cot, inputs, on_delta) do
     signature_for_call = add_cot_instructions(cot.signature)
     adapter = Dspy.Signature.AdapterPipeline.active_adapter(adapter: cot.adapter)
 
@@ -133,6 +136,7 @@ defmodule Dspy.ChainOfThought do
              signature_for_call,
              normalize_inputs(inputs),
              cot.examples,
+             on_delta,
              adapter: adapter,
              prediction_signature: cot.signature,
              lm: Map.get(cot, :lm),
