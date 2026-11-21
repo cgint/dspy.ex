@@ -20,10 +20,13 @@ defmodule Dspy.Embedder do
   @doc """
   Create an embedder from a hosted model ID or a local function.
 
-  Hosted model IDs accept ReqLLM specs, bare OpenAI model names, and the
-  `openai/<model>` and `azure/<deployment>` forms. A local function receives
-  a batch of strings and returns a list of vectors or an `{:ok, vectors}` or
-  `{:error, reason}` tuple. Two-argument functions also receive model options.
+  Hosted model IDs accept ReqLLM specs, bare OpenAI model names, and
+  `openai/<model>`. For a custom Azure deployment, pass a model spec such as
+  `azure:text-embedding-3-small` with the `:deployment` option.
+
+  A local function receives a batch of strings and returns a list of vectors
+  or an `{:ok, vectors}` or `{:error, reason}` tuple. Two-argument functions
+  also receive model options.
 
   Set `:batch_size` to override the default. Other options become model
   defaults for hosted models and two-argument functions.
@@ -143,12 +146,14 @@ defmodule Dspy.Embedder do
         [name] ->
           "openai:" <> name
 
-        [provider, name] when provider in ["openai", "azure"] and name != "" ->
-          provider <> ":" <> name
+        ["openai", name] when name != "" ->
+          "openai:" <> name
+
+        ["azure", _deployment] ->
+          raise ArgumentError, "use a ReqLLM Azure model spec and a deployment option"
 
         _ ->
-          raise ArgumentError,
-                "expected a ReqLLM model spec, openai/<model>, or azure/<deployment>"
+          raise ArgumentError, "expected a ReqLLM model spec or openai/<model>"
       end
     end
   end

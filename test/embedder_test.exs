@@ -27,6 +27,23 @@ defmodule Dspy.EmbedderTest do
     refute_received {:batch, _, _, _}
   end
 
+  test "Azure embedding requests carry a model and a separate deployment name" do
+    embedder =
+      Embedder.new("azure:text-embedding-3-small",
+        req_llm: RecordingClient,
+        deployment: "custom-deployment"
+      )
+
+    assert Embedder.embed(embedder, "a") == {:ok, [1, 1.0]}
+
+    assert_receive {:batch, "azure:text-embedding-3-small", ["a"],
+                    [deployment: "custom-deployment"]}
+
+    assert_raise ArgumentError, ~r/Azure model spec and a deployment option/, fn ->
+      Embedder.new("azure/custom-deployment")
+    end
+  end
+
   test "a local function handles single strings, singleton lists, and empty input" do
     embedder =
       Embedder.new(fn texts ->
