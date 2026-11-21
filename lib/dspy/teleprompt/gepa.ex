@@ -1,8 +1,9 @@
 defmodule Dspy.Teleprompt.GEPA do
   @moduledoc """
-  Optimize predictor instructions using a reflection LM and a rollout budget.
+  Optimize predictor instructions using a reflection provider and a rollout budget.
 
-  Set `:reflection_lm` and `:max_metric_calls` to use a five-argument metric.
+  Set `:reflection_lm` or `:instruction_proposer` and supply `:max_metric_calls`
+  to use a five-argument metric.
   Its arguments are the example, program prediction, full trace, predictor
   name, and selected predictor steps. Held-out scoring passes `nil` for the
   three trace and predictor arguments. The metric can return a score or a
@@ -15,7 +16,7 @@ defmodule Dspy.Teleprompt.GEPA do
   The default `:current_best` searches from the best validation mean and
   evaluates proposals directly on the validation set.
   The budget counts training and validation rows that the program attempts.
-  Feedback calls and reflection LM requests use those attempts as input.
+  Feedback and instruction proposals use those attempts as input.
   Reflection samples up to `:reflection_minibatch_size` training examples
   per round, defaulting to three. Feedback skips training examples that
   reach `:perfect_score` (default 1), unless `:skip_perfect_score` is false.
@@ -33,6 +34,16 @@ defmodule Dspy.Teleprompt.GEPA do
   Failed attempts use `:failure_score` without running the metric.
   This option defaults to `false`.
 
+  A custom `:instruction_proposer` gets the current instructions, bounded
+  observations for the selected slot, and a list containing that slot.
+  Both maps and the selection list use typed paths with `{:field, name}`,
+  `{:index, index}`, and `{:key, key}` segments. Each observation has
+  `:inputs`, `:outputs`, and `:feedback` keys. Return a map with the selected
+  slot's new instruction, or an empty map to keep the current instruction.
+  An explicit `:reflection_lm` is scoped to the callback. With no binding,
+  the callback inherits the calling context. Omit the callback or pass
+  `nil` to use the built-in proposer with `:reflection_lm`.
+
   The supplied-candidate mode accepts a list of instructions and an
   ordinary one- or two-argument metric.
   """
@@ -40,6 +51,7 @@ defmodule Dspy.Teleprompt.GEPA do
   @behaviour Dspy.Teleprompt
 
   alias Dspy.{Example, LM, Trainset}
+  alias Dspy.Module.PredictorSlots
   alias Dspy.Teleprompt.GEPA.Reflective
   alias Dspy.Teleprompt.Util, as: TpUtil
 
@@ -58,16 +70,26 @@ defmodule Dspy.Teleprompt.GEPA do
               :seed,
               :candidates,
               :reflection_lm,
+              :instruction_proposer,
               :max_metric_calls,
               :reflection_minibatch_size,
               :num_threads
             ] ++ @search_defaults
+
+  @type observation :: %{inputs: map(), outputs: map() | String.t(), feedback: String.t()}
+  @type instructions :: %{optional(PredictorSlots.path()) => String.t()}
+  @type instruction_proposer ::
+          (instructions(),
+           %{optional(PredictorSlots.path()) => [observation()]},
+           [PredictorSlots.path()] ->
+             instructions())
 
   @type t :: %__MODULE__{
           metric: function(),
           seed: integer(),
           candidates: [String.t()],
           reflection_lm: LM.t() | nil,
+          instruction_proposer: instruction_proposer() | nil,
           max_metric_calls: pos_integer() | nil,
           reflection_minibatch_size: pos_integer() | nil,
           num_threads: pos_integer() | nil,
@@ -80,9 +102,14 @@ defmodule Dspy.Teleprompt.GEPA do
           max_merge_invocations: non_neg_integer()
         }
 
+  defguardp reflective?(optimizer)
+            when optimizer.reflection_lm != nil or
+                   (is_map_key(optimizer, :instruction_proposer) and
+                      is_function(optimizer.instruction_proposer, 3))
+
   @impl Dspy.Teleprompt
   def new(opts \\ []) do
-    if Keyword.has_key?(opts, :reflection_lm),
+    if Keyword.has_key?(opts, :reflection_lm) or Keyword.has_key?(opts, :instruction_proposer),
       do: new_reflective(opts),
       else: new_from_candidates(opts)
   end
@@ -117,6 +144,7 @@ defmodule Dspy.Teleprompt.GEPA do
         [
           :metric,
           :reflection_lm,
+          :instruction_proposer,
           :max_metric_calls,
           :reflection_minibatch_size,
           :num_threads,
@@ -126,7 +154,8 @@ defmodule Dspy.Teleprompt.GEPA do
       )
 
     if Keyword.has_key?(opts, :candidates) do
-      raise ArgumentError, ":candidates cannot be combined with :reflection_lm"
+      raise ArgumentError,
+            ":candidates cannot be combined with :reflection_lm or :instruction_proposer"
     end
 
     metric = Keyword.get(opts, :metric)
@@ -135,8 +164,18 @@ defmodule Dspy.Teleprompt.GEPA do
       raise ArgumentError, "reflective GEPA requires a metric accepting five arguments"
     end
 
+    proposer =
+      case opts[:instruction_proposer] do
+        nil -> nil
+        fun when is_function(fun, 3) -> fun
+        _invalid -> raise ArgumentError, ":instruction_proposer must accept three arguments"
+      end
+
     lm = LM.validate_binding!(opts[:reflection_lm])
-    if is_nil(lm), do: raise(ArgumentError, ":reflection_lm must be a Dspy.LM")
+
+    if is_nil(lm) and is_nil(proposer) do
+      raise ArgumentError, ":reflection_lm must be a Dspy.LM when no :instruction_proposer is set"
+    end
 
     budget = positive_integer!(:max_metric_calls, opts[:max_metric_calls])
 
@@ -155,6 +194,7 @@ defmodule Dspy.Teleprompt.GEPA do
       seed: seed!(opts),
       candidates: [],
       reflection_lm: lm,
+      instruction_proposer: proposer,
       max_metric_calls: budget,
       reflection_minibatch_size: batch,
       num_threads: num_threads,
@@ -214,7 +254,7 @@ defmodule Dspy.Teleprompt.GEPA do
   @impl Dspy.Teleprompt
   @spec compile(t(), Dspy.Teleprompt.program_t(), list(Example.t())) ::
           Dspy.Teleprompt.compile_result()
-  def compile(%__MODULE__{reflection_lm: lm} = tp, program, trainset) when lm != nil do
+  def compile(%__MODULE__{} = tp, program, trainset) when reflective?(tp) do
     compile(tp, program, trainset, [])
   end
 
@@ -274,7 +314,7 @@ defmodule Dspy.Teleprompt.GEPA do
   """
   @spec compile(t(), Dspy.Teleprompt.program_t(), [Example.t()], keyword()) ::
           Dspy.Teleprompt.compile_result()
-  def compile(%__MODULE__{reflection_lm: lm} = tp, program, trainset, opts) when lm != nil do
+  def compile(%__MODULE__{} = tp, program, trainset, opts) when reflective?(tp) do
     opts = Keyword.validate!(opts, [:valset])
     valset = if is_nil(opts[:valset]), do: trainset, else: opts[:valset]
 

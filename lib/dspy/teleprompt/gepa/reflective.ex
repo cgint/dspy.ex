@@ -75,10 +75,12 @@ defmodule Dspy.Teleprompt.GEPA.Reflective do
   end
 
   defp improve(optimizer, trainset, valset, state, round, path, observations) do
-    predictor = round.parent |> PredictorSlots.list() |> Map.new() |> Map.fetch!(path)
+    slots = round.parent |> PredictorSlots.list() |> Map.new()
+    predictor = Map.fetch!(slots, path)
     name = PredictorSlots.name(path, predictor)
+    report = reflection_report(optimizer.metric, predictor, name, observations)
 
-    with {:ok, instruction} <- propose(optimizer, predictor, name, observations) do
+    with {:ok, instruction} <- propose(optimizer, slots, path, report) do
       state = evaluate_proposal(optimizer, valset, state, round, path, instruction)
       paths = Enum.reject(state.paths, &(&1 === path)) ++ [path]
       search(optimizer, trainset, valset, %{state | paths: paths})
@@ -278,29 +280,65 @@ defmodule Dspy.Teleprompt.GEPA.Reflective do
   defp score(result) when is_map(result), do: Attrs.get(result, :score, result)
   defp score(result), do: result
 
-  defp propose(optimizer, predictor, name, observations) do
-    previous = predictor.signature.instructions || ""
+  defp propose(_optimizer, _slots, _path, []), do: {:ok, nil}
 
-    case reflection_report(optimizer.metric, predictor, name, observations) do
-      [] ->
+  defp propose(optimizer, slots, path, report) do
+    previous = Map.fetch!(slots, path).signature.instructions || ""
+
+    case Map.get(optimizer, :instruction_proposer) do
+      nil ->
+        propose_with_lm(optimizer.reflection_lm, previous, report)
+
+      proposer ->
+        candidate =
+          Map.new(slots, fn {slot, predictor} ->
+            {slot, predictor.signature.instructions || ""}
+          end)
+
+        invoke = fn -> proposer.(candidate, %{path => report}, [path]) end
+
+        with {:ok, updates} <- call_instruction_proposer(invoke, optimizer.reflection_lm) do
+          validate_instruction_updates(updates, path, previous)
+        end
+    end
+  end
+
+  defp call_instruction_proposer(invoke, lm) do
+    result = if is_nil(lm), do: invoke.(), else: Dspy.context([lm: lm], invoke)
+    {:ok, result}
+  rescue
+    _error -> {:error, {:reflection_failed, :instruction_proposer_raised}}
+  end
+
+  defp validate_instruction_updates(updates, path, previous)
+       when is_map(updates) and not is_struct(updates) do
+    case updates do
+      %{} when map_size(updates) == 0 ->
         {:ok, nil}
 
-      report ->
-        predict = reflection_predictor(optimizer.reflection_lm)
+      %{^path => instruction} when map_size(updates) == 1 ->
+        validate_proposal(instruction, previous)
 
-        context =
-          Jason.encode!(%{
-            previous_instruction: PromptPreview.truncate(previous, @instruction_bytes),
-            observations: report
-          })
+      %{} ->
+        {:error, {:reflection_failed, :unselected_instruction_slot}}
+    end
+  end
 
-        case Module.forward(predict, %{reflection_context: context}) do
-          {:ok, %Prediction{attrs: %{new_instruction: instruction}}} ->
-            validate_proposal(instruction, previous)
+  defp validate_instruction_updates(_updates, _path, _previous), do: invalid_proposal()
 
-          {:error, reason} ->
-            {:error, {:reflection_failed, reason}}
-        end
+  defp propose_with_lm(lm, previous, report) do
+    context =
+      Jason.encode!(%{
+        previous_instruction: PromptPreview.truncate(previous, @instruction_bytes),
+        observations: report
+      })
+
+    case Module.forward(reflection_predictor(lm), %{reflection_context: context}) do
+      {:ok, %Prediction{attrs: %{new_instruction: instruction}}} ->
+        validate_proposal(instruction, previous)
+
+      {:error, reason} ->
+        {:error, {:reflection_failed, reason}}
     end
   end
 
@@ -396,19 +434,27 @@ defmodule Dspy.Teleprompt.GEPA.Reflective do
   end
 
   defp validate_proposal(instruction, previous) when is_binary(instruction) do
-    value = String.trim(instruction)
+    if String.valid?(instruction) do
+      value = String.trim(instruction)
 
-    cond do
-      value == "" or value == String.trim(previous) ->
-        {:ok, nil}
+      cond do
+        value == "" or value == String.trim(previous) ->
+          {:ok, nil}
 
-      byte_size(value) > @instruction_bytes ->
-        {:error, {:reflection_failed, :instruction_too_long}}
+        byte_size(value) > @instruction_bytes ->
+          {:error, {:reflection_failed, :instruction_too_long}}
 
-      true ->
-        {:ok, value}
+        true ->
+          {:ok, value}
+      end
+    else
+      invalid_proposal()
     end
   end
+
+  defp validate_proposal(_instruction, _previous), do: invalid_proposal()
+
+  defp invalid_proposal, do: {:error, {:reflection_failed, :invalid_instruction_proposal}}
 
   defp validate_budget(optimizer, validation_count) do
     minimum = 2 * validation_count + batch_passes(optimizer)

@@ -75,6 +75,13 @@ bounded excerpt of the failed completion, which may contain sensitive
 text, and format guidance for that predictor. The failed row uses
 `:failure_score` without calling the metric.
 
+Pass an arity-three `instruction_proposer:` callback to supply GEPA
+instruction updates in Elixir. It receives all current instructions,
+bounded reflective observations, and the selected slot, keyed by exact
+typed paths. Return a map with the new instruction for that slot, or an
+empty map to skip the proposal. A supplied reflection LM is scoped to
+the callback. Callers can also use the callback by itself.
+
 ### Streaming progress messages
 
 Pass a `status_message_provider:` module to `Dspy.streamify/2` to turn

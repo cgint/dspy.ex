@@ -29,8 +29,10 @@
 > minibatch. Opt-in merges combine compatible candidates with a common
 > ancestor and compare both parents on a shared validation subset.
 > Opt-in format feedback can revise the failed predictor using a bounded
-> malformed completion and adapter guidance. Additional frontier
-> objectives and richer proposals remain open.
+> malformed completion and adapter guidance. A custom instruction
+> proposer can supply typed-slot updates without a reflection LM.
+> Additional frontier objectives and configurable built-in proposals
+> remain open.
 
 > **M5, status messages and exit example.** `streamify/2` accepts a
 > lifecycle status provider. The [offline ChainOfThought example](../../examples/offline/chain_of_thought_streaming_offline.exs)
