@@ -181,6 +181,7 @@ defmodule Dspy.Signature.Adapters.XMLAdapter do
       case XMLValue.kind(schema) do
         :object when is_map(value) -> render_object(value, XMLValue.shape(schema))
         :discriminated when is_map(value) -> render_discriminated(value, schema)
+        :record_union when is_map(value) -> render_container_json(value)
         :array when is_integer(length(value)) -> render_array(value, XMLValue.shape(schema))
         _ when is_binary(value) -> value
         _ -> render_json(value)
@@ -323,7 +324,7 @@ defmodule Dspy.Signature.Adapters.XMLAdapter do
       %{"type" => "integer"} -> is_integer(value)
       %{"type" => "number"} -> is_number(value)
       %{"type" => "boolean"} -> is_boolean(value)
-      shaped -> XMLValue.kind(shaped) in [:object, :array, :discriminated]
+      shaped -> XMLValue.kind(shaped) in [:object, :array, :discriminated, :record_union]
     end
   end
 
@@ -352,6 +353,10 @@ defmodule Dspy.Signature.Adapters.XMLAdapter do
         {property, [{[tag | _], branch} | _]} = XMLValue.object_variants(XMLValue.shape(schema))
         Map.put(sample_value(branch), property, tag)
 
+      :record_union ->
+        [{_branch, shaped} | _] = XMLValue.record_union_branches(XMLValue.shape(schema))
+        sample_value(shaped)
+
       :leaf ->
         sample_leaf(schema)
     end
@@ -376,7 +381,8 @@ defmodule Dspy.Signature.Adapters.XMLAdapter do
 
   defp container_schema(%{schema: spec}) do
     with {:ok, schema} <- TypedOutputs.native_schema(spec),
-         kind when kind in [:object, :array, :discriminated] <- XMLValue.kind(schema) do
+         kind when kind in [:object, :array, :discriminated, :record_union] <-
+           XMLValue.kind(schema) do
       schema
     else
       _ -> nil
