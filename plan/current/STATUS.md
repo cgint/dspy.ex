@@ -3,7 +3,8 @@
 > **M5, streaming transport.** `Dspy.LM.stream_generate/3` delivers text
 > deltas and the final normalized response. A monitored ReqLLM owner closes
 > the HTTP stream on caller exit. Loopback tests cover startup cleanup,
-> incremental delivery, cancellation, and private data in crash logs.
+> incremental delivery, cancellation, and exclusion of request text and
+> credentials from cancellation logs.
 > Program streaming, field listeners, and status events remain open.
 
 > **M4b, XML adapter.** Opt-in XML outputs support typed records, arrays, and dictionaries with literal string leaves. Repeated list fields preserve item order across intervening fields. Record unions decode native XML when the value has a unique valid interpretation. Mixed string and record unions distinguish literal markup from record tags by line framing. Union demos use JSON inside field tags. XML also replays typed user turns, images, attachments, and completed tool exchanges. The [offline example](../../examples/offline/structured_react_refine_offline.exs) verifies a typed output retry on both Chat and XML with the same image-bearing tool history.

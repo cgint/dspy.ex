@@ -49,7 +49,27 @@ defmodule Dspy.LM.ReqLLMStreamingTest do
   end
 
   defmodule ExitingClient do
-    def stream_text(_model, _input, _opts), do: exit(:before_stream_handle)
+    def stream_text(_model, _input, opts) do
+      case Keyword.get(opts, :failure) do
+        :throw -> throw(:before_stream_handle)
+        :kill -> Process.exit(self(), :kill)
+        :exit -> exit(:before_stream_handle)
+      end
+    end
+  end
+
+  defmodule NarrowClient do
+    def stream_text(_model, :only_fixture, _opts), do: {:error, :unreachable}
+  end
+
+  defmodule BlockingClient do
+    def stream_text(_model, _input, opts) do
+      send(Keyword.fetch!(opts, :test_observer), {:opening_client, self()})
+
+      receive do
+        :release -> {:error, :released}
+      end
+    end
   end
 
   defmodule OrdinaryLM do
@@ -180,6 +200,72 @@ defmodule Dspy.LM.ReqLLMStreamingTest do
     refute log =~ @prompt
   end
 
+  test "killing the caller interrupts a blocked provider startup" do
+    lm =
+      LM.ReqLLM.new(
+        model: @model,
+        client_module: BlockingClient,
+        default_opts: [test_observer: self()]
+      )
+
+    {caller, caller_ref} =
+      spawn_monitor(fn -> LM.stream_generate(lm, @request, fn _ -> :ok end) end)
+
+    assert_receive {:opening_client, provider_owner}, @wait
+    on_exit(fn -> send(provider_owner, :release) end)
+    provider_ref = Process.monitor(provider_owner)
+    Process.exit(caller, :kill)
+
+    assert_receive {:DOWN, ^caller_ref, :process, ^caller, :killed}, @wait
+    assert_receive {:DOWN, ^provider_ref, :process, ^provider_owner, :shutdown}, @wait
+  end
+
+  test "caller death during the ReqLLM request hook shuts down without logging request data" do
+    log =
+      capture_log(fn ->
+        {listener, url} = listener()
+        owner = self()
+        hook_ref = make_ref()
+
+        hook = fn request ->
+          send(owner, {:hook_started, self()})
+
+          receive do
+            {^hook_ref, :release} -> request
+          after
+            @wait * 3 -> raise "test did not release the request hook"
+          end
+        end
+
+        {caller, caller_ref} =
+          spawn_monitor(fn ->
+            LM.stream_generate(lm(url, owner, on_finch_request: hook), @request, fn delta ->
+              send(owner, {:delta, delta})
+            end)
+          end)
+
+        assert_receive {:stream_client, @model, _context, _opts, provider_owner, _temp}, @wait
+        assert_receive {:hook_started, server}, @wait
+        on_exit(fn -> send(server, {hook_ref, :release}) end)
+        provider_ref = Process.monitor(provider_owner)
+        server_ref = Process.monitor(server)
+        assert {:error, :timeout} = :gen_tcp.accept(listener, 0)
+
+        Process.exit(caller, :kill)
+        assert_receive {:DOWN, ^caller_ref, :process, ^caller, :killed}, @wait
+        assert_receive {:DOWN, ^provider_ref, :process, ^provider_owner, :shutdown}, @wait
+        assert Process.alive?(server)
+
+        send(server, {hook_ref, :release})
+        assert_receive {:DOWN, ^server_ref, :process, ^server, :shutdown}, @wait
+        refute_received {:delta, _}
+        Logger.flush()
+      end)
+
+    refute log =~ @api_key
+    refute log =~ @prompt
+  end
+
   test "an early ReqLLM startup error releases its server while the caller stays alive" do
     {listener, url} = listener()
     owner = self()
@@ -214,11 +300,38 @@ defmodule Dspy.LM.ReqLLMStreamingTest do
     assert_receive {:DOWN, ^caller_ref, :process, ^caller, :normal}, @wait
   end
 
-  test "a provider owner exiting before it returns the handle reports an error to the caller" do
-    lm = LM.ReqLLM.new(model: @model, client_module: ExitingClient)
+  test "provider startup exits and throws report tagged errors to the caller" do
+    for {failure, error} <- [
+          {:exit, {:stream_owner_exited, :before_stream_handle}},
+          {:throw, {:stream_owner_threw, :before_stream_handle}},
+          {:kill, {:stream_owner_exited, :killed}}
+        ] do
+      lm =
+        LM.ReqLLM.new(
+          model: @model,
+          client_module: ExitingClient,
+          default_opts: [failure: failure]
+        )
 
-    assert {:error, {:stream_owner_exited, :before_stream_handle}} =
-             LM.stream_generate(lm, @request, fn _ -> flunk("no stream was opened") end)
+      assert {:error, ^error} =
+               LM.stream_generate(lm, @request, fn _ -> flunk("no stream was opened") end)
+    end
+  end
+
+  test "a provider startup exception returns an error without logging the request or key" do
+    lm =
+      LM.ReqLLM.new(model: @model, client_module: NarrowClient, default_opts: [api_key: @api_key])
+
+    {result, log} =
+      with_log(fn ->
+        result = LM.stream_generate(lm, @request, fn _ -> flunk("no stream was opened") end)
+        Logger.flush()
+        result
+      end)
+
+    refute log =~ @api_key
+    refute log =~ @prompt
+    assert {:error, %FunctionClauseError{}} = result
   end
 
   test "an LM without the optional callback returns unsupported without generating" do

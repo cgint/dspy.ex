@@ -130,7 +130,13 @@ defmodule Dspy.LM.ReqLLM do
   Stream text with the delta callback running in the caller.
 
   A monitored process opens ReqLLM with the caller's DSPy context. It owns the
-  provider resources until the stream finishes or the caller exits.
+  provider resources until the stream finishes or the caller exits, including
+  during startup. A synchronous provider hook can delay shutdown of the ReqLLM
+  process that runs it until the hook returns.
+
+  Startup exceptions return `{:error, exception}`. Exits and throws during
+  startup return `{:error, {:stream_owner_exited, reason}}` and
+  `{:error, {:stream_owner_threw, reason}}`, respectively.
   """
   @impl true
   def stream_generate(%__MODULE__{} = lm, request, on_delta)
@@ -150,18 +156,16 @@ defmodule Dspy.LM.ReqLLM do
 
     {owner, owner_ref} =
       spawn_monitor(fn ->
-        caller_ref = Process.monitor(caller)
+        owner = self()
+        spawn(fn -> monitor_stream_owner(caller, owner) end)
 
         result =
-          Context.with_context(context, fn ->
-            lm.client_module.stream_text(lm.model, input, opts)
-          end)
+          Context.with_context(context, fn -> open_provider_stream(lm, input, opts) end)
 
         send(caller, {tag, result})
 
         receive do
           {^tag, :release} -> :ok
-          {:DOWN, ^caller_ref, :process, ^caller, _reason} -> :ok
         end
 
         # Close provider children without an abnormal exit's crash report.
@@ -183,6 +187,25 @@ defmodule Dspy.LM.ReqLLM do
       {:DOWN, ^owner_ref, :process, ^owner, reason} ->
         {:error, {:stream_owner_exited, reason}}
     end
+  end
+
+  defp monitor_stream_owner(caller, owner) do
+    caller_ref = Process.monitor(caller)
+    owner_ref = Process.monitor(owner)
+
+    receive do
+      {:DOWN, ^caller_ref, :process, ^caller, _reason} -> Process.exit(owner, :shutdown)
+      {:DOWN, ^owner_ref, :process, ^owner, _reason} -> :ok
+    end
+  end
+
+  defp open_provider_stream(lm, input, opts) do
+    lm.client_module.stream_text(lm.model, input, opts)
+  rescue
+    error -> {:error, error}
+  catch
+    :exit, reason -> {:error, {:stream_owner_exited, reason}}
+    :throw, reason -> {:error, {:stream_owner_threw, reason}}
   end
 
   defp consume_stream(lm, stream, on_delta) do
