@@ -7,7 +7,7 @@ defmodule Dspy.EmbedderTest do
   defmodule RecordingClient do
     def embed(model, texts, opts) do
       send(self(), {:batch, model, texts, opts})
-      Keyword.get(opts, :reply, {:ok, Enum.map(texts, &[byte_size(&1), 1.0])})
+      Keyword.get_lazy(opts, :reply, fn -> {:ok, Enum.map(texts, &[byte_size(&1), 1.0])} end)
     end
   end
 
@@ -80,6 +80,44 @@ defmodule Dspy.EmbedderTest do
     refute_received {:batch, _, _, _}
   end
 
+  test "hosted model specs require a provider and a model name" do
+    for model <- ["", "   ", ":", "openai:", ":text-embedding-3-small", "openai/ "] do
+      assert_raise ArgumentError, ~r/model/, fn -> Embedder.new(model) end
+    end
+
+    assert Embedder.new(" provider:organization/model ").model == "provider:organization/model"
+  end
+
+  test "model options are validated even when there are no texts" do
+    for {key, _value} = option <- [
+          model: "other",
+          return_usage: true,
+          encoding_format: "base64",
+          api_base: "https://example.com",
+          azure_endpoint: "https://example.com",
+          caching: true
+        ] do
+      message = ~r/#{key}/
+
+      assert_raise ArgumentError, message, fn ->
+        Embedder.new("text-embedding-3-small", [option])
+      end
+
+      embedder = Embedder.new("text-embedding-3-small", req_llm: RecordingClient)
+      assert_raise ArgumentError, message, fn -> Embedder.embed(embedder, [], [option]) end
+      assert_raise ArgumentError, message, fn -> Embedder.embed(embedder, "a", [option]) end
+    end
+
+    unary = fn _ -> flunk("invalid options must fail before calling the model") end
+    assert_raise ArgumentError, ~r/two-argument/, fn -> Embedder.new(unary, scale: 2) end
+
+    assert_raise ArgumentError, ~r/two-argument/, fn ->
+      Embedder.embed(Embedder.new(unary), [], scale: 2)
+    end
+
+    refute_received {:batch, _, _, _}
+  end
+
   test "wrong counts or dimensions return a structured error instead of partial embeddings" do
     short = Embedder.new(fn _ -> [[0.0]] end)
 
@@ -101,5 +139,36 @@ defmodule Dspy.EmbedderTest do
              req_llm: RecordingClient,
              reply: {:ok, [7]}
            ) == {:error, {:invalid_embeddings, [7]}}
+  end
+
+  test "the ReqLLM provider validates vector shapes for direct retrieval callers" do
+    opts = [model: "openai:text-embedding-3-small", req_llm: RecordingClient]
+
+    assert ReqLLM.embed_batch(["a" | "b"], opts) == {:error, :invalid_texts}
+
+    for vector <- [[], [1.0 | 2.0]] do
+      assert ReqLLM.embed_text("a", opts ++ [reply: {:ok, vector}]) ==
+               {:error, {:invalid_embedding, vector}}
+    end
+
+    assert ReqLLM.embed_batch(["a", "b"], opts ++ [reply: {:ok, [[1], [2, 3]]}]) ==
+             {:error, {:embedding_dimension_mismatch, expected: 1, got: 2}}
+
+    assert ReqLLM.embed_batch(["a"], opts ++ [reply: {:ok, []}]) ==
+             {:error, {:embedding_count_mismatch, expected: 1, got: 0}}
+  end
+
+  test "unexpected responses become errors and stop later batches" do
+    embedder =
+      Embedder.new("text-embedding-3-small",
+        req_llm: RecordingClient,
+        batch_size: 1
+      )
+
+    assert Embedder.embed(embedder, ["a", "b"], reply: :malformed) ==
+             {:error, {:invalid_embeddings, :malformed}}
+
+    assert_receive {:batch, "openai:text-embedding-3-small", ["a"], _}
+    refute_received {:batch, _, _, _}
   end
 end

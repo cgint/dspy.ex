@@ -30,11 +30,18 @@ defmodule Dspy.Embedder do
 
   Set `:batch_size` to override the default. Other options become model
   defaults for hosted models and two-argument functions.
+
+  Hosted models use ReqLLM options such as `:base_url`, `:api_key`,
+  `:dimensions`, and `:deployment`. They return numeric vectors and reject
+  `:model`, `:return_usage`, base64 encoding, and the Python-specific options
+  `:api_base`, `:azure_endpoint`, and `:caching`.
   """
   @spec new(model(), keyword()) :: t()
   def new(model, opts \\ []) do
     {batch_size, model_opts} = split_options!(opts, @default_batch_size)
-    %__MODULE__{model: model!(model), batch_size: batch_size, model_opts: model_opts}
+    model = model!(model)
+    validate_model_options!(model, model_opts)
+    %__MODULE__{model: model, batch_size: batch_size, model_opts: model_opts}
   end
 
   @doc """
@@ -53,9 +60,10 @@ defmodule Dspy.Embedder do
 
   def embed(%__MODULE__{} = embedder, texts, opts) when is_integer(length(texts)) do
     {batch_size, overrides} = split_options!(opts, embedder.batch_size)
+    model_opts = Keyword.merge(embedder.model_opts, overrides)
+    validate_model_options!(embedder.model, model_opts)
 
     if Enum.all?(texts, &is_binary/1) do
-      model_opts = Keyword.merge(embedder.model_opts, overrides)
       embed_batches(texts, batch_size, embedder.model, model_opts)
     else
       {:error, :invalid_texts}
@@ -68,9 +76,8 @@ defmodule Dspy.Embedder do
     texts
     |> Stream.chunk_every(batch_size)
     |> Enum.reduce_while({:ok, [], nil}, fn batch, {:ok, batches, dimension} ->
-      with {:ok, vectors} <- embed_batch(model, batch, opts),
-           :ok <- validate_count(vectors, length(batch)),
-           {:ok, dimension} <- validate_dimensions(vectors, dimension) do
+      with {:ok, [first | _] = vectors} <- embed_batch(model, batch, opts),
+           {:ok, dimension} <- validate_dimension(length(first), dimension) do
         {:cont, {:ok, [vectors | batches], dimension}}
       else
         {:error, _} = error -> {:halt, error}
@@ -86,42 +93,45 @@ defmodule Dspy.Embedder do
     do: ReqLLM.embed_batch(batch, Keyword.put(opts, :model, model))
 
   defp embed_batch(model, batch, opts) when is_function(model, 2),
-    do: validate_local_result(model.(batch, opts))
+    do: validate_local_result(model.(batch, opts), length(batch))
 
   defp embed_batch(model, batch, []) when is_function(model, 1),
-    do: validate_local_result(model.(batch))
+    do: validate_local_result(model.(batch), length(batch))
 
-  defp embed_batch(model, _batch, _opts) when is_function(model, 1),
-    do: {:error, :embedding_options_require_two_argument_function}
+  defp validate_local_result({:error, _} = error, _count), do: error
 
-  defp validate_local_result({:error, _} = error), do: error
-
-  defp validate_local_result(result) do
+  defp validate_local_result(result, count) do
     vectors =
       case result do
         {:ok, vectors} -> vectors
         vectors -> vectors
       end
 
-    with :ok <- EmbeddingProvider.validate_batch(vectors), do: {:ok, vectors}
+    with :ok <- EmbeddingProvider.validate_batch(vectors, count), do: {:ok, vectors}
   end
 
-  defp validate_count(vectors, count) when length(vectors) == count, do: :ok
+  defp validate_dimension(got, expected) when is_nil(expected) or got == expected, do: {:ok, got}
 
-  defp validate_count(vectors, count),
-    do: {:error, {:embedding_count_mismatch, expected: count, got: length(vectors)}}
+  defp validate_dimension(got, expected),
+    do: {:error, {:embedding_dimension_mismatch, expected: expected, got: got}}
 
-  defp validate_dimensions([first | _] = vectors, expected) do
-    dimension = expected || length(first)
+  defp validate_model_options!(model, opts) when is_binary(model) do
+    Enum.each(opts, fn
+      {key, _} when key in [:model, :return_usage, :api_base, :azure_endpoint, :caching] ->
+        raise ArgumentError, "unsupported hosted embedding option #{key}"
 
-    case Enum.find(vectors, &(length(&1) != dimension)) do
-      nil ->
-        {:ok, dimension}
+      {:encoding_format, value} when value in ["base64", :base64] ->
+        raise ArgumentError, "encoding_format must return numeric embeddings"
 
-      vector ->
-        {:error, {:embedding_dimension_mismatch, expected: dimension, got: length(vector)}}
-    end
+      _option ->
+        :ok
+    end)
   end
+
+  defp validate_model_options!(model, [_ | _]) when is_function(model, 1),
+    do: raise(ArgumentError, "embedding model options require a two-argument function")
+
+  defp validate_model_options!(_model, _opts), do: :ok
 
   defp split_options!(opts, default_batch_size) do
     unless Keyword.keyword?(opts),
@@ -138,26 +148,40 @@ defmodule Dspy.Embedder do
 
   defp model!(model) when is_function(model, 1) or is_function(model, 2), do: model
 
-  defp model!(model) when is_binary(model) and byte_size(model) > 0 do
-    if String.contains?(model, ":") do
-      model
-    else
-      case String.split(model, "/", parts: 2) do
-        [name] ->
-          "openai:" <> name
-
-        ["openai", name] when name != "" ->
-          "openai:" <> name
-
-        ["azure", _deployment] ->
-          raise ArgumentError, "use a ReqLLM Azure model spec and a deployment option"
-
-        _ ->
-          raise ArgumentError, "expected a ReqLLM model spec or openai/<model>"
-      end
+  defp model!(model) when is_binary(model) do
+    case String.split(String.trim(model), ":", parts: 2) do
+      [provider, name] -> hosted_model!(provider, name)
+      [model] -> openai_model!(model)
     end
   end
 
   defp model!(_model),
     do: raise(ArgumentError, "expected a hosted model ID or local embedding function")
+
+  defp openai_model!(model) do
+    case String.split(model, "/", parts: 2) do
+      [name] ->
+        hosted_model!("openai", name)
+
+      ["openai", name] ->
+        hosted_model!("openai", name)
+
+      ["azure", _deployment] ->
+        raise ArgumentError, "use a ReqLLM Azure model spec and a deployment option"
+
+      _ ->
+        raise ArgumentError, "expected a ReqLLM model spec or openai/<model>"
+    end
+  end
+
+  defp hosted_model!(provider, name) do
+    provider = String.trim(provider)
+    name = String.trim(name)
+
+    if provider == "" or name == "" do
+      raise ArgumentError, "expected a non-empty embedding provider and model name"
+    end
+
+    provider <> ":" <> name
+  end
 end

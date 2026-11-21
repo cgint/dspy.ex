@@ -216,20 +216,44 @@ defmodule Dspy.Retrieve do
                 {:ok, list(list(float()))} | {:error, error_reason()}
 
     @doc false
-    def validate_batch(embeddings) when is_integer(length(embeddings)) do
-      if Enum.all?(embeddings, &valid_batch_vector?/1) do
-        :ok
-      else
-        {:error, {:invalid_embeddings, embeddings}}
+    def validate_vector(vector) do
+      if valid_vector?(vector), do: :ok, else: {:error, {:invalid_embedding, vector}}
+    end
+
+    @doc false
+    def validate_batch(embeddings, count) when is_integer(length(embeddings)) do
+      cond do
+        not Enum.all?(embeddings, &valid_vector?/1) ->
+          {:error, {:invalid_embeddings, embeddings}}
+
+        length(embeddings) != count ->
+          {:error, {:embedding_count_mismatch, expected: count, got: length(embeddings)}}
+
+        true ->
+          validate_batch_dimensions(embeddings)
       end
     end
 
-    def validate_batch(embeddings), do: {:error, {:invalid_embeddings, embeddings}}
+    def validate_batch(embeddings, _count), do: {:error, {:invalid_embeddings, embeddings}}
 
-    defp valid_batch_vector?([_ | _] = vector) when is_integer(length(vector)),
+    defp validate_batch_dimensions([]), do: :ok
+
+    defp validate_batch_dimensions([first | rest]) do
+      expected = length(first)
+
+      case Enum.find(rest, &(length(&1) != expected)) do
+        nil ->
+          :ok
+
+        vector ->
+          {:error, {:embedding_dimension_mismatch, expected: expected, got: length(vector)}}
+      end
+    end
+
+    defp valid_vector?([_ | _] = vector) when is_integer(length(vector)),
       do: Enum.all?(vector, &is_number/1)
 
-    defp valid_batch_vector?(_vector), do: false
+    defp valid_vector?(_vector), do: false
   end
 
   defmodule OpenAIEmbeddings do
