@@ -359,6 +359,9 @@ defmodule Dspy.Signature.AdapterPipeline do
 
   defp replace_at(list, idx, value), do: List.replace_at(list, idx, value)
 
+  defp primary_text_part?(%{"type" => "text", "text" => text}), do: is_binary(text)
+  defp primary_text_part?(_part), do: false
+
   @doc """
   Extract the primary prompt text from a request.
 
@@ -366,7 +369,7 @@ defmodule Dspy.Signature.AdapterPipeline do
 
   Looks at the final user message and returns:
   - the string content, or
-  - the text from the first `%{"type" => "text", "text" => ...}` part
+  - the first binary text from a `%{"type" => "text", "text" => ...}` part
 
   Accepts requests with either atom-keyed `:messages` or string-keyed
   `"messages"`.
@@ -395,10 +398,7 @@ defmodule Dspy.Signature.AdapterPipeline do
             {:ok, content}
 
           is_list(content) ->
-            case Enum.find(content, fn
-                   %{"type" => "text", "text" => text} when is_binary(text) -> true
-                   _ -> false
-                 end) do
+            case Enum.find(content, &primary_text_part?/1) do
               %{"type" => "text", "text" => text} -> {:ok, text}
               _ -> {:error, :no_text_part_in_user_message}
             end
@@ -415,7 +415,7 @@ defmodule Dspy.Signature.AdapterPipeline do
   end
 
   @doc """
-  Replace the primary prompt text inside a request, preserving attachments.
+  Replace the primary prompt text inside a request, preserving other messages and parts.
 
   This targets the same location as `primary_prompt_text/1`.
 
@@ -454,20 +454,14 @@ defmodule Dspy.Signature.AdapterPipeline do
               {put_msg_content(msg, content_key, new_prompt), true}
 
             is_list(content) ->
-              updated_parts =
-                Enum.map(content, fn
-                  %{"type" => "text"} = part -> Map.put(part, "text", new_prompt)
-                  other -> other
-                end)
+              case Enum.find_index(content, &primary_text_part?/1) do
+                nil ->
+                  {msg, false}
 
-              # Ensure we actually replaced at least one part.
-              ok? =
-                Enum.any?(updated_parts, fn
-                  %{"type" => "text", "text" => ^new_prompt} -> true
-                  _ -> false
-                end)
-
-              {put_msg_content(msg, content_key, updated_parts), ok?}
+                part_index ->
+                  parts = List.update_at(content, part_index, &Map.put(&1, "text", new_prompt))
+                  {put_msg_content(msg, content_key, parts), true}
+              end
 
             true ->
               {msg, false}
