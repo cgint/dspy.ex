@@ -455,8 +455,8 @@ defmodule Dspy.Teleprompt.Ensemble do
 
   defp vary_parameter({state, config}, param, values) do
     if Keyword.has_key?(config, param) do
-      {state, index} = Random.randbelow(state, length(values))
-      {state, Keyword.put(config, param, Enum.at(values, index))}
+      {state, value} = Random.choice(state, values)
+      {state, Keyword.put(config, param, value)}
     else
       {state, config}
     end

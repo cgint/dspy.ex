@@ -67,6 +67,8 @@ defmodule Dspy.Trainset do
   @doc """
   Split a dataset into train/validation/test sets.
 
+  See `Dspy.DataLoader.train_test_split/2` for a two-way train/test split.
+
   ## Parameters
 
   - `dataset` - Full dataset to split
@@ -88,7 +90,6 @@ defmodule Dspy.Trainset do
     val_ratio = Keyword.get(opts, :val, 0.1)
     test_ratio = Keyword.get(opts, :test, 0.1)
     shuffle = Keyword.get(opts, :shuffle, true)
-    seed = Keyword.get(opts, :seed, :os.system_time(:microsecond))
 
     # Validate ratios
     total_ratio = train_ratio + val_ratio + test_ratio
@@ -100,6 +101,7 @@ defmodule Dspy.Trainset do
     # Shuffle if requested
     shuffled =
       if shuffle do
+        seed = Keyword.get_lazy(opts, :seed, &Random.fresh_seed/0)
         {state, _} = Random.seed(seed)
         {_state, shuffled} = Random.shuffle(state, dataset)
         shuffled
@@ -130,7 +132,7 @@ defmodule Dspy.Trainset do
 
   ## Sampling Strategies
 
-  - `:random` - Random sampling
+  - `:random` - CPython-compatible sampling without replacement. See also `Dspy.DataLoader.sample/3`.
   - `:diverse` - Maximize diversity in examples
   - `:hard` - Select challenging examples
   - `:balanced` - Balance across categories/labels
@@ -140,7 +142,7 @@ defmodule Dspy.Trainset do
   @spec sample(list(Example.t()), pos_integer(), keyword()) :: list(Example.t())
   def sample(trainset, num_samples, opts \\ []) do
     strategy = Keyword.get(opts, :strategy, :random)
-    seed = Keyword.get(opts, :seed, :os.system_time(:microsecond))
+    seed = Keyword.get_lazy(opts, :seed, &Random.fresh_seed/0)
 
     {state, _} = Random.seed(seed)
 
@@ -186,7 +188,7 @@ defmodule Dspy.Trainset do
   def bootstrap_sample([], _num_samples, _opts), do: raise(Enum.EmptyError)
 
   def bootstrap_sample(trainset, num_samples, opts) do
-    seed = Keyword.get(opts, :seed, :os.system_time(:microsecond))
+    seed = Keyword.get_lazy(opts, :seed, &Random.fresh_seed/0)
     {state, _} = Random.seed(seed)
     rows = List.to_tuple(trainset)
 
@@ -211,7 +213,7 @@ defmodule Dspy.Trainset do
   """
   @spec stratified_sample(list(Example.t()), pos_integer(), atom()) :: list(Example.t())
   def stratified_sample(trainset, num_samples, field \\ :answer) do
-    {state, _} = Random.seed(System.unique_integer([:positive]))
+    {state, _} = Random.seed(Random.fresh_seed())
     stratified_sample(trainset, num_samples, field, state)
   end
 
@@ -396,6 +398,11 @@ defmodule Dspy.Trainset do
     {state, Enum.take(shuffled, num_samples)}
   end
 
+  defp random_sample(trainset, num_samples, state) when num_samples >= 0 do
+    {_state, sample} = Random.sample(state, trainset, num_samples)
+    sample
+  end
+
   defp random_sample(trainset, num_samples, state) do
     {_state, sample} = take_shuffled(state, trainset, num_samples)
     sample
@@ -406,7 +413,8 @@ defmodule Dspy.Trainset do
     # Start with a random example, then select the most dissimilar.
     cond do
       num_samples <= 1 ->
-        random_sample(trainset, num_samples, state)
+        {_state, sample} = take_shuffled(state, trainset, num_samples)
+        sample
 
       length(trainset) <= num_samples ->
         trainset

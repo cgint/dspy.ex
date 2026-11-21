@@ -50,6 +50,29 @@ defmodule Dspy.RandomTest do
     assert_raise ArgumentError, fn -> Dspy.Random.seed(1.5) end
   end
 
+  test "random/1 matches CPython's 53-bit float sequence" do
+    {state, _} = Dspy.Random.seed(100)
+    {state, first} = Dspy.Random.random(state)
+    {state, second} = Dspy.Random.random(state)
+    {_state, third} = Dspy.Random.random(state)
+
+    assert [first, second, third] == [0.1456692551041303, 0.45492700451402135, 0.7707838056590222]
+  end
+
+  test "choice/2 matches CPython's indices and rejects an empty population" do
+    {state, _} = Dspy.Random.seed(0)
+    population = Enum.to_list(0..64)
+
+    {choices, _state} =
+      Enum.map_reduce(1..5, state, fn _, state ->
+        {state, choice} = Dspy.Random.choice(state, population)
+        {choice, state}
+      end)
+
+    assert choices == [49, 53, 5, 33, 62]
+    assert_raise ArgumentError, fn -> Dspy.Random.choice(state, []) end
+  end
+
   test "getrandbits k=32 matches CPython first5 for all fixture seeds", %{fixture: fixture} do
     for {seed_str, expected_first5} <- fixture["first5"] do
       seed = String.to_integer(seed_str)

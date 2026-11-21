@@ -90,4 +90,21 @@ defmodule Dspy.Teleprompt.LabeledFewShotImprovementTest do
 
     assert_in_delta improved.mean, 1.0, 1.0e-12
   end
+
+  test "an explicit seed of zero matches upstream demo selection" do
+    student = Dspy.Predict.new(TestQA)
+    trainset = for index <- 0..9, do: Dspy.Example.new(question: "q#{index}", answer: "a#{index}")
+    tp = LabeledFewShot.new(k: 3, seed: 0)
+
+    {rng, result} =
+      Task.async(fn ->
+        result = Dspy.Teleprompt.compile(tp, student, trainset)
+        {:rand.export_seed(), result}
+      end)
+      |> Task.await()
+
+    assert rng == :undefined
+    assert {:ok, program} = result
+    assert Enum.map(program.examples, & &1.attrs.question) == ["q6", "q9", "q0"]
+  end
 end

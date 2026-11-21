@@ -35,6 +35,9 @@ defmodule Dspy.Random do
 
   defstruct mt: %{}, mti: 0
 
+  @doc false
+  def fresh_seed, do: :binary.decode_unsigned(:crypto.strong_rand_bytes(8))
+
   @doc """
   Create a generator seeded exactly like CPython's `random.Random(seed)`.
 
@@ -69,6 +72,14 @@ defmodule Dspy.Random do
     {state, high} = getrandbits(state, 27)
     {state, low} = getrandbits(state, 26)
     {state, ((high <<< 26) + low) / (1 <<< 53)}
+  end
+
+  @doc "Select one element using CPython's choice algorithm."
+  def choice(_state, []), do: raise(ArgumentError, "cannot choose from an empty list")
+
+  def choice(state, population) when is_list(population) do
+    {state, index} = randbelow(state, length(population))
+    {state, Enum.at(population, index)}
   end
 
   @doc """

@@ -69,6 +69,14 @@ defmodule DspyTrainsetTest do
     assert Enum.all?(sample1, &MapSet.member?(data_set, &1))
   end
 
+  test "random sample uses the CPython pool and set selections" do
+    # M1-e fixture vectors for random.Random(0).sample(range(n), 3).
+    for {size, indices} <- [{10, [6, 9, 0]}, {100, [49, 97, 53]}] do
+      data = dataset(size)
+      assert Trainset.sample(data, 3, seed: 0) == Enum.map(indices, &Enum.at(data, &1))
+    end
+  end
+
   defp labeled_dataset do
     [
       Example.new(%{id: 1, question: "q1", answer: "A"}),
@@ -140,6 +148,9 @@ defmodule DspyTrainsetTest do
 
     assert sample1 == sample2
     assert length(sample1) == 6
+    # CPython random.Random(42).choice over this population, repeated six times.
+    assert Enum.map(sample1, & &1.attrs.id) == [1, 1, 3, 2, 2, 2]
+    assert_raise Enum.EmptyError, fn -> Trainset.bootstrap_sample([], 1, seed: 42) end
   end
 
   test "trainset sampling preserves seeded and unseeded caller RNG state" do

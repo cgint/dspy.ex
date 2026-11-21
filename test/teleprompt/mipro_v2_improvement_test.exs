@@ -98,7 +98,11 @@ defmodule Dspy.Teleprompt.MIPROv2ImprovementTest do
         verbose: false
       )
 
+    :rand.seed(:exsss, {1, 2, 3})
+    caller_rng = :rand.export_seed()
+
     assert {:ok, optimized} = MIPROv2.compile(tp, student, trainset)
+    assert :rand.export_seed() == caller_rng
 
     improved =
       Dspy.Evaluate.evaluate(optimized, trainset, metric, num_threads: 1, progress: false)
