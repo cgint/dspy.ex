@@ -573,9 +573,18 @@ defmodule Dspy.Teleprompt.BootstrapRSTest do
     student = predictor_pair([], %OfflineLM{observer: self()})
     mismatched_signature = put_in(student.right.signature.instructions, "Different task")
     missing_slot = %{student | right: nil}
+    cot = Dspy.chain_of_thought(student.right.signature)
+    mismatched_kind = %{student | right: %{cot | signature: student.right.signature}}
+    keyed = %Branching{mapping: %{1 => student.left, "1" => student.right}}
+    mismatched_path = %{keyed | mapping: %{1.0 => student.left, "1" => student.right}}
     optimizer = Teleprompt.new(:bootstrap_rs, metric: fn _, _ -> 1 end, verbose: false)
 
-    for teacher <- [mismatched_signature, missing_slot] do
+    for {student, teacher} <- [
+          {student, mismatched_signature},
+          {student, missing_slot},
+          {student, mismatched_kind},
+          {keyed, mismatched_path}
+        ] do
       assert {:error, :teacher_predictor_mismatch} =
                BootstrapRS.compile_with_candidates(optimizer, student, [question_row(0)],
                  teacher: teacher,
