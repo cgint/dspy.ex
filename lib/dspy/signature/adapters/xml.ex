@@ -262,7 +262,8 @@ defmodule Dspy.Signature.Adapters.XMLAdapter do
 
     with true <- String.valid?(text),
          {:ok, text} <- unwrap_completion(String.trim(text), fields),
-         {:ok, outputs} <- parse_fields(text, fields, %{}) do
+         {:ok, values} <- parse_fields(text, fields, %{}),
+         {:ok, outputs} <- validate_lists(signature.output_fields, values) do
       missing =
         for field <- signature.output_fields,
             field.required and not Map.has_key?(outputs, field.name),
@@ -276,6 +277,24 @@ defmodule Dspy.Signature.Adapters.XMLAdapter do
       false -> decode_error(:invalid_xml_encoding)
       {:error, _} = error -> error
     end
+  end
+
+  defp validate_lists(fields, values) do
+    Enum.reduce_while(fields, {:ok, %{}}, fn field, {:ok, outputs} ->
+      case Map.fetch(values, field.name) do
+        {:ok, {:list_items, _, _} = items} ->
+          case validate_term(XMLValue.finish_items(items), field) do
+            {:ok, value} -> {:cont, {:ok, Map.put(outputs, field.name, value)}}
+            {:error, _} = error -> {:halt, error}
+          end
+
+        {:ok, {:value, value}} ->
+          {:cont, {:ok, Map.put(outputs, field.name, value)}}
+
+        :error ->
+          {:cont, {:ok, outputs}}
+      end
+    end)
   end
 
   defp add_defaults(fields, outputs) do
@@ -319,13 +338,10 @@ defmodule Dspy.Signature.Adapters.XMLAdapter do
     case Regex.run(@open_tag, text) do
       [opening, name, slash] ->
         with {:ok, field} <- fetch_field(fields, name),
-             false <- Map.has_key?(outputs, field.name),
              rest = binary_part(text, byte_size(opening), byte_size(text) - byte_size(opening)),
-             {:ok, value, rest} <- read_field(rest, name, slash, field, fields) do
+             previous = Map.fetch(outputs, field.name),
+             {:ok, value, rest} <- read_output(rest, name, slash == "/", field, fields, previous) do
           parse_fields(rest, fields, Map.put(outputs, field.name, value))
-        else
-          true -> decode_error({:duplicate_xml_field, name})
-          {:error, _} = error -> error
         end
 
       nil ->
@@ -340,17 +356,7 @@ defmodule Dspy.Signature.Adapters.XMLAdapter do
     end
   end
 
-  defp read_field(rest, _name, "/", field, _fields) do
-    result =
-      case container_schema(field) do
-        nil -> cast_value(nil, field)
-        schema -> validate_term(XMLValue.empty(schema), field)
-      end
-
-    with {:ok, value} <- result, do: {:ok, value, rest}
-  end
-
-  defp read_field(text, name, "", field, fields) do
+  defp read_output(text, name, self_close?, field, fields, previous) do
     boundary? = fn suffix ->
       case Regex.run(@open_tag, suffix) do
         [_, sibling, _] -> Map.has_key?(fields, sibling)
@@ -360,6 +366,31 @@ defmodule Dspy.Signature.Adapters.XMLAdapter do
 
     schema = container_schema(field)
 
+    cond do
+      XMLValue.list_item?(text, name, self_close?, schema) ->
+        XMLValue.read_list_item(text, {name, name}, schema, boundary?, previous)
+
+      previous == :error ->
+        with {:ok, value, rest} <- read_field(text, name, self_close?, field, schema, boundary?) do
+          {:ok, {:value, value}, rest}
+        end
+
+      true ->
+        decode_error({:duplicate_xml_field, name})
+    end
+  end
+
+  defp read_field(rest, _name, true, field, schema, _boundary?) do
+    result =
+      case schema do
+        nil -> cast_value(nil, field)
+        schema -> validate_term(XMLValue.empty(schema), field)
+      end
+
+    with {:ok, value} <- result, do: {:ok, value, rest}
+  end
+
+  defp read_field(text, name, false, field, schema, boundary?) do
     if schema && String.starts_with?(String.trim_leading(text), "<") do
       with {:ok, term, rest} <- XMLValue.container(text, name, schema, boundary?),
            {:ok, value} <- validate_term(term, field) do

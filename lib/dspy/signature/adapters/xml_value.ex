@@ -101,6 +101,41 @@ defmodule Dspy.Signature.Adapters.XMLValue do
 
   def literal(text, name, boundary, mode), do: read_literal(text, name, boundary, [], true, mode)
 
+  def list_item?(_text, _name, true, _schema), do: false
+
+  def list_item?(text, name, false, schema),
+    do: kind(schema) == :array and unwrapped_item?(String.trim_leading(text), name)
+
+  defp unwrapped_item?(text, name) do
+    close = Regex.compile!("\\A(?:null\\s*)?" <> close_pattern(name))
+
+    not String.starts_with?(text, "[") and not child_tag?(text, nil, :array) and
+      not Regex.match?(close, text)
+  end
+
+  def read_list_item(text, {name, key}, schema, boundary, previous, scopes \\ []) do
+    case previous do
+      :error ->
+        add_list_item(text, name, schema, boundary, scopes, [], 0)
+
+      {:ok, {:list_items, items, index}} ->
+        add_list_item(text, name, schema, boundary, scopes, items, index)
+
+      {:ok, _value} ->
+        decode_error({:duplicate_xml_field, key})
+    end
+  end
+
+  defp add_list_item(text, name, schema, boundary, scopes, items, index) do
+    with {:ok, value, rest} <-
+           read_child(text, name, false, item_schema(schema, index), boundary, scopes) do
+      {:ok, {:list_items, [value | items], index + 1}, rest}
+    end
+  end
+
+  def finish_items({:list_items, items, _index}), do: Enum.reverse(items)
+  def finish_items(value), do: value
+
   defp read_container(text, name, schema, boundary, ancestors) do
     schema = shape(schema)
     kind = kind(schema)
@@ -142,9 +177,8 @@ defmodule Dspy.Signature.Adapters.XMLValue do
 
       nil ->
         with {:ok, name, key, self_close?, rest} <- opening_tag(text),
-             {:ok, child_schema} <- child_schema(schema, name, key, acc),
              {:ok, value, rest} <-
-               read_child(rest, name, self_close?, child_schema, boundary, scopes) do
+               read_member(rest, {name, key, self_close?}, schema, boundary, scopes, acc) do
           read_children(rest, schema, closer, boundary, scopes, add(acc, key, value))
         end
     end
@@ -181,21 +215,36 @@ defmodule Dspy.Signature.Adapters.XMLValue do
     end
   end
 
-  defp child_schema(schema, "item", "item", {_items, index}) do
-    {:ok, item_schema(schema, index)}
+  defp read_member(text, {"item", "item", self_close?}, schema, boundary, scopes, {_items, index}) do
+    read_child(text, "item", self_close?, item_schema(schema, index), boundary, scopes)
   end
 
-  defp child_schema(_schema, _name, key, {_items, _index}),
-    do: decode_error({:unknown_xml_field, key})
+  defp read_member(
+         _text,
+         {_name, key, _self_close?},
+         _schema,
+         _boundary,
+         _scopes,
+         {_items, _index}
+       ),
+       do: decode_error({:unknown_xml_field, key})
 
-  defp child_schema(schema, _name, key, acc) when is_map(acc) do
-    if Map.has_key?(acc, key) do
-      decode_error({:duplicate_xml_field, key})
-    else
-      case property_schema(schema, key) do
-        {:ok, _child} = child -> child
-        :error -> decode_error({:unknown_xml_field, key})
+  defp read_member(text, {name, key, self_close?}, schema, boundary, scopes, acc) do
+    with {:ok, child} <- property_schema(schema, key) do
+      previous = Map.fetch(acc, key)
+
+      cond do
+        list_item?(text, name, self_close?, child) ->
+          read_list_item(text, {name, key}, child, boundary, previous, scopes)
+
+        previous == :error ->
+          read_child(text, name, self_close?, child, boundary, scopes)
+
+        true ->
+          decode_error({:duplicate_xml_field, key})
       end
+    else
+      :error -> decode_error({:unknown_xml_field, key})
     end
   end
 
@@ -203,7 +252,7 @@ defmodule Dspy.Signature.Adapters.XMLValue do
   defp add(acc, key, value), do: Map.put(acc, key, value)
 
   defp finish({items, _index}), do: Enum.reverse(items)
-  defp finish(acc), do: acc
+  defp finish(acc), do: Map.new(acc, fn {key, value} -> {key, finish_items(value)} end)
 
   defp read_child(text, _name, true, schema, _boundary, _scopes), do: {:ok, empty(schema), text}
 

@@ -1,6 +1,6 @@
 # Status
 
-> **M4b, XML adapter.** Opt-in XML outputs support typed records, arrays, and dictionaries with literal string leaves. Typed demos use nested XML where their schema identifies the values. JSON remains available inside the XML tags. Mixed schema branches and structured tool history remain open.
+> **M4b, XML adapter.** Opt-in XML outputs support typed records, arrays, and dictionaries with literal string leaves. Repeated list fields preserve item order across intervening fields. Typed demos use nested XML where their schema identifies the values. JSON remains available inside the XML tags. Mixed schema branches and structured tool history remain open.
 
 > **M4a, Refine groundwork.** Refine keys cached responses to each attempt's rollout ID. Named predictors use temperature `1.0`, and custom modules inherit it as a scoped default. Reward scoring uses the enclosing settings. Nested predictor traces preserve the enclosing optimizer's steps. Multipart output retries preserve images and trailing text. An explicit `fail_count:` bounds failed attempts per call. The feedback loop remains open.
 

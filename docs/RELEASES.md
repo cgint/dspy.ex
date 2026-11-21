@@ -16,6 +16,8 @@ fields support defaults and self-closing nulls. Output retries request XML
 tags and preserve multipart images and trailing text. Schema-backed output
 records, lists, and dictionaries support nested XML in responses and demos.
 Lists use `<item>` and dictionary keys that need escaping use `<entry key="...">`.
+Declared lists also accept repeated field tags in encounter order, including
+repeated dictionary keys. Use one representation per list field.
 Structured fields still accept JSON inside their XML tags, including schemas
 that rely on `patternProperties` or have multiple non-null branches.
 
