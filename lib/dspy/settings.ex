@@ -140,7 +140,7 @@ defmodule Dspy.Settings do
   # When all the other settings are scoped, preserve their server-free lookup.
   # This table belongs to Settings and disappears with its owner.
   defp read_telemetry_flag do
-    :ets.lookup_element(@telemetry_table, :enabled, 2, false)
+    :ets.lookup(@telemetry_table, :enabled) == [{:enabled, true}]
   rescue
     ArgumentError -> false
   end

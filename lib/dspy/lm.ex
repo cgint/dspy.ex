@@ -744,18 +744,17 @@ defmodule Dspy.LM do
   defp response_usage(_response), do: nil
 
   defp normalize_usage_for_history(%{} = usage) do
-    # Prefer Python/DSPy-style keys if present.
-    prompt_tokens = usage[:prompt_tokens] || usage["prompt_tokens"]
-    completion_tokens = usage[:completion_tokens] || usage["completion_tokens"]
-    total_tokens = usage[:total_tokens] || usage["total_tokens"]
+    prompt_tokens =
+      Map.get(usage, :prompt_tokens) || Map.get(usage, "prompt_tokens") ||
+        Map.get(usage, :input_tokens) || Map.get(usage, "input_tokens")
 
-    # Fallback to ReqLLM-style keys.
-    prompt_tokens = prompt_tokens || usage[:input_tokens] || usage["input_tokens"]
-    completion_tokens = completion_tokens || usage[:output_tokens] || usage["output_tokens"]
-    total_tokens = total_tokens || usage[:total_tokens] || usage["total_tokens"]
+    completion_tokens =
+      Map.get(usage, :completion_tokens) || Map.get(usage, "completion_tokens") ||
+        Map.get(usage, :output_tokens) || Map.get(usage, "output_tokens")
 
-    cached_tokens = usage[:cached_tokens] || usage["cached_tokens"]
-    reasoning_tokens = usage[:reasoning_tokens] || usage["reasoning_tokens"]
+    total_tokens = Map.get(usage, :total_tokens) || Map.get(usage, "total_tokens")
+    cached_tokens = Map.get(usage, :cached_tokens) || Map.get(usage, "cached_tokens")
+    reasoning_tokens = Map.get(usage, :reasoning_tokens) || Map.get(usage, "reasoning_tokens")
 
     if is_integer(prompt_tokens) and is_integer(completion_tokens) and is_integer(total_tokens) do
       base = %{

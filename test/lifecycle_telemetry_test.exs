@@ -17,6 +17,10 @@ defmodule Dspy.LifecycleTelemetryTest do
     def generate(lm, request), do: lm.reply.(request)
   end
 
+  defmodule UsageMeter do
+    defstruct [:prompt_tokens, :completion_tokens, :total_tokens]
+  end
+
   defmodule ToolProgram do
     use Dspy.Module
     defstruct [:predictor]
@@ -185,6 +189,32 @@ defmodule Dspy.LifecycleTelemetryTest do
     end
 
     assert_redacted(events)
+  end
+
+  test "observes token counts in a usage struct without invoking Access" do
+    binding =
+      lm(fn _ ->
+        {:ok, response} = answer()
+
+        {:ok,
+         %{response | usage: %UsageMeter{prompt_tokens: 2, completion_tokens: 3, total_tokens: 5}}}
+      end)
+
+    request = %{messages: [LM.user_message("private input")]}
+
+    assert {:ok, _} =
+             Dspy.context([telemetry: true, track_usage: false], fn ->
+               LM.generate(binding, request)
+             end)
+
+    events = drain()
+    assert_pairs(events)
+
+    assert [
+             {[:dspy, :lm, :stop], %{prompt_tokens: 2, completion_tokens: 3, total_tokens: 5}, _,
+              _}
+           ] =
+             Enum.filter(events, fn {name, _, _, _} -> name == [:dspy, :lm, :stop] end)
   end
 
   test "global opt-in can be disabled for a scope and is restored afterward" do
