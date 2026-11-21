@@ -277,13 +277,13 @@ defmodule Dspy.Signature.AdapterPipeline do
     new_content =
       cond do
         is_binary(content) ->
-          content
+          [text_part(content)]
           |> interleave_image_parts(image_parts)
           |> then(&(&1 ++ attachment_parts))
 
         is_list(content) ->
           content
-          |> interleave_image_parts_in_list(image_parts)
+          |> interleave_image_parts(image_parts)
           |> then(&(&1 ++ attachment_parts))
 
         true ->
@@ -299,59 +299,58 @@ defmodule Dspy.Signature.AdapterPipeline do
     end
   end
 
-  # Split a prompt text at the image sentinels and interleave the image parts
-  # at those positions. Without sentinels the text is returned unchanged as a
-  # single text part and the image parts are appended (historical behavior).
-  defp interleave_image_parts(text, image_parts) when is_binary(text) and is_list(image_parts) do
-    chunks = String.split(text, image_ref_token(), global: true)
+  defp interleave_image_parts(content, image_parts) do
+    {split_parts, marker_count} = Enum.map_reduce(content, 0, &split_marked_part/2)
+    image_count = length(image_parts)
 
     cond do
-      # Expected: one chunk per part boundary (length = parts + 1).
-      length(chunks) == length(image_parts) + 1 and image_parts != [] ->
-        interleave_chunks(chunks, image_parts)
+      marker_count == 0 ->
+        content ++ image_parts
 
-      length(chunks) == 1 ->
-        # No sentinels: fallback, append parts after the text.
-        [%{"type" => "text", "text" => text}] ++ image_parts
+      marker_count == image_count ->
+        splice_marked_parts(split_parts, image_parts)
 
       true ->
-        # Sentinel count mismatch (e.g. the literal sentinel appeared in user
-        # text without matching image values): strip leftovers, keep it safe.
         Logger.warning(
-          "Dspy image splice mismatch: #{length(chunks) - 1} sentinel(s) in prompt text but " <>
-            "#{length(image_parts)} image part(s); stripped the sentinels and appended the " <>
+          "Dspy image splice mismatch: #{marker_count} sentinel(s) in prompt text but " <>
+            "#{image_count} image part(s); stripped the sentinels and appended the " <>
             "image part(s) at the end. Check the :image input fields of the signature."
         )
 
-        clean = String.replace(text, image_ref_token(), "")
-        [%{"type" => "text", "text" => clean}] ++ image_parts
+        Enum.map(split_parts, fn
+          {:marked, chunks, _count} -> text_part(Enum.join(chunks))
+          {:unmarked, part} -> part
+        end) ++ image_parts
     end
   end
 
-  defp interleave_image_parts_in_list(content, image_parts) when is_list(content) do
-    if Enum.any?(content, &text_part_contains_ref?/1) do
-      content
-      |> Enum.map(fn part ->
-        if text_part_contains_ref?(part) do
-          text = part["text"] || part[:text]
-          interleave_image_parts(text, image_parts)
-        else
-          part
-        end
-      end)
-      |> List.flatten()
+  defp split_marked_part(part, total) do
+    with text when is_binary(text) <- image_marker_text(part),
+         [_, _ | _] = chunks <- String.split(text, image_ref_token()) do
+      count = length(chunks) - 1
+      {{:marked, chunks, count}, total + count}
     else
-      content ++ image_parts
+      _ -> {{:unmarked, part}, total}
     end
   end
 
-  defp text_part_contains_ref?(%{"type" => "text", "text" => text}) when is_binary(text),
-    do: String.contains?(text, image_ref_token())
+  defp image_marker_text(%{"type" => "text", "text" => text}), do: text
+  defp image_marker_text(%{type: "text", text: text}), do: text
+  defp image_marker_text(_part), do: nil
 
-  defp text_part_contains_ref?(%{type: "text", text: text}) when is_binary(text),
-    do: String.contains?(text, image_ref_token())
+  defp splice_marked_parts(split_parts, image_parts) do
+    {spliced, []} =
+      Enum.map_reduce(split_parts, image_parts, fn
+        {:marked, chunks, count}, remaining ->
+          {images, rest} = Enum.split(remaining, count)
+          {interleave_chunks(chunks, images), rest}
 
-  defp text_part_contains_ref?(_), do: false
+        {:unmarked, part}, remaining ->
+          {[part], remaining}
+      end)
+
+    Enum.concat(spliced)
+  end
 
   defp interleave_chunks(chunks, parts) when is_list(chunks) and is_list(parts) do
     parts
@@ -362,8 +361,10 @@ defmodule Dspy.Signature.AdapterPipeline do
   end
 
   defp keep_text_part(text) when is_binary(text) do
-    if String.trim(text) == "", do: [], else: [%{"type" => "text", "text" => text}]
+    if String.trim(text) == "", do: [], else: [text_part(text)]
   end
+
+  defp text_part(text), do: %{"type" => "text", "text" => text}
 
   defp message_content(msg) do
     case msg do
