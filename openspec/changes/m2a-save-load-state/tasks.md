@@ -15,7 +15,7 @@
 ## 3. Integration verification
 
 - [x] 3.1 Add and verify an offline fixture that actually compiles a composite BootstrapRS program with typed integer and string keys and distinct traced demos. In the writer BEAM, set distinct instructions and stored config and record successful inference requests and the prediction. In a separate reader BEAM, build the same program shape and runtime settings, supply fresh LM bindings, and verify the loaded program reproduces the captured requests and prediction. Assert restored instructions, stored config, and exact Example attrs and metadata separately from wire equality.
-- [ ] 3.2 Verify the focused tests, full test suite, frozen consumer contract, and offline examples. Confirm the slice adds no dependencies and that the Parameter APIs and frozen tests retain their current behavior.
+- [x] 3.2 Verify the focused tests, full test suite, frozen consumer contract, and offline examples. Confirm the slice adds no dependencies and that the Parameter APIs and frozen tests retain their current behavior.
 - [ ] 3.3 [User Verification] Confirm that an optimized program can be restored in a fresh BEAM by supplying its code and LM registry, and review the accepted portable demo types. This task belongs exclusively to the human user and MUST NOT be checked off by an agent.
 
 Hosted CI and committed consumer replays are merge gates on the final PR commit.
