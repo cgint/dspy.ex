@@ -187,6 +187,25 @@ defmodule Dspy.ReActStructuredTest do
              history
   end
 
+  test "keeps implicit dictionary schemas open on the provider wire" do
+    signature = Dspy.Signature.define("question -> result: json")
+    [field] = signature.output_fields
+    field = Map.put(field, :schema, %{"additionalProperties" => %{"type" => "integer"}})
+    agent = ReAct.new(%{signature | output_fields: [field]}, [], mode: :structured)
+
+    assert {:ok, %{attrs: %{result: %{"alice" => 3}}}} =
+             call(agent, %{question: "q"}, [
+               [native("final", "submit", %{"result" => %{"alice" => 3}})]
+             ])
+
+    assert_received {:wire, "/responses", request}
+
+    assert [%{"strict" => false, "parameters" => %{"properties" => %{"result" => sent}}}] =
+             request["tools"]
+
+    assert sent["additionalProperties"] == %{"type" => "integer"}
+  end
+
   test "resumes text fallback with deterministic unique IDs before executing tools" do
     agent = ReAct.new("question -> answer: int", [lookup_tool(self())], mode: :structured)
 

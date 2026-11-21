@@ -217,8 +217,8 @@ defmodule Dspy.ReAct.Structured do
     if Enum.all?(parameters["properties"], fn {_name, schema} -> strict_schema?(schema) end) do
       tool
     else
-      # ReqLLM strict tools close nested objects and require every nested key.
-      # Preserve the declared schema and validate required fields locally.
+      # ReqLLM can rewrite complex schemas in strict mode. Preserve the
+      # declared property schemas and validate required fields locally.
       required = Enum.join(parameters["required"], ", ")
       guidance = if required == "", do: "", else: " Required fields are #{required}."
 
@@ -236,20 +236,16 @@ defmodule Dspy.ReAct.Structured do
 
   defp tool_declaration(tool), do: tool
 
-  defp strict_schema?(schema) when is_map(schema) do
-    if "object" in List.wrap(schema["type"]) or Map.has_key?(schema, "properties") do
-      properties = Map.get(schema, "properties", %{})
+  defp strict_schema?(%{"type" => type} = schema)
+       when type in ["string", "integer", "number", "boolean", "null"],
+       do: Enum.all?(Map.keys(schema), &(&1 in ["type", "description", "enum"]))
 
-      schema["additionalProperties"] == false and
-        Enum.sort(Map.keys(properties)) == Enum.sort(Map.get(schema, "required", [])) and
-        Enum.all?(properties, fn {_name, value} -> strict_schema?(value) end)
-    else
-      schema |> Map.values() |> Enum.all?(&strict_schema?/1)
-    end
+  defp strict_schema?(%{"anyOf" => branches} = schema) when is_list(branches) do
+    Enum.all?(Map.keys(schema), &(&1 in ["description", "anyOf"])) and
+      Enum.all?(branches, &strict_schema?/1)
   end
 
-  defp strict_schema?(schemas) when is_list(schemas), do: Enum.all?(schemas, &strict_schema?/1)
-  defp strict_schema?(_schema), do: true
+  defp strict_schema?(_schema), do: false
 
   defp recoverable_turn_failure({:output_parse_failed, _reason, _meta}), do: :parse_error
   defp recoverable_turn_failure({:missing_content, _reason}), do: :parse_error

@@ -224,7 +224,7 @@ defmodule Dspy.LM.ReqLLM do
     end
   end
 
-  defp req_llm_tools(tools) when is_list(tools), do: Enum.map(tools, &req_llm_tool/1)
+  defp req_llm_tools(tools) when is_integer(length(tools)), do: Enum.map(tools, &req_llm_tool/1)
   defp req_llm_tools(tools), do: tools
 
   # The Responses adapter forces strict mode on plain tool maps. Its Tool
