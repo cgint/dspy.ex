@@ -456,6 +456,18 @@ defmodule Dspy.Signature.Adapter.Pipeline do
     adapter == Dspy.Signature.Adapters.JSONAdapter or signature_has_typed_outputs?(signature)
   end
 
+  defp build_output_retry_prompt(
+         base_prompt,
+         signature,
+         Dspy.Signature.Adapters.XMLAdapter,
+         reason
+       ) do
+    base_prompt <>
+      "\n\nYour previous output did not match the required XML field format.\nErrors:\n" <>
+      format_output_retry_errors(reason) <>
+      "\n\n" <> Dspy.Signature.Adapters.XMLAdapter.format_instructions(signature)
+  end
+
   defp build_output_retry_prompt(base_prompt, %Signature{} = signature, adapter, reason)
        when is_binary(base_prompt) and is_atom(adapter) do
     if json_output_retry_mode?(signature, adapter) do

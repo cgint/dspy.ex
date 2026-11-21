@@ -8,6 +8,14 @@ This repo ships in **small, user-usable slices**.
 
 ## Consumer notes
 
+### Opt-in XML field adapter
+
+Select `Dspy.Signature.Adapters.XMLAdapter` on a predictor to format field
+tags and parse literal text, typed scalars, and JSON-valued fields. Optional
+fields support defaults and self-closing nulls. Output retries request XML
+tags and preserve multipart images and trailing text. Structured values in
+this slice use JSON inside XML field tags.
+
 ### Refine failure allowance
 
 `Dspy.Refine.new/2` accepts `fail_count:` to bound failed attempts per call.
