@@ -32,6 +32,8 @@ defmodule SemanticF1EvaluationOffline do
   end
 
   def run(output_path) do
+    verify_cache_lifetime()
+
     directory =
       Path.join(
         System.tmp_dir!(),
@@ -78,6 +80,25 @@ defmodule SemanticF1EvaluationOffline do
       if is_nil(output_path), do: File.rm(report)
       File.rmdir(directory)
     end
+  end
+
+  defp verify_cache_lifetime do
+    lm = scripted_lm(["Cached answer", {:error, :unexpected_cache_miss}])
+    request = %{messages: [%{role: "user", content: "Cache lifetime check"}]}
+
+    generate = fn -> Dspy.context([lm: lm, cache: true], fn -> Dspy.LM.generate(request) end) end
+    task = Task.async(generate)
+    monitor = Process.monitor(task.pid)
+    {:ok, response} = Task.await(task)
+
+    receive do
+      {:DOWN, ^monitor, :process, _, _} -> :ok
+    after
+      5_000 -> raise "The first cache caller did not exit"
+    end
+
+    {:ok, ^response} = generate.()
+    IO.puts("The cache hit survived the first caller task")
   end
 
   defp scripted_lm(responses) do
