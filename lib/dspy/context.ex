@@ -135,8 +135,8 @@ defmodule Dspy.Context do
   - the captured RAW callback stack, preserving the target's previous stack;
   - the captured active call ID when present, restoring the target's previous
     ID afterward. A context without that key leaves the enclosing ID in scope.
-  - the captured history scopes when present, restoring the target's previous
-    scopes afterward. A context without that key leaves enclosing captures in scope.
+  - the captured history scopes alongside the enclosing captures, restoring the
+    target's previous scopes afterward. Each collector receives a call only once.
 
   Installs **no** usage frame (usage accumulators are not captured — see the
   module docs).

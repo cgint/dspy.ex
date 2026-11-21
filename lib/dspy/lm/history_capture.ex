@@ -33,10 +33,9 @@ defmodule Dspy.LM.HistoryCapture do
       do: raise(ArgumentError, "expected :include_payloads to be a boolean")
 
     {:ok, collector} = GenServer.start(__MODULE__, {self(), max_entries})
-    scopes = [{collector, include_payloads} | current()]
 
     try do
-      with_scopes(scopes, fun)
+      with_scopes([{collector, include_payloads}], fun)
     catch
       kind, reason ->
         call_if_open(collector, :discard)
@@ -51,6 +50,7 @@ defmodule Dspy.LM.HistoryCapture do
 
   @doc false
   def with_scopes(scopes, fun) do
+    scopes = Enum.uniq_by(scopes ++ current(), &elem(&1, 0))
     previous = Process.put(@scope_key, scopes)
 
     try do

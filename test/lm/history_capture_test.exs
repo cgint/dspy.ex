@@ -213,6 +213,50 @@ defmodule Dspy.LM.HistoryCaptureTest do
     assert Enum.all?(payload.messages, &(length(&1.parts) in 1..24))
   end
 
+  test "omits structured tool and media items before reading their content" do
+    request = %{
+      messages: [
+        %{type: "function_call_output", content: "PRIVATE_TOOL_OUTPUT"},
+        %{"call_id" => "private-id", "role" => "user", "content" => "PRIVATE_CALL_DATA"},
+        %{type: "input_file", role: "user", content: "PRIVATE_MEDIA"},
+        %{type: "unrecognized_item", role: "user", content: "PRIVATE_UNRECOGNIZED"}
+      ]
+    }
+
+    response = {:ok, %{choices: [%{message: %{type: "tool_use", content: "PRIVATE_TOOL_USE"}}]}}
+    lm = %RecordingLM{model: "history:structured", response: response}
+
+    assert {^response, %{records: [%{payload: payload}]}} =
+             Dspy.capture_history(fn -> LM.generate(lm, request) end, include_payloads: true)
+
+    assert Enum.map(payload.messages, & &1.parts) == [
+             ["[tool data omitted]"],
+             ["[tool data omitted]"],
+             ["[attachment omitted]"],
+             []
+           ]
+
+    assert payload.completions == ["[tool data omitted]"]
+    refute inspect(payload) =~ "PRIVATE"
+  end
+
+  test "captures direct text requests and prefers messages when supplied" do
+    lm = %RecordingLM{model: "history:direct"}
+
+    for request <- [%{prompt: "direct"}, %{text: "direct"}, %{"input" => "direct"}] do
+      assert {{:ok, "completion"}, %{records: [%{payload: payload}]}} =
+               Dspy.capture_history(fn -> LM.generate(lm, request) end, include_payloads: true)
+
+      assert payload.messages == [%{role: :user, parts: ["direct"]}]
+    end
+
+    assert {{:ok, "completion"}, %{records: [%{payload: %{messages: []}}]}} =
+             Dspy.capture_history(
+               fn -> LM.generate(lm, %{messages: [], prompt: "unused prompt"}) end,
+               include_payloads: true
+             )
+  end
+
   test "retains the completion when a prompt exceeds the text allowance" do
     lm = %RecordingLM{model: "history:long-prompt"}
     content = String.duplicate("q", 16_384)
@@ -267,6 +311,33 @@ defmodule Dspy.LM.HistoryCaptureTest do
     send(worker, :go)
     assert_receive {:finished, {:ok, "completion"}, context}, 1_000
     refute Map.has_key?(context, :history_captures)
+  end
+
+  test "an installed context preserves enclosing captures and counts shared scopes once" do
+    lm = %RecordingLM{model: "history:installed"}
+    {closed_context, _} = Dspy.capture_history(&Context.capture/0, include_payloads: true)
+
+    {nested, outer} =
+      Dspy.capture_history(fn ->
+        outer_context = Context.capture()
+
+        {_, nested} =
+          Dspy.capture_history(fn ->
+            Context.with_context(closed_context, fn ->
+              assert {:ok, _} = LM.generate(lm, %{messages: []})
+            end)
+
+            Context.with_context(outer_context, fn ->
+              assert {:ok, _} = LM.generate(lm, %{messages: []})
+            end)
+          end)
+
+        nested
+      end)
+
+    assert [%{call_id: first}, %{call_id: second}] = nested.records
+    assert [%{call_id: ^first}, %{call_id: ^second}] = outer.records
+    assert nested.dropped == 0 and outer.dropped == 0
   end
 
   test "restores enclosing capture after an exception and closes collectors when owners die" do

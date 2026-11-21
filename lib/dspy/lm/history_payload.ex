@@ -10,14 +10,11 @@ defmodule Dspy.LM.HistoryPayload do
   @roles [:system, :developer, :user, :assistant, :tool, :function]
   @role_by_name Map.new(@roles, &{Atom.to_string(&1), &1})
   @text_types [:text, "text", :input_text, "input_text", :output_text, "output_text"]
-  @tool_types [
-    :tool_call,
-    "tool_call",
-    :tool_result,
-    "tool_result",
-    :function_call,
-    "function_call"
-  ]
+  @tool_type_atoms ~w(
+    tool_call tool_result tool_use function_call function_call_output
+    custom_tool_call custom_tool_call_output computer_call computer_call_output
+  )a
+  @tool_types @tool_type_atoms ++ Enum.map(@tool_type_atoms, &Atom.to_string/1)
   @attachment_types [
     :image,
     "image",
@@ -40,12 +37,7 @@ defmodule Dspy.LM.HistoryPayload do
 
   def project(request, response) do
     {messages, {unused_prompt_bytes, truncated?}} =
-      collect(
-        field(request, :messages, "messages"),
-        @max_messages,
-        {@max_bytes - @reserved_completion_bytes, false},
-        &message/2
-      )
+      request_messages(request, {@max_bytes - @reserved_completion_bytes, false})
 
     budget = {unused_prompt_bytes + @reserved_completion_bytes, truncated?}
     {completions, {_remaining, truncated?}} = completions(response, budget)
@@ -57,23 +49,47 @@ defmodule Dspy.LM.HistoryPayload do
     text || "unknown"
   end
 
+  defp request_messages(request, budget) do
+    case field(request, :messages, "messages") do
+      messages when is_list(messages) ->
+        collect(messages, @max_messages, budget, &message/2)
+
+      _ ->
+        prompt =
+          field(request, :prompt, "prompt") || field(request, :text, "text") ||
+            field(request, :input, "input")
+
+        case one_part(prompt, budget) do
+          {[], budget} -> {[], budget}
+          {parts, budget} -> {[%{role: :user, parts: parts}], budget}
+        end
+    end
+  end
+
   defp message(%{} = message, budget) do
-    {role, parts, budget} = message_parts(message, budget)
+    {role, parts, budget} = message_parts(message, budget, :unknown)
     {%{role: role, parts: parts}, budget}
   end
 
   defp message(_message, budget), do: {nil, budget}
 
-  defp message_parts(message, budget) do
-    role = role(field(message, :role, "role"))
+  defp message_parts(message, budget, default_role) do
+    role = role(field(message, :role, "role") || default_role)
+    type = field(message, :type, "type")
     content = field(message, :content, "content")
 
     {parts, budget} =
       cond do
-        role in [:tool, :function] ->
+        role in [:tool, :function] or type in @tool_types or tool_call_reference?(message) ->
           one_part(@tool_placeholder, budget)
 
-        is_nil(content) and field(message, :tool_calls, "tool_calls") not in [nil, []] ->
+        type in @attachment_types ->
+          one_part(@attachment_placeholder, budget)
+
+        role == :unknown or type not in [nil, :message, "message"] ->
+          {[], budget}
+
+        content in [nil, "", []] and field(message, :tool_calls, "tool_calls") not in [nil, []] ->
           one_part(@tool_placeholder, budget)
 
         is_binary(content) ->
@@ -86,8 +102,16 @@ defmodule Dspy.LM.HistoryPayload do
     {role, parts, budget}
   end
 
+  defp tool_call_reference?(message) do
+    not is_nil(field(message, :tool_call_id, "tool_call_id")) or
+      not is_nil(field(message, :call_id, "call_id"))
+  end
+
   defp role(role) when role in @roles, do: role
-  defp role(role) when is_binary(role), do: Map.get(@role_by_name, role, :unknown)
+
+  defp role(role) when is_binary(role) and byte_size(role) <= 9,
+    do: Map.get(@role_by_name, role, :unknown)
+
   defp role(_role), do: :unknown
 
   defp part(%{} = part, budget) do
@@ -110,7 +134,7 @@ defmodule Dspy.LM.HistoryPayload do
   defp completion(choice, budget) do
     case field(choice, :message, "message") do
       %{} = message ->
-        {_role, parts, budget} = message_parts(message, budget)
+        {_role, parts, budget} = message_parts(message, budget, :assistant)
         if parts == [], do: {nil, budget}, else: {IO.iodata_to_binary(parts), budget}
 
       _ ->
