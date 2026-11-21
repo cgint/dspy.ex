@@ -8,6 +8,16 @@ This repo ships in **small, user-usable slices**.
 
 ## Consumer notes
 
+### Module lifecycle callbacks
+
+Implement `Dspy.Module.Callback` and register `{handler, state}` in
+`Dspy.configure/1`, `Dspy.context/2`, `Dspy.with_callbacks/2`, or a
+`Dspy.call/3` call. `Predict` and `ChainOfThought` also accept callbacks on
+construction. Each module invocation through `Dspy.Module.forward/2` has its
+own call ID. The end handler receives elapsed microseconds and the outcome
+for a return, raise, throw, or exit. Payloads omit inputs, results, and error
+details. A handler's start state carries through to its matching end.
+
 ### Usage tracking after an interrupted module call
 
 Tracked module calls now release their usage scope on a raise, throw, or
