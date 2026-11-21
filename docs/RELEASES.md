@@ -8,6 +8,13 @@ This repo ships in **small, user-usable slices**.
 
 ## Consumer notes
 
+### Embedding batches
+
+`Dspy.Embedder.new/2` accepts a hosted model or local embedding function.
+`Dspy.Embedder.embed/3` returns vectors in input order and supports a per-call
+batch size. A single string returns one vector. The ReqLLM embedding provider
+reports malformed batch rows as structured errors.
+
 ### Shared concurrency defaults
 
 `Dspy.configure(num_threads: count)` and `Dspy.context/2` set the default

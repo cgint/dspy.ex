@@ -20,21 +20,17 @@ defmodule Dspy.Retrieve.Embeddings.ReqLLM do
   In tests, pass a fake `:req_llm` module.
   """
 
-  @behaviour Dspy.Retrieve.EmbeddingProvider
+  alias Dspy.Retrieve.EmbeddingProvider
+
+  @behaviour EmbeddingProvider
 
   @impl true
   def embed_text(text, opts \\ [])
 
   def embed_text(text, opts) when is_binary(text) and is_list(opts) do
-    {req_llm, opts} = Keyword.pop(opts, :req_llm, ReqLLM)
-
-    with {:ok, model} <- fetch_model_opt(opts) do
-      opts = Keyword.delete(opts, :model)
-
-      with {:ok, embedding} <- req_llm.embed(model, text, opts),
-           :ok <- validate_embedding_vector(embedding) do
-        {:ok, embedding}
-      end
+    with {:ok, embedding} <- request_embedding(text, opts, :invalid_embedding),
+         :ok <- EmbeddingProvider.validate_vector(embedding) do
+      {:ok, embedding}
     end
   end
 
@@ -43,7 +39,7 @@ defmodule Dspy.Retrieve.Embeddings.ReqLLM do
   @impl true
   def embed_batch(texts, opts \\ [])
 
-  def embed_batch(texts, opts) when is_list(texts) and is_list(opts) do
+  def embed_batch(texts, opts) when is_integer(length(texts)) and is_list(opts) do
     cond do
       texts == [] ->
         {:ok, []}
@@ -52,20 +48,26 @@ defmodule Dspy.Retrieve.Embeddings.ReqLLM do
         {:error, :invalid_texts}
 
       true ->
-        {req_llm, opts} = Keyword.pop(opts, :req_llm, ReqLLM)
-
-        with {:ok, model} <- fetch_model_opt(opts) do
-          opts = Keyword.delete(opts, :model)
-
-          with {:ok, embeddings} <- req_llm.embed(model, texts, opts),
-               :ok <- validate_embedding_matrix(embeddings) do
-            {:ok, embeddings}
-          end
+        with {:ok, embeddings} <- request_embedding(texts, opts, :invalid_embeddings),
+             :ok <- EmbeddingProvider.validate_batch(embeddings, length(texts)) do
+          {:ok, embeddings}
         end
     end
   end
 
   def embed_batch(_texts, _opts), do: {:error, :invalid_texts}
+
+  defp request_embedding(input, opts, invalid_reason) do
+    {req_llm, opts} = Keyword.pop(opts, :req_llm, ReqLLM)
+
+    with {:ok, model} <- fetch_model_opt(opts) do
+      case req_llm.embed(model, input, Keyword.delete(opts, :model)) do
+        {:ok, _} = result -> result
+        {:error, _} = error -> error
+        other -> {:error, {invalid_reason, other}}
+      end
+    end
+  end
 
   defp fetch_model_opt(opts) do
     case Keyword.fetch(opts, :model) do
@@ -74,27 +76,4 @@ defmodule Dspy.Retrieve.Embeddings.ReqLLM do
       :error -> {:error, :model_required}
     end
   end
-
-  defp validate_embedding_vector(list) when is_list(list) do
-    if Enum.all?(list, &is_number/1) do
-      :ok
-    else
-      {:error, {:invalid_embedding, list}}
-    end
-  end
-
-  defp validate_embedding_vector(other), do: {:error, {:invalid_embedding, other}}
-
-  defp validate_embedding_matrix(list) when is_list(list) do
-    has_vectors? = Enum.all?(list, &match?([_ | _], &1))
-    all_numbers? = Enum.all?(list, fn vec -> Enum.all?(vec, fn x -> is_number(x) end) end)
-
-    if has_vectors? and all_numbers? do
-      :ok
-    else
-      {:error, {:invalid_embeddings, list}}
-    end
-  end
-
-  defp validate_embedding_matrix(other), do: {:error, {:invalid_embeddings, other}}
 end
