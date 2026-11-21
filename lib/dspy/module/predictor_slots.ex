@@ -8,29 +8,44 @@ defmodule Dspy.Module.PredictorSlots do
   @type predictor :: Predict.t() | ChainOfThought.t()
   @type path :: [{:field, atom()} | {:index, non_neg_integer()} | {:key, term()}]
 
-  @spec list(term()) :: [{path(), predictor()}]
-  def list(program), do: walk(program, [])
+  @spec list(Dspy.Module.t()) :: [{path(), predictor()}]
+  def list(%module{} = program) do
+    if module_struct?(module), do: walk_module(program, []), else: invalid_program!()
+  end
+
+  def list(_program), do: invalid_program!()
 
   @spec name(path(), predictor()) :: String.t()
   def name([], %Predict{}), do: "self"
   def name(path, %ChainOfThought{}), do: render(path ++ [{:field, :predict}])
   def name(path, %Predict{}), do: render(path)
 
-  defp walk(%Predict{} = predictor, path), do: [{Enum.reverse(path), predictor}]
-  defp walk(%ChainOfThought{} = predictor, path), do: [{Enum.reverse(path), predictor}]
-
   defp walk(%module{} = program, path) do
-    if Code.ensure_loaded?(module) and function_exported?(module, :forward, 2) do
-      program
-      |> Map.from_struct()
-      |> Enum.sort_by(&elem(&1, 0))
-      |> Enum.flat_map(fn {field, value} -> walk_field(value, [{:field, field} | path]) end)
-    else
-      []
-    end
+    if module_struct?(module), do: walk_module(program, path), else: []
   end
 
   defp walk(_value, _path), do: []
+
+  defp module_struct?(module) do
+    Code.ensure_loaded?(module) and function_exported?(module, :__struct__, 0) and
+      function_exported?(module, :forward, 2)
+  end
+
+  defp invalid_program!,
+    do: raise(ArgumentError, "expected a module struct implementing forward/2")
+
+  defp walk_module(%Predict{} = predictor, path), do: [{Enum.reverse(path), predictor}]
+  defp walk_module(%ChainOfThought{} = predictor, path), do: [{Enum.reverse(path), predictor}]
+
+  defp walk_module(%module{} = program, path) do
+    module.__struct__()
+    |> Map.from_struct()
+    |> Map.keys()
+    |> Enum.sort()
+    |> Enum.flat_map(fn field ->
+      walk_field(Map.get(program, field), [{:field, field} | path])
+    end)
+  end
 
   defp walk_field(%_{} = value, path), do: walk(value, path)
   defp walk_field(tuple, path) when is_tuple(tuple), do: walk_field(Tuple.to_list(tuple), path)

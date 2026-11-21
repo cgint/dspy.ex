@@ -100,10 +100,12 @@ defmodule Dspy.Module do
   @doc """
   List the named Predict and ChainOfThought values in a program.
 
-  Names follow module fields and the immediate entries of proper list, tuple and map
-  fields. The same predictor value in multiple slots appears at each name.
+  Names follow declared module fields and the immediate entries of proper list,
+  tuple and map fields. The same predictor value in multiple slots appears at each name.
   A standalone Predict is named `self`. ChainOfThought contributes `predict`
   within its slot and is returned as the native ChainOfThought value.
+
+  Raises `ArgumentError` if `program` is not a module struct implementing `forward/2`.
   """
   @spec named_predictors(t()) :: [{String.t(), Dspy.Module.PredictorSlots.predictor()}]
   def named_predictors(program) do

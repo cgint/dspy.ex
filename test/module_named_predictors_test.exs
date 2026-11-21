@@ -67,6 +67,43 @@ defmodule Dspy.ModuleNamedPredictorsTest do
     assert Module.named_predictors(program) == []
   end
 
+  test "only a module struct is a valid discovery root" do
+    predict = Predict.new(QA)
+
+    for value <- [nil, [predict], %{left: predict}, %Data{predictor: predict}] do
+      assert_raise ArgumentError, ~r/module struct implementing forward\/2/, fn ->
+        Module.named_predictors(value)
+      end
+    end
+
+    assert Module.named_predictors(%Program{}) == []
+  end
+
+  test "a forward function alone does not make a map a module struct" do
+    predict = Predict.new(QA)
+    impostor = %{__struct__: Dspy, left: predict}
+
+    assert_raise ArgumentError, ~r/module struct implementing forward\/2/, fn ->
+      Module.named_predictors(impostor)
+    end
+
+    assert Module.named_predictors(%Program{branch: impostor, right: predict}) == [
+             {"right", predict}
+           ]
+  end
+
+  test "only declared module fields are discovered" do
+    predict = Predict.new(QA)
+
+    program =
+      %Program{left: predict}
+      |> Map.put("extra", predict)
+      |> Map.put(:obsolete, predict)
+      |> Map.delete(:right)
+
+    assert Module.named_predictors(program) == [{"left", predict}]
+  end
+
   test "an improper data list does not prevent discovery of other fields" do
     predict = Predict.new(QA)
     program = %Program{items: [predict | :metadata], left: predict}
@@ -97,5 +134,26 @@ defmodule Dspy.ModuleNamedPredictorsTest do
              "mapping['line\\nbreak']",
              "mapping['line\\\\nbreak']"
            ]
+  end
+
+  test "map slots distinguish equal numeric keys and keep wide labels on one line" do
+    predict = Predict.new(QA)
+    other = ChainOfThought.new(QA)
+    wide_key = {List.duplicate(:long_label, 20), :suffix}
+
+    program = %Program{
+      mapping: %{1 => predict, 1.0 => other, <<255>> => predict, "<<255>>" => other}
+    }
+
+    assert Module.named_predictors(program) == [
+             {"mapping[1.0].predict", other},
+             {"mapping[1]", predict},
+             {"mapping['<<255>>'].predict", other},
+             {"mapping[<<255>>]", predict}
+           ]
+
+    assert [{name, ^predict}] = Module.named_predictors(%Program{mapping: %{wide_key => predict}})
+    assert byte_size(name) > 80
+    refute String.contains?(name, "\n")
   end
 end
