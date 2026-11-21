@@ -25,14 +25,22 @@ defmodule Dspy.Refine do
   and invalid rewards a call may tolerate. The next failure returns
   `{:error, {:refine_failed, details}}`. An omitted or `nil` allowance uses
   the existing attempt limit and lets program exceptions propagate.
+
+  Set `feedback_lm:` to opt into advice after a valid score falls below
+  the threshold and another attempt remains. This sends bounded declared
+  field values to that LM and may include sensitive text. Advice applies
+  to the next attempt only. Advisor failures leave the attempt allowance
+  available to the program.
   """
 
   use Dspy.Module
 
-  alias Dspy.{PredictorConfig, Settings}
+  alias Dspy.{LM, PredictorConfig, Settings}
   alias Dspy.Module, as: DspyModule
+  alias Dspy.Module.PredictorTrace
+  alias Dspy.Refine.Advice
 
-  defstruct [:program, :threshold, :n, :reward_fn, :fail_count]
+  defstruct [:program, :threshold, :n, :reward_fn, :fail_count, :feedback_lm]
 
   @type reward_fn :: (map(), Dspy.Prediction.t() -> number())
 
@@ -41,7 +49,8 @@ defmodule Dspy.Refine do
           threshold: number(),
           n: pos_integer(),
           reward_fn: reward_fn(),
-          fail_count: non_neg_integer() | nil
+          fail_count: non_neg_integer() | nil,
+          feedback_lm: LM.t() | nil
         }
 
   @spec new(Dspy.Module.t(), keyword()) :: t()
@@ -58,7 +67,8 @@ defmodule Dspy.Refine do
       threshold: threshold,
       n: n,
       reward_fn: reward_fn,
-      fail_count: fail_count
+      fail_count: fail_count,
+      feedback_lm: LM.validate_binding!(Keyword.get(opts, :feedback_lm))
     }
   end
 
@@ -86,6 +96,7 @@ defmodule Dspy.Refine do
   def forward(%__MODULE__{} = refiner, inputs) when is_map(inputs) do
     start = Settings.get(:rollout_id) || 0
     fail_count = Map.get(refiner, :fail_count)
+    feedback_lm = Map.get(refiner, :feedback_lm)
 
     initial = %{
       best_pred: nil,
@@ -97,17 +108,21 @@ defmodule Dspy.Refine do
     }
 
     0..(refiner.n - 1)
-    |> Enum.reduce_while(initial, fn offset, acc ->
+    |> Enum.reduce_while({initial, %{}}, fn offset, {acc, advice} ->
       rollout_id = start + offset
-      program = PredictorConfig.set_rollout(refiner.program, rollout_id)
+
+      program =
+        refiner.program |> PredictorConfig.set_rollout(rollout_id) |> Advice.annotate(advice)
+
+      collect? = not is_nil(feedback_lm) and offset + 1 < refiner.n
 
       result =
         Settings.context([temperature: 1.0, rollout_id: rollout_id], fn ->
-          run_program(program, inputs, fail_count)
+          run_program(program, inputs, fail_count, collect?)
         end)
 
       case result do
-        {:ok, pred} ->
+        {:ok, pred, trace} ->
           case safe_reward(refiner.reward_fn, inputs, pred) do
             {:ok, score} ->
               acc = %{acc | scored_attempts: acc.scored_attempts + 1}
@@ -120,9 +135,10 @@ defmodule Dspy.Refine do
                 end
 
               if score >= refiner.threshold do
-                {:halt, acc}
+                {:halt, {acc, %{}}}
               else
-                {:cont, acc}
+                advice = Advice.request(feedback_lm, program, trace, score, refiner.threshold)
+                {:cont, {acc, advice}}
               end
 
             {:error, reason} ->
@@ -144,26 +160,38 @@ defmodule Dspy.Refine do
       {:error, _reason} = error ->
         error
 
-      %{best_pred: %Dspy.Prediction{} = best_pred} ->
+      {%{best_pred: %Dspy.Prediction{} = best_pred}, _advice} ->
         {:ok, best_pred}
 
-      %{scored_attempts: 0, invalid_reward_attempts: n_bad} = acc when n_bad > 0 ->
+      {%{scored_attempts: 0, invalid_reward_attempts: n_bad} = acc, _advice} when n_bad > 0 ->
         {:error, {:no_scored_attempts, acc}}
 
-      acc ->
+      {acc, _advice} ->
         {:error, {:no_successful_attempts, acc}}
     end
   end
 
-  defp run_program(program, inputs, nil), do: DspyModule.forward(program, inputs)
+  defp run_program(program, inputs, nil, collect?), do: forward_attempt(program, inputs, collect?)
 
-  defp run_program(program, inputs, _fail_count) do
-    DspyModule.forward(program, inputs)
+  defp run_program(program, inputs, _fail_count, collect?) do
+    forward_attempt(program, inputs, collect?)
   rescue
     error -> {:error, raised_reason(error)}
   end
 
-  defp continue_after_failure(acc, nil, _reason), do: {:cont, acc}
+  defp forward_attempt(program, inputs, collect?) do
+    result =
+      if collect?,
+        do: PredictorTrace.capture(program, inputs, Advice.step_limit()),
+        else: DspyModule.forward(program, inputs)
+
+    case result do
+      {:ok, prediction} -> {:ok, prediction, []}
+      result -> result
+    end
+  end
+
+  defp continue_after_failure(acc, nil, _reason), do: {:cont, {acc, %{}}}
 
   defp continue_after_failure(acc, fail_count, reason) do
     failures = acc.invalid_reward_attempts + acc.program_error_attempts
@@ -177,7 +205,7 @@ defmodule Dspy.Refine do
 
       {:halt, {:error, {:refine_failed, details}}}
     else
-      {:cont, acc}
+      {:cont, {acc, %{}}}
     end
   end
 

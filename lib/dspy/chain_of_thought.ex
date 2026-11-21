@@ -137,6 +137,7 @@ defmodule Dspy.ChainOfThought do
              prediction_signature: cot.signature,
              lm: Map.get(cot, :lm),
              config: get_config(cot),
+             prompt_advice: Dspy.Refine.Advice.for_predictor(cot),
              callbacks: cot.callbacks,
              max_retries: cot.max_retries,
              max_output_retries: cot.max_output_retries

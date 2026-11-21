@@ -6,14 +6,16 @@ defmodule Dspy.Module.PredictorTrace do
 
   @trace_key {__MODULE__, :sink}
 
-  def capture(teacher, example) do
+  def capture(teacher, example, limit \\ :infinity) do
     table = :ets.new(:dspy_bootstrap_trace, [:ordered_set, :public])
+    budget = if limit == :infinity, do: nil, else: {:atomics.new(1, signed: false), limit}
 
     try do
       tagged =
         PredictorSlots.map(teacher, fn path, predictor ->
           sinks = List.wrap(Map.get(predictor, @trace_key))
-          Map.put(predictor, @trace_key, [{table, path} | sinks])
+          sink = if is_nil(budget), do: {table, path}, else: {table, path, budget}
+          Map.put(predictor, @trace_key, [sink | sinks])
         end)
 
       case Module.forward(tagged, example) do
@@ -33,8 +35,14 @@ defmodule Dspy.Module.PredictorTrace do
       sinks ->
         index = System.unique_integer([:monotonic, :positive])
 
-        Enum.each(List.wrap(sinks), fn {table, path} ->
-          record_step(table, {index, path, inputs, prediction})
+        Enum.each(List.wrap(sinks), fn
+          {table, path} ->
+            record_step(table, {index, path, inputs, prediction})
+
+          {table, path, {counter, limit}} ->
+            if :atomics.add_get(counter, 1, 1) <= limit do
+              record_step(table, {index, path, inputs, prediction})
+            end
         end)
     end
   end

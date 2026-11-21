@@ -19,6 +19,7 @@ examples=(
   examples/offline/retrieve_rag_offline.exs
   examples/offline/retrieve_rag_genserver_offline.exs
   examples/offline/react_tool_logging_offline.exs
+  examples/offline/structured_react_refine_offline.exs
   examples/offline/request_defaults_offline.exs
   examples/offline/semantic_f1_evaluation_offline.exs
   examples/offline/evaluation_callbacks_offline.exs

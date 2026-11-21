@@ -2,7 +2,7 @@
 
 > **M4b, XML adapter.** Opt-in XML outputs support typed records, arrays, and dictionaries with literal string leaves. Repeated list fields preserve item order across intervening fields. Typed demos use nested XML where their schema identifies the values. JSON remains available inside the XML tags. Mixed schema branches and structured tool history remain open.
 
-> **M4a, Refine groundwork.** Refine keys cached responses to each attempt's rollout ID. Named predictors use temperature `1.0`, and custom modules inherit it as a scoped default. Reward scoring uses the enclosing settings. Nested predictor traces preserve the enclosing optimizer's steps. Multipart output retries preserve images and trailing text. An explicit `fail_count:` bounds failed attempts per call. The feedback loop remains open.
+> **M4a, structured ReAct and Refine.** Refine uses distinct rollouts, a per-call failure allowance, and optional slot-specific advice through a caller-bound LM. A bounded report contains declared fields. Advice lasts one attempt and survives its output retries. The [offline example](../../examples/offline/structured_react_refine_offline.exs) replays image-bearing ReAct history, validates a submit call, and exercises a Refine feedback retry.
 
 > **M3b, tracing and logging.** Evaluation, module, LM, adapter, and tool callbacks emit paired events and carry parent IDs through captured contexts. The [offline example](../../examples/offline/evaluation_callbacks_offline.exs) traces two examples in a parallel run. DSPy diagnostics can be silenced independently of host logs and callbacks. Telemetry and scoped history remain open.
 

@@ -23,6 +23,7 @@ defmodule Dspy.Signature.Adapter.Pipeline do
           adapter: module() | nil,
           lm: Dspy.LM.t() | nil,
           forced_tool: String.t() | nil,
+          prompt_advice: String.t() | nil,
           config: PredictorConfig.t(),
           prediction_signature: Signature.t(),
           callbacks: Callbacks.callbacks(),
@@ -68,6 +69,7 @@ defmodule Dspy.Signature.Adapter.Pipeline do
       prediction_signature: Keyword.get(opts, :prediction_signature, signature),
       max_retries: Keyword.get(opts, :max_retries, 3),
       request_options: force_tool(request_options, Keyword.get(opts, :forced_tool)),
+      prompt_advice: Keyword.get(opts, :prompt_advice),
       cache_options: cache_options
     }
 
@@ -180,7 +182,9 @@ defmodule Dspy.Signature.Adapter.Pipeline do
         with {:ok, request0} <-
                AdapterPipeline.format_request(signature, inputs, demos, adapter: adapter),
              {:ok, request} <- AdapterPipeline.merge_input_media(signature, inputs, request0),
-             {:ok, base_prompt} <- AdapterPipeline.primary_prompt_text(request) do
+             {:ok, base_prompt} <- AdapterPipeline.primary_prompt_text(request),
+             {:ok, request, base_prompt} <-
+               append_advice(request, base_prompt, lm_options.prompt_advice) do
           request = Map.merge(request, lm_options.request_options)
           {{:ok, request, base_prompt}, %{request: request_summary(request, lm)}}
         else
@@ -203,6 +207,16 @@ defmodule Dspy.Signature.Adapter.Pipeline do
         request,
         base_prompt
       )
+    end
+  end
+
+  defp append_advice(request, prompt, nil), do: {:ok, request, prompt}
+
+  defp append_advice(request, prompt, advice) do
+    prompt = prompt <> "\n\n[Refine feedback]\n" <> advice <> "\n[/Refine feedback]"
+
+    with {:ok, request} <- AdapterPipeline.replace_primary_prompt_text(request, prompt) do
+      {:ok, request, prompt}
     end
   end
 
