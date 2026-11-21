@@ -8,7 +8,7 @@ This repo ships in **small, user-usable slices**.
 
 ## Consumer notes
 
-### Unreleased adapter fixes
+### Adapter fixes in v0.4.11
 
 - Transport and output retry exhaustion now log at debug level. The original
   v0.4.9 notes advertised this change, but both events still logged at info
@@ -31,7 +31,7 @@ locked, run `mix deps.update dspy jsv idna` for a git dependency on dspy.ex.
 If your app uses Swoosh and its lockfile pins a version below 1.30, include
 `swoosh` in the update so it can resolve idna 8.
 
-### Unreleased ReqLLM dependency pin
+### ReqLLM dependency pin in v0.4.11
 
 dspy.ex now declares the ReqLLM revision already in its own lockfile
 (`66b4042`). Updating dspy.ex may move an application that resolved a
@@ -105,6 +105,7 @@ The table below is maintained on `main`, but links are **tag-pinned** so they do
 
 | Tag | What you get | Evidence (tag-pinned) |
 |---|---|---|
+| `v0.4.11` | **Stabilization.** Includes the v0.4.10 provider-log redaction, patched JSV and idna floors, the ReqLLM pin, a supervised in-memory cache, early failure-score validation, and answer-only comparison attempts for blank rationales. Compatibility gates cover native structured output and fallback. | [Offline evaluation example](https://github.com/cgint/dspy.ex/blob/v0.4.11/examples/offline/semantic_f1_evaluation_offline.exs), [consumer contract](https://github.com/cgint/dspy.ex/tree/v0.4.11/test/consumer_contract), and [reviewed parity baseline](https://github.com/cgint/dspy.ex/blob/v0.4.11/plan/current/UPSTREAM_RECOUNT.md). |
 | `v0.4.10` | **Provider error redaction.** The patch release from the v0.4.9 line logs fixed summaries, valid HTTP status codes, and allowlisted reason tags for adapter retries and ReqLLM native fallback. The redaction is also included on `main`, alongside debug-level exhaustion logging. | [Release evidence at v0.4.10](https://github.com/cgint/dspy.ex/blob/v0.4.10/docs/RELEASES.md#tags). |
 | `v0.4.9` | **Log-safe adapter retry reasons** (continues OpenSpec `adapter-retry-observability-logging`) — routes all four retry/exhaustion log lines through a new `format_reason/1` so a `%ReqLLM.Error.API.Request{}` (or any exception) renders as its `Exception.message/1` summary (e.g. `"API request failed: timeout"`), meaning its `request_body` (the full prompt + output contract), `response_body`, and `headers` **never** reach a log line; non-exception reasons are `inspect/1`-truncated to 300 chars. See the unreleased notes for the exhaustion-level correction. | `LeakyLM` no-leak test in `adapter_pipeline_edge_cases` proves a real `%ReqLLM.Error.API.Request{}` with a secret body logs only the summary; focused retry + consumer-contract tests pass (`adapter_pipeline_edge_cases`, `typed_output_retry`, `untyped_output_retry_default_adapter`, `max_output_retries_settings_default`, `test/consumer_contract`); `mix compile --warnings-as-errors` clean; `mix format --check-formatted` clean. |
 | `v0.4.8` | **Adapter retry observability** (OpenSpec `adapter-retry-observability-logging`) — the two previously-silent retry loops in `Dspy.Signature.Adapter.Pipeline` now log: each **retry attempt** (transport via `max_retries`, output parse/validate via `max_output_retries`) at the **`:debug`** level, and **retries-exhausted** (the terminal "gave up" moment) at the **`:info`** level. Lines are stable and greppable: `dspy.adapter_retry` / `dspy.adapter_exhausted` with a `kind=` field (`transport`|`output`), the stable `call_id` (the `make_ref` that spans both retry kinds for one call), and a kind-specific attempt counter. Log-only: **no** callback event, **no** `Settings` key, **no** change to `Pipeline.run/4` or any `{:ok,_}`/`{:error,_}` return shape. This is what lets a long LM-heavy run distinguish "one slow call" from "N retried calls". | focused retry tests pass (`adapter_pipeline_edge_cases`, `typed_output_retry`, `untyped_output_retry_default_adapter`, `max_output_retries_settings_default`); `mix compile --warnings-as-errors` clean. |
