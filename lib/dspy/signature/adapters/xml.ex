@@ -93,6 +93,7 @@ defmodule Dspy.Signature.Adapters.XMLAdapter do
     if field.type == :json or Map.has_key?(field, :schema) do
       case Jason.encode(value) do
         {:ok, json} -> json
+        {:error, _} when is_struct(value) -> Signature.format_field_value(value)
         {:error, _} -> ChatAdapter.render_value_for_prompt(value)
       end
     else

@@ -75,6 +75,10 @@ defmodule Dspy.Signature.XMLAdapterTest do
     instructions = XMLAdapter.format_instructions(signature)
     assert instructions =~ ~s("count")
     assert instructions =~ ~s("integer")
+
+    demo = Dspy.Example.new(%{question: "Example", result: %Result{count: 5}})
+    request = XMLAdapter.format_request(signature, %{question: "New question"}, [demo])
+    assert List.last(request.messages).content =~ "<result>\n{\"count\":5}\n</result>"
   end
 
   test "accepts a fenced preamble and trailing prose" do

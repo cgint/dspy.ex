@@ -526,11 +526,12 @@ defmodule Dspy.Signature do
     |> Enum.join("\n")
   end
 
-  defp format_field_value(value) when is_binary(value), do: value
-  defp format_field_value(value) when is_atom(value), do: Atom.to_string(value)
-  defp format_field_value(value) when is_number(value), do: to_string(value)
+  @doc false
+  def format_field_value(value) when is_binary(value), do: value
+  def format_field_value(value) when is_atom(value), do: Atom.to_string(value)
+  def format_field_value(value) when is_number(value), do: to_string(value)
 
-  defp format_field_value(%_{} = value) do
+  def format_field_value(%_{} = value) do
     case Jason.encode(value) do
       {:ok, json} ->
         json
@@ -546,12 +547,12 @@ defmodule Dspy.Signature do
     end
   end
 
-  defp format_field_value(value) when is_list(value) or is_map(value) do
+  def format_field_value(value) when is_list(value) or is_map(value) do
     # Keep this deterministic + single-line to avoid surprising prompt formatting.
     inspect(value, pretty: false, limit: 100, sort_maps: true)
   end
 
-  defp format_field_value(value), do: inspect(value, pretty: false, limit: 100, sort_maps: true)
+  def format_field_value(value), do: inspect(value, pretty: false, limit: 100, sort_maps: true)
 
   defp input_section(signature) do
     placeholder_inputs =
