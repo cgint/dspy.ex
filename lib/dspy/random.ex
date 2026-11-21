@@ -64,6 +64,13 @@ defmodule Dspy.Random do
     {state, word >>> (32 - k)}
   end
 
+  @doc "A 53-bit float in [0, 1), matching CPython's random()."
+  def random(state) do
+    {state, high} = getrandbits(state, 27)
+    {state, low} = getrandbits(state, 26)
+    {state, ((high <<< 26) + low) / (1 <<< 53)}
+  end
+
   @doc """
   Uniform integer in 0..<(n) — CPython's _randbelow(n).
 

@@ -232,7 +232,7 @@ defmodule Dspy.Teleprompt.Ensemble do
 
   @behaviour Dspy.Teleprompt
 
-  alias Dspy.{Example, Evaluate, Trainset}
+  alias Dspy.{Example, Evaluate, Random, Trainset}
   alias Dspy.Teleprompt.{BootstrapFewShot, LabeledFewShot}
 
   require Logger
@@ -337,8 +337,6 @@ defmodule Dspy.Teleprompt.Ensemble do
   defp validate_trainset(other), do: {:error, {:invalid_trainset, {:not_a_list, other}}}
 
   defp split_data(%__MODULE__{validation_split: val_split, seed: seed}, trainset) do
-    :rand.seed(:exsss, {seed, seed + 1, seed + 2})
-
     {train_data, val_data, _} =
       Trainset.split(trainset,
         train: 1.0 - val_split,
@@ -414,8 +412,6 @@ defmodule Dspy.Teleprompt.Ensemble do
   end
 
   defp generate_diverse_configurations(strategy, size, train_data, base_config, seed) do
-    :rand.seed(:exsss, {seed + 100, seed + 101, seed + 102})
-
     case strategy do
       :random_samples ->
         for i <- 1..size do
@@ -430,31 +426,39 @@ defmodule Dspy.Teleprompt.Ensemble do
         end
 
       :bootstrap_aggregating ->
-        for i <- 1..size do
-          bootstrap_size = round(length(train_data) * (0.8 + :rand.uniform() * 0.4))
-          sampled_data = Trainset.bootstrap_sample(train_data, bootstrap_size, seed: seed + i)
-          {sampled_data, Keyword.put(base_config, :seed, seed + i)}
-        end
+        {state, _} = Random.seed(seed + 100)
+
+        {configs, _state} =
+          Enum.map_reduce(1..size, state, fn i, state ->
+            {state, fraction} = Random.random(state)
+            bootstrap_size = round(length(train_data) * (0.8 + fraction * 0.4))
+            sampled_data = Trainset.bootstrap_sample(train_data, bootstrap_size, seed: seed + i)
+            {{sampled_data, Keyword.put(base_config, :seed, seed + i)}, state}
+          end)
+
+        configs
     end
   end
 
   defp vary_config(base_config, member_idx, seed) do
-    :rand.seed(:exsss, {seed + member_idx, seed + member_idx + 1, seed + member_idx + 2})
+    {state, _} = Random.seed(seed + member_idx)
 
-    base_config
-    |> Keyword.put(:seed, seed + member_idx)
-    |> vary_parameter(:max_bootstrapped_demos, [2, 3, 4, 5, 6])
-    |> vary_parameter(:max_labeled_demos, [2, 3, 4, 5, 6])
-    |> vary_parameter(:num_trials, [5, 8, 10, 12, 15])
-    |> vary_parameter(:temperature, [0.5, 0.7, 1.0, 1.2, 1.5])
+    {_state, config} =
+      {state, Keyword.put(base_config, :seed, seed + member_idx)}
+      |> vary_parameter(:max_bootstrapped_demos, [2, 3, 4, 5, 6])
+      |> vary_parameter(:max_labeled_demos, [2, 3, 4, 5, 6])
+      |> vary_parameter(:num_trials, [5, 8, 10, 12, 15])
+      |> vary_parameter(:temperature, [0.5, 0.7, 1.0, 1.2, 1.5])
+
+    config
   end
 
-  defp vary_parameter(config, param, values) do
+  defp vary_parameter({state, config}, param, values) do
     if Keyword.has_key?(config, param) do
-      new_value = Enum.random(values)
-      Keyword.put(config, param, new_value)
+      {state, index} = Random.randbelow(state, length(values))
+      {state, Keyword.put(config, param, Enum.at(values, index))}
     else
-      config
+      {state, config}
     end
   end
 

@@ -93,4 +93,40 @@ defmodule Dspy.Teleprompt.EnsembleCompileImprovementTest do
 
     assert_in_delta improved.mean, 1.0, 1.0e-12
   end
+
+  test "bootstrap aggregation is reproducible without changing the caller's RNG" do
+    student = Dspy.Predict.new(TestQA)
+    trainset = for id <- 1..10, do: Example.new(question: "q#{id}", answer: "a#{id}")
+
+    tp =
+      Ensemble.new(
+        size: 3,
+        base_teleprompt: :labeled_few_shot,
+        base_teleprompt_config: [k: 20],
+        diversity_strategy: :bootstrap_aggregating,
+        validation_split: 0.0,
+        num_threads: 1,
+        seed: 0,
+        verbose: false
+      )
+
+    examples_by_run =
+      for seeded? <- [false, true] do
+        {before, after_call, result} =
+          Task.async(fn ->
+            if seeded?, do: :rand.seed(:exsss, {7, 8, 9})
+            before = :rand.export_seed()
+            result = Dspy.Teleprompt.compile(tp, student, trainset)
+            {before, :rand.export_seed(), result}
+          end)
+          |> Task.await()
+
+        assert {:ok, program} = result
+        assert after_call == before
+        Enum.map(program.members, & &1.examples)
+      end
+
+    assert [examples, examples] = examples_by_run
+    assert Enum.map(examples, &length/1) == [9, 10, 11]
+  end
 end

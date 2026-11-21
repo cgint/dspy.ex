@@ -141,4 +141,32 @@ defmodule DspyTrainsetTest do
     assert sample1 == sample2
     assert length(sample1) == 6
   end
+
+  test "trainset sampling preserves seeded and unseeded caller RNG state" do
+    rows = labeled_dataset()
+
+    samplers = [
+      split: fn -> Trainset.split(rows, seed: 42) end,
+      bootstrap: fn -> Trainset.bootstrap_sample(rows, 6, seed: 42) end,
+      stratified: fn -> Trainset.stratified_sample(rows, 3) end
+    ]
+
+    strategies =
+      for strategy <- [:random, :diverse, :hard, :balanced, :uncertainty] do
+        {strategy, fn -> Trainset.sample(rows, 3, strategy: strategy, seed: 42) end}
+      end
+
+    for {name, sample} <- samplers ++ strategies, seeded? <- [false, true] do
+      {before, after_call} =
+        Task.async(fn ->
+          if seeded?, do: :rand.seed(:exsss, {7, 8, 9})
+          before = :rand.export_seed()
+          sample.()
+          {before, :rand.export_seed()}
+        end)
+        |> Task.await()
+
+      assert after_call == before, "#{name} changed caller RNG state (seeded=#{seeded?})"
+    end
+  end
 end
