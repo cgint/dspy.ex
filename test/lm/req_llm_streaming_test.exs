@@ -65,10 +65,20 @@ defmodule Dspy.LM.ReqLLMStreamingTest do
 
   defmodule BlockingClient do
     def stream_text(_model, _input, opts) do
-      send(Keyword.fetch!(opts, :test_observer), {:opening_client, self()})
+      observer = Keyword.fetch!(opts, :test_observer)
+      send(observer, {:opening_client, self()})
+      await_release(observer)
+    end
 
+    defp await_release(observer) do
       receive do
-        :release -> {:error, :released}
+        {:observe_monitor, tag} ->
+          {:monitored_by, monitors} = Process.info(self(), :monitored_by)
+          send(observer, {:monitor_observed, self(), tag, monitors})
+          await_release(observer)
+
+        :release ->
+          {:error, :released}
       end
     end
   end
@@ -215,6 +225,13 @@ defmodule Dspy.LM.ReqLLMStreamingTest do
     assert_receive {:opening_client, provider_owner}, @wait
     on_exit(fn -> send(provider_owner, :release) end)
     provider_ref = Process.monitor(provider_owner)
+
+    # Acknowledgement from the provider orders its monitor signal before shutdown.
+    tag = make_ref()
+    send(provider_owner, {:observe_monitor, tag})
+    assert_receive {:monitor_observed, ^provider_owner, ^tag, monitors}, @wait
+    assert self() in monitors
+
     Process.exit(caller, :kill)
 
     assert_receive {:DOWN, ^caller_ref, :process, ^caller, :killed}, @wait
