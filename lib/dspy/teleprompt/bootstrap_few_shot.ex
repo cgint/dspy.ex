@@ -134,9 +134,8 @@ defmodule Dspy.Teleprompt.BootstrapFewShot do
 
     with {:ok, validated_trainset} <- validate_trainset(trainset),
          :ok <- ensure_predict_examples_supported(student),
-         {:ok, teacher} <- get_teacher_program(teleprompt, student),
          {:ok, bootstrapped_examples} <-
-           bootstrap_examples(teleprompt, teacher, validated_trainset),
+           prepare_bootstrapped(teleprompt, student, validated_trainset),
          {:ok, labeled_examples} <- select_labeled_examples(teleprompt, validated_trainset),
          {:ok, candidate_programs} <-
            generate_candidate_programs(
@@ -152,7 +151,22 @@ defmodule Dspy.Teleprompt.BootstrapFewShot do
     end
   end
 
+  @doc false
+  def compile_single(%__MODULE__{} = teleprompt, student, [_ | _] = neighbors) do
+    # KNN has already validated these examples. Pass the original rows to the metric.
+    with {:ok, bootstrapped} <- prepare_bootstrapped(teleprompt, student, neighbors) do
+      labeled = Enum.take(neighbors, max(teleprompt.max_labeled_demos, 0))
+      TpUtil.set_predict_examples(student, combine_demos(bootstrapped, labeled))
+    end
+  end
+
   # Private functions
+
+  defp prepare_bootstrapped(teleprompt, student, trainset) do
+    with {:ok, teacher} <- get_teacher_program(teleprompt, student) do
+      bootstrap_examples(teleprompt, teacher, trainset)
+    end
+  end
 
   defp validate_trainset([]), do: {:error, :empty_trainset}
 
@@ -232,9 +246,9 @@ defmodule Dspy.Teleprompt.BootstrapFewShot do
   defp seed_for_round(-1, _round), do: -1
   defp seed_for_round(seed, round), do: seed + round
 
-  defp sample_bootstrap_inputs(trainset, count, -1), do: Enum.take(trainset, count)
+  defp sample_bootstrap_examples(trainset, count, -1), do: Enum.take(trainset, count)
 
-  defp sample_bootstrap_inputs(trainset, count, seed) do
+  defp sample_bootstrap_examples(trainset, count, seed) do
     Trainset.sample(trainset, count, strategy: :random, seed: seed)
   end
 
@@ -248,20 +262,24 @@ defmodule Dspy.Teleprompt.BootstrapFewShot do
          seed,
          metric_threshold
        ) do
-    # Sample training inputs for bootstrapping. `seed: -1` intentionally means
+    # Sample training examples for bootstrapping. `seed: -1` intentionally means
     # unshuffled/natural order, matching upstream's unshuffled few-shot path.
-    inputs =
+    examples =
       trainset
-      |> sample_bootstrap_inputs(max_demos * 2, seed)
-      |> Enum.map(&Example.inputs/1)
+      |> sample_bootstrap_examples(max_demos * 2, seed)
+      |> Enum.map(fn example ->
+        # An explicit empty selection means the teacher receives no fields.
+        input = if Example.input_keys(example) == [], do: %{}, else: Example.inputs(example)
+        {example, input}
+      end)
 
     # Generate outputs using teacher program
     # Capture process-local DSPy state (overrides + callback stack) in the
     # caller; reinstall it in each task (tasks do not inherit the dictionary).
     ctx = Dspy.Context.capture()
 
-    chunk_size = max(1, div(length(inputs), num_threads))
-    chunks = Enum.chunk_every(inputs, chunk_size)
+    chunk_size = max(1, div(length(examples), num_threads))
+    chunks = Enum.chunk_every(examples, chunk_size)
 
     results =
       chunks
@@ -292,15 +310,15 @@ defmodule Dspy.Teleprompt.BootstrapFewShot do
     results
   end
 
-  defp bootstrap_chunk(teacher, inputs, metric, max_errors) do
+  defp bootstrap_chunk(teacher, examples, metric, max_errors) do
     {results, _errors} =
-      inputs
-      |> Enum.reduce({[], 0}, fn input, {acc, error_count} ->
+      examples
+      |> Enum.reduce({[], 0}, fn {example, input}, {acc, error_count} ->
         if error_count >= max_errors do
           {acc, error_count}
         else
-          case generate_bootstrap_example(teacher, input, metric) do
-            {:ok, {example, score}} -> {[{example, score} | acc], error_count}
+          case generate_bootstrap_example(teacher, example, input, metric) do
+            {:ok, {demo, score}} -> {[{demo, score} | acc], error_count}
             {:error, _reason} -> {acc, error_count + 1}
           end
         end
@@ -309,18 +327,17 @@ defmodule Dspy.Teleprompt.BootstrapFewShot do
     Enum.reverse(results)
   end
 
-  defp generate_bootstrap_example(teacher, input, metric) do
+  defp generate_bootstrap_example(teacher, example, input, metric) do
     try do
       case Dspy.Module.forward(teacher, input) do
         {:ok, prediction} ->
-          example_attrs = Map.merge(input, prediction.attrs)
-          example = Example.new(example_attrs)
+          demo = Example.new(Map.merge(input, prediction.attrs))
 
           score = Dspy.Teleprompt.run_metric(metric, example, prediction)
 
           cond do
             is_number(score) and score > 0 ->
-              {:ok, {example, score}}
+              {:ok, {demo, score}}
 
             score == :error ->
               {:error, {:metric_error, :invalid_score}}
@@ -358,9 +375,7 @@ defmodule Dspy.Teleprompt.BootstrapFewShot do
 
     {state, _} = Random.seed(seed + 1000)
 
-    full_examples =
-      (bootstrapped ++ labeled)
-      |> Enum.uniq_by(& &1.attrs)
+    full_examples = combine_demos(bootstrapped, labeled)
 
     num_candidates = max(num_candidates, 1)
 
@@ -395,6 +410,8 @@ defmodule Dspy.Teleprompt.BootstrapFewShot do
         {:error, reason}
     end
   end
+
+  defp combine_demos(bootstrapped, labeled), do: Enum.uniq_by(bootstrapped ++ labeled, & &1.attrs)
 
   defp create_candidate_program(student, examples, _candidate_id) do
     TpUtil.set_predict_examples(student, examples)
