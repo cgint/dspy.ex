@@ -1,7 +1,14 @@
 # PARITY_QUEUE.md — ordered slice queue (single source of truth)
 
 Regenerated 2026-09-28 by Greta **from the milestones approved by the user on 2026-09-28** (`plan/current/GAP_ANALYSIS_3.4.0.md` §Phase C v2; data: `plan/research/pi_handoffs/phaseB/inventory_final.csv`, column `milestone`). Loop + gates: `plan/SLICE_LOOP.md`, `plan/HOW_WE_WORK.md`.
-Reference: Python DSPy 3.4.0 (`../dspy-3.4.0`). Ids S###/U### = inventory rows. Status: `todo` | `doing` | `done (date, tag)` | `blocked (why)`. Order inside a milestone: dependencies first, then score (value÷effort). Slicing into contracts happens when each milestone starts (Clarity Gate).
+Current reference: [DSPy 3.5.0 recount](UPSTREAM_RECOUNT.md). The milestone
+tables below retain the 3.4.0 delivery estimates for context. Current
+classifications are in [UPSTREAM_INVENTORY.csv](UPSTREAM_INVENTORY.csv).
+
+Stabilization still needs a reproducible consumer canary and the release gate.
+The next product milestone is M2, focused on program persistence and history.
+Keep the three Elixir-specific metric and result contracts partial until their
+compatibility decisions are recorded.
 
 ## Safety net + foundations
 | # | Slice | Upstream | Effort | Status |
@@ -121,7 +128,6 @@ After this you can …build tool-using agents that also take images or audio, re
 | S011 | Image | done | H | M | 1.50 | <=2.6 | S018 | N | - | done: Dspy.Image + :image field (0d7b0d1); :image now declared+validatable, docs everywhere | done 2026-10-10 v0.4.7 (align-image-input-with-python) |
 | S061 | Retrieve | partial | H | M | 1.50 | <=2.6 | S059;U032 | N | - | No dspy.Retrieve Parameter (k, callbacks) wrapping settings.rm; dspy.ex Dspy.Retrieve is a | todo |
 | S043 | Refine | partial | H | M | 1.50 | 3.0.0 | S038 | N | - | No OfferFeedback advice loop; no temperature-1.0/rollout_id per attempt; no fail_count | todo |
-| S042 | ReActV2 | missing | H | M | 1.50 | 3.3.0 | S041 | N | - | No Dspy.ReActV2; multi_tool_name/args batch execution unported | todo |
 | U032 | dummy_rm | missing | L | S | 1.00 | <=2.6 | S061 | N | - | No dummy_rm stub retriever | todo |
 | S006 | Audio | missing | M | M | 1.00 | 3.0.0 | S018 | N | - | no audio input type; Attachments is file-only, no base64/audio parts | todo |
 | S019 | XMLAdapter | missing | M | M | 1.00 | 3.0.0 | S007 | N | P10 | no XML signature adapter; Dspy.Adapters.XMLAdapter.parse is an unimplemented stub | todo |
@@ -168,7 +174,7 @@ After this you can …use the stronger optimizers: real GEPA, example selection 
 | S076 | BootstrapFewShotWithOptuna | missing | L | L | 0.25 | <=2.6 | S075 | N | - | no Elixir equivalent | todo |
 
 ## M7+ pool — not a milestone; cut later after scope decisions
-36 items, 83 pts. Includes P9 ProgramOfThought (sandbox decision) and the 3.3/3.4 surface.
+Historical 3.4.0 pool. Removed upstream capabilities are recorded in the recount.
 
 | id | symbol | status | V | E | introduced | old P |
 |---|---|---|---|---|---|---|
@@ -180,8 +186,6 @@ After this you can …use the stronger optimizers: real GEPA, example selection 
 | S056 | PythonInterpreter | missing | M | L | <=2.6 | - |
 | S057 | resolve_interpreter_factory | missing | L | S | 3.4.0 | - |
 | S058 | SandboxSerializable | missing | L | M | 3.3.0 | - |
-| S034 | CodeAct | missing | M | L | 3.0.0 | - |
-| S039 | ProgramOfThought | missing | H | L | <=2.6 | P9 |
 | S040 | RLM | missing | M | L | 3.2.0 | - |
 | S045 | Flex | missing | M | L | 3.3.0 | - |
 | U038 | AnthropicCompat | missing | L | M | 3.4.0 | - |
@@ -203,14 +207,13 @@ After this you can …use the stronger optimizers: real GEPA, example selection 
 | U016 | Noul | missing | L | L | 3.4.0 | - |
 | U017 | ReAnchor | missing | L | L | 3.4.0 | - |
 | U018 | Score | missing | L | L | 3.4.0 | - |
-| U019 | TypeSafe | missing | L | M | 3.4.0 | - |
 | U027 | DummyLM | missing | L | M | <=2.6 | - |
 | U028 | DummyVectorizer | missing | L | S | <=2.6 | - |
 | U031 | download | missing | M | S | <=2.6 | - |
 | U035 | pretty_print_history | partial | L | S | 3.0.0 | - |
 
 ## Old P-id mapping
-P4→M2 (S113, S054) · P5→M2 (S054.f7) · P6→M6 (S035, S083) · P7→M2 (S077, S001) · P8→M3 (U026, U036) · P9→M7+ pool (S039) · P10→M4 (S019) · P11→M4 (+1 BAMLAdapter) · P12→M5 (S072, U022…) · P13→M3 (S025). The old section "Out of scope unless strategy changes" is **superseded**: BootstrapFinetune, Avatar and GEPA are now in M6; CodeAct/RLM/interpreters are in the M7+ pool.
+P4→M2 (S113, S054) · P5→M2 (S054.f7) · P6→M6 (S035, S083) · P7→M2 (S077, S001) · P8→M3 (U026, U036) · P9 closed as upstream removed ProgramOfThought · P10→M4 (S019) · P11→M4 (+1 BAMLAdapter) · P12→M5 (S072, U022…) · P13→M3 (S025). The old section "Out of scope unless strategy changes" is **superseded**: BootstrapFinetune, Avatar and GEPA are now in M6; RLM and interpreters are in the M7+ pool.
 
 ## Hygiene (low priority, non-blocking)
 
@@ -229,5 +232,5 @@ P4→M2 (S113, S054) · P5→M2 (S054.f7) · P6→M6 (S035, S083) · P7→M2 (S0
 | H20 | **Mechanical checks, stage 1: C2 — one shared mutation library** (Greta design `plan/research/2026-09-30-mechanical-checks.md`, ruled by Horst 2026-09-30). Each mutation **declares the tests it must kill**; verdicts `KILLED` / `SURVIVED-TARGET` (a claimed test passed) / `BLUNT` (failures outside the declared set) / `INVALID` (non-zero exit with no failing test named — which is exactly how the ENFILE outage produced two false kills). Reads a JSON test formatter, not console text. Built-in signal handlers, leftover pre-flight, base-green check, no disk state. **Why first:** three of M1-d's five blocking findings were rules already written in HOW_WE_WORK that did not transfer; the rules that never recur are the ones turned into tooling. C3a (every acceptance test claimed by some mutation) follows almost free. **Sequencing:** built before the M1-d fix round, which adopts it; older harnesses migrate when next touched. Later stages: C5 `deviations.json` per slice (required artifact), C1a ordered-text helpers refuse maps, C3b vacuous-assertion lint, C4 duplicate-code warning. Rejected as noisy: a map-order lint over `lib/`. Size M | **stage 1 (C2+C3a) done 2026-10-02 `5369372`** (Greta PASS after 2 blocks); later stages C5, C1a, C3b, C4 todo. **mutlib follow-ups (2026-10-03):** (a) reject an `also` name matching no test (H15 had 8); (b) build coverage from the base run's formatter records, not a source regex (`describe` names mismatch, M1-e); (c) a harness must declare its contract's mutation-ID list and fail when defined IDs differ (M1-e phase 2 shipped 17 mislabeled mutations of ~40; my 17/17 check did not catch it) |
 | H8 | **O(n²) in `Dspy.Evaluate`: `Enum.at` inside index loops.** `finish_evaluation`'s `results` build and `rows_for/3` call `Enum.at(items, i)` inside an `Enum.with_index`/`Enum.map` over the testset — O(n²) on large testsets (each `Enum.at` walks from the start). Pure performance, no behaviour change; trivial to fix (zip or `Enum.split` once). Found in the M1-a fix-round-2 review (booked on Horst's "book only, not in this round" ruling, 2026-09-29). Size S | todo |
 | H9 | ~~`failure_score` option unvalidated / `lookup_attr` metric-pair match~~ **SUPERSEDED by BB1 (2026-09-29):** the name-based routing (including the `is_number(in_key)` metric check) is deleted in the fix-round-3 brief, so the empty-cell path Ilse described no longer exists as code. The remaining real issue is split out as H10 (validate `failure_score` up front). No action here. | superseded |
-| H10 | **Validate `failure_score` up front.** As shipped, `failure_score: :custom` (an atom) survives to the mean computation and raises `ArithmeticError` — AFTER all the LM calls, so a misconfigured option costs a whole expensive run. Rule (Horst, 2026-09-29): validate it is a number in `evaluate/4` so it raises `ArgumentError` BEFORE any LM call. One test (atom → `ArgumentError`, raised before the mock LM sees anything; number → behaves as today), mutation-proven. Size S | todo |
+| H10 | **Validate `failure_score` up front.** As shipped, `failure_score: :custom` (an atom) survives to the mean computation and raises `ArithmeticError` — AFTER all the LM calls, so a misconfigured option costs a whole expensive run. Rule (Horst, 2026-09-29): validate it is a number in `evaluate/4` so it raises `ArgumentError` BEFORE any LM call. One test (atom → `ArgumentError`, raised before the mock LM sees anything; number → behaves as today), mutation-proven. Size S | done (2026-11-21, PR #8) |
 | H11 | **Two pre-existing crashes in the save path — contract violations, not M1-a bugs.** (a) A `%Prediction{}` built with `attrs: nil` → `BadMapError` in the save path; (b) a plain map returned from `forward` (instead of a `Dspy.Prediction`) → `KeyError`. Both break the documented module contract (`lib/dspy/module.ex:11` says `forward` returns `Dspy.Prediction.t()`), so they are user-contract violations — book with that note (fix = a friendly error at the contract boundary, or document + add a guard clause). Found in the M1-a fix-round-2 review, 2026-09-29. Size S | todo |

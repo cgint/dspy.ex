@@ -1,5 +1,7 @@
 # Status
 
+> **Current baseline, 2026-11-21.** The [DSPy 3.5.0 recount](UPSTREAM_RECOUNT.md) is independently reviewed against Elixir commit `07e3cb2`. The offline Semantic F1 example passed hosted CI in PR #8. The reproducible canary and release gate remain open.
+
 Goal: Build an **Elixir-native port** of upstream **Python DSPy** (`../dspy`) that is **adoption-first**: stable `Predict`/`ChainOfThought`, robust output parsing, deterministic evaluation, proven parameter-based teleprompters, provider access via **`req_llm`**, and persistence of optimized programs. (Orchestration/UI remain optional and live outside core.)
 
 North star docs:
