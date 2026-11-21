@@ -25,7 +25,7 @@ defmodule Dspy.Teleprompt.BootstrapFewShot do
 
   @behaviour Dspy.Teleprompt
 
-  alias Dspy.{Example, Evaluate, Trainset}
+  alias Dspy.{Example, Evaluate, Random, Trainset}
   alias Dspy.Teleprompt.Util, as: TpUtil
 
   defstruct [
@@ -189,8 +189,6 @@ defmodule Dspy.Teleprompt.BootstrapFewShot do
       metric_threshold: metric_threshold
     } = teleprompt
 
-    seed_random_if_needed(seed)
-
     # Bootstrap examples across multiple rounds
     all_examples =
       for round <- 1..max_rounds, reduce: [] do
@@ -226,13 +224,6 @@ defmodule Dspy.Teleprompt.BootstrapFewShot do
     )
 
     {:ok, best_examples}
-  end
-
-  defp seed_random_if_needed(-1), do: :ok
-
-  defp seed_random_if_needed(seed) when is_integer(seed) do
-    :rand.seed(:exsss, {seed, seed + 1, seed + 2})
-    :ok
   end
 
   defp seed_for_round(-1, _round), do: -1
@@ -362,7 +353,7 @@ defmodule Dspy.Teleprompt.BootstrapFewShot do
        ) do
     Dspy.Teleprompt.Util.log(teleprompt, "Generating #{num_candidates} candidate programs...")
 
-    :rand.seed(:exsss, {seed + 1000, seed + 1001, seed + 1002})
+    {state, _} = Random.seed(seed + 1000)
 
     full_examples =
       (bootstrapped ++ labeled)
@@ -371,31 +362,30 @@ defmodule Dspy.Teleprompt.BootstrapFewShot do
     num_candidates = max(num_candidates, 1)
 
     1..num_candidates
-    |> Enum.reduce_while({:ok, []}, fn i, {:ok, acc} ->
-      examples =
+    |> Enum.reduce_while({:ok, [], state}, fn i, {:ok, acc, state} ->
+      {state, examples} =
         if i == 1 do
-          full_examples
+          {state, full_examples}
         else
-          # Randomly combine bootstrapped and labeled examples
-          num_bootstrap = :rand.uniform(length(bootstrapped) + 1) - 1
-          num_labeled = :rand.uniform(length(labeled) + 1) - 1
+          {state, num_bootstrap} = Random.randbelow(state, length(bootstrapped) + 1)
+          {state, num_labeled} = Random.randbelow(state, length(labeled) + 1)
 
-          selected_bootstrap = take_random_subset(bootstrapped, num_bootstrap)
-          selected_labeled = take_random_subset(labeled, num_labeled)
+          {state, selected_bootstrap} = take_random_subset(state, bootstrapped, num_bootstrap)
+          {state, selected_labeled} = take_random_subset(state, labeled, num_labeled)
 
-          selected_bootstrap ++ selected_labeled
+          {state, selected_bootstrap ++ selected_labeled}
         end
 
       case create_candidate_program(student, examples, i) do
         {:ok, candidate} ->
-          {:cont, {:ok, [candidate | acc]}}
+          {:cont, {:ok, [candidate | acc], state}}
 
         {:error, reason} ->
           {:halt, {:error, reason}}
       end
     end)
     |> case do
-      {:ok, candidates} ->
+      {:ok, candidates, _state} ->
         {:ok, Enum.reverse(candidates)}
 
       {:error, reason} ->
@@ -407,18 +397,11 @@ defmodule Dspy.Teleprompt.BootstrapFewShot do
     TpUtil.set_predict_examples(student, examples)
   end
 
-  # Deterministic sampling: `generate_candidate_programs/4` seeds `:rand` first.
-  # We avoid `Enum.take_random/2` here so our behavior is explicit and less sensitive
-  # to stdlib implementation details across Elixir/OTP versions.
-  defp take_random_subset(_list, n) when is_integer(n) and n <= 0, do: []
-  defp take_random_subset([], _n), do: []
+  defp take_random_subset(state, _list, 0), do: {state, []}
 
-  defp take_random_subset(list, n) when is_list(list) and is_integer(n) do
-    n = min(n, length(list))
-
-    list
-    |> Enum.shuffle()
-    |> Enum.take(n)
+  defp take_random_subset(state, list, n) do
+    {state, shuffled} = Random.shuffle(state, list)
+    {state, Enum.take(shuffled, n)}
   end
 
   defp select_best_program(
