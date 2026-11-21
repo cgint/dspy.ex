@@ -70,9 +70,10 @@ defmodule Dspy.Teleprompt.KNNFewShot do
   Bootstrap options include `:teacher`, `:metric`, `:metric_threshold`,
   `:max_bootstrapped_demos`, `:max_labeled_demos`, `:max_rounds`, `:max_errors`,
   `:num_threads`, `:seed`, and `:verbose`. A missing or `nil` metric accepts all
-  successful teacher predictions. Labeled demos come from the closest neighbors,
-  up to a default of 16. Bootstrap sampling defaults to `seed: -1` to keep
-  neighbor order.
+  successful teacher predictions. An arity-three metric receives the original
+  neighbor, the teacher prediction, and a `t:Dspy.Teleprompt.trace/0` for that
+  attempt. Labeled demos come from the closest neighbors, up to a default of 16.
+  Bootstrap sampling defaults to `seed: -1` to keep neighbor order.
   """
   @impl true
   @spec new(keyword()) :: t()

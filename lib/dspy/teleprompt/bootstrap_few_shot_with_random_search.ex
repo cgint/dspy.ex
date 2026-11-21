@@ -465,14 +465,8 @@ defmodule Dspy.Teleprompt.BootstrapFewShotWithRandomSearch do
     end
   end
 
-  defp metric_score(metric, example, prediction, traces) when is_function(metric, 3) do
-    trace =
-      for {_order, path, inputs, output} <- traces do
-        %{path: path, inputs: inputs, prediction: output}
-      end
-
-    Teleprompt.run_metric(metric, example, prediction, trace)
-  end
+  defp metric_score(metric, example, prediction, traces) when is_function(metric, 3),
+    do: Teleprompt.run_metric(metric, example, prediction, PredictorTrace.steps(traces))
 
   defp metric_score(metric, example, prediction, _traces),
     do: Teleprompt.run_metric(metric, example, prediction)

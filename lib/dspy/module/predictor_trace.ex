@@ -27,6 +27,12 @@ defmodule Dspy.Module.PredictorTrace do
     end
   end
 
+  def steps(trace) do
+    for {_order, path, inputs, prediction} <- trace do
+      %{path: path, inputs: inputs, prediction: prediction}
+    end
+  end
+
   def record(predictor, inputs, prediction) do
     case Map.get(predictor, @trace_key) do
       nil ->

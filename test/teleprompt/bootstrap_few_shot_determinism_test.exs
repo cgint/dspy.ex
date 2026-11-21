@@ -78,6 +78,29 @@ defmodule Dspy.Teleprompt.BootstrapFewShotDeterminismTest do
     end
   end
 
+  defmodule TraceLM do
+    @behaviour Dspy.LM
+    defstruct []
+
+    @impl true
+    def generate(_lm, _request), do: {:ok, ~s({"answer":"4"})}
+  end
+
+  defmodule KeyedTeacher do
+    @behaviour Dspy.Module
+    defstruct [:mapping]
+
+    @impl true
+    def forward(%__MODULE__{mapping: mapping}, %{question: question}) do
+      with {:ok, %Prediction{}} <-
+             Dspy.Predict.forward(mapping[1], %{question: "#{question}/number"}),
+           {:ok, %Prediction{}} <-
+             Dspy.Predict.forward(mapping["1"], %{question: "#{question}/string"}) do
+        {:ok, Prediction.new(answer: "joined")}
+      end
+    end
+  end
+
   defmodule TestQA do
     use Dspy.Signature
 
@@ -230,5 +253,64 @@ defmodule Dspy.Teleprompt.BootstrapFewShotDeterminismTest do
     end
 
     refute_received {:teacher_inputs, _inputs}
+  end
+
+  test "trace-aware acceptance is isolated per row and retains the final teacher prediction" do
+    owner = self()
+    student = %RecordingStudent{test_pid: owner}
+
+    predictor =
+      Dspy.Predict.new(TestQA, lm: %TraceLM{}, adapter: Dspy.Signature.Adapters.JSONAdapter)
+
+    teacher = %KeyedTeacher{mapping: %{1 => predictor, "1" => predictor}}
+
+    rejected =
+      Example.new(question: "rejected", answer: "wrong") |> Example.with_inputs(:question)
+
+    accepted = Example.new(question: "accepted", answer: "4") |> Example.with_inputs(:question)
+
+    metric = fn row, prediction, trace ->
+      send(owner, {:scored, row, prediction, trace})
+
+      case trace do
+        nil -> true
+        steps -> Enum.any?(steps, &(&1.prediction[:answer] == row[:answer]))
+      end
+    end
+
+    optimizer =
+      BootstrapFewShot.new(
+        metric: metric,
+        teacher: teacher,
+        max_bootstrapped_demos: 2,
+        max_labeled_demos: 0,
+        num_candidate_programs: 1,
+        num_threads: 1,
+        seed: -1
+      )
+
+    assert {:ok, optimized} = BootstrapFewShot.compile(optimizer, student, [rejected, accepted])
+
+    for row <- [rejected, accepted] do
+      assert_received {:scored, ^row, %Prediction{attrs: %{answer: "joined"}}, steps}
+
+      assert steps == [
+               %{
+                 path: [field: :mapping, key: 1],
+                 inputs: %{question: "#{row[:question]}/number"},
+                 prediction: Prediction.new(answer: "4")
+               },
+               %{
+                 path: [field: :mapping, key: "1"],
+                 inputs: %{question: "#{row[:question]}/string"},
+                 prediction: Prediction.new(answer: "4")
+               }
+             ]
+
+      assert_received {:scored, ^row, %Prediction{attrs: %{answer: "4"}}, nil}
+    end
+
+    refute_received {:scored, _, _, _}
+    assert [%Example{attrs: %{question: "accepted", answer: "joined"}}] = optimized.examples
   end
 end

@@ -25,7 +25,8 @@ defmodule Dspy.Teleprompt.BootstrapFewShot do
 
   @behaviour Dspy.Teleprompt
 
-  alias Dspy.{Example, Evaluate, Random, Trainset}
+  alias Dspy.{Example, Evaluate, Random, Teleprompt, Trainset}
+  alias Dspy.Module.PredictorTrace
   alias Dspy.Teleprompt.Util, as: TpUtil
 
   defstruct [
@@ -75,7 +76,10 @@ defmodule Dspy.Teleprompt.BootstrapFewShot do
 
   ## Options
 
-  - `:metric` - Evaluation metric function (required)
+  - `:metric` - Evaluation metric function (required). An arity-three metric
+    receives the training example, the teacher prediction, and a
+    `t:Dspy.Teleprompt.trace/0` for that attempt. A teacher without captured
+    steps supplies `[]`. Candidate evaluation passes `nil` as the third argument.
   - `:teacher` - Teacher program for generating examples (defaults to student)
   - `:max_bootstrapped_demos` - Maximum bootstrapped examples (default: 4)
   - `:max_labeled_demos` - Maximum labeled examples (default: 4)
@@ -96,7 +100,7 @@ defmodule Dspy.Teleprompt.BootstrapFewShot do
     end
 
     metric = Keyword.fetch!(opts, :metric)
-    Dspy.Teleprompt.validate_metric!(metric)
+    Teleprompt.validate_metric!(metric, :trace)
 
     %__MODULE__{
       metric: metric,
@@ -329,11 +333,11 @@ defmodule Dspy.Teleprompt.BootstrapFewShot do
 
   defp generate_bootstrap_example(teacher, example, input, metric) do
     try do
-      case Dspy.Module.forward(teacher, input) do
-        {:ok, prediction} ->
+      case forward_teacher(teacher, input, metric) do
+        {:ok, prediction, trace} ->
           demo = Example.new(Map.merge(input, prediction.attrs))
 
-          score = Dspy.Teleprompt.run_metric(metric, example, prediction)
+          score = Teleprompt.run_metric(metric, example, prediction, trace)
 
           cond do
             is_number(score) and score > 0 ->
@@ -352,6 +356,18 @@ defmodule Dspy.Teleprompt.BootstrapFewShot do
     rescue
       e ->
         {:error, {:exception, %{type: e.__struct__, message: Exception.message(e)}}}
+    end
+  end
+
+  defp forward_teacher(teacher, input, metric) when is_function(metric, 3) do
+    with {:ok, prediction, trace} <- PredictorTrace.capture(teacher, input) do
+      {:ok, prediction, PredictorTrace.steps(trace)}
+    end
+  end
+
+  defp forward_teacher(teacher, input, _metric) do
+    with {:ok, prediction} <- Dspy.Module.forward(teacher, input) do
+      {:ok, prediction, nil}
     end
   end
 

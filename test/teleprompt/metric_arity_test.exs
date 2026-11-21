@@ -62,16 +62,18 @@ defmodule Dspy.Teleprompt.MetricArityTest do
   test "optimizer constructors report the same metric arity diagnostic" do
     metric = fn _, _, _ -> true end
 
-    for optimizer <- [:bootstrap_few_shot, :mipro_v2, :copro, :simba, :gepa] do
+    for optimizer <- [:mipro_v2, :copro, :simba, :gepa] do
       assert_raise ArgumentError, ~r/arity 1 or 2.*arity 3/i, fn ->
         Teleprompt.new(optimizer, metric: metric)
       end
     end
   end
 
-  test "BootstrapRS reports the extended arity range on invalid metrics" do
-    assert_raise ArgumentError, ~r/arity 1, 2, or 3.*arity 4/i, fn ->
-      Teleprompt.new(:bootstrap_rs, metric: fn _, _, _, _ -> true end)
+  test "bootstrap optimizers report the extended arity range on invalid metrics" do
+    for optimizer <- [:bootstrap_rs, :bootstrap_few_shot] do
+      assert_raise ArgumentError, ~r/arity 1, 2, or 3.*arity 4/i, fn ->
+        Teleprompt.new(optimizer, metric: fn _, _, _, _ -> true end)
+      end
     end
   end
 

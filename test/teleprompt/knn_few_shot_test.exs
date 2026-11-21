@@ -162,8 +162,8 @@ defmodule Dspy.Teleprompt.KNNFewShotTest do
         k: 1,
         vectorizer: embedding(%{"question: nearest" => [1], "question: query" => [1]}),
         teacher: %RecordingTeacher{owner: owner},
-        metric: fn example, prediction ->
-          send(owner, {:metric, example})
+        metric: fn example, prediction, trace ->
+          send(owner, {:metric, example, trace})
           example[:answer] == prediction[:answer]
         end,
         max_labeled_demos: 0
@@ -172,9 +172,61 @@ defmodule Dspy.Teleprompt.KNNFewShotTest do
     student = Predict.new("question -> answer", lm: lm(:student, "student"), adapter: ChatAdapter)
     assert {:ok, program} = KNNFewShot.compile(optimizer, student, [neighbor])
     assert {:ok, %Prediction{}} = Dspy.call(program, question: "query")
-    assert_received {:metric, ^neighbor}
+    assert_received {:metric, ^neighbor, []}
     assert_received {:generated, :student, _, request}
     assert user_prompt(request) =~ "Example 1:\n[[ ## question ## ]]\nnearest"
+  end
+
+  test "a trace-aware metric runs once per query with the exact neighbor and its teacher step" do
+    owner = self()
+    accepted = row("good neighbor", "teacher answer")
+    rejected = row("bad neighbor", "  different answer  ") |> Example.put(:untouched, nil)
+
+    embedder =
+      embedding(%{
+        "question: good neighbor" => [1, 0],
+        "question: bad neighbor" => [0, 1],
+        "question: first query" => [1, 0],
+        "question: second query" => [0, 1]
+      })
+
+    teacher =
+      Predict.new("question -> answer", lm: lm(:teacher, "teacher answer"), adapter: ChatAdapter)
+
+    student = Predict.new("question -> answer", lm: lm(:student, "student"), adapter: ChatAdapter)
+
+    optimizer =
+      KNNFewShot.new(
+        k: 1,
+        vectorizer: embedder,
+        teacher: teacher,
+        metric: fn example, prediction, trace ->
+          send(owner, {:metric, example, prediction, trace})
+          Enum.any?(trace, &(&1.prediction[:answer] == example[:answer]))
+        end,
+        max_labeled_demos: 0
+      )
+
+    assert {:ok, program} = KNNFewShot.compile(optimizer, student, [accepted, rejected])
+    refute_received {:metric, _, _, _}
+
+    for {query, neighbor, demo?} <- [
+          {"first query", accepted, true},
+          {"second query", rejected, false}
+        ] do
+      assert {:ok, %Prediction{attrs: %{answer: "student"}}} = Dspy.call(program, question: query)
+      expected_input = %{question: neighbor[:question]}
+      expected_prediction = Prediction.new(answer: "teacher answer")
+
+      assert_received {:metric, ^neighbor, ^expected_prediction,
+                       [%{path: [], inputs: ^expected_input, prediction: ^expected_prediction}]}
+
+      assert_received {:generated, :teacher, _, _}
+      assert_received {:generated, :student, _, request}
+      assert String.contains?(user_prompt(request), "Example 1:") == demo?
+      refute_received {:generated, _, _, _}
+      refute_received {:metric, _, _, _}
+    end
   end
 
   test "the default includes up to sixteen labeled neighbors" do
