@@ -1,6 +1,6 @@
 # Status
 
-> **M3b, evaluation tracing.** Evaluation, module, and LM callbacks emit paired events and carry parent IDs through captured contexts. The [offline example](../../examples/offline/evaluation_callbacks_offline.exs) traces two examples in a parallel run. Evaluation abort reports after pending tasks stop. Correlation with adapter and tool events, telemetry, and call-scoped history remain open.
+> **M3b, evaluation tracing.** Evaluation, module, LM, and adapter callbacks emit paired events and carry parent IDs through captured contexts. Adapter phases close on terminal errors and catchable interruptions. The [offline example](../../examples/offline/evaluation_callbacks_offline.exs) traces two examples in a parallel run. Tool correlation, telemetry, and call-scoped history remain open.
 
 > **M3a, `v0.6.0`.** Provider retries preserve the original error tuples. The bounded memory cache and opt-in disk store support restart-safe response reuse on the verified OpenAI Responses route. The [offline example](../../examples/offline/provider_retry_disk_cache_offline.exs) recovers from a 429 and returns the same prediction without a provider request after `:dspy` restarts. Wider disk eligibility, public error types, lifecycle hooks, and history remain open.
 

@@ -8,6 +8,14 @@ This repo ships in **small, user-usable slices**.
 
 ## Consumer notes
 
+### Adapter callback completion
+
+Adapter format, call, and parse phases emit an end event when they fail after
+emitting start. New failure events report the outcome without provider or
+exception details. Transport retries share one adapter call pair, and each
+LM invocation retains its own pair. Adapter events include a parent call ID
+when they run inside an observed call.
+
 ### Evaluation lifecycle callbacks
 
 `Dspy.Evaluate.Callback` adds an optional start and end event around each
