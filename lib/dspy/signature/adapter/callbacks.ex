@@ -1,6 +1,6 @@
 defmodule Dspy.Signature.Adapter.Callbacks do
   @moduledoc """
-  Helpers for managing module and signature-adapter lifecycle callbacks.
+  Helpers for managing module, LM, and signature-adapter lifecycle callbacks.
 
   This module provides:
   - deterministic callback merging (global → program → per-call)
@@ -8,8 +8,8 @@ defmodule Dspy.Signature.Adapter.Callbacks do
   - process-local per-call callback context (`with_callbacks/2`)
   """
 
+  alias Dspy.Lifecycle
   alias Dspy.Signature.Adapter.Callback
-  alias Dspy.Module.Callback, as: ModuleCallback
 
   @type callback_entry :: {module(), term()}
   @type callbacks :: [callback_entry()]
@@ -51,11 +51,23 @@ defmodule Dspy.Signature.Adapter.Callbacks do
   def module_handlers(global, program) do
     global
     |> merge(program, current_call_callbacks())
+    |> lifecycle_handlers(:on_module_start, :on_module_end)
+  end
+
+  @doc false
+  @spec lm_handlers(callbacks() | nil) :: callbacks()
+  def lm_handlers(global) do
+    global
+    |> merge([], current_call_callbacks())
+    |> lifecycle_handlers(:on_lm_start, :on_lm_end)
+  end
+
+  defp lifecycle_handlers(callbacks, start_hook, end_hook) do
+    callbacks
     |> Enum.filter(fn
       {mod, _state} when is_atom(mod) ->
         Code.ensure_loaded?(mod) and
-          (function_exported?(mod, :on_module_start, 3) or
-             function_exported?(mod, :on_module_end, 3))
+          (function_exported?(mod, start_hook, 3) or function_exported?(mod, end_hook, 3))
 
       _ ->
         false
@@ -63,7 +75,7 @@ defmodule Dspy.Signature.Adapter.Callbacks do
   end
 
   @doc "Emit a lifecycle event to all callbacks, swallowing callback failures."
-  @spec emit(callbacks(), atom(), Callback.meta() | ModuleCallback.meta(), map()) :: callbacks()
+  @spec emit(callbacks(), atom(), Callback.meta() | Lifecycle.meta(), map()) :: callbacks()
   def emit(callbacks, event, meta, payload)
       when is_list(callbacks) and is_atom(event) and is_map(meta) and is_map(payload) do
     Enum.map(callbacks, fn
@@ -91,6 +103,8 @@ defmodule Dspy.Signature.Adapter.Callbacks do
   defp event_to_fun(:parse_end), do: :on_adapter_parse_end
   defp event_to_fun(:module_start), do: :on_module_start
   defp event_to_fun(:module_end), do: :on_module_end
+  defp event_to_fun(:lm_start), do: :on_lm_start
+  defp event_to_fun(:lm_end), do: :on_lm_end
   defp event_to_fun(_), do: nil
 
   defp safe_apply(mod, fun, args) do

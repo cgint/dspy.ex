@@ -8,6 +8,15 @@ This repo ships in **small, user-usable slices**.
 
 ## Consumer notes
 
+### LM lifecycle callbacks
+
+`Dspy.LM.Callback` adds optional start and end handlers for resolved LM
+calls. Register handlers through Settings or the existing per-call callback
+options. A provider call and a cache hit each emit one pair. An adapter
+transport retry makes another LM call with its own ID. End events report
+the outcome and elapsed microseconds. Prompts, responses, credentials, and
+failure details stay out of the event payloads.
+
 ### Module lifecycle callbacks
 
 Implement `Dspy.Module.Callback` and register `{handler, state}` in
