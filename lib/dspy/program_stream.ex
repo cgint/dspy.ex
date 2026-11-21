@@ -1,7 +1,8 @@
 defmodule Dspy.ProgramStream do
   @moduledoc false
 
-  alias Dspy.{ChainOfThought, Context, Predict, Prediction, StreamResponse}
+  alias Dspy.{ChainOfThought, Context, Predict, Prediction, StatusMessage, StreamResponse}
+  alias Dspy.ProgramStream.StatusCallback
   alias Dspy.Signature.AdapterPipeline
   alias Dspy.Signature.Adapters.{ChatAdapter, ChatStream}
 
@@ -9,12 +10,14 @@ defmodule Dspy.ProgramStream do
 
   def wrap(%{__struct__: type} = program, opts) when type in [Predict, ChainOfThought] do
     unless Keyword.keyword?(opts), do: raise(ArgumentError, "expected streamify call options")
-    {fields, call_opts} = Keyword.pop(opts, :stream_listeners, [])
+    {fields, opts} = Keyword.pop(opts, :stream_listeners, [])
+    {provider, call_opts} = Keyword.pop(opts, :status_message_provider)
+    validate_status_provider!(provider)
     listeners = select_fields(program, fields)
 
     fn inputs ->
       Stream.resource(
-        fn -> start(program, inputs, call_opts, listeners) end,
+        fn -> start(program, inputs, call_opts, listeners, provider) end,
         &next_event/1,
         &stop/1
       )
@@ -26,6 +29,15 @@ defmodule Dspy.ProgramStream do
   end
 
   def take_delta, do: Process.delete(@delta_key)
+
+  defp validate_status_provider!(nil), do: :ok
+
+  defp validate_status_provider!(provider) do
+    unless is_atom(provider) and Code.ensure_loaded?(provider) and
+             function_exported?(provider, :message, 2) do
+      raise ArgumentError, "status_message_provider must be a module exporting message/2 or nil"
+    end
+  end
 
   defp select_fields(_program, []), do: nil
 
@@ -70,7 +82,7 @@ defmodule Dspy.ProgramStream do
     end
   end
 
-  defp start(program, inputs, opts, listeners) do
+  defp start(program, inputs, opts, listeners, provider) do
     consumer = self()
     tag = make_ref()
     context = Context.capture()
@@ -81,6 +93,11 @@ defmodule Dspy.ProgramStream do
         spawn(fn -> watch_consumer(consumer, worker) end)
         await_demand(tag)
 
+        publish = fn event ->
+          send(consumer, {tag, event})
+          await_demand(tag)
+        end
+
         terminal =
           Context.with_context(context, fn ->
             Process.put(@delta_key, fn
@@ -88,14 +105,15 @@ defmodule Dspy.ProgramStream do
                 {:error, :foreign_stream_delta}
 
               text when is_binary(text) ->
-                send(consumer, {tag, {:delta, text}})
-                await_demand(tag)
+                publish.({:delta, text})
 
               _invalid ->
                 {:error, :invalid_stream_delta}
             end)
 
-            call_program(program, inputs, opts, listeners)
+            StatusCallback.with_provider(provider, publish, fn ->
+              call_program(program, inputs, opts, listeners)
+            end)
           end)
 
         send(consumer, {tag, :terminal, terminal})
@@ -141,6 +159,9 @@ defmodule Dspy.ProgramStream do
     receive do
       {^tag, {:delta, _text} = delta} ->
         next_event(queue_delta(state, delta))
+
+      {^tag, %StatusMessage{} = status} ->
+        next_event(%{state | pending: [status]})
 
       {^tag, :terminal, event} ->
         await_stop(worker, worker_ref)

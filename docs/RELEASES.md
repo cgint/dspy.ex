@@ -8,6 +8,16 @@ This repo ships in **small, user-usable slices**.
 
 ## Consumer notes
 
+### Streaming progress messages
+
+Pass a `status_message_provider:` module to `Dspy.streamify/2` to turn
+module and LM lifecycle events into `Dspy.StatusMessage` values. A
+provider implements `Dspy.StatusMessageProvider` and receives event
+names and allowlisted call metadata. Field chunks, progress messages,
+and the final prediction share one demand-driven enumeration.
+The [offline ChainOfThought example](../examples/offline/chain_of_thought_streaming_offline.exs)
+shows progress beside answer chunks and verifies cleanup after an early halt.
+
 ### Chat field listeners
 
 Pass `stream_listeners: [:answer]` to `Dspy.streamify/2` to receive selected
