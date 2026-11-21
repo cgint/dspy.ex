@@ -65,7 +65,7 @@ After this you can …optimize a program once, save it, load it later or elsewhe
 |---|---|---|---|---|---|---|---|---|---|---|---|
 | S002 | configure | partial | H | S | 3.00 | <=2.6 | - | N | - | [facet rule: done->partial] Parsimonious keys unported: rm/trace/num_threads/max_errors/ma | todo |
 | S051 | Example | partial | H | S | 3.00 | <=2.6 | - | N | - | [facet rule: done->partial] labels/without/toDict-named variants: labels and without/2 mis | todo |
-| S054 | Module | partial | H | S | 3.00 | <=2.6 | - | N | P5 (Module.inspect_history = facet S054.f7), P4 | [facet rule: done->partial] named_predictors/predictors/map_named_predictors, set_lm/get_l | todo |
+| S054 | Module | partial | H | S | 3.00 | <=2.6 | - | N | P5 (Module.inspect_history = facet S054.f7), P4 | Named discovery implemented. Slot updates, LM traversal, traces and history remain. | M2 discovery slice implemented. Release pending. |
 | S055 | Prediction | partial | H | S | 3.00 | <=2.6 | S051 | N | - | [facet rule: done->partial] score float()/arithmetic/comparison ops and from_completions m | todo |
 | S067 | Signature | partial | H | S | 3.00 | <=2.6 | - | N | - | [facet rule: done->partial] pydantic-model validation, annotated types, and field constrai | todo |
 | S077 | BootstrapFewShotWithRandomSearch | partial | H | S | 3.00 | <=2.6 | S075 | N | P7 | Search, ranking, and teacher bootstrapping work for modules exposing `predict.examples`. Composite programs need named predictor traces. | M2 first slice implemented. Release pending. |
