@@ -45,7 +45,7 @@ defmodule Dspy.Teleprompt.BootstrapRSTest do
 
   defmodule OfflineLM do
     @behaviour Dspy.LM
-    defstruct [:observer]
+    defstruct [:observer, content: ~s({"answer":"ok"})]
 
     @impl true
     def generate(lm, request) do
@@ -53,7 +53,68 @@ defmodule Dspy.Teleprompt.BootstrapRSTest do
         send(lm.observer, {:teacher_prompt, Enum.map_join(request.messages, "\n", & &1.content)})
       end
 
-      {:ok, %{choices: [%{message: %{role: "assistant", content: ~s({"answer":"ok"})}}]}}
+      {:ok, %{choices: [%{message: %{role: "assistant", content: lm.content}}]}}
+    end
+  end
+
+  defmodule Pair do
+    @behaviour Dspy.Module
+    defstruct [:left, :right]
+
+    @impl true
+    def forward(pair, %{question: question}) do
+      for index <- 0..3 do
+        {:ok, %Prediction{}} =
+          Dspy.Module.forward(pair.left, %{question: "#{question}/left/#{index}"})
+      end
+
+      task =
+        Task.async(fn ->
+          Dspy.Predict.forward(pair.right, %{question: "#{question}/right"})
+        end)
+
+      with {:ok, %Prediction{}} <- Task.await(task) do
+        {:ok, Prediction.new(answer: "combined")}
+      end
+    end
+  end
+
+  defmodule PartialTeacher do
+    @behaviour Dspy.Module
+    defstruct [:left, :right, :observer, :fail_on]
+
+    @impl true
+    def forward(%{fail_on: question} = teacher, %{question: question}) do
+      {:ok, %Prediction{}} = Dspy.Module.forward(teacher.left, %{question: question})
+      send(teacher.observer, {:failed_teacher_slot, teacher.right})
+      {:error, :partial_teacher_failure}
+    end
+
+    def forward(teacher, inputs), do: Pair.forward(teacher, inputs)
+  end
+
+  defmodule Branching do
+    @behaviour Dspy.Module
+    defstruct [:mapping, :skip_on]
+
+    @impl true
+    def forward(%{skip_on: question}, %{question: question}) do
+      {:ok, Prediction.new(answer: "combined")}
+    end
+
+    def forward(program, %{question: question}) do
+      tasks =
+        for {key, suffix} <- [{1, "number"}, {"1", "text"}] do
+          Task.async(fn ->
+            Dspy.Module.forward(program.mapping[key], %{
+              "question" => "#{question}/#{suffix}",
+              "answer" => "shadowed by the prediction"
+            })
+          end)
+        end
+
+      for task <- tasks, do: {:ok, %Prediction{}} = Task.await(task)
+      {:ok, Prediction.new(answer: "combined")}
     end
   end
 
@@ -361,6 +422,231 @@ defmodule Dspy.Teleprompt.BootstrapRSTest do
     end
 
     refute_received {:evaluated, _}
+  end
+
+  test "composite bootstrap keeps accepted traces with the slots that produced them" do
+    student = predictor_pair([])
+    assert student.left == student.right
+
+    optimizer =
+      Teleprompt.new(:bootstrap_rs,
+        metric: fn example, _ -> example.attrs.question != question(99) end,
+        max_bootstrapped_demos: 2,
+        max_labeled_demos: 0,
+        verbose: false
+      )
+
+    assert {:ok, %{program: %Pair{} = best, candidates: [%{seed: -1, score: 100.0}]}} =
+             BootstrapRS.compile_with_candidates(
+               optimizer,
+               student,
+               Enum.map([99, 0, 1], &question_row/1),
+               restrict: [-1],
+               valset: [question_row(100)]
+             )
+
+    assert Enum.map(best.left.examples, & &1.attrs) == [
+             %{question: "#{question(0)}/left/1", answer: "ok"},
+             %{question: "#{question(1)}/left/3", answer: "ok"}
+           ]
+
+    assert Enum.map(best.right.examples, & &1.attrs) == [
+             %{question: "#{question(0)}/right", answer: "ok"},
+             %{question: "#{question(1)}/right", answer: "ok"}
+           ]
+
+    assert student.left.examples == []
+    assert student.right.examples == []
+    assert Map.keys(best.left) == Map.keys(student.left)
+    assert Map.keys(best.right) == Map.keys(student.right)
+    assert best.left.lm == student.left.lm
+    assert best.right.lm == student.right.lm
+  end
+
+  test "composite baselines clear old demos and share one labeled sampling stream" do
+    student = predictor_pair([question_row(900)])
+    optimizer = Teleprompt.new(:bootstrap_rs, metric: fn _, _ -> 1 end, max_labeled_demos: 3)
+
+    assert {:ok, %{candidates: [%{seed: -3, program: zero}, %{seed: -2, program: labeled}]}} =
+             BootstrapRS.compile_with_candidates(
+               optimizer,
+               student,
+               Enum.map(0..7, &question_row/1),
+               restrict: [-3, -2],
+               valset: [question_row(100)]
+             )
+
+    assert zero.left.examples == []
+    assert zero.right.examples == []
+    assert labeled.left.examples == Enum.map([6, 7, 3], &question_row/1)
+    assert labeled.right.examples == Enum.map([0, 2, 4], &question_row/1)
+    assert student.left.examples == [question_row(900)]
+    assert student.right.examples == [question_row(900)]
+  end
+
+  test "composite teachers sample labels per slot and omit the row being bootstrapped" do
+    student = predictor_pair([])
+    teacher = predictor_pair([question_row(900)], %OfflineLM{observer: self()})
+    teacher = put_in(teacher.right.signature.name, "Equivalent teacher signature")
+
+    optimizer =
+      Teleprompt.new(:bootstrap_rs,
+        metric: fn _, _ -> 1 end,
+        max_bootstrapped_demos: 1,
+        max_labeled_demos: 3,
+        verbose: false
+      )
+
+    assert {:ok, _} =
+             BootstrapRS.compile_with_candidates(
+               optimizer,
+               student,
+               Enum.map(0..7, &question_row/1),
+               teacher: teacher,
+               restrict: [-1],
+               valset: [question_row(100)]
+             )
+
+    for index <- 0..3 do
+      assert_received {:teacher_prompt, prompt}
+      assert String.contains?(prompt, "#{question(0)}/left/#{index}")
+      for id <- [6, 7, 3], do: assert(String.contains?(prompt, question(id)))
+      refute String.contains?(prompt, question(900))
+    end
+
+    assert_received {:teacher_prompt, prompt}
+    assert String.contains?(prompt, "#{question(0)}/right")
+    assert length(:binary.matches(prompt, question(0))) == 1
+    for id <- [2, 4], do: assert(String.contains?(prompt, question(id)))
+    refute String.contains?(prompt, question(900))
+    refute_received {:teacher_prompt, _}
+
+    assert teacher.left.examples == [question_row(900)]
+    assert teacher.right.examples == [question_row(900)]
+  end
+
+  test "a failed composite attempt drops partial traces and escaped slots can still run" do
+    student = predictor_pair([])
+
+    teacher =
+      struct!(PartialTeacher,
+        left: student.left,
+        right: student.right,
+        observer: self(),
+        fail_on: question(99)
+      )
+
+    owner = self()
+
+    optimizer =
+      Teleprompt.new(:bootstrap_rs,
+        metric: fn _, _ ->
+          assert trace_tables(owner) == []
+          1
+        end,
+        max_errors: 2,
+        max_bootstrapped_demos: 1,
+        max_labeled_demos: 0,
+        verbose: false
+      )
+
+    assert {:ok, %{program: best}} =
+             BootstrapRS.compile_with_candidates(
+               optimizer,
+               student,
+               Enum.map([99, 0], &question_row/1),
+               teacher: teacher,
+               restrict: [-1],
+               valset: [question_row(100)]
+             )
+
+    assert Enum.map(best.left.examples, & &1.attrs.question) == ["#{question(0)}/left/1"]
+    assert Enum.map(best.right.examples, & &1.attrs.question) == ["#{question(0)}/right"]
+    assert trace_tables(owner) == []
+    assert_received {:failed_teacher_slot, escaped}
+    task = Task.async(fn -> Dspy.Predict.forward(escaped, %{question: "late call"}) end)
+    assert {:ok, %Prediction{}} = Task.await(task)
+    assert trace_tables(owner) == []
+  end
+
+  test "composite teacher slot and signature mismatches fail before scoring any candidate" do
+    student = predictor_pair([], %OfflineLM{observer: self()})
+    mismatched_signature = put_in(student.right.signature.instructions, "Different task")
+    missing_slot = %{student | right: nil}
+    optimizer = Teleprompt.new(:bootstrap_rs, metric: fn _, _ -> 1 end, verbose: false)
+
+    for teacher <- [mismatched_signature, missing_slot] do
+      assert {:error, :teacher_predictor_mismatch} =
+               BootstrapRS.compile_with_candidates(optimizer, student, [question_row(0)],
+                 teacher: teacher,
+                 restrict: [-3, -1]
+               )
+    end
+
+    refute_received {:teacher_prompt, _}
+  end
+
+  test "composite row limits count skipped calls and labels fill each slot in order" do
+    predict = predictor_pair([]).left
+
+    cot =
+      Dspy.chain_of_thought("question -> answer",
+        lm: %OfflineLM{content: ~s({"reasoning":"proof","answer":"ok"})},
+        adapter: Dspy.Signature.Adapters.JSONAdapter
+      )
+
+    student = %Branching{
+      mapping: %{1 => predict, "1" => cot, "unused" => predict},
+      skip_on: question(0)
+    }
+
+    optimizer =
+      Teleprompt.new(:bootstrap_rs,
+        metric: fn _, _ -> 1 end,
+        max_bootstrapped_demos: 2,
+        max_labeled_demos: 3,
+        verbose: false
+      )
+
+    assert {:ok, %{program: best}} =
+             BootstrapRS.compile_with_candidates(
+               optimizer,
+               student,
+               Enum.map(0..5, &question_row/1),
+               restrict: [-1],
+               valset: [question_row(100)]
+             )
+
+    assert [number_demo | number_labels] = best.mapping[1].examples
+    assert number_demo.attrs == %{"question" => "#{question(1)}/number", :answer => "ok"}
+    assert number_labels == Enum.map([5, 2], &question_row/1)
+    assert [text_demo | text_labels] = best.mapping["1"].examples
+
+    assert text_demo.attrs == %{
+             "question" => "#{question(1)}/text",
+             :reasoning => "proof",
+             :answer => "ok"
+           }
+
+    assert text_labels == Enum.map([4, 2], &question_row/1)
+    assert best.mapping["unused"].examples == Enum.map([5, 2, 3], &question_row/1)
+  end
+
+  defp trace_tables(owner) do
+    Enum.filter(:ets.all(), fn table ->
+      :ets.info(table, :name) == :dspy_bootstrap_trace and :ets.info(table, :owner) == owner
+    end)
+  end
+
+  defp predictor_pair(examples, lm \\ %OfflineLM{}) do
+    predictor =
+      Dspy.predict("question -> answer",
+        lm: lm,
+        adapter: Dspy.Signature.Adapters.JSONAdapter,
+        examples: examples
+      )
+
+    %Pair{left: predictor, right: predictor}
   end
 
   defp rows(ids), do: Enum.map(ids, &Example.new(%{id: &1, answer: "ok"}))

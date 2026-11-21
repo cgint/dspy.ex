@@ -123,6 +123,7 @@ defmodule Dspy.ChainOfThought do
              max_output_retries: cot.max_output_retries
            ) do
       prediction = Dspy.Prediction.new(outputs)
+      Dspy.Module.PredictorTrace.record(cot, inputs, prediction)
       {:ok, prediction}
     else
       {:error, reason} -> {:error, reason}

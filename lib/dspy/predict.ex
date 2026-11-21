@@ -90,6 +90,7 @@ defmodule Dspy.Predict do
              max_output_retries: predict.max_output_retries
            ) do
       prediction = Dspy.Prediction.new(outputs)
+      Dspy.Module.PredictorTrace.record(predict, inputs, prediction)
       {:ok, prediction}
     else
       {:error, reason} -> {:error, reason}
