@@ -16,6 +16,15 @@ returns the original examples ranked by dot product. Training and query
 field names share a lexical order. Equal scores favor the later training
 row. Scoring uses Elixir's native numeric representation.
 
+### Trace-aware BootstrapRS metrics
+
+Pass an arity-three metric to `Dspy.Teleprompt.new(:bootstrap_rs, metric: metric)`
+to receive the training example, the teacher prediction, and the ordered
+predictor steps for one attempt. Each step contains a typed slot path, the
+predictor inputs, and its prediction. A teacher without steps supplies `[]`.
+`Dspy.Evaluate` passes `nil` as the third argument, so the same metric can
+score the validation candidates.
+
 ### Streaming progress messages
 
 Pass a `status_message_provider:` module to `Dspy.streamify/2` to turn

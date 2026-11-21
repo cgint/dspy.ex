@@ -36,6 +36,20 @@ defmodule Dspy.Teleprompt do
 
   @type metric_fun :: (Example.t() -> number()) | (Example.t(), Dspy.Prediction.t() -> number())
 
+  @typedoc "One successful predictor call in a BootstrapRS teacher attempt."
+  @type trace_step :: %{
+          path: Dspy.Module.PredictorSlots.path(),
+          inputs: map(),
+          prediction: Dspy.Prediction.t()
+        }
+
+  @typedoc "Successful predictor calls in one teacher attempt, in completion order."
+  @type trace :: [trace_step()]
+
+  @typedoc "A metric that receives teacher steps during BootstrapRS and nil during evaluation."
+  @type trace_metric_fun ::
+          (Example.t(), Dspy.Prediction.t(), trace() | nil -> number() | boolean())
+
   @type teleprompt_config :: Keyword.t()
 
   @type program_t :: Dspy.Module.t()
@@ -127,12 +141,15 @@ defmodule Dspy.Teleprompt do
 
   """
   @spec validate_config(teleprompt_config()) :: :ok | {:error, String.t()}
-  def validate_config(opts) do
+  def validate_config(opts), do: validate_config(opts, :scalar)
+
+  @doc false
+  def validate_config(opts, mode) do
     required = [:metric]
 
     case Enum.find(required, &(not Keyword.has_key?(opts, &1))) do
       nil ->
-        validate_metric(opts[:metric])
+        validate_metric(opts[:metric], mode)
 
       missing ->
         {:error, "Missing required option: #{missing}"}
@@ -140,21 +157,25 @@ defmodule Dspy.Teleprompt do
   end
 
   @doc false
-  def validate_metric!(metric) do
-    case validate_metric(metric) do
+  def validate_metric!(metric, mode \\ :scalar) do
+    case validate_metric(metric, mode) do
       :ok -> :ok
       {:error, message} -> raise ArgumentError, message
     end
   end
 
-  defp validate_metric(metric) when is_function(metric, 1) or is_function(metric, 2), do: :ok
+  defp validate_metric(metric, _mode) when is_function(metric, 1) or is_function(metric, 2),
+    do: :ok
 
-  defp validate_metric(metric) when is_function(metric) do
+  defp validate_metric(metric, :trace) when is_function(metric, 3), do: :ok
+
+  defp validate_metric(metric, mode) when is_function(metric) do
     {:arity, arity} = Function.info(metric, :arity)
-    {:error, "Metric must be a function of arity 1 or 2, got arity #{arity}"}
+    supported = if mode == :trace, do: "1, 2, or 3", else: "1 or 2"
+    {:error, "Metric must be a function of arity #{supported}, got arity #{arity}"}
   end
 
-  defp validate_metric(_), do: {:error, "Metric must be a function"}
+  defp validate_metric(_metric, _mode), do: {:error, "Metric must be a function"}
 
   @doc """
   Helper to run a metric function safely.
@@ -186,6 +207,24 @@ defmodule Dspy.Teleprompt do
     do: run_metric_arity1(metric, example)
 
   def run_metric(metric, _example, _prediction), do: validate_metric!(metric)
+
+  @doc false
+  @spec run_metric(
+          metric_fun() | trace_metric_fun(),
+          Example.t(),
+          Dspy.Prediction.t(),
+          trace() | nil
+        ) :: term()
+  def run_metric(metric, example, prediction, trace) when is_function(metric, 3) do
+    try do
+      normalize_score(metric.(example, prediction, trace))
+    rescue
+      _ -> :error
+    end
+  end
+
+  def run_metric(metric, example, prediction, _trace),
+    do: run_metric(metric, example, prediction)
 
   defp run_metric_arity2(metric, example, prediction) do
     try do
