@@ -1,0 +1,163 @@
+id,symbol,kind,status,decision,elixir_reference
+S001,BootstrapRS,core,partial,BootstrapFewShot searches sampled candidates; the upstream random-search alias and exact strategy are absent,lib/dspy/teleprompt/bootstrap_few_shot.ex
+S002,configure,core,partial,GenServer applies supported defaults; upstream settings keys and configure-owner semantics differ,lib/dspy/settings.ex
+S003,context,core,partial,Scoped overrides restore and propagate through DSPy tasks; upstream permits settings outside the Elixir key set,lib/dspy/context.ex
+S004,load_settings,core,missing,Upstream exports settings.load; Elixir settings have no persistence API,
+S030,settings,core,partial,Reads expose an Elixir settings struct; arbitrary keys and upstream attribute mutation are not implemented,lib/dspy/settings.ex
+S046,BaseModule,core,partial,Module behaviour exposes parameter callbacks; recursive discovery and whole-state persistence differ,lib/dspy/module.ex
+S047,CodeExecutionError,core,missing,Upstream interpreter execution error has no corresponding runtime in Elixir,
+S048,CodeInterpreter,core,missing,No Elixir interpreter protocol matches the upstream start execute and shutdown interface,
+S049,CodeInterpreterError,core,missing,No Elixir code interpreter error interface,
+S050,Completions,core,partial,Prediction stores completion lists; no standalone typed column and row access interface,lib/dspy/prediction.ex
+S051,Example,core,partial,Attrs and input keys are supported; upstream labels and without convenience methods are absent,lib/dspy/example.ex
+S052,FinalOutput,core,missing,No interpreter final-output sentinel,
+S053,LocalInterpreter,core,missing,No corresponding Elixir local interpreter implementation,
+S054,Module,core,partial,Public forward and parameter export work; upstream recursive named predictors and whole-program persistence remain open,lib/dspy/module.ex
+S055,Prediction,core,partial,Attrs completions and LM usage are supported; upstream from_completions and score arithmetic are absent,lib/dspy/prediction.ex
+S056,PythonInterpreter,core,missing,No corresponding code interpreter runtime in the Elixir port,
+S057,resolve_interpreter_factory,core,missing,No interpreter factory resolution in Elixir settings or modules,
+S058,SandboxSerializable,core,missing,No serialization interface for an Elixir code sandbox,
+S062,InputField,core,partial,Elixir input field macros cover type and description; upstream annotated constraints are wider,lib/dspy/signature/dsl.ex
+S063,OldField,core,approved_exclusion,Legacy signature field shim covered by the 2026-09-28 exclusions,
+S064,OldInputField,core,approved_exclusion,Legacy signature field shim covered by the 2026-09-28 exclusions,
+S065,OldOutputField,core,approved_exclusion,Legacy signature field shim covered by the 2026-09-28 exclusions,
+S066,OutputField,core,partial,Elixir output fields support typed schemas; upstream accepts wider annotated constraints,lib/dspy/signature/dsl.ex
+S067,Signature,core,partial,Elixir provides typed fields and parsing; upstream type expressions and signature transformations are wider,lib/dspy/signature.ex
+S068,SignatureMeta,core,partial,Elixir DSL builds signatures at compile time; upstream metaclass also implements class-level field transformations,lib/dspy/signature/dsl.ex
+S069,ensure_signature,core,partial,Constructors normalize strings and signature modules; no public shared helper with upstream options,lib/dspy/predict.ex
+S070,infer_prefix,core,approved_exclusion,Legacy signature helper covered by the 2026-09-28 exclusions,
+S071,make_signature,core,partial,Arrow signatures are parsed; the upstream annotated and nested Python type grammar has no direct equivalent,lib/dspy/signature.ex
+S089,AdapterParseError,core,partial,Forward returns tagged output parse failures with the raw response; upstream exception metadata differs,lib/dspy/signature/adapter/pipeline.ex
+S090,ContextWindowExceededError,core,missing,No stable DSPy classification for provider context-limit errors,
+S091,DSPyError,core,approved_exclusion,Python base exception covered by the 2026-09-28 exclusions; specific error contracts are tracked separately,
+S092,LMAuthError,core,missing,Provider error passes through without a normalized authentication classification,
+S093,LMBillingError,core,missing,No normalized billing error classification,
+S094,LMCollectionLimitError,core,missing,No core streaming collector with bounded retention and partial results,
+S095,LMConfigurationError,core,missing,Model configuration failures may return errors; no shared LM configuration error contract,lib/dspy/lm.ex
+S096,LMError,core,missing,Public calls return error tuples; the provider reason is not classified by dspy.ex,lib/dspy/lm.ex
+S097,LMInvalidRequestError,core,missing,Elixir validates some local request shapes; classified provider invalid-request reasons are absent,lib/dspy/lm/req_llm.ex
+S098,LMLockTimeoutError,core,missing,No matching credential-lock timeout contract,
+S099,LMNotConfiguredError,core,partial,Elixir returns no_lm_configured when no default LM exists; upstream additionally classifies missing provider configuration,lib/dspy/lm.ex
+S100,LMProviderError,core,missing,Provider errors pass through ReqLLM; no committed DSPy provider metadata contract,lib/dspy/lm/req_llm.ex
+S101,LMRateLimitError,core,missing,No normalized rate-limit classification or retry-after contract,
+S102,LMServerError,core,missing,No normalized server error classification,
+S103,LMStreamAssemblyError,core,missing,No core stream assembler or structured partial-stream failure,
+S104,LMTimeoutError,core,missing,Provider timeouts pass through without a stable DSPy LM timeout classification,
+S105,LMTransportError,core,missing,Transport errors propagate via the LM tuple contract; there is no normalized transport class,lib/dspy/lm/req_llm.ex
+S106,LMUnexpectedError,core,missing,No normalized unexpected-provider failure preserving a cause,
+S107,LMUnsupportedFeatureError,core,missing,Capability checks exist; no matching structured unsupported-feature failure,
+S108,LMUnsupportedModelError,core,missing,No normalized upstream-style unsupported model error,
+S109,is_retryable_lm_error,core,missing,Elixir transport retry has a budget but no provider-aware retry classifier,
+S032,BestOfN,predict,partial,Reward selection and rollout isolation work; upstream deep-copies the program and merges the winning trace,lib/dspy/best_of_n.ex
+S033,ChainOfThought,predict,partial,"needs_golden: 3.5 defaults to the Reasoning type and supports a text rationale opt-in; Elixir adds a text reasoning field",lib/dspy/chain_of_thought.ex
+S035,KNN,predict,missing,No corresponding upstream-style nearest-neighbor prediction module found in lib or extras,
+S036,MultiChainComparison,predict,partial,Answer-only attempts now match 3.5; upstream Predict constructor config is not exposed wholesale,lib/dspy/multi_chain_comparison.ex
+S037,Parallel,predict,partial,Ordered batch and failed inputs are supported; per-call worker overrides and traceback option are absent,lib/dspy/parallel.ex
+S038,Predict,predict,partial,needs_golden: Elixir prediction and contracts are tested; upstream now defaults to native tool calling through XML,lib/dspy/predict.ex
+S040,RLM,predict,missing,No Elixir recursive language model module found,
+S041,ReAct,predict,partial,"needs_golden: 3.5 uses structured tool calls and a reserved submit tool; Elixir retains named tool and finish fields",lib/dspy/react.ex
+S043,Refine,predict,partial,needs_golden: Reward-guided refinement exists; upstream resolves XML defaults and masks typed Reasoning as text,lib/dspy/refine.ex
+S044,majority,predict,partial,"needs_golden: Elixir has majority voting; its default normalizer requires strings while upstream passes other values through",lib/dspy.ex
+S045,Flex,predict,missing,No Elixir Flex module found,
+S005,Adapter,adapter,partial,Signature adapters format request maps and parse text; upstream uses typed Prompt with reasoning and tool hooks,lib/dspy/signature/adapter.ex
+S006,Audio,adapter,missing,No typed audio value or signature-to-provider audio mapping found,
+S007,ChatAdapter,adapter,partial,Signature extraction and text fallback work; upstream typed Prompt and fine-tuning formatting differ,lib/dspy/signature/adapters/chat.ex
+S008,Code,adapter,partial,Elixir validates code output syntax; upstream also provides a language-parameterized code type,lib/dspy/signature.ex
+S009,File,adapter,partial,Elixir attachments pass file content into requests; upstream has a typed File interface,lib/dspy/attachments.ex
+S010,History,adapter,partial,Elixir renders user and assistant messages; upstream formats structured tool events,lib/dspy/history.ex
+S011,Image,adapter,partial,Elixir supports typed image inputs; upstream additionally exposes image download and PIL conversion,lib/dspy/image.ex
+S012,JSONAdapter,adapter,partial,Native contract and text fallback are consumer-tested; typed Reasoning and Prompt preprocessing differ,lib/dspy/signature/adapters/json.ex
+S013,Reasoning,adapter,missing,Elixir reasoning text and token accounting do not implement a typed native Reasoning field,
+S014,Tool,adapter,partial,Executable tools and native call extraction exist; upstream typed FunctionTool conversion remains open,lib/dspy/tools.ex
+S015,ToolCallResults,adapter,missing,No typed container matching upstream tool results and result references,
+S016,ToolCalls,adapter,partial,Elixir decodes and validates call lists; upstream typed round trips and structured history differ,lib/dspy/signature/adapter/pipeline.ex
+S017,TwoStepAdapter,adapter,partial,Elixir runs an explicit extraction LM stage; upstream constructor and typed Prompt differ and upstream keeps it deprecated in 3.5,lib/dspy/signature/adapters/two_step.ex
+S018,Type,adapter,partial,Signature fields have types and structured schemas; upstream exposes an extensible adapter Type base,lib/dspy/typed_outputs.ex
+S019,XMLAdapter,adapter,missing,Elixir utility is a parsing stub and does not implement the signature adapter,lib/dspy/adapters.ex
+S020,BaseLM,client,partial,Elixir LM behaviour covers generation and feature checks; upstream also defines copy state and streaming methods,lib/dspy/lm.ex
+S021,Embedder,client,partial,ReqLLM embeddings support single and batch calls; DSPy Embedder is a callable facade with cache controls,lib/dspy/retrieve/embeddings/req_llm.ex
+S022,LM,client,partial,ReqLLM handles generation and token options; upstream typed requests and LM copy state interfaces remain open,lib/dspy/lm/req_llm.ex
+S023,Provider,client,missing,Downstream clients route providers but dspy.ex has no provider training interface,
+S024,TrainingJob,client,missing,No corresponding LM training-job API,
+S025,configure_cache,client,partial,"needs_golden: Elixir provides an opt-in memory cache; disk configuration and entry limits are missing",lib/dspy/lm/cache.ex
+S026,disable_litellm_logging,client,approved_exclusion,LiteLLM-only interface excluded in the 3.4 approval,
+S027,enable_litellm_logging,client,approved_exclusion,LiteLLM-only interface excluded in the 3.4 approval,
+S028,inspect_history,client,partial,Global history prints invocation metadata; upstream includes input and output plus a destination option,lib/dspy.ex
+S029,ColBERTv2,client,missing,Core module is a placeholder returning errors and has no server integration,lib/dspy/retrieve.ex
+S072,streamify,client,missing,Quarantined client streaming does not expose a DSPy program stream wrapper,
+U020,StatusMessage,client,missing,No core program streaming status event type,
+U021,StatusMessageProvider,client,missing,No core status provider interface for streaming,
+U022,StreamListener,client,missing,No core stream listener for predictor output fields,
+U023,StreamResponse,client,missing,No core streaming response chunk type,
+U024,apply_sync_streaming,client,missing,No core wrapper exposing a synchronous program stream,
+U025,streaming_response,client,missing,No streaming response serializer for program output,
+U037,cache,client,partial,Supervised ETS retains cached responses across caller exits; upstream includes bounded memory and disk tiers,lib/dspy/lm/cache.ex
+U038,AnthropicCompat,client,missing,ReqLLM handles the wire; no DSPy-exposed compatibility policy,
+U039,ModelSupport,client,missing,LM supports feature checks; no upstream-style caller-declared model capability policy,lib/dspy/lm.ex
+U040,OpenAIChatCompat,client,missing,ReqLLM handles the wire; no DSPy-exposed compatibility policy,
+U041,OpenAIResponsesCompat,client,missing,No DSPy-exposed Responses compatibility policy,
+U042,ProviderDefinition,client,missing,Model prefixes route to ReqLLM; no DSPy provider-definition interface,
+U043,RegisteredProvider,client,missing,No DSPy provider binding with metadata and capability declarations,
+U044,RouterConfig,client,missing,No DSPy router config for custom provider definitions,
+U045,register_provider,client,missing,No DSPy provider registry mutation API,
+U046,registered_providers,client,missing,No DSPy registry inspection API,
+U047,unregister_provider,client,missing,No DSPy provider registry removal API,
+S031,Evaluate,evaluation_optimizer,partial,needs_golden: Offline evaluation verifies failure scores and saved reports; upstream callback metadata and union-of-row-keys CSV exports are missing,lib/dspy/evaluate.ex
+S073,AvatarOptimizer,evaluation_optimizer,missing,Upstream optimizer has no Elixir implementation in lib or extras,
+S074,BetterTogether,evaluation_optimizer,missing,Upstream optimizer has no Elixir implementation in lib or extras,
+S075,BootstrapFewShot,evaluation_optimizer,partial,Elixir samples and filters demos; upstream teacher settings and trace-aware metrics are absent,lib/dspy/teleprompt/bootstrap_few_shot.ex
+S076,BootstrapFewShotWithOptuna,evaluation_optimizer,missing,Upstream Optuna search has no Elixir equivalent,
+S077,BootstrapFewShotWithRandomSearch,evaluation_optimizer,partial,Elixir searches candidate programs with seeded sampling but upstream candidate strategy parity remains open,lib/dspy/teleprompt/bootstrap_few_shot.ex
+S078,BootstrapFinetune,evaluation_optimizer,missing,No optimizer for bootstrapped model fine-tuning in Elixir,
+S079,COPRO,evaluation_optimizer,partial,Elixir searches instructions for Predict and ChainOfThought; upstream discovers named predictors across programs,lib/dspy/teleprompt/copro.ex
+S080,Ensemble,evaluation_optimizer,partial,Elixir supports ensemble reduction strategies; upstream arbitrary reducer and deterministic selection options differ,lib/dspy/teleprompt/ensemble.ex
+S081,GEPA,evaluation_optimizer,missing,Elixir has candidate search; upstream reflection LM and Pareto selection are absent,lib/dspy/teleprompt/gepa.ex
+S082,InferRules,evaluation_optimizer,missing,Upstream optimizer has no Elixir implementation in lib or extras,
+S083,KNNFewShot,evaluation_optimizer,missing,No Elixir optimizer selects demonstrations with KNN,
+S084,LabeledFewShot,evaluation_optimizer,partial,Elixir selects and assigns demos; upstream sample=False and recursive predictor installation differ,lib/dspy/teleprompt/labeled_few_shot.ex
+S085,MIPROv2,evaluation_optimizer,partial,Elixir searches prompts and demos for Predict and ChainOfThought; upstream teacher settings and named predictors differ,lib/dspy/teleprompt/mipro_v2.ex
+S086,SIMBA,evaluation_optimizer,partial,Elixir implements iterative candidate strategies; upstream prompt model and teacher settings remain open,lib/dspy/teleprompt/simba.ex
+S087,bootstrap_trace_data,evaluation_optimizer,missing,No corresponding Elixir trace-to-training-data API,
+U006,CompleteAndGrounded,evaluation_optimizer,partial,Two-stage judge is tested; automatic trace-aware threshold dispatch remains H13,lib/dspy/evaluate/complete_and_grounded.ex
+U007,EM,evaluation_optimizer,done,Normalized exact match over reference answers; pinned metric fixtures pass,lib/dspy/metrics.ex
+U008,EvaluationResult,evaluation_optimizer,partial,Percentage and ordered triples are tested; standalone struct differs from upstream Prediction subclass,lib/dspy/evaluate/result.ex
+U009,SemanticF1,evaluation_optimizer,partial,The offline example verifies evaluation scoring; automatic trace-aware threshold dispatch remains H13,lib/dspy/evaluate/semantic_f1.ex
+U010,answer_exact_match,evaluation_optimizer,partial,Exact and fractional scoring are fixture-tested; frac is a keyword and trace is deliberately omitted,lib/dspy/metrics.ex
+U011,answer_passage_match,evaluation_optimizer,partial,Contiguous token matching is fixture-tested; bare string context is deliberately rejected,lib/dspy/metrics.ex
+U012,normalize_text,evaluation_optimizer,done,Upstream normalization is unchanged since 3.4.0 and pinned Unicode fixtures pass,lib/dspy/metrics.ex
+S059,Embeddings,utility_dataset,partial,Local similarity search exists; upstream batching index selection and save-load interface differ,lib/dspy/retrieve/in_memory_retriever.ex
+S060,EmbeddingsWithScores,utility_dataset,partial,Local retrieval returns scored documents; upstream has a callable score-bearing retriever facade,lib/dspy/retrieve/in_memory_retriever.ex
+S061,Retrieve,utility_dataset,partial,Elixir retriever behaviour and RAG pipeline exist; upstream Retrieve is a callable parameter,lib/dspy/retrieve.ex
+S088,asyncify,utility_dataset,approved_exclusion,Python asyncio wrapper covered by the 2026-09-28 exclusions,
+S110,configure_dspy_loggers,utility_dataset,missing,Elixir uses Logger without a DSPy-specific logger setup API,
+S111,disable_logging,utility_dataset,missing,No DSPy-scoped logging switch,
+S112,enable_logging,utility_dataset,missing,No DSPy-scoped logging switch,
+S113,load,utility_dataset,partial,Elixir imports parameters into a supplied module; upstream load reconstructs a whole program,lib/dspy/parameter.ex
+S114,syncify,utility_dataset,approved_exclusion,Python asyncio wrapper covered by the 2026-09-28 exclusions,
+S115,track_usage,utility_dataset,partial,Per-model usage is attached to predictions; no public scoped usage tracker object,lib/dspy/lm/usage_acc.ex
+U001,Colors,utility_dataset,missing,No bundled Colors dataset,
+U002,DataLoader,utility_dataset,partial,needs_golden: CSV JSON sampling and splits are implemented; Hugging Face pandas parquet and RM loaders are absent,lib/dspy/data_loader.ex
+U003,Dataset,utility_dataset,partial,Train dev and test splits are supported; upstream seed reset and prepare-by-seed methods differ,lib/dspy/dataset.ex
+U004,HotPotQA,utility_dataset,missing,No bundled HotPotQA dataset loader,
+U005,MATH,utility_dataset,missing,No bundled MATH dataset loader,
+U013,Choice,utility_dataset,missing,Plain enum validation does not expose decision confidence or probabilities,
+U014,Citations,utility_dataset,missing,No typed Citations field linking cited text to documents,
+U015,Document,utility_dataset,missing,Elixir retrieval documents are distinct from the typed adapter Document field,
+U016,Noul,utility_dataset,missing,No matching typed Noul decision,
+U017,ReAnchor,utility_dataset,missing,No corresponding ReAnchor optimizer,
+U018,Score,utility_dataset,missing,No typed Score decision rubric or numeric bounds API,
+U026,BaseCallback,utility_dataset,partial,Adapter and tool callbacks are implemented; upstream has unified callbacks for additional engine and module boundaries,lib/dspy/signature/adapter/callback.ex
+U027,DummyLM,utility_dataset,missing,Scripted Elixir test double works; upstream also exposes DummyLM to library consumers,test/support/dummy_lm.ex
+U028,DummyVectorizer,utility_dataset,missing,No shipped reusable deterministic vectorizer,
+U031,download,utility_dataset,missing,No public general-purpose download helper equivalent,
+U032,dummy_rm,utility_dataset,missing,No public scripted retriever factory equivalent,
+U033,exceptions,utility_dataset,partial,Elixir uses error tuples and selected exceptions; narrower LM classifications tracked in separate rows,lib/dspy/lm.ex
+U034,experimental,utility_dataset,approved_exclusion,Python decorator module covered by the 2026-09-28 exclusions,
+U035,pretty_print_history,utility_dataset,partial,Elixir prints a metadata summary; upstream prints prompts and completions,lib/dspy.ex
+U036,with_callbacks,utility_dataset,partial,Dspy.with_callbacks covers adapter and tool events; module LM and evaluation lifecycle hooks are missing,lib/dspy.ex
+N001,BoundingBox,adapter,missing,No Elixir bounding-box signature type found,
+N002,Prompt,adapter,missing,Elixir adapters return request maps; there is no equivalent public typed Prompt with a separate system field,
+N003,InterpreterPool,core,missing,Upstream adds a public interpreter pool; Elixir has no matching runtime,
+N004,InstructionProposer,evaluation_optimizer,missing,No public GEPA instruction proposal interface,
+N005,InferencePricing,client,missing,No DSPy-exposed provider pricing definition,
+N006,PricingTier,client,missing,No DSPy-exposed tiered pricing definition,
