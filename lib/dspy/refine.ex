@@ -15,13 +15,16 @@ defmodule Dspy.Refine do
   via `:reward_fn`, and returns the best prediction. If a score meets/exceeds
   `:threshold`, it stops early.
 
-  Notes:
-  - This implementation does not (yet) add self-critique or feedback to the prompt.
-    It is a deterministic control-flow primitive that can be extended later.
+  Each attempt has a distinct rollout ID, starting at the configured ID or
+  `0`. Named predictors use temperature `1.0`. Custom modules inherit `1.0`
+  as a scoped default and can supply an explicit request temperature. The
+  rollout ID partitions the LM response cache. Rewards run in the caller's
+  settings scope.
   """
 
   use Dspy.Module
 
+  alias Dspy.{PredictorConfig, Settings}
   alias Dspy.Module, as: DspyModule
 
   defstruct [:program, :threshold, :n, :reward_fn]
@@ -69,6 +72,8 @@ defmodule Dspy.Refine do
 
   @impl true
   def forward(%__MODULE__{} = refiner, inputs) when is_map(inputs) do
+    start = Settings.get(:rollout_id) || 0
+
     initial = %{
       best_pred: nil,
       best_score: nil,
@@ -78,9 +83,17 @@ defmodule Dspy.Refine do
       program_error_attempts: 0
     }
 
-    1..refiner.n
-    |> Enum.reduce_while(initial, fn _attempt, acc ->
-      case DspyModule.forward(refiner.program, inputs) do
+    0..(refiner.n - 1)
+    |> Enum.reduce_while(initial, fn offset, acc ->
+      rollout_id = start + offset
+      program = PredictorConfig.set_rollout(refiner.program, rollout_id)
+
+      result =
+        Settings.context([temperature: 1.0, rollout_id: rollout_id], fn ->
+          DspyModule.forward(program, inputs)
+        end)
+
+      case result do
         {:ok, pred} ->
           case safe_reward(refiner.reward_fn, inputs, pred) do
             {:ok, score} ->
