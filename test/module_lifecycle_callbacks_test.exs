@@ -266,6 +266,47 @@ defmodule Dspy.ModuleLifecycleCallbacksTest do
     refute_received {:module_event, _, _, _, _, _, _}
   end
 
+  @tag :tmp_dir
+  test "loads a registered module handler on first use", %{tmp_dir: path} do
+    handler = __MODULE__.FirstTouchHandler
+
+    [{^handler, beam}] =
+      Code.compile_quoted(
+        quote do
+          defmodule unquote(handler) do
+            @behaviour Dspy.Module.Callback
+
+            @impl true
+            def on_module_end(meta, payload, caller) do
+              send(caller, {:first_touch_end, meta, payload})
+              :ok
+            end
+          end
+        end
+      )
+
+    File.write!(Path.join(path, Atom.to_string(handler) <> ".beam"), beam)
+    code_path = String.to_charlist(path)
+    assert :code.delete(handler)
+    :code.purge(handler)
+    assert :code.add_patha(code_path)
+
+    on_exit(fn ->
+      :code.del_path(code_path)
+      :code.delete(handler)
+      :code.purge(handler)
+    end)
+
+    assert :code.is_loaded(handler) == false
+    assert is_list(:code.which(handler))
+
+    program = %Program{run: fn _inputs -> {:ok, Dspy.Prediction.new(%{})} end}
+    assert {:ok, %Dspy.Prediction{}} = Dspy.call(program, %{}, callbacks: [{handler, self()}])
+
+    assert_received {:first_touch_end, %{module: Program, call_id: call_id}, %{status: :ok}}
+    assert is_reference(call_id)
+  end
+
   test "an adapter-only registration and both local settings need no server request" do
     ready = make_ref()
     owner = self()

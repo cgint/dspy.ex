@@ -53,8 +53,9 @@ defmodule Dspy.Signature.Adapter.Callbacks do
     |> merge(program, current_call_callbacks())
     |> Enum.filter(fn
       {mod, _state} when is_atom(mod) ->
-        function_exported?(mod, :on_module_start, 3) or
-          function_exported?(mod, :on_module_end, 3)
+        Code.ensure_loaded?(mod) and
+          (function_exported?(mod, :on_module_start, 3) or
+             function_exported?(mod, :on_module_end, 3))
 
       _ ->
         false
