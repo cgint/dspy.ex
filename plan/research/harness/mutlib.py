@@ -177,7 +177,9 @@ class Harness:
     def run_tests(self, report_path):
         env = dict(os.environ)
         # Use an absolute path so the formatter can write to it regardless of cwd
-        report_path = Path(report_path).resolve()
+        report_path = Path(report_path).absolute()
+        # A previous run may have stopped after reporting but before cleanup.
+        report_path.unlink(missing_ok=True)
         env["DSPY_MUT_REPORT"] = str(report_path)
         # Mix's incremental compile keeps a `_build/test` beam and, based on
         # recorded mtimes, may decide an edited source file is "unchanged" and

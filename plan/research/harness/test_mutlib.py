@@ -17,6 +17,8 @@ import sys
 import tempfile
 import unittest
 from pathlib import Path
+from subprocess import CompletedProcess
+from unittest.mock import patch
 
 HERE = Path(__file__).resolve().parent
 sys.path.insert(0, str(HERE))
@@ -74,6 +76,48 @@ def verdict_of(payload, mid):
         if m["id"] == mid:
             return m["verdict"]
     return None
+
+
+class TestReportIsolation(unittest.TestCase):
+    def test_compile_failure_cannot_kill_mutation_using_old_report(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            report = root / ".mutlib_report_old.jsonl"
+            report.write_text(
+                '{"name":"test rejects an invalid number","state":"failed",'
+                '"error":"Elixir.ExUnit.AssertionError"}\n'
+                '{"suite_finished":true}\n'
+            )
+            mutation = Mutation(
+                id="old",
+                file=root / "parser.ex",
+                old="valid source",
+                new="broken source",
+                expect=["rejects an invalid number"],
+            )
+            harness = Harness([mutation], [], [], root=root)
+
+            failed_compile = CompletedProcess(["mix", "test"], 2, "", "Compilation error")
+            with patch("mutlib.subprocess.run", return_value=failed_compile):
+                result = harness.run_tests(report)
+
+            self.assertEqual("INVALID", harness._verdict(mutation, result)[0])
+
+    def test_cleanup_does_not_follow_a_stale_report_symlink(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            sentinel = root / "unrelated.jsonl"
+            sentinel.write_text("keep")
+            report = root / ".mutlib_report_old.jsonl"
+            report.symlink_to(sentinel)
+
+            harness = Harness([], [], [], root=root)
+            failed_compile = CompletedProcess(["mix", "test"], 2, "", "Compilation error")
+            with patch("mutlib.subprocess.run", return_value=failed_compile):
+                harness.run_tests(report)
+
+            self.assertEqual("keep", sentinel.read_text())
+            self.assertFalse(report.is_symlink())
 
 
 class TestVerdicts(unittest.TestCase):
