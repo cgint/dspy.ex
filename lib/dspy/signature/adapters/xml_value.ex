@@ -7,17 +7,47 @@ defmodule Dspy.Signature.Adapters.XMLValue do
   @entry_tag ~r/\A<entry[ \t]+key[ \t]*=[ \t]*(?:"([^"<\x00-\x1f]*)"|'([^'<\x00-\x1f]*)')[ \t]*(\/?)>/u
   @opening_newline ~r/\A[ \t]*\r?\n/
   @closing_newline ~r/\r?\n[ \t]*\z/
+  @json_string ~S/"(?:[^"\\]++|\\[\s\S])*+"/
   @scalar_types %{"integer" => :integer, "number" => :number, "boolean" => :boolean}
 
   def kind(schema) do
     case shape(schema) do
-      %{"type" => "array"} -> :array
-      %{"type" => "object"} -> :object
-      %{"type" => _other} -> :leaf
-      %{"properties" => properties} when is_map(properties) -> :object
-      %{"additionalProperties" => additional} when is_map(additional) -> :object
-      _ -> :leaf
+      %{"type" => "array"} = array ->
+        array_kind(array)
+
+      %{"type" => "object"} = object ->
+        object_kind(object)
+
+      %{"type" => _other} ->
+        :leaf
+
+      %{"properties" => _properties} = object ->
+        object_kind(object)
+
+      %{"additionalProperties" => additional} = object when is_map(additional) ->
+        object_kind(object)
+
+      _ ->
+        :leaf
     end
+  end
+
+  defp object_kind(schema) do
+    additional = Map.get(schema, "additionalProperties", true)
+
+    if is_map(Map.get(schema, "properties", %{})) and
+         (is_map(additional) or is_boolean(additional)),
+       do: :object,
+       else: :leaf
+  end
+
+  defp array_kind(schema) do
+    items = Map.get(schema, "items", true)
+
+    if is_integer(length(Map.get(schema, "prefixItems", []))) and
+         (is_map(items) or is_boolean(items)),
+       do: :array,
+       else: :leaf
   end
 
   def empty(schema) do
@@ -69,7 +99,7 @@ defmodule Dspy.Signature.Adapters.XMLValue do
     read_container(text, name, schema, boundary, [])
   end
 
-  def literal(text, name, boundary), do: read_literal(text, name, boundary, [], true)
+  def literal(text, name, boundary, mode), do: read_literal(text, name, boundary, [], true, mode)
 
   defp read_container(text, name, schema, boundary, ancestors) do
     schema = shape(schema)
@@ -77,7 +107,7 @@ defmodule Dspy.Signature.Adapters.XMLValue do
     closer = Regex.compile!("\\A" <> close_pattern(name))
 
     if json_container?(String.trim_leading(text), kind) do
-      with {:ok, raw, rest} <- read_literal(text, name, boundary, ancestors, false),
+      with {:ok, raw, rest} <- read_literal(text, name, boundary, ancestors, false, :json),
            {:ok, decoded} <- decode_json(raw, name) do
         {:ok, decoded, rest}
       end
@@ -180,7 +210,7 @@ defmodule Dspy.Signature.Adapters.XMLValue do
   defp read_child(text, name, false, schema, boundary, scopes) do
     case kind(schema) do
       :leaf ->
-        with {:ok, raw, rest} <- read_literal(text, name, boundary, scopes, false),
+        with {:ok, raw, rest} <- read_literal(text, name, boundary, scopes, false, :text),
              {:ok, decoded} <- cast_scalar(raw, shape(schema), name) do
           {:ok, decoded, rest}
         end
@@ -226,7 +256,7 @@ defmodule Dspy.Signature.Adapters.XMLValue do
 
   # A matching close in a literal is structural only when a valid continuation
   # follows it. A leaf may not run past a recognized enclosing close.
-  defp read_literal(text, name, boundary, scopes, allow_fallback?) do
+  defp read_literal(text, name, boundary, scopes, allow_fallback?, mode) do
     field_close =
       if Regex.match?(@opening_newline, text) do
         "</#{Regex.escape(name)}[ \\t]*>(?=[ \\t]*(?:\\r?\\n|\\z))"
@@ -235,6 +265,8 @@ defmodule Dspy.Signature.Adapters.XMLValue do
       end
 
     alternatives = ["(" <> field_close <> ")" | Enum.map(scopes, &close_pattern(elem(&1, 0)))]
+    # Skip quoted JSON tokens before looking for any of the XML closing tags.
+    alternatives = if mode == :json, do: [@json_string | alternatives], else: alternatives
     matcher = Regex.compile!(Enum.join(alternatives, "|"))
     fallback = if allow_fallback?, do: :keep, else: :none
 

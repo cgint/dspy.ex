@@ -16,7 +16,8 @@ fields support defaults and self-closing nulls. Output retries request XML
 tags and preserve multipart images and trailing text. Schema-backed output
 records, lists, and dictionaries support nested XML in responses and demos.
 Lists use `<item>` and dictionary keys that need escaping use `<entry key="...">`.
-Structured fields still accept JSON inside their XML tags.
+Structured fields still accept JSON inside their XML tags, including schemas
+that rely on `patternProperties` or have multiple non-null branches.
 
 ### Refine failure allowance
 

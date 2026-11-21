@@ -16,6 +16,7 @@ defmodule Dspy.Signature.Adapters.XMLAdapter do
 
   @open_tag ~r/\A<([\p{L}_][\p{L}\p{N}\p{M}_.-]*)[ \t]*(\/?)>/u
   @tag_name ~r/\A[\p{L}_][\p{L}\p{N}\p{M}_.-]*\z/u
+  @invalid_key_char ~r/[\x00-\x08\x0B\x0C\x0E-\x1F\x{FFFE}\x{FFFF}]/u
   @fenced ~r/\A```(?:xml)?[ \t]*\r?\n(.*)\r?\n```[ \t]*(?:\r?\n[^<]*)?\z/s
   @reasoning ~r/\A<(think|thinking)>/
   @key_escapes %{
@@ -108,7 +109,7 @@ defmodule Dspy.Signature.Adapters.XMLAdapter do
     case schema do
       nil ->
         body =
-          if field.type == :json or Map.has_key?(field, :schema),
+          if json_field?(field),
             do: render_json(value),
             else: ChatAdapter.render_value_for_prompt(value)
 
@@ -145,7 +146,7 @@ defmodule Dspy.Signature.Adapters.XMLAdapter do
   defp render_object(value, schema) do
     value = if is_struct(value), do: Map.from_struct(value), else: value
 
-    if Enum.all?(Map.keys(value), &(is_atom(&1) or is_binary(&1))) do
+    if Enum.all?(Map.keys(value), &xml_key?/1) do
       entries = value |> Enum.map(fn {key, item} -> {to_string(key), item} end) |> Enum.sort()
 
       children =
@@ -165,6 +166,13 @@ defmodule Dspy.Signature.Adapters.XMLAdapter do
       render_json(value)
     end
   end
+
+  defp xml_key?(key) when is_atom(key), do: xml_key?(Atom.to_string(key))
+
+  defp xml_key?(key) when is_binary(key),
+    do: String.valid?(key) and not Regex.match?(@invalid_key_char, key)
+
+  defp xml_key?(_key), do: false
 
   defp entry_tag(key) do
     if Regex.match?(@tag_name, key) do
@@ -358,12 +366,16 @@ defmodule Dspy.Signature.Adapters.XMLAdapter do
         {:ok, value, rest}
       end
     else
-      with {:ok, raw, rest} <- XMLValue.literal(text, name, boundary?),
+      mode = if json_field?(field), do: :json, else: :text
+
+      with {:ok, raw, rest} <- XMLValue.literal(text, name, boundary?, mode),
            {:ok, value} <- cast_value(raw, field) do
         {:ok, value, rest}
       end
     end
   end
+
+  defp json_field?(field), do: field.type == :json or Map.has_key?(field, :schema)
 
   defp validate_term(term, %{schema: schema, name: name}) do
     wrap_cast_result(TypedOutputs.validate_term(term, schema), name)

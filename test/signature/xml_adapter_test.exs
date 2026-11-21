@@ -91,6 +91,8 @@ defmodule Dspy.Signature.XMLAdapterTest do
         required: [:values, :metadata]
       }
     )
+
+    output_field(:summary, :string, "Summary", required: false)
   end
 
   test "parses typed fields and treats markup and closing-tag literals as text" do
@@ -232,6 +234,37 @@ defmodule Dspy.Signature.XMLAdapterTest do
     request = XMLAdapter.format_request(signature, %{}, [demo])
     [_, rendered] = Regex.run(~r/(<data>.*<\/data>)/s, List.last(request.messages).content)
     assert %{data: ^expected} = XMLAdapter.parse_outputs(signature, rendered)
+
+    expected = %{"values" => nil, "metadata" => %{"a\0z" => "printable"}}
+    demo = Dspy.Example.new(%{data: expected})
+    request = XMLAdapter.format_request(signature, %{}, [demo])
+    [_, rendered] = Regex.run(~r/(<data>.*<\/data>)/s, List.last(request.messages).content)
+    assert %{data: ^expected} = XMLAdapter.parse_outputs(signature, rendered)
+  end
+
+  test "preserves closing tags and escaped quotes inside JSON strings" do
+    signature = Flexible.signature()
+    details = %{"text" => "literal \"quotes\" \\ </metadata><values> and </data><summary> text"}
+    metadata = %{"details" => details}
+    expected = %{"metadata" => metadata, "values" => [1]}
+
+    for xml <- [
+          "<data>#{Jason.encode!(expected)}</data><summary>ok</summary>",
+          "<data><metadata>#{Jason.encode!(metadata)}</metadata>" <>
+            "<values><item>1</item></values></data><summary>ok</summary>"
+        ] do
+      assert %{data: ^expected, summary: "ok"} = XMLAdapter.parse_outputs(signature, xml)
+    end
+  end
+
+  test "falls back to JSON instructions when a schema has invalid container metadata" do
+    signature = Typed.signature()
+    [output] = signature.output_fields
+    bad_schema = %{type: :object, properties: "bad"}
+    signature = %{signature | output_fields: [%{output | schema: bad_schema}]}
+
+    assert XMLAdapter.format_instructions(signature) =~ "<result>{JSON value}</result>"
+    assert {:error, _} = XMLAdapter.parse_outputs(signature, "<result>{}</result>")
   end
 
   test "accepts a fenced preamble and trailing prose" do
