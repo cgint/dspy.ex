@@ -174,7 +174,7 @@ After this you can …use the stronger optimizers: real GEPA, example selection 
 
 | id | symbol | status | V | E | score | introduced | deps | breaking | old P | gap | queue status |
 |---|---|---|---|---|---|---|---|---|---|---|---|
-| S035 | KNN | missing | M | M | 1.00 | <=2.6 | - | N | P6 | No Dspy.KNN; k/trainset/vectorizer + __call__ retrieval loop absent | todo |
+| S035 | KNN | partial | M | M | 1.00 | <=2.6 | - | N | P6 | Native index and dot-product lookup use declared examples and Dspy.Embedder. Field ordering, numeric precision, and ties follow the documented Elixir contract. | M6 native lookup |
 | S083 | KNNFewShot | missing | M | M | 1.00 | <=2.6 | DEP:embedder S075 | N | P6 | no Elixir equivalent | todo |
 | S082 | InferRules | missing | M | M | 1.00 | 3.0.0 | S031 | N | - | no Elixir equivalent | todo |
 | S078 | BootstrapFinetune | missing | H | L | 0.75 | <=2.6 | - | N | - | no Elixir equivalent | todo |
