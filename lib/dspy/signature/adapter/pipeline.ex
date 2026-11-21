@@ -11,7 +11,17 @@ defmodule Dspy.Signature.Adapter.Pipeline do
   It is used by `Dspy.Predict` and `Dspy.ChainOfThought`.
   """
 
-  alias Dspy.{Lifecycle, LM, Prediction, PredictorConfig, Settings, Signature, Telemetry}
+  alias Dspy.{
+    Lifecycle,
+    LM,
+    Prediction,
+    PredictorConfig,
+    ProgramStream,
+    Settings,
+    Signature,
+    Telemetry
+  }
+
   alias Dspy.Refine.Advice
   alias Dspy.Signature.Adapter.Callbacks
   alias Dspy.Signature.AdapterPipeline
@@ -58,12 +68,14 @@ defmodule Dspy.Signature.Adapter.Pipeline do
 
     count = Map.get(request_options, :n)
     lm = choice_lm(Keyword.get(opts, :lm), count)
+    on_delta = ProgramStream.current_delta()
 
     lm_options = %{
       lm: lm,
+      on_delta: on_delta,
       count: count,
       prediction_signature: Keyword.get(opts, :prediction_signature, signature),
-      max_retries: Keyword.get(opts, :max_retries, 3),
+      max_retries: if(on_delta, do: 0, else: Keyword.get(opts, :max_retries, 3)),
       request_options: force_tool(request_options, Keyword.get(opts, :forced_tool)),
       prompt_advice: Keyword.get(opts, :prompt_advice),
       telemetry?: telemetry?,
@@ -84,13 +96,15 @@ defmodule Dspy.Signature.Adapter.Pipeline do
           end
       end
 
+    max_output_retries = if on_delta, do: 0, else: max_output_retries
     call_id = make_ref()
     max_output_attempts = max_output_retries + 1
 
     meta = meta(call_id, adapter, signature)
 
     run = fn ->
-      with :ok <- validate_choice_request(count, lm, adapter, signature) do
+      with :ok <- validate_streaming_adapter(adapter, on_delta),
+           :ok <- validate_choice_request(count, lm, adapter, signature) do
         do_run_attempt(
           signature,
           inputs,
@@ -114,6 +128,12 @@ defmodule Dspy.Signature.Adapter.Pipeline do
       run.()
     end
   end
+
+  defp validate_streaming_adapter(Dspy.Signature.Adapters.TwoStep = adapter, on_delta)
+       when is_function(on_delta, 1),
+       do: {:error, {:unsupported_streaming_adapter, adapter}}
+
+  defp validate_streaming_adapter(_adapter, _on_delta), do: :ok
 
   defp force_tool(options, nil), do: options
 
@@ -852,7 +872,7 @@ defmodule Dspy.Signature.Adapter.Pipeline do
     result =
       with {:ok, advised_request} <- append_advice(request, lm_options.prompt_advice) do
         if lm_options.telemetry?, do: Telemetry.count_transport_attempt()
-        Dspy.LM.generate_with_options(lm_options.lm, advised_request, lm_options.cache_options)
+        invoke_lm(advised_request, lm_options)
       end
 
     case result do
@@ -874,6 +894,17 @@ defmodule Dspy.Signature.Adapter.Pipeline do
         end
     end
   end
+
+  defp invoke_lm(request, %{lm: bound_lm, on_delta: on_delta}) when is_function(on_delta, 1) do
+    lm = if is_nil(bound_lm), do: Settings.get(:lm), else: bound_lm
+
+    if is_nil(lm),
+      do: {:error, :no_lm_configured},
+      else: LM.stream_generate(lm, request, on_delta)
+  end
+
+  defp invoke_lm(request, %{lm: lm, cache_options: options}),
+    do: LM.generate_with_options(lm, request, options)
 
   defp retry_sleep_ms do
     Application.get_env(:dspy, :predict_retry_sleep_ms, 1000)

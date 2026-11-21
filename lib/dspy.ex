@@ -450,6 +450,21 @@ defmodule Dspy do
           {:ok, Dspy.Module.outputs()} | {:error, term()}
   def call(program, inputs, opts) when is_list(opts), do: forward(program, inputs, opts)
 
+  @doc """
+  Wrap a standalone Predict or ChainOfThought in a lazy callable stream.
+
+  Call the returned function with the program's inputs. Each enumeration uses
+  the enumerating process's DSPy context and yields `{:delta, text}` events
+  followed by the ordinary `Dspy.Prediction` or a terminal `{:error, reason}`.
+  Halting the enumeration cancels the run. Streamed calls make one attempt.
+  The original enumerating process must resume or halt an active continuation.
+
+  The options are the same per-call options accepted by `call/3`.
+  """
+  @spec streamify(Predict.t() | ChainOfThought.t(), keyword()) ::
+          (Dspy.Module.inputs() -> Enumerable.t())
+  def streamify(program, opts \\ []), do: Dspy.ProgramStream.wrap(program, opts)
+
   @doc "Alias for `forward!/2`."
   @spec call!(Dspy.Module.t(), Dspy.Module.inputs()) :: Dspy.Module.outputs()
   def call!(program, inputs) when is_list(inputs) do

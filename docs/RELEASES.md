@@ -8,6 +8,17 @@ This repo ships in **small, user-usable slices**.
 
 ## Consumer notes
 
+### Lazy program streams
+
+`Dspy.streamify/2` wraps a standalone Predict or ChainOfThought in an input
+function that returns an enumerable. Each enumeration uses the consumer's
+DSPy context and yields `{:delta, text}` events followed by a prediction
+or terminal error. Halting the enumeration or stopping its consumer cancels
+the ReqLLM HTTP request. Resume a suspended enumeration in its original
+process. Streaming makes one DSPy generation attempt and uses the ordinary
+adapter to parse the final prediction. Field listeners and status events
+remain in M5.
+
 ### LM streaming transport
 
 `Dspy.LM.stream_generate/3` delivers ReqLLM text deltas to a callback in the
