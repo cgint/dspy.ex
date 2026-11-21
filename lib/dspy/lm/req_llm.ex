@@ -32,6 +32,7 @@ defmodule Dspy.LM.ReqLLM do
 
   defstruct [
     :model,
+    :cache_namespace,
     default_opts: [],
     client_module: ReqLLM,
     context_module: ReqLLM.Context,
@@ -41,6 +42,7 @@ defmodule Dspy.LM.ReqLLM do
 
   @type t :: %__MODULE__{
           model: String.t(),
+          cache_namespace: String.t() | nil,
           default_opts: keyword(),
           client_module: module(),
           context_module: module(),
@@ -56,11 +58,19 @@ defmodule Dspy.LM.ReqLLM do
 
   Optional:
   - `:default_opts` - default ReqLLM options (merged with per-request options)
+  - `:cache_namespace` - account namespace for eligible disk cache entries
   - `:client_module` / `:context_module` / `:response_module` - for testing
   """
   def new(opts \\ []) do
+    namespace = Keyword.get(opts, :cache_namespace)
+
+    unless valid_cache_namespace?(namespace) do
+      raise ArgumentError, "expected :cache_namespace to be nil or a nonblank string"
+    end
+
     %__MODULE__{
       model: Keyword.fetch!(opts, :model),
+      cache_namespace: namespace,
       default_opts: Keyword.get(opts, :default_opts, []),
       client_module: Keyword.get(opts, :client_module, ReqLLM),
       context_module: Keyword.get(opts, :context_module, ReqLLM.Context),
@@ -68,6 +78,14 @@ defmodule Dspy.LM.ReqLLM do
       generation_module: Keyword.get(opts, :generation_module, ReqLLM.Generation)
     }
   end
+
+  @doc false
+  def valid_cache_namespace?(nil), do: true
+
+  def valid_cache_namespace?(namespace) when is_binary(namespace),
+    do: String.valid?(namespace) and String.trim(namespace) != ""
+
+  def valid_cache_namespace?(_namespace), do: false
 
   @impl true
   def generate(%__MODULE__{} = lm, request) when is_map(request) do

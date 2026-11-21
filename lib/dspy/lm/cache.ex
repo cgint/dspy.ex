@@ -20,6 +20,12 @@ defmodule Dspy.LM.Cache do
   @spec clear() :: :ok
   def clear, do: call(:clear, :ok)
 
+  def publish_disk_record(tid, epoch, temporary, destination) do
+    call({:publish_disk_record, tid, epoch, temporary, destination}, {:error, :cache_unavailable})
+  end
+
+  def await_disk_publications, do: call(:disk_publication_barrier, :ok)
+
   @doc """
   Fetch a cached value for `{lm, request}`.
 
@@ -57,6 +63,19 @@ defmodule Dspy.LM.Cache do
 
   def handle_call(:clear, _from, state),
     do: {:reply, :ok, replace_table(state.table, state.limit)}
+
+  def handle_call({:publish_disk_record, tid, epoch, temporary, destination}, _from, state) do
+    result =
+      if state.table == tid and Dspy.LM.DiskCache.context() == epoch do
+        File.rename(temporary, destination)
+      else
+        {:error, :stale_cache}
+      end
+
+    {:reply, result, state}
+  end
+
+  def handle_call(:disk_publication_barrier, _from, state), do: {:reply, :ok, state}
 
   def handle_call({:fetch, tid, key}, _from, %{table: tid} = state) do
     case :ets.lookup(tid, key) do
