@@ -121,6 +121,8 @@ defmodule Dspy.Predict do
              forced_tool: Map.get(predict, :forced_tool),
              config: get_config(predict),
              prompt_advice: Dspy.Refine.Advice.binding(predict),
+             on_terminal_parse_failure:
+               Dspy.Module.PredictorTrace.parse_failure_observer(predict),
              callbacks: predict.callbacks,
              max_retries: predict.max_retries,
              max_output_retries: predict.max_output_retries
@@ -128,9 +130,7 @@ defmodule Dspy.Predict do
       Dspy.Module.PredictorTrace.record(predict, inputs, prediction)
       {:ok, prediction}
     else
-      {:error, reason} = error ->
-        Dspy.Module.PredictorTrace.record_parse_failure(predict, inputs, reason)
-        error
+      {:error, reason} -> {:error, reason}
     end
   end
 

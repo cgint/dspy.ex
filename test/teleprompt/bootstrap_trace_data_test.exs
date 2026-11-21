@@ -62,6 +62,9 @@ defmodule Dspy.Teleprompt.BootstrapTraceDataTest do
         String.contains?(prompt, "leaf-transport") ->
           {:error, :unavailable}
 
+        String.contains?(prompt, "leaf-provider-error") ->
+          {:error, {:output_parse_failed, :provider_error, %{raw_output: "lookalike"}}}
+
         String.contains?(prompt, "Your previous output") ->
           {:ok, ~s({"answer":"ok","reasoning":"recovered"})}
 
@@ -291,7 +294,9 @@ defmodule Dspy.Teleprompt.BootstrapTraceDataTest do
     Dspy.context([cache: false], fn ->
       for {question, reason} <- [
             {"unobserved", {:output_parse_failed, :manual, %{raw_output: "unobserved"}}},
-            {"transport", :unavailable}
+            {"transport", :unavailable},
+            {"provider-error",
+             {:output_parse_failed, :provider_error, %{raw_output: "lookalike"}}}
           ] do
         error =
           assert_raise Error, fn ->
@@ -302,8 +307,10 @@ defmodule Dspy.Teleprompt.BootstrapTraceDataTest do
         assert error.reason == reason
       end
 
-      assert [%{example_index: 1}] =
-               Teleprompt.bootstrap_trace_data(program, Enum.map(["transport", "first"], &row/1),
+      assert [%{example_index: 2}] =
+               Teleprompt.bootstrap_trace_data(
+                 program,
+                 Enum.map(["transport", "provider-error", "first"], &row/1),
                  capture_failed_parses: true,
                  raise_on_error: false
                )

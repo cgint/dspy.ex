@@ -67,26 +67,26 @@ defmodule Dspy.Module.PredictorTrace do
     end
   end
 
-  def record_parse_failure(
-        predictor,
-        inputs,
-        {:output_parse_failed, _, %{raw_output: text}} = reason
-      )
-      when is_binary(text) do
-    sinks = List.wrap(Map.get(predictor, @trace_key))
-
-    if sinks != [] do
-      index = System.unique_integer([:monotonic, :positive])
-
-      for {table, path, :failed_parses} <- sinks do
-        record_step(table, {index, path, inputs, {:error, reason}})
+  def parse_failure_observer(predictor) do
+    sinks =
+      for {table, path, :failed_parses} <- List.wrap(Map.get(predictor, @trace_key)) do
+        {table, path}
       end
+
+    case sinks do
+      [] ->
+        nil
+
+      [_ | _] ->
+        fn inputs, reason ->
+          index = System.unique_integer([:monotonic, :positive])
+
+          Enum.each(sinks, fn {table, path} ->
+            record_step(table, {index, path, inputs, {:error, reason}})
+          end)
+        end
     end
-
-    :ok
   end
-
-  def record_parse_failure(_predictor, _inputs, _reason), do: :ok
 
   defp record_step(table, step) do
     :ets.insert(table, step)

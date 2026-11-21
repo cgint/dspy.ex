@@ -142,6 +142,7 @@ defmodule Dspy.ChainOfThought do
              lm: Map.get(cot, :lm),
              config: get_config(cot),
              prompt_advice: Dspy.Refine.Advice.binding(cot),
+             on_terminal_parse_failure: Dspy.Module.PredictorTrace.parse_failure_observer(cot),
              callbacks: cot.callbacks,
              max_retries: cot.max_retries,
              max_output_retries: cot.max_output_retries
@@ -149,9 +150,7 @@ defmodule Dspy.ChainOfThought do
       Dspy.Module.PredictorTrace.record(cot, inputs, prediction)
       {:ok, prediction}
     else
-      {:error, reason} = error ->
-        Dspy.Module.PredictorTrace.record_parse_failure(cot, inputs, reason)
-        error
+      {:error, reason} -> {:error, reason}
     end
   end
 

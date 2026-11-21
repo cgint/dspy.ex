@@ -25,6 +25,7 @@ defmodule Dspy.Signature.Adapter.Pipeline do
           lm: Dspy.LM.t() | nil,
           forced_tool: String.t() | nil,
           prompt_advice: Advice.binding(),
+          on_terminal_parse_failure: (map(), term() -> :ok) | nil,
           config: PredictorConfig.t(),
           prediction_signature: Signature.t(),
           callbacks: Callbacks.callbacks(),
@@ -75,6 +76,7 @@ defmodule Dspy.Signature.Adapter.Pipeline do
       max_retries: if(on_delta, do: 0, else: Keyword.get(opts, :max_retries, 3)),
       request_options: force_tool(request_options, Keyword.get(opts, :forced_tool)),
       prompt_advice: Keyword.get(opts, :prompt_advice),
+      on_terminal_parse_failure: Keyword.get(opts, :on_terminal_parse_failure),
       telemetry?: telemetry?,
       cache_options: cache_options
     }
@@ -512,7 +514,13 @@ defmodule Dspy.Signature.Adapter.Pipeline do
           "dspy.adapter_exhausted kind=output call_id=#{inspect(call_id)} attempts_used=#{max_output_attempts} last_reason=#{Dspy.LogReason.format(reason)}"
         )
 
-        {:error, output_parse_failure(reason, response_text, choice_index)}
+        reason = output_parse_failure(reason, response_text, choice_index)
+
+        if is_function(lm_options.on_terminal_parse_failure, 2) do
+          lm_options.on_terminal_parse_failure.(inputs, reason)
+        end
+
+        {:error, reason}
     end
   end
 
