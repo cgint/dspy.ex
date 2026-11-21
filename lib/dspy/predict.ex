@@ -103,7 +103,10 @@ defmodule Dspy.Predict do
   end
 
   @impl true
-  def forward(%__MODULE__{} = predict, inputs) do
+  def forward(%__MODULE__{} = predict, inputs), do: forward(predict, inputs, nil)
+
+  @doc false
+  def forward(%__MODULE__{} = predict, inputs, on_delta) do
     adapter = Dspy.Signature.AdapterPipeline.active_adapter(adapter: predict.adapter)
 
     with :ok <- Dspy.Signature.validate_inputs(predict.signature, inputs),
@@ -112,6 +115,7 @@ defmodule Dspy.Predict do
              predict.signature,
              normalize_inputs(inputs),
              predict.examples,
+             on_delta,
              adapter: adapter,
              lm: Map.get(predict, :lm),
              forced_tool: Map.get(predict, :forced_tool),

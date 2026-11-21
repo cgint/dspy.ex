@@ -6,7 +6,7 @@ defmodule Dspy.Module do
   forward passes for inference and can contain optimizable parameters.
   """
 
-  alias Dspy.Lifecycle
+  alias Dspy.{ChainOfThought, Lifecycle, Predict, ProgramStream}
   alias Dspy.Module.{PredictorSlots, ProgramState}
   alias Dspy.Signature.Adapter.Callbacks
 
@@ -52,6 +52,7 @@ defmodule Dspy.Module do
   - a `%Dspy.Example{}` (converted via `Dspy.Example.inputs/1`)
   """
   def forward(module, inputs) do
+    on_delta = ProgramStream.take_delta()
     {track_usage, global_callbacks, telemetry?} = Dspy.Settings.module_observability()
 
     with %{__struct__: type} when is_atom(type) <- module,
@@ -61,12 +62,12 @@ defmodule Dspy.Module do
         type,
         callbacks,
         {:module_start, :module_end},
-        fn -> forward_with_usage(module, inputs, track_usage) end,
+        fn -> forward_with_usage(module, inputs, track_usage, on_delta) end,
         nil,
         telemetry?
       )
     else
-      _ -> forward_with_usage(module, inputs, track_usage)
+      _ -> forward_with_usage(module, inputs, track_usage, on_delta)
     end
   end
 
@@ -76,12 +77,12 @@ defmodule Dspy.Module do
 
   defp program_callbacks(_module), do: []
 
-  defp forward_with_usage(module, inputs, true) do
+  defp forward_with_usage(module, inputs, true, on_delta) do
     outer? = Dspy.LM.UsageAcc.enter()
 
     result =
       try do
-        forward_untracked(module, inputs)
+        forward_untracked(module, inputs, on_delta)
       catch
         kind, reason ->
           Dspy.LM.UsageAcc.exit()
@@ -97,23 +98,27 @@ defmodule Dspy.Module do
     end
   end
 
-  defp forward_with_usage(module, inputs, _track_usage), do: forward_untracked(module, inputs)
+  defp forward_with_usage(module, inputs, _track_usage, on_delta),
+    do: forward_untracked(module, inputs, on_delta)
 
-  defp forward_untracked(module, %Dspy.Example{} = example) do
-    forward_untracked(module, Dspy.Example.inputs(example))
-  end
+  defp forward_untracked(module, inputs, on_delta) do
+    inputs = normalize_inputs(inputs)
+    type = module.__struct__
 
-  defp forward_untracked(module, inputs) when is_list(inputs) do
-    if Keyword.keyword?(inputs) do
-      forward_untracked(module, Map.new(inputs))
+    if type in [Predict, ChainOfThought] and is_function(on_delta, 1) do
+      type.forward(module, inputs, on_delta)
     else
-      module.__struct__.forward(module, inputs)
+      type.forward(module, inputs)
     end
   end
 
-  defp forward_untracked(module, inputs) do
-    module.__struct__.forward(module, inputs)
-  end
+  defp normalize_inputs(%Dspy.Example{} = example),
+    do: normalize_inputs(Dspy.Example.inputs(example))
+
+  defp normalize_inputs(inputs) when is_list(inputs),
+    do: if(Keyword.keyword?(inputs), do: normalize_inputs(Map.new(inputs)), else: inputs)
+
+  defp normalize_inputs(inputs), do: inputs
 
   defp attach_usage_to_result({:ok, %Dspy.Prediction{} = pred}, usage) do
     if is_map(usage) do

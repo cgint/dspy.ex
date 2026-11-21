@@ -259,6 +259,7 @@ defmodule Dspy.LM do
   @doc """
   Generate one text completion and call `on_delta` for each text fragment.
 
+  Invoke `on_delta` in the process that called `stream_generate/3`.
   Return the normalized completion after the stream ends. A callback returning
   `:halt` cancels the stream. A callback returning `{:error, reason}` aborts it.
   """
@@ -314,7 +315,19 @@ defmodule Dspy.LM do
       when is_map(request) and is_function(on_delta, 1) do
     with true <- Code.ensure_loaded?(module) and function_exported?(module, :stream_generate, 3),
          :ok <- validate_stream_options(request) do
-      module.stream_generate(lm, apply_settings_defaults(request), on_delta)
+      observe_generation(lm, fn telemetry?, capture ->
+        request = apply_settings_defaults(request)
+        started_at_ms = System.monotonic_time(:millisecond)
+
+        with {:ok, response} = result <- module.stream_generate(lm, request, on_delta) do
+          record_success(lm, request, response, telemetry?, capture,
+            cache_hit?: false,
+            duration_ms: System.monotonic_time(:millisecond) - started_at_ms
+          )
+
+          result
+        end
+      end)
     else
       false -> {:error, :streaming_unsupported}
       {:error, _} = error -> error
@@ -360,7 +373,10 @@ defmodule Dspy.LM do
 
   def generate_with_options(lm, request, opts), do: generate_request(lm, request, opts)
 
-  defp generate_request(lm, request, opts) do
+  defp generate_request(lm, request, opts),
+    do: observe_generation(lm, &do_generate_request(lm, request, opts, &1, &2))
+
+  defp observe_generation(lm, generation) do
     {callbacks, telemetry?} = Dspy.Settings.lifecycle_observability()
     captures = HistoryCapture.current()
 
@@ -374,12 +390,12 @@ defmodule Dspy.LM do
         type,
         handlers,
         {:lm_start, :lm_end},
-        fn -> do_generate_request(lm, request, opts, telemetry?, capture) end,
+        fn -> generation.(telemetry?, capture) end,
         nil,
         telemetry?
       )
     else
-      _ -> do_generate_request(lm, request, opts, false, nil)
+      _ -> generation.(false, nil)
     end
   end
 

@@ -38,4 +38,13 @@ defmodule Dspy.ModuleForwardExampleTest do
     assert {:ok, pred} = Dspy.Module.forward(program, ex)
     assert pred.attrs.answer == "ok"
   end
+
+  test "Module.forward/2 also normalizes Example entries passed as a keyword list" do
+    example =
+      Example.new(%{question: "q", answer: "a"})
+      |> Example.with_inputs([:question])
+
+    assert {:ok, %Prediction{attrs: %{answer: "ok"}}} =
+             Dspy.Module.forward(%StrictInputProgram{}, Map.to_list(example))
+  end
 end

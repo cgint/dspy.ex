@@ -1,5 +1,11 @@
 # Status
 
+> **M5, program streaming.** `Dspy.streamify/2` wraps standalone
+> Predict and ChainOfThought in a lazy enumerable. The consumer receives
+> raw deltas and the normal parsed result. Loopback tests verify incremental
+> delivery and socket closure on early halt or consumer death. Field
+> listeners, status events, and the milestone exit example remain open.
+
 > **M5, streaming transport.** `Dspy.LM.stream_generate/3` delivers text
 > deltas and the final normalized response. A monitored ReqLLM owner closes
 > the HTTP stream on caller exit. Loopback tests cover startup cleanup,
