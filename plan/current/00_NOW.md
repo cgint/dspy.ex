@@ -16,6 +16,11 @@ in CI. The `v0.5.0` M2-a release pairs BootstrapRS with native checkpoint
 save and load. Its fresh-process test reproduces an optimized program's requests
 and predictions. The [parity queue](PARITY_QUEUE.md) tracks the remaining work.
 
+The `v0.6.0` M3a release covers provider retry handling and opt-in memory and
+disk caching. The offline example recovers from a rate limit and reuses the
+prediction after an application restart. Disk caching starts with OpenAI
+`gpt-4.1-mini`. Wider provider support and lifecycle hooks remain open.
+
 ## Historical milestone notes from September 2026
 
 ## 3. How we will get there

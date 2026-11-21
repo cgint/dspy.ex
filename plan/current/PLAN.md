@@ -5,6 +5,11 @@ release covers optimization and native checkpoint reuse. Public history still
 needs its own contract. See [current status](00_NOW.md) and the [reviewed
 inventory](UPSTREAM_RECOUNT.md) for the current baseline.
 
+`v0.6.0` opens M3 with provider retry classification, bounded memory and disk
+caches, and an offline retry and restart example. M3b covers lifecycle hooks
+and scoped history. The parity queue tracks wider disk eligibility and public
+provider error types.
+
 | Target | Symbols done/total (facet %) | Phase | Next | Updated |
 |---|---|---|---|---|
 | Python DSPy **3.4.0** (`2413b67a4d`) | 32/150 in scope (21%; ~30% w/ partial=½; corrected from 37); 10 n/a approved by user 2026-09-28; milestones M1–M6 approved | A + C | Milestone cut (phase C); H0b | 2026-09-26 |
