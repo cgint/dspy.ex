@@ -19,7 +19,13 @@ and predictions. The [parity queue](PARITY_QUEUE.md) tracks the remaining work.
 The `v0.6.0` M3a release covers provider retry handling and opt-in memory and
 disk caching. The offline example recovers from a rate limit and reuses the
 prediction after an application restart. Disk caching starts with OpenAI
-`gpt-4.1-mini`. Wider provider support and lifecycle hooks remain open.
+`gpt-4.1-mini`.
+
+On `main`, evaluation callbacks link model calls to the evaluation that
+started them, including in parallel workers. The
+[offline example](../../examples/offline/evaluation_callbacks_offline.exs)
+shows a successful example and a failed one in the same run. Wider disk
+cache support and tracing through adapter and tool callbacks remain open.
 
 ## Historical milestone notes from September 2026
 

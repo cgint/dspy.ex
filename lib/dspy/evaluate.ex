@@ -22,7 +22,8 @@ defmodule Dspy.Evaluate do
 
   require Logger
 
-  alias Dspy.{Example, Module, Prediction, Random}
+  alias Dspy.{Example, Lifecycle, Module, Prediction, Random}
+  alias Dspy.Signature.Adapter.Callbacks
 
   @type evaluation_error ::
           {:forward_error, term()}
@@ -108,6 +109,24 @@ defmodule Dspy.Evaluate do
   @spec evaluate(Dspy.Module.t(), [Example.t()], function(), keyword()) ::
           Dspy.Evaluate.Result.t()
   def evaluate(program, testset, metric_fn, opts \\ []) do
+    case Callbacks.evaluate_handlers(Callbacks.settings_callbacks()) do
+      [] ->
+        do_evaluate(program, testset, metric_fn, opts)
+
+      handlers ->
+        Lifecycle.run(
+          __MODULE__,
+          handlers,
+          {:evaluate_start, :evaluate_end},
+          fn -> do_evaluate(program, testset, metric_fn, opts) end,
+          fn %Dspy.Evaluate.Result{count: count, failures: failures} ->
+            %{count: count, failures: failures}
+          end
+        )
+    end
+  end
+
+  defp do_evaluate(program, testset, metric_fn, opts) do
     # Q3 (upstream evaluate.py:157-158): an empty testset is a caller error.
     if testset == [] do
       raise ArgumentError, "devset must contain at least one example"
@@ -152,15 +171,10 @@ defmodule Dspy.Evaluate do
     # stream abort) surfaces as a non-`{:ok, _}` element and maps to a failure
     # item (dead task, D1).
     #
-    # Budget-kill mechanism (E5/D2): a tiny consumer process (`spawn_link`,
-    # no `trap_exit`) drives the stream. As each element arrives it maps it to
-    # an item; when the failure count reaches `max_errors` (upstream `>=`), the
-    # consumer (a) sends `{:abort, failures, completed}` to the caller, and
-    # (b) `Process.exit`s itself with `:normal`. Exiting a `Task.async_stream`
-    # consumer kills the stream process and every outstanding task child, so
-    # no pending example can run to completion after the raise, and no linked
-    # task crash ever reaches the caller (the consumer only exits with
-    # :normal; the caller then raises the exception itself).
+    # Budget cancellation (E5/D2): the consumer halts the stream on the first
+    # invalid metric result or when failures reach max_errors. Halting closes
+    # the stream and kills pending item tasks before the consumer reports the
+    # terminal outcome to the caller.
     ctx = Dspy.Context.capture()
     caller = self()
 
@@ -231,19 +245,14 @@ defmodule Dspy.Evaluate do
             case map_stream_element(element, failure_score) do
               {:invalid_metric_result, value, example_index} ->
                 # Q2 (H0b-2): a non-numeric, non-boolean metric result is a
-                # caller error, not a per-example failure — it must never be
-                # counted toward the budget or turned into a failed 0.0. Send
-                # the tagged value to the caller and exit :normal (killing the
-                # stream and any pending item tasks, as for MaxErrorsExceeded).
-                send(caller, {:invalid_metric_result, value, example_index})
-                exit(:normal)
+                # caller error and does not count against the budget.
+                {:halt, {:invalid_metric_result, value, example_index}}
 
               {item, failed?} ->
                 failures = failures + if(failed?, do: 1, else: 0)
 
                 if failed? and failures >= max_errors do
-                  send(caller, {:abort, failures, length(acc) + 1})
-                  exit(:normal)
+                  {:halt, {:abort, failures, length(acc) + 1}}
                 else
                   {:cont, {[item | acc], failures}}
                 end
@@ -252,6 +261,7 @@ defmodule Dspy.Evaluate do
         )
         |> case do
           {items, _failures} -> send(caller, {:done, Enum.reverse(items)})
+          terminal -> send(caller, terminal)
         end
       end)
 
@@ -267,17 +277,14 @@ defmodule Dspy.Evaluate do
         })
 
       {:abort, errors, completed} ->
-        # Budget reached: the consumer already exited :normal, which killed the
-        # stream and all pending item tasks. Raise to the caller (E5).
+        # The stream has closed and all pending items have been killed (E5).
         raise Dspy.Evaluate.MaxErrorsExceeded,
           errors: errors,
           max_errors: max_errors,
           completed: completed
 
       {:invalid_metric_result, value, example_index} ->
-        # Q2: the consumer already exited :normal, which killed the stream and
-        # all pending item tasks. Raise the invalid metric result to the
-        # caller (TRAP 2).
+        # Q2: raise in the caller after the stream closes (TRAP 2).
         raise Dspy.Evaluate.InvalidMetricResult,
           value: value,
           example_index: example_index

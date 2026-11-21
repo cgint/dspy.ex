@@ -9,8 +9,10 @@ defmodule Dspy.Context do
   - **Settings overrides** — process-scoped overrides from `Dspy.context/2` /
     `Dspy.Settings.context/2` (including `track_usage` and `callbacks` when set
     via overrides), stored under `{Dspy.Settings, :process_overrides}`;
-  - **Adapter callback stack** — the RAW process-local per-call callback stack
+  - **Callback stack** — the RAW process-local per-call callback stack
     (`{Dspy.Signature.Adapter.Callbacks, :stack}` frames, innermost first).
+  - **Active call ID** — the current observed lifecycle call, when present.
+    A worker uses it to correlate its own hooks to the caller.
 
   Usage accumulators (`Dspy.LM.UsageAcc`) are **intentionally NOT captured**:
   the usage frame is opened per `Dspy.Module.forward/2` in whichever process
@@ -25,11 +27,10 @@ defmodule Dspy.Context do
 
   ## Why the raw callback stack (not the flattened list)
 
-  The adapter pipeline resolves callbacks as
-  `merge(global, program, call)` where `call` is the flattened process-local
-  stack and `global` is re-read from `Dspy.Settings` in the process running the
-  pipeline (`lib/dspy/signature/adapter/pipeline.ex`). If we captured the
-  flattened list and reinstalled it as a per-call frame, global/program
+  Each lifecycle boundary resolves its registrations in settings, program,
+  and per-call order. The per-call list comes from the flattened process-local
+  stack, and settings are re-read in the process running the boundary.
+  If we captured the flattened list and reinstalled it as a per-call frame, global/program
   callbacks already present in the caller's flattened list would fire **twice**
   in the target. Reinstalling the RAW caller frames reproduces exactly the
   caller's per-call nesting, so every callback (global, program, per-call, and
@@ -74,9 +75,11 @@ defmodule Dspy.Context do
 
   @type t :: %{
           required(:overrides) => map(),
-          required(:callback_stack) => list() | nil
+          required(:callback_stack) => list() | nil,
+          optional(:active_call_id) => reference()
         }
 
+  alias Dspy.Lifecycle
   alias Dspy.Signature.Adapter.Callbacks
 
   @stack_key {Callbacks, :stack}
@@ -84,8 +87,9 @@ defmodule Dspy.Context do
   @doc """
   Capture the caller's process-local DSPy state.
 
-  Reads (without mutating) the current settings overrides map and the raw
-  adapter-callback stack. Cheap: two `Process.get/2` calls.
+  Reads the current settings overrides, raw callback stack, and active
+  lifecycle call ID. The `:active_call_id` key is present only inside an
+  observed call, so ordinary snapshots keep their original two keys.
 
   The result is meant to be installed later in another process via
   `with_context/2` (see the module docs for the capture/install split).
@@ -98,10 +102,15 @@ defmodule Dspy.Context do
   """
   @spec capture() :: t()
   def capture do
-    %{
+    context = %{
       overrides: Dspy.Settings.current_overrides(),
       callback_stack: Process.get(@stack_key)
     }
+
+    case Lifecycle.active_call_id() do
+      call_id when is_reference(call_id) -> Map.put(context, :active_call_id, call_id)
+      _ -> context
+    end
   end
 
   @doc """
@@ -113,8 +122,9 @@ defmodule Dspy.Context do
 
   - the captured settings overrides via `Dspy.Settings.with_overrides/2`
     (which saves/restores its own frame);
-  - the captured RAW adapter-callback stack (save/restore — NOT a bare
-    `Process.put`, so a pre-existing stack in the target is preserved).
+  - the captured RAW callback stack, preserving the target's previous stack;
+  - the captured active call ID when present, restoring the target's previous
+    ID afterward. A context without that key leaves the enclosing ID in scope.
 
   Installs **no** usage frame (usage accumulators are not captured — see the
   module docs).
@@ -139,7 +149,15 @@ defmodule Dspy.Context do
     end
 
     try do
-      Dspy.Settings.with_overrides(ctx.overrides, fn -> fun.() end)
+      case ctx do
+        %{active_call_id: call_id} when is_reference(call_id) ->
+          Lifecycle.with_active_call_id(call_id, fn ->
+            Dspy.Settings.with_overrides(ctx.overrides, fun)
+          end)
+
+        _ ->
+          Dspy.Settings.with_overrides(ctx.overrides, fun)
+      end
     after
       if install? do
         restore_stack(prev_stack)

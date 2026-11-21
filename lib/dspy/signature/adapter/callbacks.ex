@@ -1,6 +1,6 @@
 defmodule Dspy.Signature.Adapter.Callbacks do
   @moduledoc """
-  Helpers for managing module, LM, and signature-adapter lifecycle callbacks.
+  Helpers for managing module, LM, evaluation, and signature-adapter lifecycle callbacks.
 
   This module provides:
   - deterministic callback merging (global → program → per-call)
@@ -62,6 +62,25 @@ defmodule Dspy.Signature.Adapter.Callbacks do
     |> lifecycle_handlers(:on_lm_start, :on_lm_end)
   end
 
+  @doc false
+  @spec evaluate_handlers(callbacks() | nil) :: callbacks()
+  def evaluate_handlers(global) do
+    global
+    |> merge([], current_call_callbacks())
+    |> lifecycle_handlers(:on_evaluate_start, :on_evaluate_end)
+  end
+
+  @doc false
+  def settings_callbacks do
+    case Dspy.Settings.current_overrides() do
+      %{callbacks: callbacks} ->
+        callbacks
+
+      _ ->
+        if Process.whereis(Dspy.Settings), do: Dspy.Settings.get(:callbacks), else: []
+    end
+  end
+
   defp lifecycle_handlers(callbacks, start_hook, end_hook) do
     callbacks
     |> Enum.filter(fn
@@ -105,6 +124,8 @@ defmodule Dspy.Signature.Adapter.Callbacks do
   defp event_to_fun(:module_end), do: :on_module_end
   defp event_to_fun(:lm_start), do: :on_lm_start
   defp event_to_fun(:lm_end), do: :on_lm_end
+  defp event_to_fun(:evaluate_start), do: :on_evaluate_start
+  defp event_to_fun(:evaluate_end), do: :on_evaluate_end
   defp event_to_fun(_), do: nil
 
   defp safe_apply(mod, fun, args) do

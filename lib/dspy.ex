@@ -296,7 +296,8 @@ defmodule Dspy do
   end
 
   @doc """
-  Run `fun` with module, LM, and signature-adapter callbacks enabled for this process.
+  Run `fun` with module, LM, evaluation, and signature-adapter callbacks enabled
+  for this process.
 
   This mirrors Python DSPy’s `with_callbacks(...)` usage, adapted to Elixir’s
   process-local execution model.
