@@ -216,6 +216,36 @@ defmodule Dspy.Teleprompt.GEPAObservationImagesTest do
     assert_rollouts([{:held_out, "0"}, {:training, "0"}])
   end
 
+  test "image limits apply across previously admitted fields" do
+    url_prefix = "data:image/png;base64,"
+    exact_url = url_prefix <> :binary.copy("A", 8 * 1_024 * 1_024 - byte_size(url_prefix))
+    eight_urls = Enum.map(1..8, &"https://example.invalid/count-#{&1}.png")
+    config = InstructionProposer.new(include_observation_images: true)
+
+    for expected_urls <- [eight_urls, [exact_url]] do
+      {:ok, _program} =
+        compile(config, JSONAdapter, expected_urls, fn _report -> false end,
+          photos: Enum.map(expected_urls, &Image.new/1)
+        )
+
+      assert_receive {:reflection, _text, urls,
+                      [
+                        %{
+                          "inputs" => %{
+                            "photo" => %{"image_indices" => indices},
+                            "detail" => "[omitted]"
+                          },
+                          "outputs" => %{"illustration" => "[omitted]"}
+                        }
+                      ]}
+
+      assert length(urls) == length(expected_urls)
+      assert urls == expected_urls
+      assert indices == Enum.to_list(1..length(expected_urls))
+      assert_rollouts([{:held_out, "0"}, {:training, "0"}])
+    end
+  end
+
   test "a malformed training prediction still contributes declared input images" do
     check = fn
       [
