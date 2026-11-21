@@ -17,8 +17,9 @@
 
 > **S087, batch bootstrap traces.** Successful trace records retain their
 > original input indices when the caller skips failed rows. An optional
-> metric sees each attempt's trace in its worker. Parse-failure records and
-> GEPA's reflection loop remain open.
+> metric sees each successful attempt's trace in its worker. Opt-in parse
+> failure records retain earlier steps and identify the exact failing slot.
+> Crash capture and partial-format scoring remain open.
 
 > **M6, GEPA instruction reflection.** An opt-in reflection LM proposes
 > changes for one typed predictor slot at a time. The budgeted search

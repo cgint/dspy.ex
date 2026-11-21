@@ -142,6 +142,7 @@ defmodule Dspy.ChainOfThought do
              lm: Map.get(cot, :lm),
              config: get_config(cot),
              prompt_advice: Dspy.Refine.Advice.binding(cot),
+             on_terminal_parse_failure: Dspy.Module.PredictorTrace.parse_failure_observer(cot),
              callbacks: cot.callbacks,
              max_retries: cot.max_retries,
              max_output_retries: cot.max_output_retries

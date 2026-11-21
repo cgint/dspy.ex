@@ -44,6 +44,12 @@ declared inputs and returns their predictions and predictor traces. An optional
 metric scores each attempt in its worker. Skipping failed rows preserves
 the original zero-based indices for batch scoring and reflection.
 
+Set `capture_failed_parses: true` to retain a row that ends in a predictor
+parse failure. Its trace includes the successful steps and the exact slot
+and inputs of the failed call. The failure record contains the raw completion
+text. When a metric is supplied, `format_failure_score:` scores that row
+without invoking the metric. Its default is `-1`.
+
 ### Reflective GEPA instruction search
 
 `Dspy.Teleprompt.GEPA` accepts a reflection LM and a rollout budget. A
