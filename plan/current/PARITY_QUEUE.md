@@ -64,7 +64,7 @@ After this you can …optimize a program once, save it, load it later or elsewhe
 | id | symbol | status | V | E | score | introduced | deps | breaking | old P | gap | queue status |
 |---|---|---|---|---|---|---|---|---|---|---|---|
 | S002 | configure | partial | H | S | 3.00 | <=2.6 | - | N | - | [facet rule: done->partial] Parsimonious keys unported: rm/trace/num_threads/max_errors/ma | todo |
-| S051 | Example | partial | H | S | 3.00 | <=2.6 | - | N | - | Label selection and immutable field removal are implemented. Recursive `toDict` serialization remains. | M2 example slice implemented. Release pending. |
+| S051 | Example | partial | H | S | 3.00 | <=2.6 | - | N | - | Labels, field removal, and recursive dictionaries for `Example`, `Prediction`, and `History` are implemented. Legacy `inputs/1` still falls back to all attributes when inputs are unset or empty. | M2 example slices implemented. Release pending. |
 | S054 | Module | partial | H | S | 3.00 | <=2.6 | - | N | P5 (Module.inspect_history = facet S054.f7), P4 | Named discovery, immutable slot updates, shared LM bindings, and reset copies implemented. BootstrapRS records private teacher traces. Public history remains. | M2 traversal and reset slices implemented. Release pending. |
 | S055 | Prediction | partial | H | S | 3.00 | <=2.6 | S051 | N | - | [facet rule: done->partial] score float()/arithmetic/comparison ops and from_completions m | todo |
 | S067 | Signature | partial | H | S | 3.00 | <=2.6 | - | N | - | [facet rule: done->partial] pydantic-model validation, annotated types, and field constrai | todo |

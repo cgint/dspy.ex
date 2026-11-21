@@ -189,6 +189,17 @@ defmodule Dspy.Example do
   end
 
   @doc """
+  Convert the example's fields into a plain map, recursively converting
+  examples, predictions, and conversation histories inside lists and maps.
+
+  Examples and predictions contribute their attributes. Conversation history
+  contributes its `:messages` field. Field keys and other values, including
+  other structs, are preserved.
+  """
+  @spec to_dict(t()) :: map()
+  def to_dict(%__MODULE__{attrs: attrs}), do: dictionary_value(attrs)
+
+  @doc """
   Merge two examples, with the second taking precedence.
   """
   def merge(example1, example2) do
@@ -220,6 +231,19 @@ defmodule Dspy.Example do
     current_value = get(example, key)
     {current_value, delete(example, key)}
   end
+
+  defp dictionary_value(%__MODULE__{} = example), do: to_dict(example)
+  defp dictionary_value(%Dspy.Prediction{attrs: attrs}), do: dictionary_value(attrs)
+
+  defp dictionary_value(%Dspy.History{messages: messages}),
+    do: %{messages: dictionary_value(messages)}
+
+  defp dictionary_value(map) when is_map(map) and not is_struct(map) do
+    Map.new(map, fn {key, value} -> {key, dictionary_value(value)} end)
+  end
+
+  defp dictionary_value(list) when is_list(list), do: Enum.map(list, &dictionary_value/1)
+  defp dictionary_value(value), do: value
 
   # H15: the atom→string resolution rule now lives in the canonical
   # Dspy.Attrs accessor; key_for_put resolves the stored key through it.
