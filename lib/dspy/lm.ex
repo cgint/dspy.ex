@@ -295,6 +295,27 @@ defmodule Dspy.LM do
   def generate_with_options(lm, request, opts), do: generate_request(lm, request, opts)
 
   defp generate_request(lm, request, opts) do
+    with %{__struct__: type} when is_atom(type) <- lm,
+         [_ | _] = handlers <- Dspy.Signature.Adapter.Callbacks.lm_handlers(lm_callbacks()) do
+      Dspy.Lifecycle.run(type, handlers, {:lm_start, :lm_end}, fn ->
+        do_generate_request(lm, request, opts)
+      end)
+    else
+      _ -> do_generate_request(lm, request, opts)
+    end
+  end
+
+  defp lm_callbacks do
+    case Dspy.Settings.current_overrides() do
+      %{callbacks: callbacks} ->
+        callbacks
+
+      _ ->
+        if Process.whereis(Dspy.Settings), do: Dspy.Settings.get(:callbacks), else: []
+    end
+  end
+
+  defp do_generate_request(lm, request, opts) do
     request = apply_settings_defaults(request)
     started_at_ms = System.monotonic_time(:millisecond)
 

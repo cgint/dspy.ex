@@ -6,6 +6,7 @@ defmodule Dspy.Module do
   forward passes for inference and can contain optimizable parameters.
   """
 
+  alias Dspy.Lifecycle
   alias Dspy.Module.{PredictorSlots, ProgramState}
   alias Dspy.Signature.Adapter.Callbacks
 
@@ -56,7 +57,9 @@ defmodule Dspy.Module do
     with %{__struct__: type} when is_atom(type) <- module,
          [_ | _] = callbacks <-
            Callbacks.module_handlers(global_callbacks, program_callbacks(module)) do
-      forward_with_callbacks(module, inputs, track_usage, type, callbacks)
+      Lifecycle.run(type, callbacks, {:module_start, :module_end}, fn ->
+        forward_with_usage(module, inputs, track_usage)
+      end)
     else
       _ -> forward_with_usage(module, inputs, track_usage)
     end
@@ -67,31 +70,6 @@ defmodule Dspy.Module do
        do: Map.get(module, :callbacks)
 
   defp program_callbacks(_module), do: []
-
-  defp forward_with_callbacks(module, inputs, track_usage, type, callbacks) do
-    meta = %{call_id: make_ref(), module: type}
-    callbacks = Callbacks.emit(callbacks, :module_start, meta, %{})
-    started_at = System.monotonic_time(:microsecond)
-
-    result =
-      try do
-        forward_with_usage(module, inputs, track_usage)
-      catch
-        kind, reason ->
-          status = if kind == :error, do: :raise, else: kind
-          emit_module_end(callbacks, meta, started_at, status)
-          :erlang.raise(kind, reason, __STACKTRACE__)
-      end
-
-    status = if match?({:error, _}, result), do: :error, else: :ok
-    emit_module_end(callbacks, meta, started_at, status)
-    result
-  end
-
-  defp emit_module_end(callbacks, meta, started_at, status) do
-    duration_us = System.monotonic_time(:microsecond) - started_at
-    Callbacks.emit(callbacks, :module_end, meta, %{status: status, duration_us: duration_us})
-  end
 
   defp forward_with_usage(module, inputs, true) do
     outer? = Dspy.LM.UsageAcc.enter()

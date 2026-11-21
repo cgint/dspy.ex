@@ -18,9 +18,9 @@ defmodule Dspy.Module.Callback do
   receive the registered state.
   """
 
-  @type meta :: %{required(:call_id) => reference(), required(:module) => module()}
-  @type status :: :ok | :error | :raise | :throw | :exit
-  @type result :: %{required(:status) => status(), required(:duration_us) => non_neg_integer()}
+  @type meta :: Dspy.Lifecycle.meta()
+  @type status :: Dspy.Lifecycle.status()
+  @type result :: Dspy.Lifecycle.result()
 
   @callback on_module_start(meta(), map(), term()) :: term()
   @callback on_module_end(meta(), result(), term()) :: term()
