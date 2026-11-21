@@ -23,14 +23,31 @@ defmodule Dspy.Teleprompt.MetricArityTest do
   end
 
   test "evaluation rejects the metric before forwarding any example" do
-    metric = fn _, _, _ -> true end
+    metric = fn _, _, _, _ -> true end
     program = %RecordingProgram{owner: self()}
 
-    assert_raise ArgumentError, ~r/arity 1 or 2.*arity 3/i, fn ->
+    assert_raise ArgumentError, ~r/arity 1, 2, or 3.*arity 4/i, fn ->
       Evaluate.evaluate(program, [Example.new(question: "test")], metric, progress: false)
     end
 
     refute_received :forwarded
+  end
+
+  test "evaluation passes nil as the third metric argument in each worker" do
+    program = %RecordingProgram{owner: self()}
+    examples = for id <- 1..2, do: Example.new(id: id)
+    owner = self()
+
+    metric = fn example, prediction, trace ->
+      send(owner, {:metric, example, prediction, trace})
+      Example.get(example, :id) == 2
+    end
+
+    assert %{scores: [0.0, 1.0]} = Evaluate.evaluate(program, examples, metric, num_threads: 2)
+
+    for example <- examples do
+      assert_received {:metric, ^example, %Prediction{attrs: %{answer: "ok"}}, nil}
+    end
   end
 
   test "evaluation accepts a one-argument metric and passes it the example" do
@@ -45,10 +62,16 @@ defmodule Dspy.Teleprompt.MetricArityTest do
   test "optimizer constructors report the same metric arity diagnostic" do
     metric = fn _, _, _ -> true end
 
-    for optimizer <- [:bootstrap_few_shot, :bootstrap_rs, :mipro_v2, :copro, :simba, :gepa] do
+    for optimizer <- [:bootstrap_few_shot, :mipro_v2, :copro, :simba, :gepa] do
       assert_raise ArgumentError, ~r/arity 1 or 2.*arity 3/i, fn ->
         Teleprompt.new(optimizer, metric: metric)
       end
+    end
+  end
+
+  test "BootstrapRS reports the extended arity range on invalid metrics" do
+    assert_raise ArgumentError, ~r/arity 1, 2, or 3.*arity 4/i, fn ->
+      Teleprompt.new(:bootstrap_rs, metric: fn _, _, _, _ -> true end)
     end
   end
 

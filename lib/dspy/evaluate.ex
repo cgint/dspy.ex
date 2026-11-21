@@ -31,7 +31,7 @@ defmodule Dspy.Evaluate do
           | {:exception, %{type: module(), message: String.t()}}
           | {:caught, term(), term()}
 
-  # NOTE: `:error` from `Dspy.Teleprompt.run_metric/3` (a metric that raised)
+  # NOTE: `:error` from `Dspy.Teleprompt.run_metric/4` (a metric that raised)
   # scores `failure_score` with `error: nil` (D-U1); it is NOT an item error.
   # Q2 (H0b-2): a non-numeric, non-boolean metric result raises
   # `Dspy.Evaluate.InvalidMetricResult` (it never reaches an item).
@@ -63,7 +63,8 @@ defmodule Dspy.Evaluate do
 
   - `program` - DSPy program (struct implementing `Dspy.Module`)
   - `testset` - list of test examples
-  - `metric_fn` - metric function `(example, prediction) -> score` or `(example) -> score`
+  - `metric_fn` - metric function accepting the example, optionally the prediction,
+    and optionally a third argument. Evaluation passes `nil` as the third argument.
   - `opts` - options:
     - `:num_threads` - parallelism. Defaults to the configured `:num_threads`
       or the number of online schedulers.
@@ -154,7 +155,7 @@ defmodule Dspy.Evaluate do
       raise ArgumentError, "failure_score must be a number"
     end
 
-    Dspy.Teleprompt.validate_metric!(metric_fn)
+    Dspy.Teleprompt.validate_metric!(metric_fn, :trace)
 
     item_timeout = Keyword.get(opts, :timeout, :infinity)
     provide_traceback = Keyword.get(opts, :provide_traceback, false)
@@ -1071,7 +1072,7 @@ defmodule Dspy.Evaluate do
     case result do
       {:ok, prediction} ->
         score =
-          Dspy.Teleprompt.run_metric(metric_fn, example, prediction)
+          Dspy.Teleprompt.run_metric(metric_fn, example, prediction, nil)
           |> validate_metric_score(example_index)
 
         %{example: example, prediction: prediction, score: score, error: nil}

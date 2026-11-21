@@ -6,6 +6,12 @@ defmodule Dspy.Teleprompt.BootstrapFewShotWithRandomSearch do
   The search compares three baseline candidates and then seeded permutations of
   the training set. Candidate scores are percentages on the validation set.
   `compile_with_candidates/4` also returns the ranked candidates and their scores.
+
+  A metric can accept three arguments: the training example, the teacher's
+  prediction, and a list of `t:Dspy.Teleprompt.trace_step/0` records from that
+  attempt in call completion order. Paths identify predictor slots. The
+  standalone predictor uses the empty path `[]`. An attempt with no captured
+  steps supplies an empty list. Candidate evaluation passes `nil` instead.
   """
 
   @behaviour Dspy.Teleprompt
@@ -44,7 +50,7 @@ defmodule Dspy.Teleprompt.BootstrapFewShotWithRandomSearch do
 
   @impl true
   def new(opts \\ []) do
-    case Teleprompt.validate_config(opts) do
+    case Teleprompt.validate_config(opts, :trace) do
       :ok -> :ok
       {:error, message} -> raise ArgumentError, message
     end
@@ -449,13 +455,32 @@ defmodule Dspy.Teleprompt.BootstrapFewShotWithRandomSearch do
     Enum.find(Module.parameters(teacher), &match?(%Parameter{name: "predict.examples"}, &1))
   end
 
-  defp forward_teacher(teacher, :named, example), do: PredictorTrace.capture(teacher, example)
+  defp forward_teacher(teacher, mode, example, metric)
+       when mode == :named or is_function(metric, 3),
+       do: PredictorTrace.capture(teacher, example)
 
-  defp forward_teacher(teacher, :parameter, example) do
+  defp forward_teacher(teacher, :parameter, example, _metric) do
     with {:ok, %Prediction{} = prediction} <- Module.forward(teacher, example) do
       {:ok, prediction, nil}
     end
   end
+
+  defp metric_score(metric, example, prediction, traces) when is_function(metric, 3) do
+    trace =
+      for {_order, path, inputs, output} <- traces do
+        %{path: path, inputs: inputs, prediction: output}
+      end
+
+    Teleprompt.run_metric(metric, example, prediction, trace)
+  end
+
+  defp metric_score(metric, example, prediction, _traces),
+    do: Teleprompt.run_metric(metric, example, prediction)
+
+  defp accepted_demo(:named, _example, _prediction, traces), do: traces
+
+  defp accepted_demo(:parameter, example, prediction, _traces),
+    do: Example.new(Map.merge(Example.inputs(example), prediction.attrs))
 
   defp attempt(optimizer, teacher, mode, example, round) do
     overrides =
@@ -471,11 +496,11 @@ defmodule Dspy.Teleprompt.BootstrapFewShotWithRandomSearch do
         else: teacher
 
     Dspy.context(overrides, fn ->
-      with {:ok, prediction, traces} <- forward_teacher(teacher, mode, example) do
-        case Teleprompt.run_metric(optimizer.metric, example, prediction) do
+      with {:ok, prediction, traces} <- forward_teacher(teacher, mode, example, optimizer.metric) do
+        case metric_score(optimizer.metric, example, prediction, traces) do
           score when is_number(score) ->
             if accepted?(score, optimizer.metric_threshold) do
-              {:ok, traces || Example.new(Map.merge(Example.inputs(example), prediction.attrs))}
+              {:ok, accepted_demo(mode, example, prediction, traces)}
             else
               :rejected
             end

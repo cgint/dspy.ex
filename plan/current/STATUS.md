@@ -9,6 +9,11 @@
 > projection once. Queries use dot product and return the original
 > examples. The native numeric and tie rules are documented.
 
+> **H13, trace-aware metrics.** BootstrapRS can score a teacher prediction
+> using the successful predictor calls from that attempt. Candidate scoring
+> in Evaluate passes `nil` to the same arity-three metric. Basic
+> BootstrapFewShot and KNNFewShot still use scalar metrics.
+
 > **M5, status messages and exit example.** `streamify/2` accepts a
 > lifecycle status provider. The [offline ChainOfThought example](../../examples/offline/chain_of_thought_streaming_offline.exs)
 > emits status and field chunks, returns the validated prediction, and

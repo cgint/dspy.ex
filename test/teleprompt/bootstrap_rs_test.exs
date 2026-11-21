@@ -484,6 +484,98 @@ defmodule Dspy.Teleprompt.BootstrapRSTest do
     assert student.right.examples == [question_row(900)]
   end
 
+  test "the metric sees only the current attempt's ordered steps and receives nil in evaluation" do
+    student = predictor_pair([])
+    owner = self()
+    [rejected, accepted, validation] = Enum.map([99, 0, 100], &question_row/1)
+    accept_question = accepted[:question]
+
+    optimizer =
+      Teleprompt.new(:bootstrap_rs,
+        metric: fn row, prediction, trace ->
+          send(owner, {:scored, row, prediction, trace})
+          is_nil(trace) or row[:question] == accept_question
+        end,
+        max_bootstrapped_demos: 1,
+        max_labeled_demos: 0,
+        verbose: false
+      )
+
+    assert {:ok, %{program: best, candidates: [%{score: 100.0}]}} =
+             BootstrapRS.compile_with_candidates(optimizer, student, [rejected, accepted],
+               restrict: [-1],
+               valset: [validation]
+             )
+
+    for row <- [rejected, accepted] do
+      assert_received {:scored, ^row, %Prediction{attrs: %{answer: "combined"}}, trace}
+
+      expected =
+        for index <- 0..3 do
+          %{path: [field: :left], inputs: %{question: "#{row[:question]}/left/#{index}"}}
+        end
+
+      assert Enum.map(trace, &Map.delete(&1, :prediction)) ==
+               expected ++
+                 [%{path: [field: :right], inputs: %{question: "#{row[:question]}/right"}}]
+
+      assert Enum.all?(trace, &match?(%Prediction{attrs: %{answer: "ok"}}, &1.prediction))
+    end
+
+    assert_received {:scored, ^validation, %Prediction{}, nil}
+    refute_received {:scored, _, _, _}
+    assert Enum.map(best.left.examples, & &1[:question]) == ["#{accept_question}/left/1"]
+    assert Enum.map(best.right.examples, & &1[:question]) == ["#{accept_question}/right"]
+  end
+
+  test "trace-aware parameter mode keeps one demo with or without a discovered predictor" do
+    owner = self()
+    [train, validation] = Enum.map([0, 100], &question_row/1)
+
+    optimizer =
+      Teleprompt.new(:bootstrap_rs,
+        metric: fn row, prediction, trace ->
+          send(owner, {:scored, row, prediction, trace})
+          true
+        end,
+        max_bootstrapped_demos: 1,
+        max_labeled_demos: 0,
+        verbose: false
+      )
+
+    native = predictor_pair([]).left
+
+    assert {:ok, %{program: best, candidates: [%{score: 100.0}]}} =
+             BootstrapRS.compile_with_candidates(optimizer, native, [train],
+               restrict: [-1],
+               valset: [validation]
+             )
+
+    question = train[:question]
+
+    assert [%Example{attrs: %{question: ^question, answer: "ok"}}] = best.examples
+
+    assert_received {:scored, ^train, prediction,
+                     [%{path: [], inputs: %{question: ^question}, prediction: step_prediction}]}
+
+    assert prediction == step_prediction
+    assert_received {:scored, ^validation, %Prediction{}, nil}
+
+    [train, validation] = rows([0, 100])
+
+    assert {:ok, %{program: best, candidates: [%{score: 100.0}]}} =
+             BootstrapRS.compile_with_candidates(optimizer, %Student{observer: owner}, [train],
+               teacher: teacher(fn _, _ -> true end),
+               restrict: [-1],
+               valset: [validation]
+             )
+
+    assert demo_ids(best) == [0]
+    assert_received {:scored, ^train, %Prediction{}, []}
+    assert_received {:scored, ^validation, %Prediction{}, nil}
+    refute_received {:scored, _, _, _}
+  end
+
   test "composite teachers sample labels per slot and omit the row being bootstrapped" do
     student = predictor_pair([])
     teacher = predictor_pair([question_row(900)], %OfflineLM{observer: self()})
