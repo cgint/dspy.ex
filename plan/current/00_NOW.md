@@ -27,7 +27,8 @@ started them, including in parallel workers. The
 shows a successful example and a failed one in the same run. Adapter
 callbacks report when a phase ends in error and identify the enclosing call.
 Tool callbacks also link to the enclosing call and report timeout outcomes.
-Wider disk cache support and call-scoped history remain open.
+DSPy diagnostics can be silenced while host logs and callbacks continue.
+Wider disk cache support, telemetry, and call-scoped history remain open.
 
 ## Historical milestone notes from September 2026
 
