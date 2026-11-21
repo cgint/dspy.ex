@@ -9,9 +9,11 @@ The reviewed inventory has 162 rows. Of these, 152 are in scope and 10 are
 approved exclusions. Two are done, 66 are partial, and 84 are missing.
 See the [recount](UPSTREAM_RECOUNT.md) for the exact Git revisions and scope.
 
-The stabilization release remains open. The offline Semantic F1 example is
-in CI. The committed-source consumer canary and release checks remain before
-v0.4.10. The [parity queue](PARITY_QUEUE.md) tracks the remaining work.
+Stabilization shipped as `v0.4.11` at `975d7c6`. Both Docker toolchains, all six
+hosted checks, and all five committed-source consumer replays passed. Two consumer
+builds reproduced their baseline warnings. The offline Semantic F1 example runs
+in CI. M2 starts with language model binding for `Predict` and `ChainOfThought`.
+The [parity queue](PARITY_QUEUE.md) tracks the remaining work.
 
 ## Historical milestone notes from September 2026
 

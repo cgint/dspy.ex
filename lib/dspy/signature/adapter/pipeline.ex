@@ -21,6 +21,7 @@ defmodule Dspy.Signature.Adapter.Pipeline do
 
   @type opts :: [
           adapter: module() | nil,
+          lm: Dspy.LM.t() | nil,
           callbacks: Callbacks.callbacks(),
           max_retries: non_neg_integer(),
           max_output_retries: non_neg_integer()
@@ -42,7 +43,7 @@ defmodule Dspy.Signature.Adapter.Pipeline do
     call_callbacks = Callbacks.current_call_callbacks()
     callbacks = Callbacks.merge(global_callbacks, program_callbacks, call_callbacks)
 
-    max_retries = Keyword.get(opts, :max_retries, 3)
+    lm_options = %{lm: Keyword.get(opts, :lm), max_retries: Keyword.get(opts, :max_retries, 3)}
 
     max_output_retries =
       case Keyword.fetch(opts, :max_output_retries) do
@@ -69,7 +70,7 @@ defmodule Dspy.Signature.Adapter.Pipeline do
       callbacks,
       call_id,
       1,
-      max_retries,
+      lm_options,
       max_output_retries,
       max_output_attempts
     )
@@ -83,7 +84,7 @@ defmodule Dspy.Signature.Adapter.Pipeline do
          callbacks,
          call_id,
          attempt,
-         max_retries,
+         %{lm: lm, max_retries: max_retries} = lm_options,
          output_retries_left,
          max_output_attempts
        )
@@ -101,7 +102,7 @@ defmodule Dspy.Signature.Adapter.Pipeline do
          {:ok, request} <- merge_media_parts(signature, inputs, request0),
          {:ok, base_prompt} <- AdapterPipeline.primary_prompt_text(request) do
       callbacks =
-        Callbacks.emit(callbacks, :format_end, meta, %{request: request_summary(request)})
+        Callbacks.emit(callbacks, :format_end, meta, %{request: request_summary(request, lm)})
 
       # `base_request` is the request we use as a stable template for prompt replacement
       # during typed-output retries.
@@ -115,7 +116,7 @@ defmodule Dspy.Signature.Adapter.Pipeline do
         callbacks,
         call_id,
         attempt,
-        max_retries,
+        lm_options,
         output_retries_left,
         max_output_attempts,
         request,
@@ -133,7 +134,7 @@ defmodule Dspy.Signature.Adapter.Pipeline do
          callbacks,
          call_id,
          attempt,
-         max_retries,
+         %{lm: lm, max_retries: max_retries} = lm_options,
          output_retries_left,
          max_output_attempts,
          request,
@@ -144,15 +145,16 @@ defmodule Dspy.Signature.Adapter.Pipeline do
               is_integer(max_output_attempts) and max_output_attempts >= 1 do
     meta = meta(call_id, attempt, adapter, signature)
 
-    callbacks = Callbacks.emit(callbacks, :call_start, meta, %{request: request_summary(request)})
+    callbacks =
+      Callbacks.emit(callbacks, :call_start, meta, %{request: request_summary(request, lm)})
 
-    case call_with_retry_log(request, max_retries, call_id) do
+    case call_with_retry_log(request, lm, max_retries, call_id) do
       {:ok, response} ->
         usage_raw = extract_usage(response)
 
         callbacks =
           Callbacks.emit(callbacks, :call_end, meta, %{
-            request: request_summary(request),
+            request: request_summary(request, lm),
             usage: normalize_usage(usage_raw)
           })
 
@@ -188,7 +190,7 @@ defmodule Dspy.Signature.Adapter.Pipeline do
                     callbacks,
                     call_id,
                     attempt,
-                    max_retries,
+                    lm_options,
                     output_retries_left,
                     max_output_attempts,
                     base_request,
@@ -209,7 +211,7 @@ defmodule Dspy.Signature.Adapter.Pipeline do
                 callbacks,
                 call_id,
                 attempt,
-                max_retries,
+                lm_options,
                 output_retries_left,
                 max_output_attempts,
                 base_request,
@@ -230,7 +232,7 @@ defmodule Dspy.Signature.Adapter.Pipeline do
                 callbacks,
                 call_id,
                 attempt,
-                max_retries,
+                lm_options,
                 output_retries_left,
                 max_output_attempts,
                 base_request,
@@ -258,7 +260,7 @@ defmodule Dspy.Signature.Adapter.Pipeline do
          callbacks,
          call_id,
          attempt,
-         max_retries,
+         %{lm: lm} = lm_options,
          output_retries_left,
          max_output_attempts,
          base_request,
@@ -287,7 +289,7 @@ defmodule Dspy.Signature.Adapter.Pipeline do
 
           callbacks =
             Callbacks.emit(callbacks, :format_end, meta, %{
-              request: request_summary(retry_request)
+              request: request_summary(retry_request, lm)
             })
 
           do_call_and_parse(
@@ -298,7 +300,7 @@ defmodule Dspy.Signature.Adapter.Pipeline do
             callbacks,
             call_id,
             next_attempt,
-            max_retries,
+            lm_options,
             output_retries_left - 1,
             max_output_attempts,
             retry_request,
@@ -537,16 +539,19 @@ defmodule Dspy.Signature.Adapter.Pipeline do
   defp decode_tool_call_arguments(name, _args),
     do: {:error, {:invalid_tool_call_arguments, %{name: name}}}
 
-  defp call_with_retry_log(request, max_retries, call_id)
+  defp generate_with_lm(nil, request), do: Dspy.LM.generate(request)
+  defp generate_with_lm(lm, request), do: Dspy.LM.generate(lm, request)
+
+  defp call_with_retry_log(request, lm, max_retries, call_id)
        when is_map(request) and is_integer(max_retries) and max_retries >= 0 do
     max_attempts = max_retries + 1
 
-    do_call_with_retry_log(request, max_retries, max_attempts, call_id)
+    do_call_with_retry_log(request, lm, max_retries, max_attempts, call_id)
   end
 
-  defp do_call_with_retry_log(request, retries, max_attempts, call_id)
+  defp do_call_with_retry_log(request, lm, retries, max_attempts, call_id)
        when is_map(request) and is_integer(retries) and retries >= 0 do
-    case Dspy.LM.generate(request) do
+    case generate_with_lm(lm, request) do
       {:ok, response} ->
         {:ok, response}
 
@@ -556,7 +561,7 @@ defmodule Dspy.Signature.Adapter.Pipeline do
         )
 
         Process.sleep(retry_sleep_ms())
-        do_call_with_retry_log(request, retries - 1, max_attempts, call_id)
+        do_call_with_retry_log(request, lm, retries - 1, max_attempts, call_id)
 
       {:error, _reason} = err ->
         err
@@ -634,11 +639,15 @@ defmodule Dspy.Signature.Adapter.Pipeline do
 
   defp normalize_usage(_), do: nil
 
-  defp request_summary(request) when is_map(request) do
+  defp request_summary(request, bound_lm) when is_map(request) do
     messages = Map.get(request, :messages) || Map.get(request, "messages")
     messages_count = if is_list(messages), do: length(messages), else: 0
 
-    lm = if Process.whereis(Dspy.Settings), do: Dspy.Settings.get(:lm), else: nil
+    lm =
+      case bound_lm do
+        nil -> if Process.whereis(Dspy.Settings), do: Dspy.Settings.get(:lm), else: nil
+        lm -> lm
+      end
 
     model =
       cond do

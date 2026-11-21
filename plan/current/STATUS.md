@@ -1,6 +1,8 @@
 # Status
 
-> **Current baseline, 2026-11-21.** The [DSPy 3.5.0 recount](UPSTREAM_RECOUNT.md) is independently reviewed against Elixir commit `07e3cb2`. The offline Semantic F1 example passed hosted CI in PR #8. The reproducible canary and release gate remain open.
+> **Current baseline, 2026-11-21.** The [DSPy 3.5.0 recount](UPSTREAM_RECOUNT.md) is independently reviewed against Elixir commit `07e3cb2`. Stabilization shipped as `v0.4.11` at `975d7c6` after both Docker legs, all six hosted checks, a scratch Git-tag install, and five committed-source consumer replays. Three apps compiled cleanly and two reproduced their baseline warnings. [Release PR](https://github.com/cgint/dspy.ex/pull/14)
+
+> **M2.** `Predict` and `ChainOfThought` accept a constructor `lm:` binding. The bound LM is used on retries and identified in callback summaries. Scoped generation defaults and the surrounding LM context still apply as before. Predictor config, explicit random state for BootstrapRS, and the versioned program save format remain open.
 
 Goal: Build an **Elixir-native port** of upstream **Python DSPy** (`../dspy`) that is **adoption-first**: stable `Predict`/`ChainOfThought`, robust output parsing, deterministic evaluation, proven parameter-based teleprompters, provider access via **`req_llm`**, and persistence of optimized programs. (Orchestration/UI remain optional and live outside core.)
 
