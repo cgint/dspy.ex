@@ -8,11 +8,13 @@ This repo ships in **small, user-usable slices**.
 
 ## Consumer notes
 
-### Named predictor inspection
+### Named predictor inspection and updates
 
 `Dspy.Module.named_predictors/1` lists predictor values by their program slots.
 It covers immediate list, tuple, and map entries as well as nested modules.
 Equal predictor values in separate slots still have separate names.
+`Dspy.Module.predictors/1` returns the values alone. `Dspy.Module.map_named_predictors/2`
+applies a function to each predictor in discovery order and returns an updated program.
 
 ### Random search for few-shot demos
 

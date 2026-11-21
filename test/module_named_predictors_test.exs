@@ -1,7 +1,7 @@
 defmodule Dspy.ModuleNamedPredictorsTest do
   use ExUnit.Case, async: true
 
-  alias Dspy.{ChainOfThought, Module, Predict}
+  alias Dspy.{ChainOfThought, Example, Module, Predict}
 
   defmodule Program do
     @behaviour Dspy.Module
@@ -155,5 +155,82 @@ defmodule Dspy.ModuleNamedPredictorsTest do
     assert [{name, ^predict}] = Module.named_predictors(%Program{mapping: %{wide_key => predict}})
     assert byte_size(name) > 80
     refute String.contains?(name, "\n")
+  end
+
+  test "predictors returns the values in discovery order, including equal values" do
+    predict = Predict.new(QA)
+    cot = ChainOfThought.new(QA)
+    program = %Program{left: predict, items: [cot, predict], right: cot}
+
+    assert Module.predictors(program) == [cot, predict, predict, cot]
+    assert Module.predictors(%Program{}) == []
+  end
+
+  test "mapping a standalone predictor returns the callback's replacement" do
+    predict = Predict.new(QA)
+    cot = ChainOfThought.new(QA)
+
+    assert Module.map_named_predictors(predict, fn ^predict -> cot end) == cot
+    assert Module.map_named_predictors(cot, fn ^cot -> predict end) == predict
+  end
+
+  test "mapping assigns different demos to equal predictors in their exact slots" do
+    predict = Predict.new(QA)
+    cot = ChainOfThought.new(QA)
+
+    program =
+      %Program{
+        branch: %Program{left: cot},
+        data: %Data{predictor: predict},
+        items: [:metadata, predict, %Program{left: predict}, [cot]],
+        mapping: %{1 => predict, 1.0 => predict, "1" => predict, "wrapped" => %{left: predict}},
+        pair: {:metadata, cot}
+      }
+      |> Map.put("extra", predict)
+
+    update = fn predictor, answer -> %{predictor | examples: [Example.new(%{answer: answer})]} end
+    ref = make_ref()
+
+    for answer <- [:branch, :list, :nested, :float, :integer, :string, :tuple] do
+      send(self(), {:demo, ref, answer})
+    end
+
+    mapped =
+      Module.map_named_predictors(program, fn predictor ->
+        assert_receive {:demo, ^ref, answer}, 0
+        update.(predictor, answer)
+      end)
+
+    assert mapped == %{
+             program
+             | branch: %Program{left: update.(cot, :branch)},
+               items: [
+                 :metadata,
+                 update.(predict, :list),
+                 %Program{left: update.(predict, :nested)},
+                 [cot]
+               ],
+               mapping: %{
+                 1.0 => update.(predict, :float),
+                 1 => update.(predict, :integer),
+                 "1" => update.(predict, :string),
+                 "wrapped" => %{left: predict}
+               },
+               pair: {:metadata, update.(cot, :tuple)}
+           }
+
+    refute_receive {:demo, ^ref, _answer}, 0
+    assert Module.predictors(program) == [cot, predict, predict, predict, predict, predict, cot]
+  end
+
+  test "mapping can replace a slot with data and skips undiscovered values" do
+    predict = Predict.new(QA)
+    program = %Program{items: [predict | :metadata], left: predict}
+    mapped = Module.map_named_predictors(program, fn ^predict -> :disabled end)
+
+    assert mapped == %{program | left: :disabled}
+
+    assert Module.map_named_predictors(mapped, fn _ -> flunk("unexpected predictor") end) ==
+             mapped
   end
 end
