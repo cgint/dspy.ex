@@ -25,6 +25,7 @@ examples=(
   examples/offline/evaluation_callbacks_offline.exs
   examples/offline/provider_retry_disk_cache_offline.exs
   examples/offline/chain_of_thought_streaming_offline.exs
+  examples/offline/knn_few_shot_offline.exs
 )
 
 echo "== Verifying offline examples =="
