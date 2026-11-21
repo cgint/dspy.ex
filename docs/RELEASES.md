@@ -82,6 +82,14 @@ typed paths. Return a map with the new instruction for that slot, or an
 empty map to skip the proposal. A supplied reflection LM is scoped to
 the callback. Callers can also use the callback by itself.
 
+`Dspy.Teleprompt.GEPA.InstructionProposer.new/1` configures GEPA's
+LM-driven proposer. Set a base prompt, additional instructions, a signature
+adapter, or reference skills. Skill strings are inline text. An explicit
+`{:path, path}` loads a file or a directory's `SKILL.md` at construction.
+With `max_chars:`, an oversized draft gets one correction call before
+GEPA evaluates the instruction. The limit counts Unicode code points
+after trimming. Reflective examples use the existing bounded text previews.
+
 ### Streaming progress messages
 
 Pass a `status_message_provider:` module to `Dspy.streamify/2` to turn

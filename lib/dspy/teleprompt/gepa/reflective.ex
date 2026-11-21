@@ -7,7 +7,7 @@ defmodule Dspy.Teleprompt.GEPA.Reflective do
   alias Dspy.Signature.Adapters.JSONAdapter
   alias Dspy.Signature.PromptPreview
   alias Dspy.Teleprompt.BootstrapTrace
-  alias Dspy.Teleprompt.GEPA.{CandidatePool, Merger}
+  alias Dspy.Teleprompt.GEPA.{CandidatePool, InstructionProposer, Merger}
 
   @report_bytes 16_384
   @instruction_bytes 4_096
@@ -288,6 +288,14 @@ defmodule Dspy.Teleprompt.GEPA.Reflective do
     case Map.get(optimizer, :instruction_proposer) do
       nil ->
         propose_with_lm(optimizer.reflection_lm, previous, report)
+
+      %InstructionProposer{} = proposer ->
+        preview = PromptPreview.truncate(previous, @instruction_bytes)
+
+        case InstructionProposer.propose(proposer, optimizer.reflection_lm, preview, report) do
+          {:ok, instruction} -> validate_proposal(instruction, previous)
+          {:error, reason} -> {:error, {:reflection_failed, reason}}
+        end
 
       proposer ->
         candidate =

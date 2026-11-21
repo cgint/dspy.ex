@@ -44,6 +44,11 @@ defmodule Dspy.Teleprompt.GEPA do
   the callback inherits the calling context. Omit the callback or pass
   `nil` to use the built-in proposer with `:reflection_lm`.
 
+  Pass a `Dspy.Teleprompt.GEPA.InstructionProposer` configuration to guide
+  the built-in proposal with custom prompts, reference material, an adapter,
+  or a length limit. The configuration uses `:reflection_lm` when supplied
+  and the current DSPy LM otherwise.
+
   The supplied-candidate mode accepts a list of instructions and an
   ordinary one- or two-argument metric.
   """
@@ -52,7 +57,7 @@ defmodule Dspy.Teleprompt.GEPA do
 
   alias Dspy.{Example, LM, Trainset}
   alias Dspy.Module.PredictorSlots
-  alias Dspy.Teleprompt.GEPA.Reflective
+  alias Dspy.Teleprompt.GEPA.{InstructionProposer, Reflective}
   alias Dspy.Teleprompt.Util, as: TpUtil
 
   @search_defaults [
@@ -89,7 +94,7 @@ defmodule Dspy.Teleprompt.GEPA do
           seed: integer(),
           candidates: [String.t()],
           reflection_lm: LM.t() | nil,
-          instruction_proposer: instruction_proposer() | nil,
+          instruction_proposer: instruction_proposer() | InstructionProposer.t() | nil,
           max_metric_calls: pos_integer() | nil,
           reflection_minibatch_size: pos_integer() | nil,
           num_threads: pos_integer() | nil,
@@ -105,7 +110,8 @@ defmodule Dspy.Teleprompt.GEPA do
   defguardp reflective?(optimizer)
             when optimizer.reflection_lm != nil or
                    (is_map_key(optimizer, :instruction_proposer) and
-                      is_function(optimizer.instruction_proposer, 3))
+                      (is_function(optimizer.instruction_proposer, 3) or
+                         is_struct(optimizer.instruction_proposer, InstructionProposer)))
 
   @impl Dspy.Teleprompt
   def new(opts \\ []) do
@@ -166,9 +172,18 @@ defmodule Dspy.Teleprompt.GEPA do
 
     proposer =
       case opts[:instruction_proposer] do
-        nil -> nil
-        fun when is_function(fun, 3) -> fun
-        _invalid -> raise ArgumentError, ":instruction_proposer must accept three arguments"
+        nil ->
+          nil
+
+        %InstructionProposer{} = config ->
+          config
+
+        fun when is_function(fun, 3) ->
+          fun
+
+        _invalid ->
+          raise ArgumentError,
+                ":instruction_proposer must accept three arguments or be an InstructionProposer"
       end
 
     lm = LM.validate_binding!(opts[:reflection_lm])
