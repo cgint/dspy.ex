@@ -65,10 +65,10 @@ After this you can …optimize a program once, save it, load it later or elsewhe
 |---|---|---|---|---|---|---|---|---|---|---|---|
 | S002 | configure | partial | H | S | 3.00 | <=2.6 | - | N | - | [facet rule: done->partial] Parsimonious keys unported: rm/trace/num_threads/max_errors/ma | todo |
 | S051 | Example | partial | H | S | 3.00 | <=2.6 | - | N | - | [facet rule: done->partial] labels/without/toDict-named variants: labels and without/2 mis | todo |
-| S054 | Module | partial | H | S | 3.00 | <=2.6 | - | N | P5 (Module.inspect_history = facet S054.f7), P4 | Named discovery, value listing, and immutable slot updates implemented. LM traversal, traces and history remain. | M2 discovery and update slices implemented. Release pending. |
+| S054 | Module | partial | H | S | 3.00 | <=2.6 | - | N | P5 (Module.inspect_history = facet S054.f7), P4 | Named discovery, value listing, and immutable slot updates implemented. BootstrapRS records private teacher traces. LM traversal and public history remain. | M2 discovery and update slices implemented. Release pending. |
 | S055 | Prediction | partial | H | S | 3.00 | <=2.6 | S051 | N | - | [facet rule: done->partial] score float()/arithmetic/comparison ops and from_completions m | todo |
 | S067 | Signature | partial | H | S | 3.00 | <=2.6 | - | N | - | [facet rule: done->partial] pydantic-model validation, annotated types, and field constrai | todo |
-| S077 | BootstrapFewShotWithRandomSearch | partial | H | S | 3.00 | <=2.6 | S075 | N | P7 | Search, ranking, and teacher bootstrapping work for modules exposing `predict.examples`. Composite programs need named predictor traces. | M2 first slice implemented. Release pending. |
+| S077 | BootstrapFewShotWithRandomSearch | partial | H | S | 3.00 | <=2.6 | S075 | N | P7 | Search, ranking, and per-slot teacher demos work for composite programs. Custom programs can still use `predict.examples`. Trace-aware metrics remain. | M2 composite slice implemented. Release pending. |
 | S060 | EmbeddingsWithScores | partial | M | S | 2.00 | 3.2.0 | S059 | N | - | No EmbeddingsWithScores class; closest: InMemoryRetriever Document.score (cosine) | todo |
 | S038 | Predict | partial | H | M | 1.50 | <=2.6 | S033 | N | - | Missing **config (temperature/rollout_id), set_lm/get_lm, reset, dump/load_state, criteria | todo |
 | S113 | load | partial | H | M | 1.50 | <=2.6 | S059 | N | P4 | No program-level load (upstream cloudpickle); only parameter-state JSON persistence; no ve | todo |

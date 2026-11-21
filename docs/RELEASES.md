@@ -23,8 +23,9 @@ optimizer. Compile it with `Dspy.Teleprompt.compile/3` to get the best program.
 Use `Dspy.Teleprompt.BootstrapFewShotWithRandomSearch.compile_with_candidates/4`
 for ranked scores, subscores, and a separate validation set. Pass
 `teacher_compiled: true` to reuse an already-compiled teacher's demos. The
-winning predictor uses its bound LM. This first slice supports programs
-exposing `predict.examples`. Composite per-predictor demos require trace support.
+winning predictors keep their bound LMs. Programs with named predictor slots
+can bootstrap each slot from its own teacher calls, including calls inside
+tasks. The existing `predict.examples` path continues to support custom teachers.
 
 ### Sampling after v0.4.11
 

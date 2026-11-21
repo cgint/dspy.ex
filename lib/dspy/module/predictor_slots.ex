@@ -22,8 +22,23 @@ defmodule Dspy.Module.PredictorSlots do
 
   @spec map(Dspy.Module.t(), (path(), predictor() -> term())) :: term()
   def map(program, fun) do
-    replacements = for {path, predictor} <- list(program), do: {path, fun.(path, predictor)}
-    replace_slots(program, replacements)
+    {mapped, nil} =
+      map_reduce(program, nil, fn path, predictor, nil -> {fun.(path, predictor), nil} end)
+
+    mapped
+  end
+
+  @spec map_reduce(Dspy.Module.t(), acc, (path(), predictor(), acc -> {term(), acc})) ::
+          {term(), acc}
+        when acc: term()
+  def map_reduce(program, acc, fun) do
+    {replacements, acc} =
+      Enum.map_reduce(list(program), acc, fn {path, predictor}, state ->
+        {replacement, state} = fun.(path, predictor, state)
+        {{path, replacement}, state}
+      end)
+
+    {replace_slots(program, replacements), acc}
   end
 
   defp replace_slots(value, []), do: value
