@@ -12,7 +12,8 @@ defmodule Dspy.Module.PredictorTrace do
     try do
       tagged =
         PredictorSlots.map(teacher, fn path, predictor ->
-          Map.put(predictor, @trace_key, {table, path})
+          sinks = List.wrap(Map.get(predictor, @trace_key))
+          Map.put(predictor, @trace_key, [{table, path} | sinks])
         end)
 
       case Module.forward(tagged, example) do
@@ -26,17 +27,23 @@ defmodule Dspy.Module.PredictorTrace do
 
   def record(predictor, inputs, prediction) do
     case Map.get(predictor, @trace_key) do
-      nil -> :ok
-      {table, path} -> record_step(table, path, inputs, prediction)
+      nil ->
+        :ok
+
+      sinks ->
+        index = System.unique_integer([:monotonic, :positive])
+
+        Enum.each(List.wrap(sinks), fn {table, path} ->
+          record_step(table, {index, path, inputs, prediction})
+        end)
     end
   end
 
-  defp record_step(table, path, inputs, prediction) do
-    index = System.unique_integer([:monotonic, :positive])
-    :ets.insert(table, {index, path, inputs, prediction})
+  defp record_step(table, step) do
+    :ets.insert(table, step)
     :ok
   rescue
-    # A detached task can finish after its teacher attempt has closed.
+    # A detached task can finish after one of its captures has closed.
     ArgumentError -> :ok
   end
 end
