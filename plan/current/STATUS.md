@@ -1,9 +1,13 @@
 # Status
 
+> **M6, KNNFewShot.** The optimizer builds one neighbor index and
+> prepares demos for each query. Bootstrap acceptance metrics receive
+> the original training labels. The [offline example](../../examples/offline/knn_few_shot_offline.exs)
+> verifies two different demo selections. Trace-aware metrics remain open.
+
 > **M6, nearest-neighbor lookup.** `Dspy.KNN` embeds each training input
 > projection once. Queries use dot product and return the original
-> examples. The native numeric and tie rules are documented. KNNFewShot's
-> per-query bootstrapping remains open.
+> examples. The native numeric and tie rules are documented.
 
 > **M5, status messages and exit example.** `streamify/2` accepts a
 > lifecycle status provider. The [offline ChainOfThought example](../../examples/offline/chain_of_thought_streaming_offline.exs)

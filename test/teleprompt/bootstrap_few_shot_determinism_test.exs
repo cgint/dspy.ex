@@ -1,6 +1,7 @@
 defmodule Dspy.Teleprompt.BootstrapFewShotDeterminismTest do
   use ExUnit.Case, async: false
 
+  alias Dspy.{Example, Prediction}
   alias Dspy.Teleprompt.BootstrapFewShot
 
   defmodule ExampleAwareMockLM do
@@ -62,6 +63,18 @@ defmodule Dspy.Teleprompt.BootstrapFewShotDeterminismTest do
     def update_parameters(student, [%Dspy.Parameter{name: "predict.examples", value: examples}]) do
       send(student.test_pid, {:candidate_demos, Enum.map(examples, & &1.attrs.question)})
       %{student | examples: examples}
+    end
+  end
+
+  defmodule ProjectedTeacher do
+    @behaviour Dspy.Module
+    defstruct [:test_pid]
+
+    @impl true
+    def forward(teacher, %{question: question} = inputs) do
+      send(teacher.test_pid, {:teacher_inputs, inputs})
+      answer = if question == "accepted", do: "4", else: "wrong"
+      {:ok, Prediction.new(answer: answer, source: :teacher)}
     end
   end
 
@@ -155,5 +168,49 @@ defmodule Dspy.Teleprompt.BootstrapFewShotDeterminismTest do
       assert actual == expected
       refute_received {:candidate_demos, _}
     end
+  end
+
+  test "bootstrap acceptance uses the gold example while the teacher sees only projected inputs" do
+    test_pid = self()
+    student = %RecordingStudent{test_pid: test_pid}
+
+    [rejected, accepted] =
+      for question <- ["rejected", "accepted"] do
+        Example.new(%{question: question, answer: "4", label_detail: "gold only"}, %{
+          row: question
+        })
+        |> Example.with_inputs(:question)
+      end
+
+    metric = fn example, prediction ->
+      if prediction[:source] == :teacher do
+        send(test_pid, {:bootstrap_metric, example, prediction})
+      end
+
+      example[:answer] == prediction[:answer]
+    end
+
+    optimizer =
+      BootstrapFewShot.new(
+        metric: metric,
+        teacher: %ProjectedTeacher{test_pid: test_pid},
+        max_bootstrapped_demos: 2,
+        max_labeled_demos: 0,
+        num_candidate_programs: 1,
+        num_threads: 1,
+        seed: -1
+      )
+
+    assert {:ok, optimized} = BootstrapFewShot.compile(optimizer, student, [rejected, accepted])
+    assert_received {:teacher_inputs, %{question: "rejected"} = rejected_inputs}
+    assert_received {:teacher_inputs, %{question: "accepted"} = accepted_inputs}
+    assert rejected_inputs == %{question: "rejected"}
+    assert accepted_inputs == %{question: "accepted"}
+
+    assert_received {:bootstrap_metric, ^rejected, %Prediction{attrs: %{answer: "wrong"}}}
+    assert_received {:bootstrap_metric, ^accepted, %Prediction{attrs: %{answer: "4"}}}
+
+    assert [%Example{attrs: demo, metadata: %{}}] = optimized.examples
+    assert demo == %{question: "accepted", answer: "4", source: :teacher}
   end
 end

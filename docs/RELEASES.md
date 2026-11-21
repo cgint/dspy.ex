@@ -8,6 +8,15 @@ This repo ships in **small, user-usable slices**.
 
 ## Consumer notes
 
+### Per-query nearest-neighbor demos
+
+`Dspy.Teleprompt.new(:knn_few_shot, k: k, vectorizer: embedder)` builds an
+index when compiled with a student and training set. Each call uses its
+own neighbor subset to prepare one student program. Bootstrap metrics
+receive the original training example and the teacher's prediction.
+The [offline KNNFewShot example](../examples/offline/knn_few_shot_offline.exs)
+verifies that two queries use different demonstrations from one index.
+
 ### K-nearest-neighbor lookup
 
 `Dspy.KNN.new/3` indexes the declared inputs of training examples through

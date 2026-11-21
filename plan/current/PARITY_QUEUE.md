@@ -175,7 +175,7 @@ After this you can …use the stronger optimizers: real GEPA, example selection 
 | id | symbol | status | V | E | score | introduced | deps | breaking | old P | gap | queue status |
 |---|---|---|---|---|---|---|---|---|---|---|---|
 | S035 | KNN | partial | M | M | 1.00 | <=2.6 | - | N | P6 | Native index and dot-product lookup use declared examples and Dspy.Embedder. Field ordering, numeric precision, and ties follow the documented Elixir contract. | M6 native lookup |
-| S083 | KNNFewShot | missing | M | M | 1.00 | <=2.6 | DEP:embedder S075 | N | P6 | no Elixir equivalent | todo |
+| S083 | KNNFewShot | partial | M | M | 1.00 | <=2.6 | S035 S075 | N | P6 | One index and per-query BootstrapFewShot demo construction through the native compile interface. Shared bootstrap traces and exact upstream demo selection remain open. | M6 query-time demos |
 | S082 | InferRules | missing | M | M | 1.00 | 3.0.0 | S031 | N | - | no Elixir equivalent | todo |
 | S078 | BootstrapFinetune | missing | H | L | 0.75 | <=2.6 | - | N | - | no Elixir equivalent | todo |
 | S081 | GEPA | missing | H | L | 0.75 | 3.0.0 | S031 | Y | - | [reclassified partial->missing] metric must become 5-arg (gold, pred, trace, pred_name, pr | todo |
