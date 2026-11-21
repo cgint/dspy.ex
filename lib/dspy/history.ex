@@ -2,15 +2,35 @@ defmodule Dspy.History do
   @moduledoc """
   Conversation history container for signature inputs with `type: :history`.
 
-  Each history entry represents one prior turn and is expected to include:
+  A flat map represents a prior turn and includes:
   - at least one signature input field (excluding the history field itself)
   - at least one signature output field
 
-  Adapters can use `extract_messages/2` to validate and convert history entries
-  into deterministic `user`/`assistant` request messages.
+  `Dspy.History.Turn` stores typed fields and completed tool exchanges.
+  ChatAdapter replays typed turns including media and tool-call IDs.
   """
 
   alias Dspy.Signature
+
+  defmodule Turn do
+    @moduledoc """
+    A replayable turn containing declared inputs, outputs, and tool exchanges.
+
+    Each exchange stores a completed call and its result under the same
+    nonempty string ID. A tool-only turn has empty input and output maps.
+    """
+
+    defstruct inputs: %{}, outputs: %{}, tool_exchanges: []
+
+    @type exchange :: %{
+            required(:id) => String.t(),
+            required(:name) => String.t(),
+            required(:arguments) => map(),
+            required(:result) => term(),
+            optional(:is_error) => boolean()
+          }
+    @type t :: %__MODULE__{inputs: map(), outputs: map(), tool_exchanges: [exchange()]}
+  end
 
   defstruct messages: []
 
@@ -24,10 +44,15 @@ defmodule Dspy.History do
   @spec from_messages([message_entry()]) :: t()
   def from_messages(messages) when is_list(messages), do: new(messages)
 
-  @spec extract_messages(Signature.t(), map()) ::
+  @spec extract_messages(
+          Signature.t(),
+          map(),
+          (Turn.t() -> {:ok, [map()]} | {:error, term()}) | nil
+        ) ::
           {:ok, %{inputs: map(), messages: [map()], history_field: atom() | nil}}
           | {:error, term()}
-  def extract_messages(%Signature{} = signature, inputs) when is_map(inputs) do
+  def extract_messages(%Signature{} = signature, inputs, render_turn \\ nil)
+      when is_map(inputs) do
     case history_field(signature) do
       nil ->
         {:ok, %{inputs: inputs, messages: [], history_field: nil}}
@@ -43,12 +68,12 @@ defmodule Dspy.History do
           nil ->
             {:ok, %{inputs: filtered_inputs, messages: [], history_field: history_field}}
 
-          %__MODULE__{messages: messages} when is_list(messages) ->
-            with {:ok, pairs} <- validate_history_elements(signature, history_field, messages) do
+          %__MODULE__{messages: messages} when is_integer(length(messages)) ->
+            with {:ok, replay} <- render_entries(signature, history_field, messages, render_turn) do
               {:ok,
                %{
                  inputs: filtered_inputs,
-                 messages: Enum.flat_map(pairs, &pair_to_request_messages/1),
+                 messages: replay,
                  history_field: history_field
                }}
             end
@@ -69,8 +94,7 @@ defmodule Dspy.History do
     end)
   end
 
-  defp validate_history_elements(%Signature{} = signature, history_field, history_messages)
-       when is_list(history_messages) do
+  defp render_entries(signature, history_field, entries, render_turn) do
     input_fields =
       signature.input_fields
       |> Enum.reject(fn field -> field.name == history_field end)
@@ -78,30 +102,87 @@ defmodule Dspy.History do
 
     output_fields = Enum.map(signature.output_fields, & &1.name)
 
-    history_messages
+    entries
     |> Enum.with_index()
-    |> Enum.reduce_while({:ok, []}, fn {entry, index}, {:ok, acc} ->
-      with :ok <- ensure_map_entry(entry, index),
-           {:ok, input_pairs} <- extract_ordered_pairs(entry, input_fields, index, :input),
-           {:ok, output_pairs} <- extract_ordered_pairs(entry, output_fields, index, :output) do
-        {:cont, {:ok, [%{input_pairs: input_pairs, output_pairs: output_pairs} | acc]}}
-      else
+    |> Enum.reduce_while({:ok, [], MapSet.new()}, fn {entry, index}, {:ok, acc, ids} ->
+      case render_entry(entry, index, {input_fields, output_fields}, render_turn, ids) do
+        {:ok, messages, ids} -> {:cont, {:ok, Enum.reverse(messages, acc), ids}}
         {:error, _reason} = error -> {:halt, error}
       end
     end)
     |> case do
-      {:ok, pairs} -> {:ok, Enum.reverse(pairs)}
+      {:ok, messages, _ids} -> {:ok, Enum.reverse(messages)}
       {:error, _reason} = error -> error
     end
   end
 
-  defp ensure_map_entry(entry, index) do
-    if is_map(entry) do
-      :ok
-    else
-      {:error, {:invalid_history_element, %{index: index, reason: :not_a_map}}}
+  defp render_entry(%Turn{}, index, _fields, nil, _ids),
+    do: invalid_entry(index, :typed_turn_unsupported)
+
+  defp render_entry(%Turn{} = turn, index, _fields, render_turn, ids) do
+    with {:ok, ids} <- validate_turn(turn, index, ids),
+         {:ok, messages} <- render_turn.(turn) do
+      {:ok, messages, ids}
     end
   end
+
+  defp render_entry(entry, index, {input_fields, output_fields}, _render_turn, ids)
+       when is_map(entry) do
+    with {:ok, input_pairs} <- extract_ordered_pairs(entry, input_fields, index, :input),
+         {:ok, output_pairs} <- extract_ordered_pairs(entry, output_fields, index, :output) do
+      messages = [
+        %{role: "user", content: render_lines(input_pairs)},
+        %{role: "assistant", content: render_lines(output_pairs)}
+      ]
+
+      {:ok, messages, ids}
+    end
+  end
+
+  defp render_entry(_entry, index, _fields, _render_turn, _ids),
+    do: invalid_entry(index, :not_a_map)
+
+  defp validate_turn(
+         %Turn{inputs: inputs, outputs: outputs, tool_exchanges: exchanges},
+         index,
+         ids
+       )
+       when is_map(inputs) and is_map(outputs) and is_integer(length(exchanges)) do
+    Enum.reduce_while(exchanges, {:ok, ids}, fn exchange, {:ok, seen} ->
+      case validate_exchange(exchange, seen) do
+        {:ok, seen} -> {:cont, {:ok, seen}}
+        {:error, reason} -> {:halt, invalid_entry(index, reason)}
+      end
+    end)
+  end
+
+  defp validate_turn(_turn, index, _ids), do: invalid_entry(index, :invalid_typed_turn)
+
+  defp validate_exchange(%{id: id, name: name, arguments: args, result: _result} = exchange, ids)
+       when is_map(args) and not is_struct(args) do
+    cond do
+      not nonblank?(id) or not nonblank?(name) -> {:error, :invalid_tool_exchange}
+      MapSet.member?(ids, id) -> {:error, :duplicate_tool_call_id}
+      not is_boolean(Map.get(exchange, :is_error, false)) -> {:error, :invalid_tool_exchange}
+      not match?({:ok, _}, encode_tool_value(args)) -> {:error, :invalid_tool_exchange}
+      true -> {:ok, MapSet.put(ids, id)}
+    end
+  end
+
+  defp validate_exchange(_exchange, _ids), do: {:error, :invalid_tool_exchange}
+
+  @doc false
+  def encode_tool_value(value) do
+    Jason.encode(value, maps: :strict)
+  rescue
+    FunctionClauseError -> {:error, :invalid_tool_value}
+  end
+
+  defp nonblank?(value),
+    do: is_binary(value) and String.valid?(value) and String.trim(value) != ""
+
+  defp invalid_entry(index, reason),
+    do: {:error, {:invalid_history_element, %{index: index, reason: reason}}}
 
   defp extract_ordered_pairs(entry, field_names, index, kind)
        when is_map(entry) and is_list(field_names) do
@@ -116,17 +197,10 @@ defmodule Dspy.History do
 
     if pairs == [] do
       reason = if kind == :input, do: :missing_input_fields, else: :missing_output_fields
-      {:error, {:invalid_history_element, %{index: index, reason: reason}}}
+      invalid_entry(index, reason)
     else
       {:ok, pairs}
     end
-  end
-
-  defp pair_to_request_messages(%{input_pairs: input_pairs, output_pairs: output_pairs}) do
-    [
-      %{role: "user", content: render_lines(input_pairs)},
-      %{role: "assistant", content: render_lines(output_pairs)}
-    ]
   end
 
   defp render_lines(pairs) when is_list(pairs) do

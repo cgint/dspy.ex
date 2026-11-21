@@ -172,6 +172,35 @@ defmodule Dspy.Signature.AdapterPipeline do
     end
   end
 
+  @doc false
+  def merge_input_media(%Signature{} = signature, inputs, request)
+      when is_map(inputs) and is_map(request) do
+    {image_parts, attachment_parts} = extract_media_parts(signature, inputs)
+    merge_media(request, attachment_parts, image_parts)
+  end
+
+  defp extract_media_parts(%Signature{} = signature, inputs) when is_map(inputs) do
+    Enum.reduce(signature.input_fields, {[], []}, fn %{name: name}, {images, attachments} ->
+      case fetch_input(inputs, name) do
+        {:ok, %Dspy.Attachments{} = a} ->
+          {images, attachments ++ Dspy.Attachments.to_message_parts(a)}
+
+        {:ok, %Dspy.Image{} = image} ->
+          {images ++ Dspy.Image.format(image), attachments}
+
+        {:ok, list} when is_list(list) ->
+          if all_images?(list) do
+            {images ++ Enum.flat_map(list, &Dspy.Image.format/1), attachments}
+          else
+            {images, attachments}
+          end
+
+        _ ->
+          {images, attachments}
+      end
+    end)
+  end
+
   defp format_input_value(value) when is_binary(value), do: value
 
   defp format_input_value(value) do

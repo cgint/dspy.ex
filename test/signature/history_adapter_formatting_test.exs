@@ -2,10 +2,22 @@ defmodule Dspy.Signature.HistoryAdapterFormattingTest do
   # Uses global settings via Dspy.configure/1.
   use ExUnit.Case, async: false
 
+  alias Dspy.History.Turn
+
   defmodule HistorySig do
     use Dspy.Signature
 
     input_field(:question, :string, "Question")
+    input_field(:history, :history, "Conversation History", required: false)
+    output_field(:answer, :string, "Answer")
+  end
+
+  defmodule MediaHistorySig do
+    use Dspy.Signature
+
+    input_field(:question, :string, "Question")
+    input_field(:page, :image, "Page", required: false)
+    input_field(:files, :string, "Files", required: false)
     input_field(:history, :history, "Conversation History", required: false)
     output_field(:answer, :string, "Answer")
   end
@@ -156,6 +168,193 @@ defmodule Dspy.Signature.HistoryAdapterFormattingTest do
     {pos1, _} = :binary.match(final_user, "Example 1:")
     {pos2, _} = :binary.match(final_user, "Example 2:")
     assert pos1 < pos2
+  end
+
+  test "typed history replays the live multipart user message and consecutive tool exchanges" do
+    lm = %CapturingLM{pid: self(), content: "[[ ## answer ## ]]\nok\n"}
+    demo = Dspy.Example.new(%{question: "demo", answer: "example"})
+
+    predictor =
+      Dspy.Predict.new(MediaHistorySig,
+        adapter: Dspy.Signature.Adapters.ChatAdapter,
+        examples: [demo]
+      )
+
+    image_url = "data:image/png;base64,QUJD"
+    file_path = Path.join(System.tmp_dir!(), "typed-history-fixture.pdf")
+
+    first = %{
+      question: "Read this image",
+      page: Dspy.Image.new(image_url),
+      files: Dspy.Attachments.new(file_path)
+    }
+
+    Dspy.context([lm: lm, cache: false], fn ->
+      assert {:ok, _prediction} = Dspy.call(predictor, first)
+      assert_receive {:lm_request, %{messages: [_system, live_user]}}
+
+      assert %{role: "user", content: parts} = live_user
+
+      assert Enum.any?(parts, fn part ->
+               (part[:image_url] || part["image_url"]) in [
+                 %{url: image_url},
+                 %{"url" => image_url}
+               ]
+             end)
+
+      assert %{"type" => "input_file", "file_path" => ^file_path} = List.last(parts)
+
+      history =
+        Dspy.History.new([
+          %Turn{inputs: first, outputs: %{answer: "previous"}},
+          %Turn{
+            tool_exchanges: [%{id: "call_1", name: "lookup", arguments: %{}, result: "found"}]
+          },
+          %Turn{
+            tool_exchanges: [
+              %{id: "call_2", name: "lookup", arguments: %{"q" => "other"}, result: %{count: 2}}
+            ]
+          }
+        ])
+
+      assert {:ok, _prediction} = Dspy.call(predictor, %{question: "Continue", history: history})
+
+      assert_receive {:lm_request,
+                      %{
+                        messages: [
+                          _system,
+                          ^live_user,
+                          assistant,
+                          call1,
+                          result1,
+                          call2,
+                          result2,
+                          current
+                        ]
+                      }}
+
+      assert %{role: "assistant", content: "[[ ## answer ## ]]\nprevious"} = assistant
+
+      assert %{
+               role: "assistant",
+               content: "",
+               tool_calls: [
+                 %{id: "call_1", type: "function", function: %{name: "lookup", arguments: %{}}}
+               ]
+             } = call1
+
+      assert %{role: "tool", tool_call_id: "call_1", name: "lookup", content: "found"} = result1
+
+      assert %{
+               role: "assistant",
+               tool_calls: [%{id: "call_2", function: %{arguments: %{"q" => "other"}}}]
+             } = call2
+
+      assert %{role: "tool", tool_call_id: "call_2", content: ~s({"count":2})} = result2
+      assert %{role: "user", content: text} = current
+      assert is_binary(text)
+      assert text =~ "Continue"
+    end)
+  end
+
+  test "typed history rejects duplicate IDs and incomplete exchanges before an LM request" do
+    lm = %CapturingLM{pid: self(), content: "[[ ## answer ## ]]\nok\n"}
+    predictor = Dspy.Predict.new(HistorySig, adapter: Dspy.Signature.Adapters.ChatAdapter)
+    exchange = %{id: "same", name: "tool", arguments: %{}, result: "ok"}
+    turn = %Turn{tool_exchanges: [exchange]}
+
+    Dspy.context([lm: lm], fn ->
+      for {turns, index, reason} <- [
+            {[turn, turn], 1, :duplicate_tool_call_id},
+            {[%Turn{tool_exchanges: [Map.delete(exchange, :result)]}], 0, :invalid_tool_exchange},
+            {[%Turn{tool_exchanges: [%{exchange | arguments: %{opaque: make_ref()}}]}], 0,
+             :invalid_tool_exchange},
+            {[%Turn{tool_exchanges: [%{exchange | arguments: %{"q" => "string", q: "atom"}}]}], 0,
+             :invalid_tool_exchange},
+            {[%Turn{tool_exchanges: [%{exchange | arguments: %{nested: [1 | :tail]}}]}], 0,
+             :invalid_tool_exchange}
+          ] do
+        history = Dspy.History.new(turns)
+
+        assert {:error, {:invalid_history_element, %{index: ^index, reason: ^reason}}} =
+                 Dspy.call(predictor, %{question: "q", history: history})
+
+        refute_received {:lm_request, _}
+      end
+    end)
+  end
+
+  test "assistant image values replay as text placeholders" do
+    signature = HistorySig.signature()
+    [answer] = signature.output_fields
+    signature = %{signature | output_fields: [%{answer | type: :image}]}
+    image = Dspy.Image.new("data:image/png;base64,QUJD")
+    history = Dspy.History.new([%Turn{outputs: %{answer: image}}])
+
+    assert %{
+             messages: [
+               _system,
+               %{role: "assistant", content: "[[ ## answer ## ]]\n<image>"},
+               _user
+             ]
+           } =
+             Dspy.Signature.Adapters.ChatAdapter.format_request(
+               signature,
+               %{question: "q", history: history},
+               []
+             )
+  end
+
+  test "non-JSON tool results replay as valid wire text" do
+    for {value, text} <- [
+          {<<255>>, "<<255>>"},
+          {%{nested: [1 | :tail]}, "%{nested: [1 | :tail]}"}
+        ] do
+      exchange = %{id: "opaque", name: "lookup", arguments: %{}, result: value}
+      history = Dspy.History.new([%Turn{tool_exchanges: [exchange]}])
+
+      request =
+        Dspy.Signature.Adapters.ChatAdapter.format_request(
+          HistorySig.signature(),
+          %{question: "q", history: history},
+          []
+        )
+
+      assert %{messages: [_system, _assistant, %{role: "tool", content: ^text}, _user]} = request
+      assert {:ok, _encoded} = Jason.encode(request)
+    end
+  end
+
+  test "example dictionaries expose typed exchanges with their string IDs" do
+    exchange = %{id: "call_2_0", name: "lookup", arguments: %{"q" => "x"}, result: "found"}
+    history = Dspy.History.new([%Turn{tool_exchanges: [exchange]}])
+    example = Dspy.Example.new(%{history: history})
+
+    assert %{history: %{messages: [%{inputs: %{}, outputs: %{}, tool_exchanges: [^exchange]}]}} =
+             Dspy.Example.to_dict(example)
+
+    assert {:ok, encoded} = Jason.encode(Dspy.Example.to_dict(example))
+    assert encoded =~ ~s("id":"call_2_0")
+  end
+
+  test "unsupported built-in adapters reject typed turns before an LM request" do
+    lm = %CapturingLM{pid: self(), content: "Answer: ok\n"}
+    history = Dspy.History.new([%Turn{inputs: %{question: "before"}, outputs: %{answer: "ok"}}])
+
+    Dspy.context([lm: lm], fn ->
+      for adapter <- [
+            Dspy.Signature.Adapters.Default,
+            Dspy.Signature.Adapters.JSONAdapter,
+            Dspy.Signature.Adapters.XMLAdapter
+          ] do
+        predictor = Dspy.Predict.new(HistorySig, adapter: adapter)
+
+        assert {:error, {:invalid_history_element, %{index: 0, reason: :typed_turn_unsupported}}} =
+                 Dspy.call(predictor, %{question: "now", history: history})
+
+        refute_received {:lm_request, _}
+      end
+    end)
   end
 
   test "JSONAdapter rejects invalid history value before LM call" do
