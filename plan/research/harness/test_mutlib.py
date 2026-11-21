@@ -637,7 +637,10 @@ class TestVerdicts(unittest.TestCase):
             cwd=str(SELFTEST), env=env,
         )
         self.assertEqual(proc.returncode, 0, proc.stdout + proc.stderr)
-        self.assertIn("Result: 6 passed", proc.stdout, proc.stdout + proc.stderr)
+        self.assertRegex(
+            proc.stdout, r"(?m)^(?:Result: 6 passed|6 tests, 0 failures)$",
+            proc.stdout + proc.stderr,
+        )
         # No formatter output: the report file must not exist.
         self.assertFalse((SELFTEST / ".mutlib_base_report.jsonl").exists())
         # The formatter must not be loaded: no crash/error from MutFormatter.
