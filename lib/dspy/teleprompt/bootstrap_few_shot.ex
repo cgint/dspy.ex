@@ -95,8 +95,11 @@ defmodule Dspy.Teleprompt.BootstrapFewShot do
       raise ArgumentError, "BootstrapFewShot requires a :metric function"
     end
 
+    metric = Keyword.fetch!(opts, :metric)
+    Dspy.Teleprompt.validate_metric!(metric)
+
     %__MODULE__{
-      metric: Keyword.fetch!(opts, :metric),
+      metric: metric,
       teacher: Keyword.get(opts, :teacher),
       max_bootstrapped_demos: Keyword.get(opts, :max_bootstrapped_demos, 4),
       max_labeled_demos: Keyword.get(opts, :max_labeled_demos, 4),

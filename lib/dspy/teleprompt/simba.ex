@@ -59,8 +59,11 @@ defmodule Dspy.Teleprompt.SIMBA do
       raise ArgumentError, "SIMBA requires a :metric function"
     end
 
+    metric = Keyword.fetch!(opts, :metric)
+    Dspy.Teleprompt.validate_metric!(metric)
+
     %__MODULE__{
-      metric: Keyword.fetch!(opts, :metric),
+      metric: metric,
       bsize: Keyword.get(opts, :bsize, 32),
       num_candidates: Keyword.get(opts, :num_candidates, 6),
       max_steps: Keyword.get(opts, :max_steps, 8),

@@ -139,8 +139,21 @@ defmodule Dspy.Teleprompt do
     end
   end
 
-  defp validate_metric(metric) when is_function(metric, 2), do: :ok
-  defp validate_metric(metric) when is_function(metric, 1), do: :ok
+  @doc false
+  def validate_metric!(metric) do
+    case validate_metric(metric) do
+      :ok -> :ok
+      {:error, message} -> raise ArgumentError, message
+    end
+  end
+
+  defp validate_metric(metric) when is_function(metric, 1) or is_function(metric, 2), do: :ok
+
+  defp validate_metric(metric) when is_function(metric) do
+    {:arity, arity} = Function.info(metric, :arity)
+    {:error, "Metric must be a function of arity 1 or 2, got arity #{arity}"}
+  end
+
   defp validate_metric(_), do: {:error, "Metric must be a function"}
 
   @doc """
@@ -148,7 +161,7 @@ defmodule Dspy.Teleprompt do
 
   ## Parameters
 
-  - `metric` - Metric function
+  - `metric` - An arity-1 or arity-2 metric function
   - `example` - Input example
   - `prediction` - Model prediction
 
@@ -161,16 +174,18 @@ defmodule Dspy.Teleprompt do
   `Dspy.Evaluate.InvalidMetricResult`; bootstrap/mipro treat them as
   "no hit").
 
+  Raises `ArgumentError` for an invalid metric function or unsupported arity.
+
   """
   @spec run_metric(metric_fun(), Example.t(), Dspy.Prediction.t()) ::
           number() | term() | :error
-  def run_metric(metric, example, prediction) do
-    if is_function(metric, 2) do
-      run_metric_arity2(metric, example, prediction)
-    else
-      run_metric_arity1(metric, example)
-    end
-  end
+  def run_metric(metric, example, prediction) when is_function(metric, 2),
+    do: run_metric_arity2(metric, example, prediction)
+
+  def run_metric(metric, example, _prediction) when is_function(metric, 1),
+    do: run_metric_arity1(metric, example)
+
+  def run_metric(metric, _example, _prediction), do: validate_metric!(metric)
 
   defp run_metric_arity2(metric, example, prediction) do
     try do
