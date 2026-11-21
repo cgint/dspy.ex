@@ -130,12 +130,13 @@ defmodule Dspy.Signature.Adapters.ChatAdapter do
     |> Enum.join("\n\n")
   end
 
-  defp render_value_for_prompt(%Dspy.Attachments{}), do: "<attachments>"
+  @doc false
+  def render_value_for_prompt(%Dspy.Attachments{}), do: "<attachments>"
 
-  defp render_value_for_prompt(%Dspy.Image{}),
+  def render_value_for_prompt(%Dspy.Image{}),
     do: Dspy.Signature.AdapterPipeline.image_ref_token()
 
-  defp render_value_for_prompt(list) when is_list(list) do
+  def render_value_for_prompt(list) when is_list(list) do
     if all_images?(list) do
       Enum.join(
         List.duplicate(Dspy.Signature.AdapterPipeline.image_ref_token(), length(list)),
@@ -146,7 +147,7 @@ defmodule Dspy.Signature.Adapters.ChatAdapter do
     end
   end
 
-  defp render_value_for_prompt(value), do: format_value_for_prompt(value)
+  def render_value_for_prompt(value), do: format_value_for_prompt(value)
 
   defp fetch_map_key(map, atom_key) when is_map(map) and is_atom(atom_key) do
     cond do
@@ -308,7 +309,8 @@ defmodule Dspy.Signature.Adapters.ChatAdapter do
     end
   end
 
-  defp cast_output_value(raw, %{schema: schema_spec}) when is_binary(raw) do
+  @doc false
+  def cast_output_value(raw, %{schema: schema_spec}) when is_binary(raw) do
     with {:ok, decoded} <- decode_json_term(raw),
          {:ok, typed} <- Dspy.TypedOutputs.validate_term(decoded, schema_spec) do
       {:ok, typed}
@@ -318,7 +320,7 @@ defmodule Dspy.Signature.Adapters.ChatAdapter do
     end
   end
 
-  defp cast_output_value(raw, field) when is_binary(raw) do
+  def cast_output_value(raw, field) when is_binary(raw) do
     with {:ok, typed} <- validate_field_type(raw, field.type),
          :ok <- validate_field_constraints(typed, field) do
       {:ok, typed}
