@@ -166,15 +166,23 @@ defmodule Dspy.Signature.AdapterNativeToolCallingTest do
 
     assert {:ok, prediction} = structured_forward(message)
 
-    assert prediction.attrs == %{
-             tool_calls: [
-               %{id: "provider-call-4", name: "add", args: %{"a" => 2}},
-               %{id: nil, name: "lookup", args: %{"q" => "x"}}
-             ]
-           }
+    attrs = %{
+      tool_calls: [
+        %{id: "provider-call-4", name: "add", args: %{"a" => 2}},
+        %{id: nil, name: "lookup", args: %{"q" => "x"}}
+      ]
+    }
+
+    assert prediction.attrs == attrs
 
     assert {:error, {:output_parse_failed, {:missing_required_outputs, [:answer]}, _}} =
              structured_forward(message, answer_required: true)
+
+    assert {:ok, %{attrs: ^attrs}} =
+             structured_forward(%{message | content: "Looking up the answer."})
+
+    assert {:error, {:missing_content, nil}} =
+             structured_forward(%{message | content: %{unexpected: "shape"}})
   end
 
   test "structured text fallback decodes calls in order and retains declared outputs" do
@@ -182,7 +190,7 @@ defmodule Dspy.Signature.AdapterNativeToolCallingTest do
     [[ ## answer ## ]]
     working
     [[ ## tool_calls ## ]]
-    [{"name":"lookup","args":{"q":"x"}},{"name":"add","arguments":{"a":2}}]
+    [{"name":"lookup","args":{"q":"Keep [[ ## answer ## ]] as text"}},{"name":"add","arguments":{"a":2}}]
     """
 
     assert {:ok, prediction} = structured_forward(%{content: content, tool_calls: []})
@@ -190,7 +198,7 @@ defmodule Dspy.Signature.AdapterNativeToolCallingTest do
     assert prediction.attrs == %{
              answer: "working",
              tool_calls: [
-               %{id: nil, name: "lookup", args: %{"q" => "x"}},
+               %{id: nil, name: "lookup", args: %{"q" => "Keep [[ ## answer ## ]] as text"}},
                %{id: nil, name: "add", args: %{"a" => 2}}
              ]
            }
@@ -206,6 +214,11 @@ defmodule Dspy.Signature.AdapterNativeToolCallingTest do
   end
 
   test "structured calls reject malformed IDs and non-object arguments" do
+    builtin = %{type: "web_search_call", name: "add", arguments: %{}}
+
+    assert {:error, {:output_parse_failed, {:invalid_tool_call, %{reason: :unsupported_type}}, _}} =
+             structured_forward(%{content: nil, tool_calls: [builtin]})
+
     for id <- [false, "  ", <<255>>] do
       call = %{id: id, function: %{name: "add", arguments: "{}"}}
 
@@ -213,16 +226,23 @@ defmodule Dspy.Signature.AdapterNativeToolCallingTest do
                structured_forward(%{content: nil, tool_calls: [call]})
     end
 
-    for args <- ["[]", "false", false, %{:x => 1, "x" => 2}] do
+    for args <- ["[]", "false", "null", nil, false, ~s({"x":1,"x":2}), %{:x => 1, "x" => 2}] do
       call = %{function: %{name: "add", arguments: args}}
 
       assert {:error, {:output_parse_failed, {:invalid_tool_call_arguments, %{name: "add"}}, _}} =
                structured_forward(%{content: nil, tool_calls: [call]})
     end
 
-    assert {:error, {:output_parse_failed, {:invalid_tool_call_arguments, %{name: "add"}}, _}} =
+    for args <- ["false", "null"] do
+      assert {:error, {:output_parse_failed, {:invalid_tool_call_arguments, %{name: "add"}}, _}} =
+               structured_forward(%{
+                 content: "[[ ## tool_calls ## ]]\n" <> ~s([{"name":"add","args":#{args}}])
+               })
+    end
+
+    assert {:error, {:output_parse_failed, {:invalid_tool_calls, :duplicate_json_key}, _}} =
              structured_forward(%{
-               content: "[[ ## tool_calls ## ]]\n[{\"name\":\"add\",\"args\":false}]"
+               content: "[[ ## tool_calls ## ]]\n" <> ~s([{"name":"add","args":{"x":1,"x":2}}])
              })
   end
 

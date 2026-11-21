@@ -288,9 +288,14 @@ defmodule Dspy.Signature.Adapter.Pipeline do
   defp response_choices(response, nil, signature) do
     with {:ok, choice} <- LM.choice_from_response(response) do
       cond do
-        is_binary(choice.text) -> {:ok, [choice]}
-        structured_tool_calls?(signature) -> {:ok, [%{choice | text: ""}]}
-        true -> {:error, {:missing_content, nil}}
+        is_binary(choice.text) ->
+          {:ok, [choice]}
+
+        structured_tool_calls?(signature) and is_nil(tool_value(choice.raw, :content)) ->
+          {:ok, [%{choice | text: ""}]}
+
+        true ->
+          {:error, {:missing_content, nil}}
       end
     end
   end
@@ -332,12 +337,25 @@ defmodule Dspy.Signature.Adapter.Pipeline do
     end
   end
 
-  defp parse_text_outputs(adapter, signature, choice, structured?) do
-    if structured? and String.trim(choice.text) == "" and
-         Enum.all?(signature.output_fields, &(not &1.required)) do
+  defp parse_text_outputs(adapter, signature, choice, false),
+    do: adapter.parse_outputs(signature, choice.text, choice: choice)
+
+  defp parse_text_outputs(adapter, signature, choice, true) do
+    if String.trim(choice.text) == "" and Enum.all?(signature.output_fields, &(not &1.required)) do
       %{}
     else
-      adapter.parse_outputs(signature, choice.text, choice: choice)
+      case adapter.parse_outputs(signature, choice.text,
+             choice: choice,
+             structured_tool_calls: true
+           ) do
+        {:error, {:missing_required_outputs, []}} ->
+          if has_native_tool_calls?(choice),
+            do: %{},
+            else: {:error, {:missing_required_outputs, []}}
+
+        result ->
+          result
+      end
     end
   end
 
@@ -584,7 +602,7 @@ defmodule Dspy.Signature.Adapter.Pipeline do
     fields =
       Enum.flat_map(signature.output_fields, fn
         %{type: :tool_calls, tool_call_format: :structured} = field ->
-          if structured_native_calls(choice) in [nil, []], do: [%{field | type: :json}], else: []
+          if has_native_tool_calls?(choice), do: [], else: [%{field | type: :string}]
 
         %{type: :tool_calls} ->
           []
@@ -621,15 +639,17 @@ defmodule Dspy.Signature.Adapter.Pipeline do
   end
 
   defp merge_tool_call_field(%{tool_call_format: :structured, name: name}, outputs, choice) do
-    native_calls = structured_native_calls(choice)
-    calls = if native_calls in [nil, []], do: Map.get(outputs, name), else: native_calls
+    case {structured_native_calls(choice), Map.fetch(outputs, name)} do
+      {native, _text} when native not in [nil, []] ->
+        put_structured_tool_calls(outputs, name, native)
 
-    with {:ok, parsed} <- parse_tool_calls(calls, &normalize_structured_tool_call/1) do
-      if parsed == [] and not Map.has_key?(outputs, name) do
+      {_native, {:ok, text}} ->
+        with {:ok, calls} <- decode_tool_call_list(text) do
+          put_structured_tool_calls(outputs, name, calls)
+        end
+
+      {_native, :error} ->
         {:ok, outputs}
-      else
-        {:ok, Map.put(outputs, name, parsed)}
-      end
     end
   end
 
@@ -640,6 +660,21 @@ defmodule Dspy.Signature.Adapter.Pipeline do
   end
 
   defp structured_native_calls(choice), do: tool_value(choice.raw, :tool_calls)
+  defp has_native_tool_calls?(choice), do: structured_native_calls(choice) not in [nil, []]
+
+  defp put_structured_tool_calls(outputs, name, calls) do
+    with {:ok, parsed} <- parse_tool_calls(calls, &normalize_structured_tool_call/1) do
+      {:ok, Map.put(outputs, name, parsed)}
+    end
+  end
+
+  defp decode_tool_call_list(text) do
+    case decode_tool_json(text) do
+      {:ok, calls} when is_list(calls) -> {:ok, calls}
+      {:ok, _} -> {:error, {:invalid_tool_calls, :expected_list}}
+      {:error, reason} -> {:error, {:invalid_tool_calls, reason}}
+    end
+  end
 
   defp parse_tool_calls(nil, _normalize), do: {:ok, []}
 
@@ -662,11 +697,12 @@ defmodule Dspy.Signature.Adapter.Pipeline do
   defp normalize_structured_tool_call(call) when is_map(call) do
     function = tool_value(call, :function, call)
 
-    with true <- is_map(function),
+    with :ok <- validate_tool_call_type(tool_value(call, :type, "function")),
+         true <- is_map(function),
          name <- tool_value(function, :name),
          true <- nonblank_tool_string?(name),
          {:ok, id} <- structured_tool_id(name, tool_value(call, :id)),
-         raw_args = tool_value(function, :arguments, tool_value(function, :args)),
+         raw_args = tool_value(function, :arguments, tool_value(function, :args, %{})),
          {:ok, args} <- structured_tool_arguments(name, raw_args) do
       {:ok, %{id: id, name: name, args: args}}
     else
@@ -677,6 +713,11 @@ defmodule Dspy.Signature.Adapter.Pipeline do
 
   defp normalize_structured_tool_call(_other),
     do: {:error, {:invalid_tool_call, %{reason: :not_a_map}}}
+
+  defp validate_tool_call_type(type) when type in [:function, "function"], do: :ok
+
+  defp validate_tool_call_type(_type),
+    do: {:error, {:invalid_tool_call, %{reason: :unsupported_type}}}
 
   defp tool_value(map, key, default \\ nil),
     do: Map.get(map, key, Map.get(map, Atom.to_string(key), default))
@@ -693,14 +734,37 @@ defmodule Dspy.Signature.Adapter.Pipeline do
   end
 
   defp structured_tool_arguments(name, raw_args) do
-    with {:ok, args} when is_map(args) and not is_struct(args) <-
-           decode_tool_call_arguments(name, raw_args),
-         {:ok, _} <- Dspy.History.encode_tool_value(args) do
-      {:ok, args}
-    else
+    case tool_argument_object(raw_args) do
+      {:ok, args} when is_map(args) and not is_struct(args) -> {:ok, args}
       _ -> {:error, {:invalid_tool_call_arguments, %{name: name}}}
     end
   end
+
+  defp tool_argument_object(json) when is_binary(json), do: decode_tool_json(json)
+
+  defp tool_argument_object(args) when is_map(args) do
+    with {:ok, _} <- Dspy.History.encode_tool_value(args), do: {:ok, args}
+  end
+
+  defp tool_argument_object(_value), do: {:error, :expected_object}
+
+  defp decode_tool_json(text) when is_binary(text) do
+    with {:ok, ordered} <- Jason.decode(text, objects: :ordered_objects),
+         {:ok, _} <- Dspy.History.encode_tool_value(ordered) do
+      {:ok, tool_json_maps(ordered)}
+    else
+      {:error, %Jason.EncodeError{}} -> {:error, :duplicate_json_key}
+      {:error, _} -> {:error, :invalid_json}
+    end
+  end
+
+  defp decode_tool_json(_text), do: {:error, :invalid_json}
+
+  defp tool_json_maps(%Jason.OrderedObject{values: pairs}),
+    do: Map.new(pairs, fn {key, value} -> {key, tool_json_maps(value)} end)
+
+  defp tool_json_maps(values) when is_list(values), do: Enum.map(values, &tool_json_maps/1)
+  defp tool_json_maps(value), do: value
 
   defp normalize_tool_call(tool_call) when is_map(tool_call) do
     function = Map.get(tool_call, :function) || Map.get(tool_call, "function") || %{}

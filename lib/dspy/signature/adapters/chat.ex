@@ -21,6 +21,7 @@ defmodule Dspy.Signature.Adapters.ChatAdapter do
   alias Dspy.Signature.AdapterPipeline
 
   @marker_regex ~r/\[\[\s*##\s*([A-Za-z0-9_]+)\s*##\s*\]\]/
+  @line_marker_regex ~r/^[\t ]*\[\[[\t ]*##[\t ]*([A-Za-z0-9_]+)[\t ]*##[\t ]*\]\]/m
 
   @impl true
   def format_instructions(%Dspy.Signature{} = signature, _opts \\ []) do
@@ -60,8 +61,12 @@ defmodule Dspy.Signature.Adapters.ChatAdapter do
   end
 
   @impl true
-  def parse_outputs(%Dspy.Signature{} = signature, text, _opts \\ []) when is_binary(text) do
-    case parse_marker_sections(signature, text) do
+  def parse_outputs(%Dspy.Signature{} = signature, text, opts \\ []) when is_binary(text) do
+    # Structured tool calls can contain literal marker text in JSON string values.
+    markers =
+      if Keyword.get(opts, :structured_tool_calls), do: @line_marker_regex, else: @marker_regex
+
+    case parse_marker_sections(signature, text, markers) do
       {:ok, raw_outputs} ->
         # Important: if we found all required marker sections, we do NOT fall back
         # to JSON, even if type validation fails.
@@ -264,14 +269,14 @@ defmodule Dspy.Signature.Adapters.ChatAdapter do
 
   # --- parsing helpers ---
 
-  defp parse_marker_sections(%Dspy.Signature{} = signature, text) when is_binary(text) do
+  defp parse_marker_sections(%Dspy.Signature{} = signature, text, markers) when is_binary(text) do
     allowed =
       signature.output_fields
       |> Enum.map(&Atom.to_string(&1.name))
       |> Map.new(fn s -> {s, String.to_existing_atom(s)} end)
       |> safe_allowed_atoms(signature)
 
-    matches = Regex.scan(@marker_regex, text, return: :index)
+    matches = Regex.scan(markers, text, return: :index)
 
     case matches do
       [] ->
