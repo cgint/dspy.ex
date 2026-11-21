@@ -8,6 +8,13 @@ This repo ships in **small, user-usable slices**.
 
 ## Consumer notes
 
+### ReqLLM tool history
+
+The ReqLLM bridge preserves assistant function calls and tool-role results
+in request history, including their call IDs. Text-generation responses
+carry native function calls for the application to execute. Malformed tool
+messages return a local error.
+
 ### Parallel call concurrency
 
 Pass `num_threads:` to `Dspy.Parallel.run/3` to set concurrency for that

@@ -6,6 +6,10 @@ defmodule Dspy.LM.ReqLLM do
 
   This delegates LLM provider calls to `req_llm` (unified API across providers).
 
+  Assistant history messages can carry OpenAI-style `tool_calls`. Tool result
+  messages use role `"tool"` and the corresponding `tool_call_id`. The
+  text-generation response includes native function calls when present.
+
   ## Multipart / attachments
 
   This adapter supports `request.messages[].content` as either:
@@ -119,7 +123,7 @@ defmodule Dspy.LM.ReqLLM do
       text = lm.response_module.text(response)
       finish_reason = lm.response_module.finish_reason(response)
       usage = lm.response_module.usage(response)
-      normalized_response(text || "", finish_reason, usage)
+      normalized_response(text || "", finish_reason, usage, response_tool_calls(lm, response))
     end
   end
 
@@ -139,12 +143,29 @@ defmodule Dspy.LM.ReqLLM do
     )
   end
 
-  defp normalized_response(text, finish_reason, usage) do
+  defp response_tool_calls(lm, response) do
+    with true <- function_exported?(lm.response_module, :tool_calls, 1),
+         calls when is_integer(length(calls)) <- lm.response_module.tool_calls(response) do
+      for call <- calls, not ReqLLM.ToolCall.builtin?(call) do
+        case call do
+          %ReqLLM.ToolCall{} -> Map.from_struct(call)
+          other -> other
+        end
+      end
+    else
+      _ -> []
+    end
+  end
+
+  defp normalized_response(text, finish_reason, usage, tool_calls \\ []) do
+    message = %{role: "assistant", content: text}
+    message = if tool_calls == [], do: message, else: Map.put(message, :tool_calls, tool_calls)
+
     {:ok,
      %{
        choices: [
          %{
-           message: %{role: "assistant", content: text},
+           message: message,
            finish_reason: finish_reason && Atom.to_string(finish_reason)
          }
        ],
@@ -218,36 +239,101 @@ defmodule Dspy.LM.ReqLLM do
     end
   end
 
-  defp to_req_llm_message(context_module, %{role: role, content: content})
-       when is_binary(role) and is_binary(content) do
-    {:ok,
-     case role do
-       "system" -> context_module.system(content)
-       "assistant" -> context_module.assistant(content)
-       _ -> context_module.user(content)
-     end}
-  end
+  defp to_req_llm_message(context_module, message) when is_map(message) do
+    role = wire_field(message, :role)
+    content = wire_field(message, :content)
 
-  defp to_req_llm_message(context_module, %{role: role, content: content})
-       when is_binary(role) and is_list(content) do
-    with {:ok, parts} <- to_req_llm_parts(content) do
-      {:ok,
-       case role do
-         "system" -> context_module.system(parts)
-         "assistant" -> context_module.assistant(parts)
-         _ -> context_module.user(parts)
-       end}
+    case {role, wire_field(message, :tool_calls)} do
+      {"tool", _} ->
+        to_req_llm_tool_result(context_module, message, content)
+
+      {"assistant", calls} when calls not in [nil, []] ->
+        content = if is_nil(content), do: "", else: content
+
+        with {:ok, tool_calls} <- to_req_llm_tool_calls(calls),
+             {:ok, content} <- to_req_llm_content(content) do
+          {:ok, context_module.assistant(content, tool_calls: tool_calls)}
+        end
+
+      {role, _} when is_binary(role) and (is_binary(content) or is_integer(length(content))) ->
+        with {:ok, content} <- to_req_llm_content(content) do
+          {:ok,
+           case role do
+             "system" -> context_module.system(content)
+             "assistant" -> context_module.assistant(content)
+             _ -> context_module.user(content)
+           end}
+        end
+
+      _ ->
+        {:error, {:unsupported_message, message}}
     end
-  end
-
-  defp to_req_llm_message(context_module, %{"role" => role, "content" => content})
-       when is_binary(role) do
-    to_req_llm_message(context_module, %{role: role, content: content})
   end
 
   defp to_req_llm_message(_context_module, other) do
     {:error, {:unsupported_message, other}}
   end
+
+  defp to_req_llm_tool_result(context_module, message, content) do
+    id = wire_field(message, :tool_call_id)
+    name = wire_field(message, :name)
+
+    if nonblank?(id) and (is_nil(name) or nonblank?(name)) do
+      with {:ok, content} <- to_req_llm_content(content) do
+        {:ok, context_module.tool_result(id, name, content)}
+      end
+    else
+      {:error, {:unsupported_message, :invalid_tool_result}}
+    end
+  end
+
+  defp to_req_llm_content(content) when is_binary(content), do: {:ok, content}
+  defp to_req_llm_content(content) when is_integer(length(content)), do: to_req_llm_parts(content)
+  defp to_req_llm_content(_content), do: {:error, {:unsupported_message, :invalid_tool_content}}
+
+  defp to_req_llm_tool_calls(calls) when is_integer(length(calls)) do
+    calls
+    |> Enum.reduce_while({:ok, []}, fn call, {:ok, acc} ->
+      case to_req_llm_tool_call(call) do
+        {:ok, converted} -> {:cont, {:ok, [converted | acc]}}
+        {:error, _} = error -> {:halt, error}
+      end
+    end)
+    |> case do
+      {:ok, converted} -> {:ok, Enum.reverse(converted)}
+      {:error, _} = error -> error
+    end
+  end
+
+  defp to_req_llm_tool_calls(_calls), do: {:error, {:unsupported_message, :invalid_tool_calls}}
+
+  defp to_req_llm_tool_call(call) when is_map(call) do
+    with "function" <- wire_field(call, :type),
+         false <- ReqLLM.ToolCall.builtin?(call),
+         %{} = function <- wire_field(call, :function),
+         id = wire_field(call, :id),
+         name = wire_field(function, :name),
+         true <- nonblank?(id) and nonblank?(name),
+         {:ok, args} <- encode_tool_arguments(wire_field(function, :arguments)) do
+      {:ok, ReqLLM.ToolCall.new(id, name, args)}
+    else
+      _ -> {:error, {:unsupported_message, :invalid_tool_call}}
+    end
+  end
+
+  defp to_req_llm_tool_call(_call), do: {:error, {:unsupported_message, :invalid_tool_call}}
+
+  defp encode_tool_arguments(args) when is_binary(args), do: {:ok, args}
+
+  defp encode_tool_arguments(args) when is_map(args) and not is_struct(args),
+    do: Jason.encode(args)
+
+  defp encode_tool_arguments(_args), do: :error
+
+  defp wire_field(map, key), do: Map.get(map, key, Map.get(map, Atom.to_string(key)))
+
+  defp nonblank?(value),
+    do: is_binary(value) and String.valid?(value) and String.trim(value) != ""
 
   defp to_req_llm_parts(parts) when is_list(parts) do
     with {:ok, rev} <-
