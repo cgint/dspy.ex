@@ -3,6 +3,7 @@ defmodule Dspy.Refine.Advice do
 
   alias Dspy.{Attrs, Context, LM, Settings}
   alias Dspy.Module.PredictorSlots
+  alias Dspy.Signature.AdapterPipeline
 
   @key {__MODULE__, :text}
   @step_limit 32
@@ -16,18 +17,40 @@ defmodule Dspy.Refine.Advice do
   @omitted "[omitted]"
   @truncated "[truncated]"
 
+  @type binding :: {reference(), PredictorSlots.path()} | nil
+
   def step_limit, do: @step_limit
-  def for_predictor(predictor), do: Map.get(predictor, @key)
+  def binding(predictor), do: Map.get(predictor, @key)
 
-  def annotate(program, advice) when map_size(advice) == 0, do: program
+  def with_advice(program, advice, run) when map_size(advice) == 0, do: run.(program)
 
-  def annotate(program, advice) do
-    PredictorSlots.map(program, fn path, predictor ->
-      case Map.fetch(advice, path) do
-        {:ok, text} -> Map.put(predictor, @key, text)
-        :error -> predictor
-      end
-    end)
+  def with_advice(program, advice, run) do
+    table = :ets.new(:dspy_refine_advice, [:protected, :set])
+
+    try do
+      :ets.insert(table, Map.to_list(advice))
+
+      program
+      |> PredictorSlots.map(fn path, predictor ->
+        if Map.has_key?(advice, path),
+          do: Map.put(predictor, @key, {table, path}),
+          else: predictor
+      end)
+      |> run.()
+    after
+      :ets.delete(table)
+    end
+  end
+
+  def text(nil), do: nil
+
+  def text({table, path}) do
+    case :ets.lookup(table, path) do
+      [{^path, text}] -> text
+      [] -> nil
+    end
+  rescue
+    ArgumentError -> nil
   end
 
   def request(_lm, _program, [], _score, _threshold), do: %{}
@@ -156,39 +179,51 @@ defmodule Dspy.Refine.Advice do
 
   defp query(lm, payload, ids) do
     context = Context.capture()
-    reply = :erlang.alias()
+    caller = self()
+    reply = make_ref()
 
-    {worker, monitor} =
+    {coordinator, monitor} =
       spawn_monitor(fn ->
         advice =
-          Context.with_context(context, fn ->
-            Settings.context([cache: false], fn -> generate_advice(lm, payload, ids) end)
+          run_advisor(caller, fn ->
+            Context.with_context(context, fn ->
+              Settings.context([cache: false], fn -> generate_advice(lm, payload, ids) end)
+            end)
           end)
 
-        send(reply, {reply, advice})
+        send(caller, {reply, advice})
       end)
 
-    try do
-      receive do
-        {^reply, advice} -> advice
-        {:DOWN, ^monitor, :process, ^worker, _reason} -> %{}
-      after
-        @timeout ->
-          Process.exit(worker, :kill)
+    receive do
+      {^reply, advice} ->
+        Process.demonitor(monitor, [:flush])
+        advice
 
-          receive do
-            {:DOWN, ^monitor, :process, ^worker, _reason} -> %{}
-          end
-      end
+      {:DOWN, ^monitor, :process, ^coordinator, _reason} ->
+        %{}
+    end
+  end
+
+  defp run_advisor(caller, run) do
+    caller_monitor = Process.monitor(caller)
+    coordinator = self()
+    reply = make_ref()
+    {worker, monitor} = spawn_monitor(fn -> send(coordinator, {reply, run.()}) end)
+
+    receive do
+      {^reply, advice} -> advice
+      {:DOWN, ^monitor, :process, ^worker, _reason} -> %{}
+      {:DOWN, ^caller_monitor, :process, ^caller, _reason} -> stop_advisor(worker, monitor)
     after
-      :erlang.unalias(reply)
-      Process.demonitor(monitor, [:flush])
+      @timeout -> stop_advisor(worker, monitor)
+    end
+  end
 
-      receive do
-        {^reply, _late} -> :ok
-      after
-        0 -> :ok
-      end
+  defp stop_advisor(worker, monitor) do
+    Process.exit(worker, :kill)
+
+    receive do
+      {:DOWN, ^monitor, :process, ^worker, _reason} -> %{}
     end
   end
 
@@ -226,7 +261,7 @@ defmodule Dspy.Refine.Advice do
   end
 
   defp valid_advice(value) when is_binary(value) do
-    text = String.trim(value)
+    text = value |> AdapterPipeline.sanitize_prompt() |> String.trim()
     if text in ["", "N/A"], do: :error, else: {:ok, truncate(text, @advice_bytes)}
   end
 

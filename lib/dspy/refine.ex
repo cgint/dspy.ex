@@ -111,14 +111,12 @@ defmodule Dspy.Refine do
     |> Enum.reduce_while({initial, %{}}, fn offset, {acc, advice} ->
       rollout_id = start + offset
 
-      program =
-        refiner.program |> PredictorConfig.set_rollout(rollout_id) |> Advice.annotate(advice)
-
+      program = PredictorConfig.set_rollout(refiner.program, rollout_id)
       collect? = not is_nil(feedback_lm) and offset + 1 < refiner.n
 
       result =
         Settings.context([temperature: 1.0, rollout_id: rollout_id], fn ->
-          run_program(program, inputs, fail_count, collect?)
+          Advice.with_advice(program, advice, &run_program(&1, inputs, fail_count, collect?))
         end)
 
       case result do

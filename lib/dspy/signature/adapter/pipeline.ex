@@ -12,6 +12,7 @@ defmodule Dspy.Signature.Adapter.Pipeline do
   """
 
   alias Dspy.{Lifecycle, LM, Prediction, PredictorConfig, Settings, Signature}
+  alias Dspy.Refine.Advice
   alias Dspy.Signature.Adapter.Callbacks
   alias Dspy.Signature.AdapterPipeline
   require Logger
@@ -23,7 +24,7 @@ defmodule Dspy.Signature.Adapter.Pipeline do
           adapter: module() | nil,
           lm: Dspy.LM.t() | nil,
           forced_tool: String.t() | nil,
-          prompt_advice: String.t() | nil,
+          prompt_advice: Advice.binding(),
           config: PredictorConfig.t(),
           prediction_signature: Signature.t(),
           callbacks: Callbacks.callbacks(),
@@ -182,9 +183,7 @@ defmodule Dspy.Signature.Adapter.Pipeline do
         with {:ok, request0} <-
                AdapterPipeline.format_request(signature, inputs, demos, adapter: adapter),
              {:ok, request} <- AdapterPipeline.merge_input_media(signature, inputs, request0),
-             {:ok, base_prompt} <- AdapterPipeline.primary_prompt_text(request),
-             {:ok, request, base_prompt} <-
-               append_advice(request, base_prompt, lm_options.prompt_advice) do
+             {:ok, base_prompt} <- AdapterPipeline.primary_prompt_text(request) do
           request = Map.merge(request, lm_options.request_options)
           {{:ok, request, base_prompt}, %{request: request_summary(request, lm)}}
         else
@@ -210,13 +209,16 @@ defmodule Dspy.Signature.Adapter.Pipeline do
     end
   end
 
-  defp append_advice(request, prompt, nil), do: {:ok, request, prompt}
+  defp append_advice(request, binding) do
+    case Advice.text(binding) do
+      nil ->
+        {:ok, request}
 
-  defp append_advice(request, prompt, advice) do
-    prompt = prompt <> "\n\n[Refine feedback]\n" <> advice <> "\n[/Refine feedback]"
-
-    with {:ok, request} <- AdapterPipeline.replace_primary_prompt_text(request, prompt) do
-      {:ok, request, prompt}
+      advice ->
+        with {:ok, prompt} <- AdapterPipeline.primary_prompt_text(request) do
+          advised = prompt <> "\n\n[Refine feedback]\n" <> advice <> "\n[/Refine feedback]"
+          AdapterPipeline.replace_primary_prompt_text(request, advised)
+        end
     end
   end
 
@@ -833,7 +835,12 @@ defmodule Dspy.Signature.Adapter.Pipeline do
   end
 
   defp do_call_with_retry_log(request, lm_options, attempt, max_attempts, call_id) do
-    case Dspy.LM.generate_with_options(lm_options.lm, request, lm_options.cache_options) do
+    result =
+      with {:ok, advised_request} <- append_advice(request, lm_options.prompt_advice) do
+        Dspy.LM.generate_with_options(lm_options.lm, advised_request, lm_options.cache_options)
+      end
+
+    case result do
       {:ok, response} ->
         {:ok, response}
 

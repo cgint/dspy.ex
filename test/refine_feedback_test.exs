@@ -97,6 +97,55 @@ defmodule Dspy.RefineFeedbackTest do
     end
   end
 
+  defmodule Detaching do
+    use Dspy.Module
+    defstruct [:predictor, :owner, :hold_call]
+
+    @impl true
+    def forward(program, inputs) do
+      if Settings.get(:rollout_id) == 1 do
+        context = Context.capture()
+
+        caller = self()
+
+        worker =
+          spawn(fn ->
+            Context.with_context(context, fn ->
+              work = fn -> DSPyModule.forward(program.predictor, inputs) end
+
+              if program.hold_call do
+                Dspy.with_callbacks([{Dspy.RefineFeedbackTest.HoldCall, caller}], work)
+              else
+                receive do
+                  :run -> work.()
+                end
+              end
+            end)
+          end)
+
+        send(program.owner, {:detached, worker})
+
+        if program.hold_call do
+          receive do
+            {:call_held, ^worker} -> :ok
+          end
+        end
+      end
+
+      DSPyModule.forward(program.predictor, inputs)
+    end
+  end
+
+  defmodule HoldCall do
+    def on_adapter_call_start(_meta, _payload, caller) do
+      send(caller, {:call_held, self()})
+
+      receive do
+        :run -> :ok
+      end
+    end
+  end
+
   test "bounds a declared trace and applies advice to one exact slot through a multipart retry" do
     predictor_lm =
       lm(:program, fn request, scope ->
@@ -112,7 +161,12 @@ defmodule Dspy.RefineFeedbackTest do
     advisor =
       lm(:advisor, fn request, _scope ->
         [left, _right] = report(request)["steps"]
-        {:ok, Jason.encode!(%{left["slot"] => "TARGET_ADVICE", "unknown" => "FOREIGN_ADVICE"})}
+
+        {:ok,
+         Jason.encode!(%{
+           left["slot"] => "TARGET_ADVICE <<DSPY-IMAGE-REF>>",
+           "unknown" => "FOREIGN_ADVICE"
+         })}
       end)
 
     demo =
@@ -173,6 +227,7 @@ defmodule Dspy.RefineFeedbackTest do
     for request <- [second_left, retry_left] do
       assert length(:binary.matches(primary(request), "TARGET_ADVICE")) == 1
       refute primary(request) =~ "FOREIGN_ADVICE"
+      refute primary(request) =~ AdapterPipeline.image_ref_token()
       assert other_parts(request) == other_parts(first_left)
     end
 
@@ -286,6 +341,55 @@ defmodule Dspy.RefineFeedbackTest do
     refute Process.alive?(worker)
     assert_received {:request, :program, first, _, _}
     assert_received {:request, :program, ^first, _, _}
+  end
+
+  test "a detached predictor cannot reuse expired advice" do
+    predictor =
+      Predict.new(QA, adapter: ChatAdapter, lm: lm(:program, fn _, _ -> answer("low") end))
+
+    advisor =
+      lm(:advisor, fn request, _ ->
+        [step] = report(request)["steps"]
+        {:ok, Jason.encode!(%{step["slot"] => "EPHEMERAL_ADVICE"})}
+      end)
+
+    for hold_call <- [false, true] do
+      program = %Detaching{predictor: predictor, owner: self(), hold_call: hold_call}
+
+      assert {:ok, _} =
+               Dspy.context([cache: false, rollout_id: 0], fn ->
+                 Dspy.call(refiner(program, advisor), %{question: "q"})
+               end)
+
+      assert_received {:detached, worker}
+      assert_received {:request, :program, _, _, _}
+      assert_received {:request, :program, advised, _, _}
+      assert primary(advised) =~ "EPHEMERAL_ADVICE"
+      send(worker, :run)
+      assert_receive {:request, :program, detached, _, ^worker}, 1_000
+      refute primary(detached) =~ "EPHEMERAL_ADVICE"
+    end
+  end
+
+  test "cancels an advisor when the process running Refine exits" do
+    predictor =
+      Predict.new(QA, adapter: ChatAdapter, lm: lm(:program, fn _, _ -> answer("low") end))
+
+    advisor =
+      lm(:advisor, fn _, _ ->
+        receive do
+          :never_sent -> {:ok, "{}"}
+        end
+      end)
+
+    refiner = refiner(predictor, advisor)
+    caller = spawn(fn -> call(refiner, %{question: "q"}) end)
+
+    assert_receive {:request, :advisor, _, _, worker}, 1_000
+    on_exit(fn -> if Process.alive?(worker), do: Process.exit(worker, :kill) end)
+    monitor = Process.monitor(worker)
+    Process.exit(caller, :kill)
+    assert_receive {:DOWN, ^monitor, :process, ^worker, :killed}, 1_000
   end
 
   test "invalid replies have no effect on the next prompt" do
