@@ -20,7 +20,9 @@ defmodule Dspy.Retrieve.Embeddings.ReqLLM do
   In tests, pass a fake `:req_llm` module.
   """
 
-  @behaviour Dspy.Retrieve.EmbeddingProvider
+  alias Dspy.Retrieve.EmbeddingProvider
+
+  @behaviour EmbeddingProvider
 
   @impl true
   def embed_text(text, opts \\ [])
@@ -58,7 +60,7 @@ defmodule Dspy.Retrieve.Embeddings.ReqLLM do
           opts = Keyword.delete(opts, :model)
 
           with {:ok, embeddings} <- req_llm.embed(model, texts, opts),
-               :ok <- validate_embedding_matrix(embeddings) do
+               :ok <- EmbeddingProvider.validate_batch(embeddings) do
             {:ok, embeddings}
           end
         end
@@ -84,17 +86,4 @@ defmodule Dspy.Retrieve.Embeddings.ReqLLM do
   end
 
   defp validate_embedding_vector(other), do: {:error, {:invalid_embedding, other}}
-
-  defp validate_embedding_matrix(list) when is_list(list) do
-    has_vectors? = Enum.all?(list, &match?([_ | _], &1))
-    all_numbers? = Enum.all?(list, fn vec -> Enum.all?(vec, fn x -> is_number(x) end) end)
-
-    if has_vectors? and all_numbers? do
-      :ok
-    else
-      {:error, {:invalid_embeddings, list}}
-    end
-  end
-
-  defp validate_embedding_matrix(other), do: {:error, {:invalid_embeddings, other}}
 end

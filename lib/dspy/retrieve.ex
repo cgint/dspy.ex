@@ -214,6 +214,22 @@ defmodule Dspy.Retrieve do
     @callback embed_text(String.t(), keyword()) :: {:ok, list(float())} | {:error, error_reason()}
     @callback embed_batch(list(String.t()), keyword()) ::
                 {:ok, list(list(float()))} | {:error, error_reason()}
+
+    @doc false
+    def validate_batch(embeddings) when is_integer(length(embeddings)) do
+      if Enum.all?(embeddings, &valid_batch_vector?/1) do
+        :ok
+      else
+        {:error, {:invalid_embeddings, embeddings}}
+      end
+    end
+
+    def validate_batch(embeddings), do: {:error, {:invalid_embeddings, embeddings}}
+
+    defp valid_batch_vector?([_ | _] = vector) when is_integer(length(vector)),
+      do: Enum.all?(vector, &is_number/1)
+
+    defp valid_batch_vector?(_vector), do: false
   end
 
   defmodule OpenAIEmbeddings do
