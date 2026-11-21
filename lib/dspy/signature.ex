@@ -429,6 +429,8 @@ defmodule Dspy.Signature do
     end
   end
 
+  defp normalize_json_value_for_field(value, %{type: :string, strict_string: true}), do: value
+
   defp normalize_json_value_for_field(value, field) do
     case field.type do
       :string ->
@@ -597,6 +599,10 @@ defmodule Dspy.Signature do
 
     result || :error
   end
+
+  defp validate_field_value(value, %{type: :string, strict_string: true})
+       when not is_binary(value),
+       do: {:error, :invalid_string}
 
   defp validate_field_value(value, field) do
     with {:ok, typed_value} <- validate_field_type(value, field.type),

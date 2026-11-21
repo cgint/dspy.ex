@@ -207,6 +207,10 @@ defmodule Dspy.Signature.Adapters.JSONAdapter do
     end
   end
 
+  defp validate_field_value(value, %{type: :string, strict_string: true})
+       when not is_binary(value),
+       do: {:error, :invalid_string}
+
   defp validate_field_value(value, field) do
     with {:ok, typed_value} <- validate_field_type(value, field.type),
          :ok <- validate_field_constraints(typed_value, field) do

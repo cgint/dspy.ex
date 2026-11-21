@@ -31,7 +31,9 @@
 > Opt-in format feedback can revise the failed predictor using a bounded
 > malformed completion and adapter guidance. A custom instruction
 > proposer can supply typed-slot updates without a reflection LM.
-> Additional frontier objectives and configurable built-in proposals
+> The configurable LM-driven proposer supports reference skills, custom
+> instructions and adapters, and one correction for oversized drafts.
+> Typed media and history in proposals and additional frontier objectives
 > remain open.
 
 > **M5, status messages and exit example.** `streamify/2` accepts a
