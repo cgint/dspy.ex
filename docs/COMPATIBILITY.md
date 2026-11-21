@@ -296,6 +296,9 @@ ruling, Horst, commit `4789417` 2026-09-28):**
 | `:number` and `:integer` | `"true"`, `"True"`, `"False"` | accepts → `1` or `0` in the requested type | **reject** | Coercing a boolean word would fabricate a numeric answer. |
 
 Upstream and dspy.ex both reject NaN and infinity on `:integer`.
+Pydantic also limits float-to-integer coercion to a signed 64-bit range.
+dspy.ex accepts the integral value for inputs such as `"1.e100"`. This range
+difference remains open.
 
 The mutation standard for this parser is `plan/research/upstream_golden/mutate_h12.py`.
 

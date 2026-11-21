@@ -13,7 +13,8 @@ This repo ships in **small, user-usable slices**.
 `-5.e3` now keeps its sign on both numeric output types. The parser matches
 DSPy for nested decimal parentheses, matching single or double quotes, and
 one underscore immediately after an unwrapped radix prefix. Malformed radix
-separators still produce parse errors.
+separators still produce parse errors. Radix values beyond the finite float
+range return a parse error on `:number` and retain their exact `:integer` value.
 
 ### LM memory cache
 
