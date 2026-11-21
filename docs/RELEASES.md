@@ -8,11 +8,13 @@ This repo ships in **small, user-usable slices**.
 
 ## Consumer notes
 
-### Example labels and field removal
+### Example fields and dictionaries
 
 `Dspy.Example.labels/1` builds an example from the fields outside the selection
 made by `with_inputs/2`. `Dspy.Example.without/2` removes one or more fields from
 a copy while keeping its input selection and metadata.
+`Dspy.Example.to_dict/1` projects examples, predictions, and conversation history
+inside fields into plain maps. It also works inside lists and maps.
 
 ### Named predictor inspection and updates
 
