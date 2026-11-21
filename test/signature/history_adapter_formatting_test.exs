@@ -344,8 +344,7 @@ defmodule Dspy.Signature.HistoryAdapterFormattingTest do
     Dspy.context([lm: lm], fn ->
       for adapter <- [
             Dspy.Signature.Adapters.Default,
-            Dspy.Signature.Adapters.JSONAdapter,
-            Dspy.Signature.Adapters.XMLAdapter
+            Dspy.Signature.Adapters.JSONAdapter
           ] do
         predictor = Dspy.Predict.new(HistorySig, adapter: adapter)
 

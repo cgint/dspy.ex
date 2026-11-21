@@ -18,7 +18,7 @@ defmodule Dspy.Signature.Adapters.ChatAdapter do
   @behaviour Dspy.Signature.Adapter
 
   alias Dspy.History
-  alias Dspy.Signature.AdapterPipeline
+  alias Dspy.Signature.Adapters.HistoryReplay
 
   @marker_regex ~r/\[\[\s*##\s*([A-Za-z0-9_]+)\s*##\s*\]\]/
   @line_marker_regex ~r/^[\t ]*\[\[[\t ]*##[\t ]*([A-Za-z0-9_]+)[\t ]*##[\t ]*\]\]/m
@@ -47,7 +47,12 @@ defmodule Dspy.Signature.Adapters.ChatAdapter do
           )
     }
 
-    render_turn = &render_history_turn(filtered_signature, demos, &1)
+    render_user = &user_message(filtered_signature, &1, demos)
+    render_prior_user = &user_message(filtered_signature, &1, demos, :history)
+
+    render_turn = fn turn ->
+      HistoryReplay.render(filtered_signature, turn, render_prior_user, &history_outputs/2)
+    end
 
     with {:ok, %{inputs: filtered_inputs, messages: history_messages}} <-
            History.extract_messages(signature, inputs, render_turn) do
@@ -59,7 +64,7 @@ defmodule Dspy.Signature.Adapters.ChatAdapter do
       %{
         messages:
           [%{role: "system", content: system}] ++
-            history_messages ++ [user_message(filtered_signature, filtered_inputs, demos)]
+            history_messages ++ [render_user.(filtered_inputs)]
       }
     end
   end
@@ -88,96 +93,20 @@ defmodule Dspy.Signature.Adapters.ChatAdapter do
   defp instruction_line(%Dspy.Signature{instructions: instructions}),
     do: "Instructions: #{instructions}"
 
-  defp user_message(signature, inputs, demos) do
+  defp user_message(signature, inputs, demos, mode \\ :live) do
+    demo_text = render_demos(signature, demos)
+    demo_text = if mode == :history, do: HistoryReplay.demo_text(demo_text), else: demo_text
+
     content =
-      [render_demos(signature, demos), render_inputs(signature, inputs)]
+      [demo_text, render_inputs(signature, inputs)]
       |> Enum.reject(&(&1 == ""))
       |> Enum.join("\n\n")
 
     %{role: "user", content: content}
   end
 
-  defp render_history_turn(signature, demos, %History.Turn{} = turn) do
-    with {:ok, users} <- render_history_user(signature, turn.inputs, demos) do
-      outputs =
-        Enum.filter(signature.output_fields, fn field ->
-          field.type != :tool_calls and fetch_map_key(turn.outputs, field.name) != :__missing__
-        end)
-
-      {:ok,
-       users ++
-         history_assistant_messages(outputs, turn.outputs, turn.tool_exchanges) ++
-         Enum.map(turn.tool_exchanges, &history_tool_message/1)}
-    end
-  end
-
-  defp render_history_user(signature, inputs, demos) do
-    if Enum.any?(signature.input_fields, &(fetch_map_key(inputs, &1.name) != :__missing__)) do
-      request = %{messages: [user_message(signature, inputs, demos)]}
-
-      with {:ok, %{messages: messages}} <-
-             AdapterPipeline.merge_input_media(signature, inputs, request) do
-        {:ok, messages}
-      end
-    else
-      {:ok, []}
-    end
-  end
-
-  defp history_assistant_messages([], _outputs, []), do: []
-
-  defp history_assistant_messages(fields, outputs, exchanges) do
-    assistant = %{
-      role: "assistant",
-      content: render_field_sections(fields, outputs, &history_output_text/1)
-    }
-
-    case exchanges do
-      [] -> [assistant]
-      exchanges -> [Map.put(assistant, :tool_calls, Enum.map(exchanges, &history_tool_call/1))]
-    end
-  end
-
-  defp history_tool_call(exchange) do
-    %{
-      id: exchange.id,
-      type: "function",
-      function: %{name: exchange.name, arguments: exchange.arguments}
-    }
-  end
-
-  defp history_tool_message(exchange) do
-    %{
-      role: "tool",
-      tool_call_id: exchange.id,
-      name: exchange.name,
-      content: tool_result_text(exchange.result)
-    }
-  end
-
-  defp tool_result_text(value) when is_binary(value), do: history_output_text(value)
-
-  defp tool_result_text(value) do
-    case History.encode_tool_value(value) do
-      {:ok, encoded} -> encoded
-      {:error, _} -> history_output_text(value)
-    end
-  end
-
-  defp history_output_text(%Dspy.Image{}), do: "<image>"
-  defp history_output_text(%Dspy.Attachments{}), do: "<attachments>"
-
-  defp history_output_text(value) when is_binary(value) do
-    if String.valid?(value), do: value, else: inspect(value)
-  end
-
-  defp history_output_text(value) when is_integer(length(value)) do
-    if all_images?(value),
-      do: Enum.map_join(value, " ", fn _ -> "<image>" end),
-      else: format_value_for_prompt(value)
-  end
-
-  defp history_output_text(value), do: format_value_for_prompt(value)
+  defp history_outputs(fields, outputs),
+    do: render_field_sections(fields, outputs, &HistoryReplay.output_text/1)
 
   defp render_demos(_signature, []), do: ""
 

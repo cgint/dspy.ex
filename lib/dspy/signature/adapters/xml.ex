@@ -12,7 +12,7 @@ defmodule Dspy.Signature.Adapters.XMLAdapter do
   @behaviour Dspy.Signature.Adapter
 
   alias Dspy.{Attrs, Example, History, Signature, TypedOutputs}
-  alias Dspy.Signature.Adapters.{ChatAdapter, XMLValue}
+  alias Dspy.Signature.Adapters.{ChatAdapter, HistoryReplay, XMLValue}
 
   @open_tag ~r/\A<([\p{L}_][\p{L}\p{N}\p{M}_.-]*)[ \t]*(\/?)>/u
   @tag_name ~r/\A[\p{L}_][\p{L}\p{N}\p{M}_.-]*\z/u
@@ -60,37 +60,80 @@ defmodule Dspy.Signature.Adapters.XMLAdapter do
 
   @impl true
   def format_request(%Signature{} = signature, inputs, demos, opts \\ []) do
-    with {:ok, %{inputs: inputs, messages: history}} <-
-           History.extract_messages(signature, inputs) do
-      input_fields = Enum.reject(signature.input_fields, &(&1.type == :history))
+    filtered_signature = %{
+      signature
+      | input_fields: Enum.reject(signature.input_fields, &(&1.type == :history))
+    }
 
+    render_user = &user_message(filtered_signature, &1, demos)
+    render_prior_user = &user_message(filtered_signature, &1, demos, :history)
+
+    render_turn = fn turn ->
+      HistoryReplay.render(filtered_signature, turn, render_prior_user, &history_outputs/2)
+    end
+
+    with {:ok, %{inputs: inputs, messages: history}} <-
+           History.extract_messages(signature, inputs, render_turn) do
       system =
         [signature.instructions, format_instructions(signature, opts)]
         |> Enum.reject(&is_nil/1)
         |> Enum.join("\n\n")
 
-      examples =
-        demos
-        |> Enum.with_index(1)
-        |> Enum.map(fn {example, index} ->
-          "Example #{index}:\n" <>
-            render_fields(input_fields, Example.inputs(example), :input) <>
-            "\n" <> render_fields(signature.output_fields, Example.to_map(example))
-        end)
-
-      user = Enum.join(examples ++ [render_fields(input_fields, inputs, :input)], "\n\n")
-
       %{
-        messages:
-          [%{role: "system", content: system}] ++ history ++ [%{role: "user", content: user}]
+        messages: [%{role: "system", content: system}] ++ history ++ [render_user.(inputs)]
       }
     end
   end
 
-  defp render_fields(fields, values, direction \\ :output) do
+  defp user_message(signature, inputs, demos, mode \\ :live) do
+    examples =
+      demos
+      |> Enum.with_index(1)
+      |> Enum.map(fn {example, index} ->
+        "Example #{index}:\n" <>
+          render_fields(signature.input_fields, Example.inputs(example), :input) <>
+          "\n" <> render_fields(signature.output_fields, Example.to_map(example))
+      end)
+
+    {examples, fetch_input} =
+      case mode do
+        :history -> {Enum.map(examples, &HistoryReplay.demo_text/1), &Attrs.fetch_map/2}
+        :live -> {examples, &Attrs.fetch/2}
+      end
+
+    input = render_fields(signature.input_fields, inputs, :input, fetch_input)
+    content = Enum.join(examples ++ [input], "\n\n")
+    %{role: "user", content: content}
+  end
+
+  defp history_outputs(fields, outputs) do
+    Enum.map_join(fields, "\n", fn field ->
+      {:ok, value} = Attrs.fetch_map(outputs, field.name)
+      history_field(field, value)
+    end)
+  end
+
+  defp history_field(field, value) do
+    case HistoryReplay.media_placeholder(value) do
+      nil ->
+        xml = render_field(field, value, :output)
+
+        if String.valid?(xml), do: xml, else: history_text_field(field, value)
+
+      placeholder ->
+        render_text_field(field.name, placeholder)
+    end
+  rescue
+    FunctionClauseError -> history_text_field(field, value)
+  end
+
+  defp history_text_field(field, value),
+    do: render_text_field(field.name, HistoryReplay.output_text(value))
+
+  defp render_fields(fields, values, direction \\ :output, fetch_field \\ &Attrs.fetch/2) do
     fields
     |> Enum.flat_map(fn field ->
-      case Attrs.fetch(values, field.name) do
+      case fetch_field.(values, field.name) do
         :error ->
           []
 
@@ -113,12 +156,14 @@ defmodule Dspy.Signature.Adapters.XMLAdapter do
             do: render_json(value),
             else: ChatAdapter.render_value_for_prompt(value)
 
-        "<#{field.name}>\n#{body}\n</#{field.name}>"
+        render_text_field(field.name, body)
 
       schema ->
         render_node(field.name, value, schema)
     end
   end
+
+  defp render_text_field(name, body), do: "<#{name}>\n#{body}\n</#{name}>"
 
   defp render_json(value) do
     case Jason.encode(value) do

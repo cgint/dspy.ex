@@ -7,7 +7,7 @@ defmodule Dspy.History do
   - at least one signature output field
 
   `Dspy.History.Turn` stores typed fields and completed tool exchanges.
-  ChatAdapter replays typed turns including media and tool-call IDs.
+  ChatAdapter and XMLAdapter replay typed turns including media and tool-call IDs.
   """
 
   alias Dspy.Signature
