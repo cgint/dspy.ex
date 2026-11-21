@@ -56,20 +56,20 @@ defmodule Dspy.Teleprompt.GEPAParetoTest do
     [baseline, specialist, champion, _] = @variants
     owner = self()
     program = program(owner, baseline)
-    trainset = [row("row_train")]
+    trainset = Enum.map(["row_train_a", "row_train_b"], &row/1)
     valset = Enum.map(["row_val_a", "row_val_b", "row_val_c"], &row/1)
 
     metric = fn example, prediction, trace, name, selected ->
       variant = prediction[:answer]
       question = example[:question]
 
-      if question == "row_train" and name == nil do
+      if question in ["row_train_a", "row_train_b"] and name == nil do
         send(owner, {:training_trace, variant, trace, selected})
       end
 
       case {variant, question} do
-        {^baseline, "row_train"} -> 0.2
-        {^specialist, "row_train"} -> 0.5
+        {^baseline, row} when row in ["row_train_a", "row_train_b"] -> 0.2
+        {^specialist, row} when row in ["row_train_a", "row_train_b"] -> 0.5
         {^champion, _} -> 1
         {^specialist, "row_val_c"} -> 1
         {^baseline, row} when row in ["row_val_a", "row_val_b"] -> 1
@@ -83,6 +83,7 @@ defmodule Dspy.Teleprompt.GEPAParetoTest do
         reflection_lm: %ReflectionLM{owner: owner},
         candidate_selection_strategy: :pareto,
         max_metric_calls: 13,
+        reflection_minibatch_size: 1,
         num_threads: 1,
         seed: 5
       )
@@ -101,7 +102,24 @@ defmodule Dspy.Teleprompt.GEPAParetoTest do
       assert_received {:rollout, ^variant, ^question}
     end
 
-    for _ <- 1..4, do: assert_received({:rollout, _, "row_train"})
+    training_rollouts =
+      for _ <- 1..4 do
+        assert_received {:rollout, variant, question}
+        {variant, question}
+      end
+
+    assert [
+             {^baseline, first_parent_row},
+             {^specialist, first_child_row},
+             {^specialist, second_parent_row},
+             {^champion, second_child_row}
+           ] = training_rollouts
+
+    assert first_parent_row in ["row_train_a", "row_train_b"]
+    assert second_parent_row in ["row_train_a", "row_train_b"]
+    assert first_parent_row == first_child_row
+    assert second_parent_row == second_child_row
+
     refute_received {:rollout, _, _}
     refute_received {:reflected, _}
   end
@@ -178,6 +196,29 @@ defmodule Dspy.Teleprompt.GEPAParetoTest do
       expected = if draw < 2, do: :baseline, else: :specialist
       assert CandidatePool.parent(pool, :pareto, state) == {next, expected}
     end
+  end
+
+  test "current-best keeps the incumbent when adjacent totals round to the same mean" do
+    [baseline, specialist | _] = @variants
+    program = program(self(), baseline)
+    valset = Enum.map(["row_val_a", "row_val_b", "row_val_c"], &row/1)
+
+    optimizer =
+      GEPA.new(
+        metric: fn example, prediction, _trace, _name, _selected ->
+          case {example[:question], prediction[:answer]} do
+            {"row_val_c", ^baseline} -> 1.75
+            {"row_val_c", ^specialist} -> 1.7500000000000002
+            _ -> 0
+          end
+        end,
+        reflection_lm: %ReflectionLM{owner: self(), fixed: specialist},
+        max_metric_calls: 7,
+        num_threads: 1
+      )
+
+    assert {:ok, ^program} = GEPA.compile(optimizer, program, [row("row_train")], valset: valset)
+    assert_received {:rollout, ^specialist, "row_val_c"}
   end
 
   defp program(owner, instruction) do

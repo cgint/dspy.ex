@@ -3,23 +3,23 @@ defmodule Dspy.Teleprompt.GEPA.CandidatePool do
 
   alias Dspy.Random
 
-  @enforce_keys [:best, :best_total, :candidates, :leaders]
-  defstruct [:best, :best_total, :candidates, :leaders]
+  @enforce_keys [:best, :best_mean, :candidates, :leaders]
+  defstruct [:best, :best_mean, :candidates, :leaders]
 
   def new(program, scores) do
-    total = Enum.sum(scores)
+    mean = mean(scores)
 
     %__MODULE__{
       best: program,
-      best_total: total,
-      candidates: %{0 => {program, total}},
+      best_mean: mean,
+      candidates: %{0 => {program, mean}},
       leaders: Enum.map(scores, &{&1, MapSet.new([0])})
     }
   end
 
   def add(pool, program, scores) do
     index = map_size(pool.candidates)
-    total = Enum.sum(scores)
+    mean = mean(scores)
 
     leaders =
       Enum.zip_with(pool.leaders, scores, fn {best_score, ids} = leader, score ->
@@ -32,11 +32,15 @@ defmodule Dspy.Teleprompt.GEPA.CandidatePool do
 
     pool = %{
       pool
-      | candidates: Map.put(pool.candidates, index, {program, total}),
+      | candidates: Map.put(pool.candidates, index, {program, mean}),
         leaders: leaders
     }
 
-    if total > pool.best_total, do: %{pool | best: program, best_total: total}, else: pool
+    if mean > pool.best_mean, do: %{pool | best: program, best_mean: mean}, else: pool
+  end
+
+  def keep_best(pool, program, scores) do
+    if mean(scores) > pool.best_mean, do: new(program, scores), else: pool
   end
 
   def parent(pool, :current_best, random), do: {random, pool.best}
@@ -45,7 +49,7 @@ defmodule Dspy.Teleprompt.GEPA.CandidatePool do
     weights = frontier_weights(pool)
     {random, draw} = Random.randbelow(random, Enum.sum_by(weights, &elem(&1, 1)))
     index = choose(weights, draw)
-    {program, _total} = Map.fetch!(pool.candidates, index)
+    {program, _mean} = Map.fetch!(pool.candidates, index)
     {random, program}
   end
 
@@ -62,8 +66,8 @@ defmodule Dspy.Teleprompt.GEPA.CandidatePool do
 
     ordered =
       Enum.sort_by(support, fn {id, _rows} ->
-        {_program, total} = Map.fetch!(pool.candidates, id)
-        {total, id}
+        {_program, mean} = Map.fetch!(pool.candidates, id)
+        {mean, id}
       end)
 
     # Remove a candidate only if all the rows it leads still have another
@@ -82,4 +86,6 @@ defmodule Dspy.Teleprompt.GEPA.CandidatePool do
 
   defp choose([{id, weight} | _], draw) when draw < weight, do: id
   defp choose([{_id, weight} | rest], draw), do: choose(rest, draw - weight)
+
+  defp mean(scores), do: Enum.sum(scores) / length(scores)
 end

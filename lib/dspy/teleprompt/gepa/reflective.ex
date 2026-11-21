@@ -101,11 +101,8 @@ defmodule Dspy.Teleprompt.GEPA.Reflective do
   defp update_pool(:pareto, state, candidate, scores),
     do: %{state | pool: CandidatePool.add(state.pool, candidate, scores)}
 
-  defp update_pool(:current_best, state, candidate, scores) do
-    if Enum.sum(scores) > state.pool.best_total,
-      do: %{state | pool: CandidatePool.new(candidate, scores)},
-      else: state
-  end
+  defp update_pool(:current_best, state, candidate, scores),
+    do: %{state | pool: CandidatePool.keep_best(state.pool, candidate, scores)}
 
   defp passes_minibatch?(
          %{candidate_selection_strategy: :current_best},
