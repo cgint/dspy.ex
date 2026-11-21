@@ -18,6 +18,7 @@ defmodule Dspy.Predict do
     :max_output_retries,
     :adapter,
     :callbacks,
+    :forced_tool,
     config: %{}
   ]
 
@@ -29,6 +30,7 @@ defmodule Dspy.Predict do
           max_retries: non_neg_integer(),
           max_output_retries: non_neg_integer(),
           adapter: module() | nil,
+          forced_tool: String.t() | nil,
           callbacks: list()
         }
 
@@ -112,6 +114,7 @@ defmodule Dspy.Predict do
              predict.examples,
              adapter: adapter,
              lm: Map.get(predict, :lm),
+             forced_tool: Map.get(predict, :forced_tool),
              config: get_config(predict),
              callbacks: predict.callbacks,
              max_retries: predict.max_retries,

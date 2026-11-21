@@ -194,6 +194,8 @@ defmodule Dspy.LM.ReqLLM do
   def supports?(%__MODULE__{model: model}, :structured_output),
     do: native_structured_model?(model)
 
+  def supports?(%__MODULE__{model: "openai:" <> _model}, :structured_react), do: true
+  def supports?(_lm, :structured_react), do: false
   def supports?(_lm, :multiple_choices), do: false
   def supports?(_lm, _feature), do: true
 
@@ -210,6 +212,12 @@ defmodule Dspy.LM.ReqLLM do
         |> maybe_put(:tool_choice, request[:tool_choice])
 
       opts = Keyword.merge(lm.default_opts, request_opts)
+
+      opts =
+        if Map.get(request, :reasoning_effort, :inherit) == nil,
+          do: Keyword.delete(opts, :reasoning_effort),
+          else: opts
+
       opts = normalize_token_limits_for_model(lm.model, opts)
 
       {:ok, {input, opts}}

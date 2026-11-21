@@ -2,9 +2,18 @@ defmodule Dspy.ReAct do
   @moduledoc """
   Signature-driven ReAct (Reasoning + Acting) module.
 
-  This module is intended to mirror Python DSPy’s ReAct shape: an iterative
-  tool-selection loop implemented via `Dspy.Predict`, followed by a final
-  extraction step implemented via `Dspy.ChainOfThought`.
+  The default mode selects tools through a text trajectory and extracts the
+  final outputs with `Dspy.ChainOfThought`.
+
+  Set `mode: :structured` to use ChatAdapter, typed `Dspy.History` turns, and
+  a `submit` tool that validates the declared outputs. This mode supports
+  OpenAI models through `Dspy.LM.ReqLLM` and custom LMs that advertise
+  `:structured_react` support. Pass the returned history as `:history` on
+  a later call to resume it. Successful predictions include `:history`
+  and `:termination_reason` (`:submit` or `:forced_submit`). A failed final
+  submission returns `{:error, {:structured_react_failed, details}}` with
+  the history and the failure reason. An optional output may be omitted or
+  supplied as JSON null on `submit`.
 
   Compared to `Dspy.Tools.React`, this module is signature-polymorphic and
   participates in adapter-driven prompt formatting/parsing.
@@ -13,6 +22,7 @@ defmodule Dspy.ReAct do
   use Dspy.Module
 
   alias Dspy.{ChainOfThought, Predict, Prediction, Signature}
+  alias Dspy.ReAct.Structured
   alias Dspy.Tools.Tool
 
   defstruct [
@@ -23,18 +33,20 @@ defmodule Dspy.ReAct do
     :step_signature,
     :extract_signature,
     :step_predictor,
-    :extractor
+    :extractor,
+    mode: :legacy
   ]
 
   @type t :: %__MODULE__{
           signature: Signature.t(),
           tools: %{optional(String.t()) => Tool.t()},
-          max_steps: pos_integer(),
+          max_steps: non_neg_integer(),
+          mode: :legacy | :structured,
           adapter: module() | nil,
           step_signature: Signature.t(),
-          extract_signature: Signature.t(),
+          extract_signature: Signature.t() | nil,
           step_predictor: Predict.t(),
-          extractor: ChainOfThought.t()
+          extractor: ChainOfThought.t() | nil
         }
 
   @doc """
@@ -49,7 +61,9 @@ defmodule Dspy.ReAct do
 
   Options:
   - `:max_steps` (default: 10)
-  - `:adapter` optional signature adapter override (defaults to global settings)
+  - `:mode` (default: `:legacy`)
+  - `:adapter` optional signature adapter override. Legacy mode defaults
+    to global settings. Structured mode requires and defaults to ChatAdapter.
   """
   @spec new(Signature.t() | module() | binary(), [Tool.t()], keyword()) :: t()
   def new(signature, tools, opts \\ []) when is_list(tools) and is_list(opts) do
@@ -60,6 +74,14 @@ defmodule Dspy.ReAct do
     adapter = Keyword.get(opts, :adapter)
     max_steps = Keyword.get(opts, :max_steps, 10)
 
+    case Keyword.get(opts, :mode, :legacy) do
+      :legacy -> new_legacy(base_signature, tools_by_name, adapter, max_steps)
+      :structured -> Structured.build!(base_signature, tools_by_name, adapter, max_steps)
+      _other -> raise ArgumentError, "ReAct mode must be :legacy or :structured"
+    end
+  end
+
+  defp new_legacy(base_signature, tools_by_name, adapter, max_steps) do
     step_signature = build_step_signature(base_signature, tools_by_name)
     extract_signature = build_extract_signature(base_signature)
 
@@ -79,6 +101,9 @@ defmodule Dspy.ReAct do
   end
 
   @impl true
+  def forward(%__MODULE__{mode: :structured} = react, inputs) when is_map(inputs),
+    do: Structured.forward(react, inputs)
+
   def forward(%__MODULE__{} = react, inputs) when is_map(inputs) do
     with :ok <- Signature.validate_inputs(react.signature, inputs),
          {:ok, trajectory} <- run_steps(react, inputs),
