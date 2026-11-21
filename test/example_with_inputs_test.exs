@@ -82,6 +82,7 @@ defmodule Dspy.ExampleWithInputsTest do
     assert Example.without(example, "question").attrs == %{question: "atom"}
     assert Example.without(example, []).attrs == example.attrs
     assert_raise KeyError, fn -> Example.without(example, [:question, :missing]) end
+    assert_raise KeyError, fn -> Example.without(example, [:question, :question]) end
   end
 
   test "Evaluate uses Example.inputs/1 when forwarding" do

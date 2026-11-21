@@ -157,18 +157,19 @@ defmodule Dspy.Example do
   Return a copy with the given attribute key or list of keys removed.
 
   Metadata, including the input selection, is preserved. Atom keys can match
-  stored string keys as in `delete/2`. A missing key raises `KeyError`.
+  stored string keys as in `delete/2`. A missing key or a repeated reference
+  to the same field raises `KeyError`.
   """
   @spec without(t(), term()) :: t()
-  def without(%__MODULE__{} = example, keys) when is_list(keys) do
-    attrs =
-      Enum.reduce(keys, example.attrs, fn key, attrs ->
+  def without(%__MODULE__{attrs: attrs} = example, keys) when is_list(keys) do
+    remaining_attrs =
+      Enum.reduce(keys, attrs, fn key, remaining_attrs ->
         actual_key = Dspy.Attrs.resolve_key(attrs, key) || key
-        {_value, remaining} = Map.pop!(attrs, actual_key)
+        {_value, remaining} = Map.pop!(remaining_attrs, actual_key)
         remaining
       end)
 
-    %{example | attrs: attrs}
+    %{example | attrs: remaining_attrs}
   end
 
   def without(%__MODULE__{} = example, key), do: without(example, [key])
