@@ -193,7 +193,7 @@ defmodule Dspy.Signature.Adapter.Pipeline do
          callbacks,
          call_id,
          attempt,
-         %{lm: lm, max_retries: max_retries, count: count} = lm_options,
+         %{lm: lm, count: count} = lm_options,
          output_retries_left,
          max_output_attempts,
          request,
@@ -265,9 +265,9 @@ defmodule Dspy.Signature.Adapter.Pipeline do
           end
         end
 
-      {:error, reason} ->
+      {:error, reason, attempts_used} ->
         Logger.debug(
-          "dspy.adapter_exhausted kind=transport call_id=#{inspect(call_id)} attempts_used=#{max_retries + 1} last_reason=#{Dspy.LogReason.format(reason)}"
+          "dspy.adapter_exhausted kind=transport call_id=#{inspect(call_id)} attempts_used=#{attempts_used} last_reason=#{Dspy.LogReason.format(reason)}"
         )
 
         {:error, reason}
@@ -642,27 +642,27 @@ defmodule Dspy.Signature.Adapter.Pipeline do
 
   defp call_with_retry_log(request, %{max_retries: max_retries} = lm_options, call_id)
        when is_map(request) and is_integer(max_retries) and max_retries >= 0 do
-    max_attempts = max_retries + 1
-
-    do_call_with_retry_log(request, lm_options, max_retries, max_attempts, call_id)
+    do_call_with_retry_log(request, lm_options, 1, max_retries + 1, call_id)
   end
 
-  defp do_call_with_retry_log(request, lm_options, retries, max_attempts, call_id)
-       when is_map(request) and is_integer(retries) and retries >= 0 do
+  defp do_call_with_retry_log(request, lm_options, attempt, max_attempts, call_id) do
     case Dspy.LM.generate_with_options(lm_options.lm, request, lm_options.cache_options) do
       {:ok, response} ->
         {:ok, response}
 
-      {:error, reason} when retries > 0 ->
-        Logger.debug(
-          "dspy.adapter_retry kind=transport call_id=#{inspect(call_id)} attempt=#{retries + 1}/#{max_attempts} reason=#{Dspy.LogReason.format(reason)}"
-        )
+      {:error, reason} ->
+        if attempt < max_attempts and Dspy.LM.RetryPolicy.retry?(reason) do
+          next_attempt = attempt + 1
 
-        Process.sleep(retry_sleep_ms())
-        do_call_with_retry_log(request, lm_options, retries - 1, max_attempts, call_id)
+          Logger.debug(
+            "dspy.adapter_retry kind=transport call_id=#{inspect(call_id)} attempt=#{next_attempt}/#{max_attempts} reason=#{Dspy.LogReason.format(reason)}"
+          )
 
-      {:error, _reason} = err ->
-        err
+          Process.sleep(retry_sleep_ms())
+          do_call_with_retry_log(request, lm_options, next_attempt, max_attempts, call_id)
+        else
+          {:error, reason, attempt}
+        end
     end
   end
 
