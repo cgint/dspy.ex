@@ -6,6 +6,7 @@ defmodule Dspy.Teleprompt.GEPA.Reflective do
   alias Dspy.Signature.Adapters.JSONAdapter
   alias Dspy.Signature.PromptPreview
   alias Dspy.Teleprompt.BootstrapTrace
+  alias Dspy.Teleprompt.GEPA.CandidatePool
 
   @report_bytes 16_384
   @instruction_bytes 4_096
@@ -14,14 +15,13 @@ defmodule Dspy.Teleprompt.GEPA.Reflective do
   def compile(optimizer, program, trainset, valset) do
     with :ok <- validate_examples(trainset, :trainset),
          :ok <- validate_examples(valset, :valset),
-         :ok <- validate_budget(optimizer.max_metric_calls, length(valset)),
+         :ok <- validate_budget(optimizer, length(valset)),
          [_ | _] = slots <- PredictorSlots.list(program) do
       {random, _seed} = Random.seed(optimizer.seed)
       {random, paths} = Random.shuffle(random, Enum.map(slots, &elem(&1, 0)))
 
       state = %{
-        best: program,
-        score: validation_score(optimizer, program, valset),
+        pool: CandidatePool.new(program, validation_scores(optimizer, program, valset)),
         remaining: optimizer.max_metric_calls - length(valset),
         random: random,
         paths: paths
@@ -36,39 +36,49 @@ defmodule Dspy.Teleprompt.GEPA.Reflective do
 
   defp search(optimizer, trainset, valset, state) do
     count = min(optimizer.reflection_minibatch_size, length(trainset))
-    count = min(count, state.remaining - length(valset))
+    available = div(max(0, state.remaining - length(valset)), batch_passes(optimizer))
+    count = min(count, available)
 
     if count <= 0 do
-      {:ok, state.best}
+      {:ok, state.pool.best}
     else
-      {random, batch} = Random.sample(state.random, trainset, count)
-      records = collect(optimizer, state.best, batch, true)
-      state = %{state | random: random, remaining: state.remaining - count}
+      {random, parent} =
+        CandidatePool.parent(state.pool, optimizer.candidate_selection_strategy, state.random)
 
-      case select_slot(state.paths, records) do
-        nil when count < length(trainset) -> search(optimizer, trainset, valset, state)
-        nil -> {:ok, state.best}
-        {path, observations} -> improve(optimizer, trainset, valset, state, path, observations)
+      {random, batch} = Random.sample(random, trainset, count)
+      records = collect(optimizer, parent, batch, true)
+      state = %{state | random: random, remaining: state.remaining - count}
+      round = %{parent: parent, batch: batch, records: records}
+
+      case select_slot(optimizer, state.paths, records) do
+        nil when optimizer.candidate_selection_strategy == :pareto or count < length(trainset) ->
+          search(optimizer, trainset, valset, state)
+
+        nil ->
+          {:ok, state.pool.best}
+
+        {path, observations} ->
+          improve(optimizer, trainset, valset, state, round, path, observations)
       end
     end
   end
 
-  defp improve(optimizer, trainset, valset, state, path, observations) do
-    predictor = state.best |> PredictorSlots.list() |> Map.new() |> Map.fetch!(path)
+  defp improve(optimizer, trainset, valset, state, round, path, observations) do
+    predictor = round.parent |> PredictorSlots.list() |> Map.new() |> Map.fetch!(path)
     name = PredictorSlots.name(path, predictor)
 
     with {:ok, instruction} <- propose(optimizer, predictor.signature, name, observations) do
-      state = evaluate_proposal(optimizer, valset, state, path, instruction)
+      state = evaluate_proposal(optimizer, valset, state, round, path, instruction)
       paths = Enum.reject(state.paths, &(&1 === path)) ++ [path]
       search(optimizer, trainset, valset, %{state | paths: paths})
     end
   end
 
-  defp evaluate_proposal(_optimizer, _valset, state, _path, nil), do: state
+  defp evaluate_proposal(_optimizer, _valset, state, _round, _path, nil), do: state
 
-  defp evaluate_proposal(optimizer, valset, state, selected_path, instruction) do
+  defp evaluate_proposal(optimizer, valset, state, round, selected_path, instruction) do
     candidate =
-      PredictorSlots.map(state.best, fn path, predictor ->
+      PredictorSlots.map(round.parent, fn path, predictor ->
         if path === selected_path do
           %{predictor | signature: %{predictor.signature | instructions: instruction}}
         else
@@ -76,15 +86,46 @@ defmodule Dspy.Teleprompt.GEPA.Reflective do
         end
       end)
 
-    score = validation_score(optimizer, candidate, valset)
-    state = %{state | remaining: state.remaining - length(valset)}
+    {evaluate?, state} = passes_minibatch?(optimizer, candidate, round, state)
 
-    if score > state.score, do: %{state | best: candidate, score: score}, else: state
+    if evaluate? do
+      scores = validation_scores(optimizer, candidate, valset)
+      state = %{state | remaining: state.remaining - length(valset)}
+
+      update_pool(optimizer.candidate_selection_strategy, state, candidate, scores)
+    else
+      state
+    end
   end
 
-  defp select_slot(paths, records) do
+  defp update_pool(:pareto, state, candidate, scores),
+    do: %{state | pool: CandidatePool.add(state.pool, candidate, scores)}
+
+  defp update_pool(:current_best, state, candidate, scores),
+    do: %{state | pool: CandidatePool.keep_best(state.pool, candidate, scores)}
+
+  defp passes_minibatch?(
+         %{candidate_selection_strategy: :current_best},
+         _candidate,
+         _round,
+         state
+       ),
+       do: {true, state}
+
+  defp passes_minibatch?(optimizer, candidate, round, state) do
+    count = length(round.batch)
+    parent_scores = ordered_scores(round.records, count, optimizer.failure_score)
+    records = collect(optimizer, candidate, round.batch, true)
+    candidate_scores = ordered_scores(records, count, optimizer.failure_score)
+
+    {Enum.sum(candidate_scores) > Enum.sum(parent_scores),
+     %{state | remaining: state.remaining - count}}
+  end
+
+  defp select_slot(optimizer, paths, records) do
     records =
-      for record <- records, record.score < 1 do
+      for record <- records,
+          not optimizer.skip_perfect_score or record.score < optimizer.perfect_score do
         {record, Map.new(record.trace, &{&1.path, &1})}
       end
 
@@ -98,9 +139,14 @@ defmodule Dspy.Teleprompt.GEPA.Reflective do
     end)
   end
 
-  defp validation_score(optimizer, program, valset) do
+  defp validation_scores(optimizer, program, valset) do
     records = collect(optimizer, program, valset, false)
-    Enum.sum_by(records, & &1.score) / length(valset)
+    ordered_scores(records, length(valset), optimizer.failure_score)
+  end
+
+  defp ordered_scores(records, count, fallback) do
+    scores = Map.new(records, &{&1.example_index, &1.score})
+    Enum.map(0..(count - 1), &Map.get(scores, &1, fallback))
   end
 
   defp collect(optimizer, program, examples, capture?) do
@@ -217,10 +263,16 @@ defmodule Dspy.Teleprompt.GEPA.Reflective do
     end
   end
 
-  defp validate_budget(budget, validation_count) do
-    minimum = 2 * validation_count + 1
-    if budget >= minimum, do: :ok, else: {:error, {:insufficient_metric_budget, minimum}}
+  defp validate_budget(optimizer, validation_count) do
+    minimum = 2 * validation_count + batch_passes(optimizer)
+
+    if optimizer.max_metric_calls >= minimum,
+      do: :ok,
+      else: {:error, {:insufficient_metric_budget, minimum}}
   end
+
+  defp batch_passes(%{candidate_selection_strategy: :pareto}), do: 2
+  defp batch_passes(_optimizer), do: 1
 
   defp validate_examples([_ | _] = examples, label) when is_integer(length(examples)) do
     examples

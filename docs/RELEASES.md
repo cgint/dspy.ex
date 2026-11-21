@@ -52,6 +52,12 @@ proposes an instruction for that slot, and the optimizer keeps candidates
 that improve the validation score. The [offline example](../examples/offline/gepa_reflection_offline.exs)
 improves from 0% to 100% on a held-out addition question.
 
+Set `candidate_selection_strategy: :pareto` to compare a proposed
+instruction with its parent on the same training minibatch before
+validation. Parent sampling uses per-example validation leaders, so a
+specialist can remain eligible with a lower mean. Failed rows retain
+their positions and use the configured `:failure_score`.
+
 ### Streaming progress messages
 
 Pass a `status_message_provider:` module to `Dspy.streamify/2` to turn
