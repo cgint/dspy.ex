@@ -8,6 +8,11 @@ This repo ships in **small, user-usable slices**.
 
 ## Consumer notes
 
+### Parallel call concurrency
+
+Pass `num_threads:` to `Dspy.Parallel.run/3` to set concurrency for that
+call. An omitted or `nil` value uses the executor's configured count.
+
 ### Comparing parsed completions
 
 `Dspy.MultiChainComparison` accepts the ordered collection from
