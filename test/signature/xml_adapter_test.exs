@@ -95,6 +95,20 @@ defmodule Dspy.Signature.XMLAdapterTest do
     output_field(:summary, :string, "Summary", required: false)
   end
 
+  defmodule Repeated do
+    use Dspy.Signature
+
+    output_field(:values, :json, "Ordered numbers",
+      schema: %{type: :array, items: %{type: :integer}, minItems: 2}
+    )
+
+    output_field(:summary, :string, "Summary")
+
+    output_field(:counts, :json, "Numbers by key",
+      schema: %{type: :object, additionalProperties: %{type: :array, items: %{type: :integer}}}
+    )
+  end
+
   test "parses typed fields and treats markup and closing-tag literals as text" do
     body = "```elixir\nif x < y, do: \"</answer> & R&B\"\n```"
 
@@ -265,6 +279,144 @@ defmodule Dspy.Signature.XMLAdapterTest do
 
     assert XMLAdapter.format_instructions(signature) =~ "<result>{JSON value}</result>"
     assert {:error, _} = XMLAdapter.parse_outputs(signature, "<result>{}</result>")
+  end
+
+  test "assembles repeated output tags and interleaved dictionary keys in order" do
+    completion = """
+    <values>3</values>
+    <summary>ready</summary>
+    <counts>
+    <entry key="unit &amp; count">5</entry>
+    <other>7</other>
+    <entry key="unit &amp; count">2</entry>
+    </counts>
+    <values>1</values>
+    """
+
+    lm = recording_lm([completion])
+    predictor = Dspy.Predict.new(Repeated, lm: lm, adapter: XMLAdapter)
+
+    assert {:ok,
+            %Dspy.Prediction{
+              attrs: %{
+                values: [3, 1],
+                summary: "ready",
+                counts: %{"unit & count" => [5, 2], "other" => [7]}
+              }
+            }} = Dspy.call(predictor, %{})
+  end
+
+  test "parses repeated records through their item schema" do
+    completion = """
+    <result>
+    <lines><number>9</number><description>first & more</description></lines>
+    <labels />
+    <lines><number>2</number><description>second</description></lines>
+    </result>
+    """
+
+    assert %{result: %Record{lines: [%Line{number: 9}, %Line{number: 2}], labels: %{}}} =
+             XMLAdapter.parse_outputs(Nested.signature(), completion)
+  end
+
+  test "uses successive positional schemas for repeated items" do
+    signature = Repeated.signature()
+    [values | fields] = signature.output_fields
+
+    schema = %{
+      type: :array,
+      prefixItems: [%{type: :integer}, %{type: :string}],
+      items: false,
+      minItems: 2
+    }
+
+    signature = %{signature | output_fields: [%{values | schema: schema} | fields]}
+    xml = "<values>3</values><summary>ok</summary><values>3</values><counts />"
+
+    assert %{values: [3, "3"], summary: "ok", counts: %{}} =
+             XMLAdapter.parse_outputs(signature, xml)
+  end
+
+  test "distinguishes a literal null item from an explicitly nullable list" do
+    signature = Repeated.signature()
+    [values | fields] = signature.output_fields
+    schema = %{type: :array, items: %{type: :string}}
+    signature = %{signature | output_fields: [%{values | schema: schema} | fields]}
+    suffix = "<summary>ok</summary><counts />"
+
+    assert %{values: ["null", "ready"]} =
+             XMLAdapter.parse_outputs(
+               signature,
+               "<values>null</values><values>ready</values>" <> suffix
+             )
+
+    assert %{values: ["[draft]", "", "null"]} =
+             XMLAdapter.parse_outputs(
+               signature,
+               "<values><item>[draft]</item><item></item><item>null</item></values>" <> suffix
+             )
+
+    nullable = %{schema | type: [:array, :null]}
+    signature = %{signature | output_fields: [%{values | schema: nullable} | fields]}
+
+    assert %{values: nil} = XMLAdapter.parse_outputs(signature, "<values>null</values>" <> suffix)
+    assert %{values: nil} = XMLAdapter.parse_outputs(signature, "<values />" <> suffix)
+  end
+
+  test "preserves a leading apparent closer in a repeated string item" do
+    signature = Repeated.signature()
+    [values | fields] = signature.output_fields
+    schema = %{type: :array, items: %{type: :string}}
+    signature = %{signature | output_fields: [%{values | schema: schema} | fields]}
+
+    for literal <- ["</values> is literal\nbody", "</values><i>literal markup</i>"] do
+      xml =
+        "<values>\n#{literal}\n</values>\n<values>tail</values><summary>ok</summary><counts />"
+
+      assert %{values: [^literal, "tail"]} = XMLAdapter.parse_outputs(signature, xml)
+    end
+  end
+
+  test "accepts empty multiline wrappers adjacent to another tag" do
+    signature = Repeated.signature()
+    [values | fields] = signature.output_fields
+    values = %{values | schema: Map.delete(values.schema, :minItems)}
+    signature = %{signature | output_fields: [values | fields]}
+
+    xml = "<values>\n</values><summary>ok</summary><counts><empty>\n</empty></counts>"
+
+    assert %{values: [], summary: "ok", counts: %{"empty" => []}} =
+             XMLAdapter.parse_outputs(signature, xml)
+  end
+
+  test "validates the complete array and rejects repeats of scalar or complete fields" do
+    signature = Repeated.signature()
+
+    for list <- ["<values>[3,1]</values>", "<values><item>3</item><item>1</item></values>"] do
+      assert %{values: [3, 1], counts: %{"one" => []}} =
+               XMLAdapter.parse_outputs(
+                 signature,
+                 list <> "<summary>ok</summary><counts><one /></counts>"
+               )
+
+      assert {:error, {:output_decode_failed, {:duplicate_xml_field, "values"}}} =
+               XMLAdapter.parse_outputs(
+                 signature,
+                 list <> "<values>2</values><summary>ok</summary><counts />"
+               )
+    end
+
+    assert {:error, {:invalid_output_value, :values, {:output_validation_failed, _}}} =
+             XMLAdapter.parse_outputs(
+               signature,
+               "<values>1</values><summary>ok</summary><counts />"
+             )
+
+    assert {:error, {:output_decode_failed, {:duplicate_xml_field, "summary"}}} =
+             XMLAdapter.parse_outputs(
+               signature,
+               "<values>3</values><values>1</values><summary>a</summary><summary>b</summary><counts />"
+             )
   end
 
   test "accepts a fenced preamble and trailing prose" do
