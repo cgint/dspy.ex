@@ -1,32 +1,19 @@
 # dspy.ex — where we are (plain overview)
 
-Updated 2026-09-30 by Horst. Details for the team: `PLAN.md`.
+## Current baseline
 
-## 1. What we are building
-An Elixir version of Python DSPy that **behaves like Python DSPy 3.4.0** (the newest release, Sept 2026). Pure Elixir, no Python inside.
-Rule for every release: the 5 projects that already use dspy.ex must keep working.
+As of 2026-11-21, the parity target is Python DSPy 3.5.0. The port remains
+Elixir-native, with compatibility checks for the five apps that use it.
 
-## 2. How far along are we?
-Python DSPy 3.4.0 has **160 public features**. Of those, 10 are Python-only (we skip them — approved by you 2026-09-28), leaving **150 that count**.
+The reviewed inventory has 162 rows. Of these, 152 are in scope and 10 are
+approved exclusions. Two are done, 66 are partial, and 84 are missing.
+See the [recount](UPSTREAM_RECOUNT.md) for the exact Git revisions and scope.
 
-| Status | Count | Meaning |
-|---|---|---|
-| done | 13 | same behavior as Python, pinned by a test |
-| done, Elixir-style | 19 | same capability, shaped the Elixir way |
-| partial | 27 | exists, but options or behaviors are missing |
-| missing | 91 | not there |
+The stabilization release remains open. The offline Semantic F1 example is
+in CI. The committed-source consumer canary and release checks remain before
+v0.4.10. The [parity queue](PARITY_QUEUE.md) tracks the remaining work.
 
-**→ 32 of 150 done (21%); about 30% if partials count half.** *(measured 2026-09-26)*
-- **Honest caveat (2026-09-30):** this count has **not been re-measured** since. Five releases have
-  shipped since (v0.4.0–v0.4.3 plus M1-d in progress), each moving specific items from missing or
-  partial toward done — and one item (`dspy.inspect_history`) was *downgraded* from done to partial
-  when Greta found it records neither messages nor outputs. In chat I had been quoting "~39 of 150";
-  that was **an estimate, not a count**. A proper re-count is booked for the end of M1.
-- *Correction 2026-09-26:* first reported as 37 (25%). Greta found 5 core features (`configure`, `Example`, `Module`, `Prediction`, `Signature`) rated done although some of their options are missing → now partial.
-- **Core is strong, breadth is weak:** the important everyday features (signatures, Predict, ChainOfThought, adapters, LM calls) are done or partial — none missing; several still lack some options. Most of the 91 missing are less-used extras (special optimizers, metrics, helpers).
-- **By DSPy release:** of features that existed in DSPy 2.6 we have 28 of 79; of those added in 3.0–3.4 only 9 of 81. The newer DSPy gets, the further behind we are.
-- Checked by: 6 helper agents + a checker (which caught 18 over-optimistic ratings; Greta later caught 5 more) + Greta + Horst (11 random rows verified by hand).
-- Details: `GAP_ANALYSIS_3.4.0.md`.
+## Historical milestone notes from September 2026
 
 ## 3. How we will get there
 Not in one big push, but in **milestones**. Each milestone:
