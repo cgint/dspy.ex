@@ -47,6 +47,15 @@ applies a function to each predictor in discovery order and returns an updated p
 cleared across the named predictors. `Predict.reset/1` and `ChainOfThought.reset/1`
 provide the same operation for standalone predictors.
 
+### Native program checkpoints
+
+`Dspy.Module.save_state/3` saves predictor instructions, demos, and generation
+config as native JSON v1. `Dspy.Module.load_state/3` restores them into a
+caller-built program with matching typed slots and ordered signature fields.
+Use `lms: %{"name" => lm}` to save and restore stored LM bindings by name.
+The bindings' credentials and runtime options stay with the caller. This
+format has its own portable demo types and is specific to dspy.ex.
+
 ### Predictor generation config
 
 `Dspy.Predict` and `Dspy.ChainOfThought` accept a `config:` map or keyword list

@@ -6,7 +6,7 @@ defmodule Dspy.Module do
   forward passes for inference and can contain optimizable parameters.
   """
 
-  alias Dspy.Module.PredictorSlots
+  alias Dspy.Module.{PredictorSlots, ProgramState}
 
   @type t :: struct()
   @type inputs :: map() | keyword() | Dspy.Example.t()
@@ -177,6 +177,39 @@ defmodule Dspy.Module do
   def reset_copy(program) do
     map_named_predictors(program, &Map.merge(&1, %{examples: [], lm: nil}))
   end
+
+  @doc """
+  Save a native JSON v1 checkpoint of the program's predictor state.
+
+  The document stores instructions, ordered demos, and generation config by
+  typed predictor slot. Supply `lms: %{"name" => lm}` to name any bound LM.
+  Only the name is saved. The filename is caller-selected.
+
+  Demos are `Dspy.Example` values with portable attributes and metadata. Values
+  can contain numbers, booleans, nil, UTF-8 strings, lists, and plain maps.
+  Attribute map keys can be strings or atoms declared by the signature.
+  Metadata keys can be strings and the top-level `:inputs` atom. Slots in
+  maps support atoms, UTF-8 strings, and integer keys.
+
+  Returns `:ok` after atomic publication or `{:error, reason}` on failure.
+  """
+  @spec save_state(t(), Path.t(), keyword()) :: :ok | {:error, term()}
+  def save_state(program, path, opts \\ []), do: ProgramState.save(program, path, opts)
+
+  @doc """
+  Restore a native JSON v1 checkpoint into a caller-built program.
+
+  The target must match the checkpoint's typed predictor slots, predictor
+  kinds, and ordered input and output field names. The target supplies the
+  field definitions, adapters, callbacks, retry options, and program structure.
+  Provide an LM registry with `lms: %{"name" => lm}` to resolve named bindings.
+  A null reference restores an unbound predictor.
+
+  Returns `{:ok, restored_program}` or `{:error, reason}` for a rejected
+  checkpoint. The returned program is hydrated only after full validation.
+  """
+  @spec load_state(t(), Path.t(), keyword()) :: {:ok, t()} | {:error, term()}
+  def load_state(program, path, opts \\ []), do: ProgramState.load(program, path, opts)
 
   @doc """
   Get a module's parameters if it implements the callback.
