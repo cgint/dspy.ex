@@ -268,6 +268,10 @@ defmodule Dspy.Signature.HistoryAdapterFormattingTest do
             {[turn, turn], 1, :duplicate_tool_call_id},
             {[%Turn{tool_exchanges: [Map.delete(exchange, :result)]}], 0, :invalid_tool_exchange},
             {[%Turn{tool_exchanges: [%{exchange | arguments: %{opaque: make_ref()}}]}], 0,
+             :invalid_tool_exchange},
+            {[%Turn{tool_exchanges: [%{exchange | arguments: %{"q" => "string", q: "atom"}}]}], 0,
+             :invalid_tool_exchange},
+            {[%Turn{tool_exchanges: [%{exchange | arguments: %{nested: [1 | :tail]}}]}], 0,
              :invalid_tool_exchange}
           ] do
         history = Dspy.History.new(turns)
@@ -278,6 +282,47 @@ defmodule Dspy.Signature.HistoryAdapterFormattingTest do
         refute_received {:lm_request, _}
       end
     end)
+  end
+
+  test "assistant image values replay as text placeholders" do
+    signature = HistorySig.signature()
+    [answer] = signature.output_fields
+    signature = %{signature | output_fields: [%{answer | type: :image}]}
+    image = Dspy.Image.new("data:image/png;base64,QUJD")
+    history = Dspy.History.new([%Turn{outputs: %{answer: image}}])
+
+    assert %{
+             messages: [
+               _system,
+               %{role: "assistant", content: "[[ ## answer ## ]]\n<image>"},
+               _user
+             ]
+           } =
+             Dspy.Signature.Adapters.ChatAdapter.format_request(
+               signature,
+               %{question: "q", history: history},
+               []
+             )
+  end
+
+  test "non-JSON tool results replay as valid wire text" do
+    for {value, text} <- [
+          {<<255>>, "<<255>>"},
+          {%{nested: [1 | :tail]}, "%{nested: [1 | :tail]}"}
+        ] do
+      exchange = %{id: "opaque", name: "lookup", arguments: %{}, result: value}
+      history = Dspy.History.new([%Turn{tool_exchanges: [exchange]}])
+
+      request =
+        Dspy.Signature.Adapters.ChatAdapter.format_request(
+          HistorySig.signature(),
+          %{question: "q", history: history},
+          []
+        )
+
+      assert %{messages: [_system, _assistant, %{role: "tool", content: ^text}, _user]} = request
+      assert {:ok, _encoded} = Jason.encode(request)
+    end
   end
 
   test "example dictionaries expose typed exchanges with their string IDs" do

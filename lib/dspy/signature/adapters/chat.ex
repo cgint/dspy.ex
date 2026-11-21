@@ -118,7 +118,10 @@ defmodule Dspy.Signature.Adapters.ChatAdapter do
   defp history_assistant_messages([], _outputs, []), do: []
 
   defp history_assistant_messages(fields, outputs, exchanges) do
-    assistant = %{role: "assistant", content: render_field_sections(fields, outputs)}
+    assistant = %{
+      role: "assistant",
+      content: render_field_sections(fields, outputs, &history_output_text/1)
+    }
 
     case exchanges do
       [] -> [assistant]
@@ -143,14 +146,29 @@ defmodule Dspy.Signature.Adapters.ChatAdapter do
     }
   end
 
-  defp tool_result_text(value) when is_binary(value), do: value
+  defp tool_result_text(value) when is_binary(value), do: history_output_text(value)
 
   defp tool_result_text(value) do
-    case Jason.encode(value) do
+    case History.encode_tool_value(value) do
       {:ok, encoded} -> encoded
-      {:error, _} -> format_value_for_prompt(value)
+      {:error, _} -> history_output_text(value)
     end
   end
+
+  defp history_output_text(%Dspy.Image{}), do: "<image>"
+  defp history_output_text(%Dspy.Attachments{}), do: "<attachments>"
+
+  defp history_output_text(value) when is_binary(value) do
+    if String.valid?(value), do: value, else: inspect(value)
+  end
+
+  defp history_output_text(value) when is_integer(length(value)) do
+    if all_images?(value),
+      do: Enum.map_join(value, " ", fn _ -> "<image>" end),
+      else: format_value_for_prompt(value)
+  end
+
+  defp history_output_text(value), do: format_value_for_prompt(value)
 
   defp render_demos(_signature, []), do: ""
 
@@ -184,7 +202,8 @@ defmodule Dspy.Signature.Adapters.ChatAdapter do
   defp all_images?(list) when is_list(list),
     do: list != [] and Enum.all?(list, &match?(%Dspy.Image{}, &1))
 
-  defp render_field_sections(fields, data) when is_list(fields) and is_map(data) do
+  defp render_field_sections(fields, data, render_value \\ &render_value_for_prompt/1)
+       when is_list(fields) and is_map(data) do
     fields
     |> Enum.map(fn %{name: name} ->
       value = fetch_map_key(data, name)
@@ -192,7 +211,7 @@ defmodule Dspy.Signature.Adapters.ChatAdapter do
       value_str =
         case value do
           :__missing__ -> ""
-          other -> render_value_for_prompt(other)
+          other -> render_value.(other)
         end
 
       marker_header(Atom.to_string(name)) <> "\n" <> value_str

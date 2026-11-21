@@ -158,17 +158,25 @@ defmodule Dspy.History do
 
   defp validate_turn(_turn, index, _ids), do: invalid_entry(index, :invalid_typed_turn)
 
-  defp validate_exchange(%{id: id, name: name, arguments: args, result: _result}, ids)
+  defp validate_exchange(%{id: id, name: name, arguments: args, result: _result} = exchange, ids)
        when is_map(args) and not is_struct(args) do
     cond do
       not nonblank?(id) or not nonblank?(name) -> {:error, :invalid_tool_exchange}
       MapSet.member?(ids, id) -> {:error, :duplicate_tool_call_id}
-      not match?({:ok, _}, Jason.encode(args)) -> {:error, :invalid_tool_exchange}
+      not is_boolean(Map.get(exchange, :is_error, false)) -> {:error, :invalid_tool_exchange}
+      not match?({:ok, _}, encode_tool_value(args)) -> {:error, :invalid_tool_exchange}
       true -> {:ok, MapSet.put(ids, id)}
     end
   end
 
   defp validate_exchange(_exchange, _ids), do: {:error, :invalid_tool_exchange}
+
+  @doc false
+  def encode_tool_value(value) do
+    Jason.encode(value, maps: :strict)
+  rescue
+    FunctionClauseError -> {:error, :invalid_tool_value}
+  end
 
   defp nonblank?(value),
     do: is_binary(value) and String.valid?(value) and String.trim(value) != ""
