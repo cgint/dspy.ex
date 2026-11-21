@@ -15,6 +15,11 @@
 > `nil` to the same arity-three metric. KNNFewShot metrics receive the
 > exact indexed neighbor.
 
+> **S087, batch bootstrap traces.** Successful trace records retain their
+> original input indices when the caller skips failed rows. An optional
+> metric sees each attempt's trace in its worker. Parse-failure records and
+> GEPA's reflection loop remain open.
+
 > **M5, status messages and exit example.** `streamify/2` accepts a
 > lifecycle status provider. The [offline ChainOfThought example](../../examples/offline/chain_of_thought_streaming_offline.exs)
 > emits status and field chunks, returns the validated prediction, and

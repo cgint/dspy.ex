@@ -37,6 +37,13 @@ the predictor inputs, and its prediction. A teacher without steps supplies
 metric can score validation candidates. KNNFewShot passes the exact indexed
 neighbor and runs the configured student once per query.
 
+### Batch bootstrap trace collection
+
+`Dspy.Teleprompt.bootstrap_trace_data/3` runs a program over examples with
+declared inputs and returns their predictions and predictor traces. An optional
+metric scores each attempt in its worker. Skipping failed rows preserves
+the original zero-based indices for batch scoring and reflection.
+
 ### Streaming progress messages
 
 Pass a `status_message_provider:` module to `Dspy.streamify/2` to turn

@@ -32,8 +32,7 @@ defmodule Dspy.Teleprompt do
 
   alias Dspy.Example
   alias Dspy.Teleprompt.{LabeledFewShot, BootstrapFewShot, COPRO, MIPROv2, SIMBA, Ensemble, GEPA}
-  alias Dspy.Teleprompt.BootstrapFewShotWithRandomSearch
-  alias Dspy.Teleprompt.KNNFewShot
+  alias Dspy.Teleprompt.{BootstrapFewShotWithRandomSearch, BootstrapTrace, KNNFewShot}
 
   @type metric_fun :: (Example.t() -> number()) | (Example.t(), Dspy.Prediction.t() -> number())
 
@@ -56,6 +55,15 @@ defmodule Dspy.Teleprompt do
   @typedoc "A metric that receives teacher steps during bootstrapping and nil during evaluation."
   @type trace_metric_fun ::
           (Example.t(), Dspy.Prediction.t(), trace() | nil -> number() | boolean())
+
+  @typedoc "A successful batch trace record with its original position in the dataset."
+  @type trace_data :: %{
+          required(:example_index) => non_neg_integer(),
+          required(:example) => Example.t(),
+          required(:prediction) => Dspy.Prediction.t(),
+          required(:trace) => trace(),
+          optional(:score) => number()
+        }
 
   @type teleprompt_config :: Keyword.t()
 
@@ -138,6 +146,23 @@ defmodule Dspy.Teleprompt do
   def compile(%Ensemble{} = tp, program, trainset), do: Ensemble.compile(tp, program, trainset)
   def compile(%GEPA{} = tp, program, trainset), do: GEPA.compile(tp, program, trainset)
   def compile(tp, _program, _trainset), do: {:error, {:unknown_teleprompt, tp}}
+
+  @doc """
+  Collect successful predictor traces over a nonempty dataset.
+
+  Mark each example's input fields with `Dspy.Example.with_inputs/2`. An
+  empty selection forwards an empty map. The original example goes to the metric.
+  Records follow dataset order and retain their zero-based `:example_index`.
+
+  - `:metric` adds a scalar `:score` to each record. An arity-three metric receives
+    the example, prediction, and that attempt's trace in the worker process.
+  - `:num_threads` sets the concurrency limit. It defaults to the current DSPy setting.
+  - `:raise_on_error` defaults to `true` and raises
+    `Dspy.Teleprompt.BootstrapTrace.Error` for the first failed row in dataset order.
+    Set it to `false` to omit failed rows.
+  """
+  @spec bootstrap_trace_data(program_t(), [Example.t()], keyword()) :: [trace_data()]
+  defdelegate bootstrap_trace_data(program, dataset, opts \\ []), to: BootstrapTrace, as: :collect
 
   @doc """
   Helper to validate teleprompt configuration.
