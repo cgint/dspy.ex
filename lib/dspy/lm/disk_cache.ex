@@ -62,6 +62,9 @@ defmodule Dspy.LM.DiskCache do
     state =
       case Application.get_env(:dspy, @policy) do
         {directory, limit} when is_binary(directory) and is_integer(limit) and limit > 0 ->
+          # Resolve any publish call from the previous owner before scanning its directory.
+          :ok = Cache.await_disk_publications()
+
           case open_directory(directory, limit) do
             {:ok, state} -> activate(state)
             {:error, _reason} -> nil
@@ -100,7 +103,7 @@ defmodule Dspy.LM.DiskCache do
 
   def handle_call({:put, epoch, key, response, memory_table}, _from, %{epoch: epoch} = state) do
     if Cache.table_ref() == memory_table do
-      {:reply, :ok, write_record(key, response, state)}
+      {:reply, :ok, write_record(key, response, state, memory_table)}
     else
       {:reply, :ok, state}
     end
@@ -215,7 +218,7 @@ defmodule Dspy.LM.DiskCache do
     File.close(device)
   end
 
-  defp write_record(key, response, state) do
+  defp write_record(key, response, state, memory_table) do
     path = record_path(state, key)
 
     with {:ok, encoded} <- Record.encode(response),
@@ -224,7 +227,7 @@ defmodule Dspy.LM.DiskCache do
          :ok <- require_directory(state.directory),
          :ok <- allow_replacement(path),
          {:ok, temporary, mtime} <- write_temp(state.directory, encoded) do
-      publish_record(state, key, size, mtime, temporary, path)
+      publish_record(state, key, {size, mtime}, temporary, path, memory_table)
     else
       _ -> state
     end
@@ -257,22 +260,40 @@ defmodule Dspy.LM.DiskCache do
     with :ok <- written, do: closed
   end
 
-  defp publish_record(state, key, size, mtime, temporary, path) do
-    {old_size, _old_mtime} = Map.get(state.entries, key, {0, nil})
+  defp publish_record(state, key, {size, _mtime} = entry, temporary, path, memory_table) do
+    if Cache.table_ref() == memory_table do
+      {old_size, _old_mtime} = Map.get(state.entries, key, {0, nil})
 
-    case evict_to_fit(state, state.limit - size + old_size, key) do
-      {:ok, updated} ->
-        case File.rename(temporary, path) do
-          :ok -> updated |> drop_entry(key) |> add_entry(key, {size, mtime})
-          {:error, _reason} -> updated
-        end
+      case evict_to_fit(state, state.limit - size + old_size, key) do
+        {:ok, updated} ->
+          # Rename shares the memory owner's ordering with clear and reconfigure.
+          result = Cache.publish_disk_record(memory_table, state.epoch, temporary, path)
 
-      {:error, _reason, updated} ->
-        updated
+          if published?(result, temporary, path, size) do
+            updated |> drop_entry(key) |> add_entry(key, entry)
+          else
+            updated
+          end
+
+        {:error, _reason, updated} ->
+          updated
+      end
+    else
+      state
     end
   after
     File.rm(temporary)
   end
+
+  defp published?(:ok, _temporary, _path, _size), do: true
+
+  defp published?({:error, :cache_unavailable}, temporary, path, size) do
+    # The memory owner can exit after rename and before replying.
+    record_stat(temporary) == {:error, :enoent} and
+      match?({:ok, %{type: :regular, size: ^size}}, record_stat(path))
+  end
+
+  defp published?({:error, _reason}, _temporary, _path, _size), do: false
 
   defp evict_to_fit(state, target, _protected_key) when state.bytes <= target, do: {:ok, state}
 

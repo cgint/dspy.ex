@@ -123,7 +123,11 @@ defmodule Dspy.LM.DiskCache.Identity do
       get_in(model, [Access.key(:extra, %{}), :wire, :protocol]) ||
         get_in(model, [Access.key(:extra, %{}), "wire", "protocol"])
 
-    provider_model_id in [nil, @model_id] and protocol == "openai_responses"
+    extra = model.extra || %{}
+
+    provider_model_id in [nil, @model_id] and protocol == "openai_responses" and
+      extra[:category] != "deep_research" and is_nil(extra[:openai_compatible_backend]) and
+      is_nil(extra["openai_compatible_backend"])
   end
 
   defp operation(_model, nil), do: {:ok, :text}

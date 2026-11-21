@@ -10,12 +10,14 @@ defmodule Dspy.LM.DiskCacheTest do
   } do
     endpoint = start_provider()
     run_fixture!("write", dir, endpoint)
-    assert_receive {:wire_call, _}
-    assert_receive {:wire_call, _}
+    assert_receive {:wire_call, ^endpoint, text_body}
+    assert_receive {:wire_call, ^endpoint, native_body}
+    refute text_body =~ ~s("structured_output")
+    assert native_body =~ ~s("structured_output")
     assert length(records(dir)) == 2
 
     run_fixture!("read", dir, endpoint)
-    refute_received {:wire_call, _}
+    refute_received {:wire_call, _, _}
 
     for route <- ["text", "native"] do
       assert File.read!(Path.join(dir, "#{route}-write.etf")) ==
@@ -33,17 +35,17 @@ defmodule Dspy.LM.DiskCacheTest do
     endpoint = start_provider()
     alternate = start_provider()
     generate!(lm(endpoint, "first"))
-    assert_receive {:wire_call, ^endpoint}
+    assert_receive {:wire_call, ^endpoint, _}
 
     generate!(lm(endpoint, "rotated"))
-    refute_received {:wire_call, _}
+    refute_received {:wire_call, _, _}
 
     generate!(lm(alternate, "rotated"))
-    assert_receive {:wire_call, ^alternate}
+    assert_receive {:wire_call, ^alternate, _}
     generate!(lm(endpoint, "rotated", cache_namespace: "account-b"))
-    assert_receive {:wire_call, ^endpoint}
+    assert_receive {:wire_call, ^endpoint, _}
     generate!(lm(endpoint, "rotated"), "question", rollout_id: 1)
-    assert_receive {:wire_call, ^endpoint}
+    assert_receive {:wire_call, ^endpoint, _}
     assert length(records(dir)) == 4
   end
 
@@ -52,7 +54,7 @@ defmodule Dspy.LM.DiskCacheTest do
     configure_disk(dir)
     endpoint = start_provider()
     generate!(lm(endpoint, "first"), "first request")
-    assert_receive {:wire_call, ^endpoint}
+    assert_receive {:wire_call, ^endpoint, _}
     [first] = records(dir)
     limit = File.stat!(first).size
     unrelated = Path.join([dir, @managed, "unrelated.txt"])
@@ -63,7 +65,7 @@ defmodule Dspy.LM.DiskCacheTest do
     assert :ok = Dspy.configure_cache(disk_size_limit_bytes: limit, disk_cache_dir: dir)
     refute File.exists?(abandoned)
     generate!(lm(endpoint, "first"), "second request")
-    assert_receive {:wire_call, ^endpoint}
+    assert_receive {:wire_call, ^endpoint, _}
 
     [second] = records(dir)
     assert second != first
@@ -71,11 +73,11 @@ defmodule Dspy.LM.DiskCacheTest do
     refute File.exists?(first)
     assert File.read!(unrelated) == "keep"
     generate!(lm(endpoint, "rotated"), "second request")
-    refute_received {:wire_call, _}
+    refute_received {:wire_call, _, _}
 
     assert :ok = Dspy.configure_cache(disk_cache_dir: dir, disk_size_limit_bytes: 1)
     generate!(lm(endpoint, "rotated"), "third request")
-    assert_receive {:wire_call, ^endpoint}
+    assert_receive {:wire_call, ^endpoint, _}
     assert records(dir) == []
     assert File.read!(unrelated) == "keep"
   end
@@ -85,7 +87,7 @@ defmodule Dspy.LM.DiskCacheTest do
     configure_disk(dir)
     endpoint = start_provider()
     response = generate!(lm(endpoint, "first"))
-    assert_receive {:wire_call, ^endpoint}
+    assert_receive {:wire_call, ^endpoint, _}
     [record] = records(dir)
 
     novel_atom = "cache-probe-" <> Base.url_encode64(:crypto.strong_rand_bytes(16))
@@ -98,7 +100,7 @@ defmodule Dspy.LM.DiskCacheTest do
     for {bytes, index} <- Enum.with_index(invalid_records) do
       File.write!(record, String.pad_trailing(bytes, File.stat!(record).size))
       assert generate!(lm(endpoint, "rotated #{index}")) === response
-      assert_receive {:wire_call, ^endpoint}
+      assert_receive {:wire_call, ^endpoint, _}
       assert [^record] = records(dir)
     end
 
@@ -112,18 +114,46 @@ defmodule Dspy.LM.DiskCacheTest do
     configure_disk(dir)
     endpoint = start_provider()
     expected = generate!(lm(endpoint, "first"))
-    assert_receive {:wire_call, ^endpoint}
+    assert_receive {:wire_call, ^endpoint, _}
     [record] = records(dir)
 
     assert :ok = Supervisor.terminate_child(Dspy.Supervisor, Dspy.LM.DiskCache)
     assert {:ok, _pid} = Supervisor.restart_child(Dspy.Supervisor, Dspy.LM.DiskCache)
     assert generate!(lm(endpoint, "after restart")) === expected
-    refute_received {:wire_call, _}
+    refute_received {:wire_call, _, _}
 
     assert :ok = Dspy.configure_cache(disk_cache_dir: nil)
     assert generate!(lm(endpoint, "after disable")) === expected
-    assert_receive {:wire_call, ^endpoint}
+    assert_receive {:wire_call, ^endpoint, _}
     assert [^record] = records(dir)
+  end
+
+  @tag :tmp_dir
+  test "a memory clear discards an in-flight provider result and a staged publication", %{
+    tmp_dir: dir
+  } do
+    configure_disk(dir)
+    endpoint = start_provider(200, true)
+    task = Task.async(fn -> generate!(lm(endpoint, "first")) end)
+    assert_receive {:wire_call, ^endpoint, _}, 1_000
+    assert_receive {:ready_to_respond, provider}, 1_000
+
+    memory_table = Dspy.LM.Cache.table_ref()
+    disk_epoch = Dspy.LM.DiskCache.context()
+    temporary = Path.join(dir, "staged.json")
+    destination = Path.join(dir, "published.json")
+    File.write!(temporary, "staged")
+
+    assert :ok = Dspy.LM.Cache.clear()
+
+    assert {:error, :stale_cache} =
+             Dspy.LM.Cache.publish_disk_record(memory_table, disk_epoch, temporary, destination)
+
+    refute File.exists?(destination)
+    assert File.exists?(temporary)
+    send(provider, :respond)
+    assert %{choices: [_]} = Task.await(task)
+    assert records(dir) == []
   end
 
   @tag :tmp_dir
@@ -141,9 +171,9 @@ defmodule Dspy.LM.DiskCacheTest do
 
     endpoint = start_provider()
     generate!(lm(endpoint, "first"))
-    assert_receive {:wire_call, ^endpoint}
+    assert_receive {:wire_call, ^endpoint, _}
     generate!(lm(endpoint, "rotated"))
-    refute_received {:wire_call, _}
+    refute_received {:wire_call, _, _}
     assert length(records(safe)) == 1
   end
 
@@ -153,11 +183,11 @@ defmodule Dspy.LM.DiskCacheTest do
     endpoint = start_provider()
 
     generate!(lm(endpoint, "disabled"), "disabled", cache: false)
-    assert_receive {:wire_call, ^endpoint}
+    assert_receive {:wire_call, ^endpoint, _}
     generate!(lm(endpoint, "unsupported", req_http_options: [receive_timeout: 1_000]))
-    assert_receive {:wire_call, ^endpoint}
+    assert_receive {:wire_call, ^endpoint, _}
     generate!(lm(endpoint, "unscoped", cache_namespace: nil))
-    assert_receive {:wire_call, ^endpoint}
+    assert_receive {:wire_call, ^endpoint, _}
     assert records(dir) == []
   end
 
@@ -171,7 +201,7 @@ defmodule Dspy.LM.DiskCacheTest do
                Dspy.LM.generate(lm(endpoint, "first"), request("bad"))
              end)
 
-    assert_receive {:wire_call, ^endpoint}
+    assert_receive {:wire_call, ^endpoint, _}
     assert records(dir) == []
   end
 
@@ -215,23 +245,40 @@ defmodule Dspy.LM.DiskCacheTest do
     assert status == 0, "disk-cache fixture failed in #{mode} mode:\n#{output}"
   end
 
-  defp start_provider(status \\ 200) do
+  defp start_provider(status \\ 200, pause? \\ false) do
     {:ok, listener} = :gen_tcp.listen(0, [:binary, active: false, ip: {127, 0, 0, 1}])
     {:ok, port} = :inet.port(listener)
     endpoint = "http://127.0.0.1:#{port}"
     owner = self()
-    {:ok, _pid} = Task.start_link(fn -> serve(listener, owner, endpoint, status) end)
+    {:ok, _pid} = Task.start_link(fn -> serve(listener, owner, endpoint, status, pause?) end)
     endpoint
   end
 
-  defp serve(listener, owner, endpoint, status) do
+  defp serve(listener, owner, endpoint, status, pause?) do
     case :gen_tcp.accept(listener) do
       {:ok, socket} ->
         {headers, remaining} = receive_headers(socket, "")
         [_, length] = Regex.run(~r/content-length: (\d+)/i, headers)
         remaining_bytes = String.to_integer(length) - byte_size(remaining)
-        if remaining_bytes > 0, do: :gen_tcp.recv(socket, remaining_bytes, 5_000)
-        send(owner, {:wire_call, endpoint})
+
+        request_body =
+          if remaining_bytes > 0 do
+            {:ok, rest} = :gen_tcp.recv(socket, remaining_bytes, 5_000)
+            remaining <> rest
+          else
+            remaining
+          end
+
+        send(owner, {:wire_call, endpoint, request_body})
+
+        if pause? do
+          send(owner, {:ready_to_respond, self()})
+
+          receive do
+            :respond -> :ok
+          end
+        end
+
         body = provider_body(status)
 
         :ok =
@@ -242,7 +289,7 @@ defmodule Dspy.LM.DiskCacheTest do
           ])
 
         :gen_tcp.close(socket)
-        serve(listener, owner, endpoint, status)
+        serve(listener, owner, endpoint, status, pause?)
 
       {:error, :closed} ->
         :ok
