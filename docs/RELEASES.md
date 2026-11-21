@@ -8,6 +8,14 @@ This repo ships in **small, user-usable slices**.
 
 ## Consumer notes
 
+### K-nearest-neighbor lookup
+
+`Dspy.KNN.new/3` indexes the declared inputs of training examples through
+`Dspy.Embedder`. `Dspy.KNN.query/2` embeds a map or keyword list and
+returns the original examples ranked by dot product. Training and query
+field names share a lexical order. Equal scores favor the later training
+row. Scoring uses Elixir's native numeric representation.
+
 ### Streaming progress messages
 
 Pass a `status_message_provider:` module to `Dspy.streamify/2` to turn
