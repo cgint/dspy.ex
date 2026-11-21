@@ -1,6 +1,6 @@
 # Status
 
-> **M4a, Refine groundwork.** Refine keys cached responses to each attempt's rollout ID. Named predictors use temperature `1.0`, and custom modules inherit it as a scoped default. Reward scoring uses the enclosing settings. Nested predictor traces preserve the enclosing optimizer's steps. Multipart output retries preserve images and trailing text. The feedback loop and failure budget remain open.
+> **M4a, Refine groundwork.** Refine keys cached responses to each attempt's rollout ID. Named predictors use temperature `1.0`, and custom modules inherit it as a scoped default. Reward scoring uses the enclosing settings. Nested predictor traces preserve the enclosing optimizer's steps. Multipart output retries preserve images and trailing text. An explicit `fail_count:` bounds failed attempts per call. The feedback loop remains open.
 
 > **M3b, tracing and logging.** Evaluation, module, LM, adapter, and tool callbacks emit paired events and carry parent IDs through captured contexts. The [offline example](../../examples/offline/evaluation_callbacks_offline.exs) traces two examples in a parallel run. DSPy diagnostics can be silenced independently of host logs and callbacks. Telemetry and scoped history remain open.
 

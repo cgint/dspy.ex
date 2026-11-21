@@ -66,6 +66,18 @@ defmodule Dspy.RefineTest do
     end
   end
 
+  defmodule RaisingProgram do
+    use Dspy.Module
+
+    defstruct [:owner]
+
+    @impl true
+    def forward(%__MODULE__{owner: owner}, _inputs) do
+      send(owner, :program_called)
+      raise "program failed"
+    end
+  end
+
   test "new/2 validates options" do
     {:ok, counter} = Agent.start_link(fn -> 0 end)
     prog = %SequenceProgram{counter: counter, answers: ["x"]}
@@ -76,6 +88,12 @@ defmodule Dspy.RefineTest do
 
     assert_raise ArgumentError, ~r/:reward_fn must be a function with arity 2/, fn ->
       Dspy.Refine.new(prog, n: 1, reward_fn: fn _ -> 1.0 end)
+    end
+
+    for count <- [-1, false, 1.5] do
+      assert_raise ArgumentError, ~r/:fail_count must be a non-negative integer or nil/, fn ->
+        Refine.new(prog, fail_count: count, reward_fn: fn _, _ -> 1.0 end)
+      end
     end
   end
 
@@ -118,6 +136,68 @@ defmodule Dspy.RefineTest do
     assert {:error, {:no_scored_attempts, meta}} = Dspy.Module.forward(refiner, %{question: "q"})
     assert meta.invalid_reward_attempts == 2
     assert meta.scored_attempts == 0
+  end
+
+  test "the failure allowance counts program errors and invalid rewards and resets each call" do
+    lm =
+      recording_lm(:bounded,
+        ok: "draft",
+        error: :provider_failed,
+        ok: "unscored",
+        error: :second_call_error,
+        ok: "target"
+      )
+
+    refiner =
+      Refine.new(%CustomProgram{lm: lm},
+        n: 4,
+        fail_count: 1,
+        threshold: 1.0,
+        reward_fn: fn _, %Prediction{attrs: %{answer: answer}} ->
+          case answer do
+            "draft" -> 0.5
+            "target" -> 1.0
+            "unscored" -> :invalid
+          end
+        end
+      )
+
+    Dspy.context([cache: false, rollout_id: 8], fn ->
+      assert {:error, {:refine_failed, %{failures: 2, attempts: 3, last_error: :invalid_score}}} =
+               Dspy.call(refiner, %{question: "q"})
+
+      assert_received {:lm_call, :bounded, 8, _}
+      assert_received {:lm_call, :bounded, 9, _}
+      assert_received {:lm_call, :bounded, 10, _}
+      refute_received {:lm_call, :bounded, _, _}
+
+      assert {:ok, %Prediction{attrs: %{answer: "target"}}} = Dspy.call(refiner, %{question: "q"})
+      assert_received {:lm_call, :bounded, 8, _}
+      assert_received {:lm_call, :bounded, 9, _}
+      refute_received {:lm_call, :bounded, _, _}
+    end)
+  end
+
+  test "an explicit zero allowance stops on a program exception" do
+    program = %RaisingProgram{owner: self()}
+    reward = fn _, _ -> flunk("a raised attempt cannot be scored") end
+    bounded = Refine.new(program, n: 3, fail_count: 0, reward_fn: reward)
+
+    assert {:error,
+            {:refine_failed,
+             %{
+               failures: 1,
+               attempts: 1,
+               last_error: {:raised, %{module: RuntimeError, message: "program failed"}}
+             }}} = Dspy.call(bounded, %{question: "q"})
+
+    assert_received :program_called
+    refute_received :program_called
+
+    legacy = Refine.new(program, n: 3, reward_fn: reward) |> Map.delete(:fail_count)
+    assert_raise RuntimeError, "program failed", fn -> Dspy.call(legacy, %{question: "q"}) end
+    assert_received :program_called
+    refute_received :program_called
   end
 
   test "named predictor rollouts use distinct cache entries and score in the original scope" do
