@@ -58,14 +58,14 @@ After this you can …measure your program reliably: failed examples count again
 ## M2 — Programs you can save, inspect, reuse
 After this you can …optimize a program once, save it, load it later or elsewhere and get the same behaviour, and see exactly which LM calls one program made.
 - **Depends on:** M1 (BootstrapRS scores via Evaluate)
-- **Exit example:** Compile with BootstrapRS, save, then load in a fresh process: the outputs are the same. `Module.inspect_history` shows only that program's calls.
+- **Exit evidence:** The fresh-process BootstrapRS checkpoint test reproduces the program's requests and prediction. An explicit `Dspy.capture_history/2` scope can retain the program's calls for `Dspy.inspect_history/2`.
 - **Size:** 12 items, 15 effort pts
 
 | id | symbol | status | V | E | score | introduced | deps | breaking | old P | gap | queue status |
 |---|---|---|---|---|---|---|---|---|---|---|---|
 | S002 | configure | partial | H | S | 3.00 | <=2.6 | - | N | - | Shared `num_threads` settings reach Evaluate and Parallel. Evaluate already reads the shared `max_errors` budget. Global retrieval, tracing, and other execution settings remain. | Shared concurrency implemented. Included in v0.5.0. |
 | S051 | Example | partial | H | S | 3.00 | <=2.6 | - | N | - | Labels, field removal, and recursive dictionaries for `Example`, `Prediction`, and `History` are implemented. Legacy `inputs/1` still falls back to all attributes when inputs are unset or empty. | M2 example slices implemented. Included in v0.5.0. |
-| S054 | Module | partial | H | S | 3.00 | <=2.6 | - | N | P5 (Module.inspect_history = facet S054.f7), P4 | Named discovery, immutable slot updates, shared LM bindings, and reset copies implemented. BootstrapRS records private teacher traces. Public history remains. | M2 traversal and reset slices implemented. Included in v0.5.0. |
+| S054 | Module | partial | H | S | 3.00 | <=2.6 | - | N | P5 (Module.inspect_history = facet S054.f7), P4 | Named discovery, immutable slot updates, shared LM bindings, and reset copies implemented. BootstrapRS records private teacher traces. Public diagnostics use an explicit capture scope for immutable programs. | M2 traversal and reset in v0.5.0. Scoped history in M3b. |
 | S055 | Prediction | partial | H | S | 3.00 | <=2.6 | S051 | N | - | `from_completions` exposes the first row and retains parsed alternatives. Score conversion, arithmetic and comparisons remain. | M2 parsed-completion slice implemented. Included in v0.5.0. |
 | S067 | Signature | partial | H | S | 3.00 | <=2.6 | - | N | - | [facet rule: done->partial] pydantic-model validation, annotated types, and field constrai | todo |
 | S077 | BootstrapFewShotWithRandomSearch | partial | H | S | 3.00 | <=2.6 | S075 | N | P7 | Search, ranking, and per-slot teacher demos work for composite programs. Custom programs can still use `predict.examples`. Trace-aware metrics remain. | M2 composite slice implemented. Included in v0.5.0. |

@@ -27,6 +27,7 @@ defmodule Dspy do
   """
 
   alias Dspy.{Settings, Example, Prediction, Predict, ChainOfThought, Evaluate, Majority}
+  alias Dspy.LM.HistoryCapture
 
   @logging_filter :dspy_suppress_application_logs
 
@@ -243,24 +244,73 @@ defmodule Dspy do
   end
 
   @doc """
-  Print a human-readable summary of recent LM invocation history.
+  Run a function and return its result with a scoped snapshot of successful LM calls.
+
+  The snapshot includes cache hits and calls made by workers using the captured
+  DSPy context. Nested captures receive the same calls in their respective scopes.
+  If the function raises, throws, or exits, its outcome propagates and the partial
+  snapshot is discarded.
+
+  - `:max_entries` sets the number of recent calls to keep (default: 50).
+  - `:include_payloads` includes bounded excerpts of rendered prompt and completion
+    text (default: false). Structured tool data and non-text attachments use
+    placeholders. Values rendered as ordinary text can appear in the excerpts.
+    The text budget is 16 KiB per record, including 4 KiB reserved for completions.
+    Separate limits bound the number of messages, parts, and completions.
+  """
+  @spec capture_history((-> result), keyword()) :: {result, HistoryCapture.t()} when result: var
+  def capture_history(fun, opts \\ []), do: HistoryCapture.run(fun, opts)
+
+  @doc """
+  Print a human-readable summary of recent LM invocation history or a captured snapshot.
+
+  A captured snapshot includes the retained text excerpts when payload capture was enabled.
 
   ## Options
 
   - `:n` - maximum number of records to print (default: 50)
   """
-  @spec inspect_history(keyword()) :: :ok
-  def inspect_history(opts \\ []) do
-    records = history(opts)
+  @spec inspect_history(keyword() | HistoryCapture.t()) :: :ok
+  def inspect_history(history_or_opts \\ [])
 
+  def inspect_history(%HistoryCapture{} = capture), do: inspect_history(capture, [])
+  def inspect_history(opts), do: print_history_records(history(opts))
+
+  @doc """
+  Print a captured history snapshot. The `:n` option limits the number of records (default: 50).
+  """
+  @spec inspect_history(HistoryCapture.t(), keyword()) :: :ok
+  def inspect_history(%HistoryCapture{records: records, dropped: dropped}, opts) do
+    n = Keyword.get(opts, :n, 50)
+
+    unless is_integer(n) and n >= 0,
+      do: raise(ArgumentError, "expected :n to be a non-negative integer")
+
+    if dropped > 0, do: IO.puts("Earlier LM calls dropped: #{dropped}")
+    print_history_records(Enum.take(records, n), true)
+  end
+
+  defp print_history_records(records, include_payloads? \\ false) do
     records
     |> Enum.with_index(1)
     |> Enum.each(fn {rec, idx} ->
       IO.puts(format_history_record(rec, idx))
+      if include_payloads?, do: print_history_payload(rec)
     end)
 
     :ok
   end
+
+  defp print_history_payload(%{payload: payload}) do
+    Enum.each(payload.messages, fn %{role: role, parts: parts} ->
+      Enum.each(parts, &IO.puts(["  ", Atom.to_string(role), ": ", &1]))
+    end)
+
+    Enum.each(payload.completions, &IO.puts(["  completion: ", &1]))
+    if payload.truncated?, do: IO.puts("  [payload truncated]")
+  end
+
+  defp print_history_payload(_record), do: :ok
 
   defp format_history_record(rec, idx) when is_map(rec) do
     usage = Map.get(rec, :usage)

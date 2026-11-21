@@ -7,7 +7,10 @@ defmodule Dspy.LM do
   """
 
   alias Dspy.{Lifecycle, Telemetry}
+  alias Dspy.LM.{HistoryCapture, HistoryPayload}
   alias Dspy.Signature.Adapter.Callbacks
+
+  @max_captured_message_count 256
 
   @type content_part :: map()
 
@@ -300,24 +303,28 @@ defmodule Dspy.LM do
 
   defp generate_request(lm, request, opts) do
     {callbacks, telemetry?} = Dspy.Settings.lifecycle_observability()
+    captures = HistoryCapture.current()
 
     with %{__struct__: type} when is_atom(type) <- lm,
          handlers = Callbacks.lm_handlers(callbacks),
-         true <- telemetry? or handlers != [] do
+         true <- telemetry? or handlers != [] or captures != [] do
+      capture =
+        if captures != [], do: {captures, Lifecycle.active_call_id()}
+
       Lifecycle.run(
         type,
         handlers,
         {:lm_start, :lm_end},
-        fn -> do_generate_request(lm, request, opts, telemetry?) end,
+        fn -> do_generate_request(lm, request, opts, telemetry?, capture) end,
         nil,
         telemetry?
       )
     else
-      _ -> do_generate_request(lm, request, opts, false)
+      _ -> do_generate_request(lm, request, opts, false, nil)
     end
   end
 
-  defp do_generate_request(lm, request, opts, telemetry?) do
+  defp do_generate_request(lm, request, opts, telemetry?, capture) do
     request = apply_settings_defaults(request)
     started_at_ms = System.monotonic_time(:millisecond)
 
@@ -329,7 +336,7 @@ defmodule Dspy.LM do
         {:hit, cached} ->
           duration_ms = System.monotonic_time(:millisecond) - started_at_ms
 
-          maybe_track_usage(lm, request, cached, telemetry?,
+          record_success(lm, request, cached, telemetry?, capture,
             cache_hit?: true,
             duration_ms: duration_ms
           )
@@ -341,7 +348,7 @@ defmodule Dspy.LM do
             {:ok, response} ->
               duration_ms = System.monotonic_time(:millisecond) - started_at_ms
 
-              maybe_track_usage(lm, request, response, telemetry?,
+              record_success(lm, request, response, telemetry?, capture,
                 cache_hit?: false,
                 duration_ms: duration_ms
               )
@@ -359,7 +366,7 @@ defmodule Dspy.LM do
         {:ok, response} = ok ->
           duration_ms = System.monotonic_time(:millisecond) - started_at_ms
 
-          maybe_track_usage(lm, request, response, telemetry?,
+          record_success(lm, request, response, telemetry?, capture,
             cache_hit?: false,
             duration_ms: duration_ms
           )
@@ -711,32 +718,54 @@ defmodule Dspy.LM do
   defp lm_model_key(%{__struct__: mod}) when is_atom(mod), do: Atom.to_string(mod)
   defp lm_model_key(_), do: "unknown"
 
-  defp maybe_track_usage(lm, request, response, telemetry?, opts) when is_list(opts) do
-    if telemetry? do
-      counts = normalize_usage_for_history(response_usage(response)) || %{}
-      Telemetry.record(:lm, %{cache_hit?: Keyword.get(opts, :cache_hit?, false)}, counts)
-    end
+  defp record_success(lm, request, response, telemetry?, capture, opts) do
+    track_usage? =
+      not is_nil(Process.whereis(Dspy.Settings)) and Dspy.Settings.get(:track_usage) == true
 
-    if not is_nil(Process.whereis(Dspy.Settings)) and Dspy.Settings.get(:track_usage) == true do
+    if telemetry? or track_usage? or capture != nil do
       usage_raw = response_usage(response)
+      usage = normalize_usage_for_history(usage_raw)
+      cache_hit? = Keyword.fetch!(opts, :cache_hit?)
 
-      model_key = lm_model_key(lm)
+      if telemetry?, do: Telemetry.record(:lm, %{cache_hit?: cache_hit?}, usage || %{})
 
-      Dspy.LM.UsageAcc.add(model_key, usage_raw)
+      if track_usage? or capture != nil do
+        model_key = lm_model_key(lm)
 
-      record = %{
-        at: DateTime.utc_now(),
-        model: model_key,
-        cache_hit?: Keyword.get(opts, :cache_hit?, false),
-        duration_ms: Keyword.get(opts, :duration_ms),
-        usage: normalize_usage_for_history(usage_raw),
-        request: summarize_request(request)
-      }
+        record = %{
+          at: DateTime.utc_now(),
+          model: model_key,
+          cache_hit?: cache_hit?,
+          duration_ms: Keyword.get(opts, :duration_ms),
+          usage: usage
+        }
 
-      _ = Dspy.LM.History.record(record)
+        if track_usage? do
+          Dspy.LM.UsageAcc.add(model_key, usage_raw)
+          Dspy.LM.History.record(Map.put(record, :request, summarize_request(request)))
+        end
+
+        if capture, do: record_capture(capture, record, request, response)
+      end
     end
 
     :ok
+  end
+
+  defp record_capture({scopes, parent_call_id}, record, request, response) do
+    record =
+      Map.merge(record, %{
+        model: HistoryPayload.model_label(record.model),
+        call_id: Lifecycle.active_call_id(),
+        request: summarize_captured_request(request)
+      })
+
+    record =
+      if is_reference(parent_call_id),
+        do: Map.put(record, :parent_call_id, parent_call_id),
+        else: record
+
+    HistoryCapture.record(scopes, record, request, response)
   end
 
   defp response_usage(%{usage: usage}), do: usage
@@ -779,15 +808,31 @@ defmodule Dspy.LM do
 
   defp normalize_usage_for_history(_other), do: nil
 
-  defp summarize_request(%{messages: msgs}) when is_list(msgs) do
+  defp summarize_request(%{messages: msgs}) when is_integer(length(msgs)) do
     %{message_count: length(msgs)}
   end
 
-  defp summarize_request(%{"messages" => msgs}) when is_list(msgs) do
+  defp summarize_request(%{"messages" => msgs}) when is_integer(length(msgs)) do
     %{message_count: length(msgs)}
   end
 
   defp summarize_request(_other), do: %{}
+
+  defp summarize_captured_request(%{messages: messages}) when is_list(messages),
+    do: count_captured_messages(messages, 0)
+
+  defp summarize_captured_request(%{"messages" => messages}) when is_list(messages),
+    do: count_captured_messages(messages, 0)
+
+  defp summarize_captured_request(_other), do: %{}
+
+  defp count_captured_messages([], count), do: %{message_count: count}
+
+  defp count_captured_messages([_message | rest], count) when count < @max_captured_message_count,
+    do: count_captured_messages(rest, count + 1)
+
+  defp count_captured_messages(_unread, count),
+    do: %{message_count: count, message_count_truncated?: true}
 
   defp apply_settings_defaults(request) when is_map(request) do
     if Process.whereis(Dspy.Settings) do
