@@ -557,7 +557,8 @@ Evidence:
 | Python DSPy | `dspy.ex` | Notes | Evidence |
 |---|---|---|---|
 | `dspy.teleprompt.*` | `Dspy.Teleprompt.*` | Parameter-based optimizers (no runtime module generation) | `test/teleprompt/*_improvement_test.exs` |
-| save/load optimized programs | export/apply parameters + JSON | Persist parameters, then re-apply to a fresh program struct | `test/module_parameter_json_persistence_test.exs` |
+| save/load optimized programs | `Dspy.Module.save_state/3` and `load_state/3` | Native JSON v1 restores learned state into matching typed slots on caller-built programs. The caller supplies named LM bindings. | `test/module_program_state_fresh_process_test.exs` |
+| export/apply parameters | `Dspy.Module.export_parameters/1` and `apply_parameters/2` | Persist parameters, then re-apply to a fresh program struct | `test/module_parameter_json_persistence_test.exs` |
 | persist to disk | `Dspy.Parameter.write_json!/2`, `read_json!/1` | Simple file helpers | `test/parameter_file_persistence_test.exs` |
 
 ### Tools + retrieval

@@ -1,5 +1,10 @@
 # PLAN — dspy.ex toward Python DSPy 3.4.0 parity
 
+**2026-11-21.** The current upstream pin is DSPy 3.5.0. The `v0.5.0` M2-a
+release covers optimization and native checkpoint reuse. Public history still
+needs its own contract. See [current status](00_NOW.md) and the [reviewed
+inventory](UPSTREAM_RECOUNT.md) for the current baseline.
+
 | Target | Symbols done/total (facet %) | Phase | Next | Updated |
 |---|---|---|---|---|
 | Python DSPy **3.4.0** (`2413b67a4d`) | 32/150 in scope (21%; ~30% w/ partial=½; corrected from 37); 10 n/a approved by user 2026-09-28; milestones M1–M6 approved | A + C | Milestone cut (phase C); H0b | 2026-09-26 |

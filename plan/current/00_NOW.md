@@ -12,8 +12,9 @@ See the [recount](UPSTREAM_RECOUNT.md) for the exact Git revisions and scope.
 Stabilization shipped as `v0.4.11` at `975d7c6`. Both Docker toolchains, all six
 hosted checks, and all five committed-source consumer replays passed. Two consumer
 builds reproduced their baseline warnings. The offline Semantic F1 example runs
-in CI. M2 starts with language model binding for `Predict` and `ChainOfThought`.
-The [parity queue](PARITY_QUEUE.md) tracks the remaining work.
+in CI. The `v0.5.0` M2-a release pairs BootstrapRS with native checkpoint
+save and load. Its fresh-process test reproduces an optimized program's requests
+and predictions. The [parity queue](PARITY_QUEUE.md) tracks the remaining work.
 
 ## Historical milestone notes from September 2026
 
