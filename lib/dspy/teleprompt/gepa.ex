@@ -27,6 +27,11 @@ defmodule Dspy.Teleprompt.GEPA do
   budget for one validation pass and reuses the subset scores it collects.
   Reflection sends previews of the selected predictor's declared fields
   and metric feedback to the configured reflection LM.
+  Set `:add_format_failure_as_feedback` to `true` to reflect on terminal
+  parse failures using a bounded excerpt of the failed completion and the
+  predictor's output format. The generated excerpt can contain sensitive text.
+  Failed attempts use `:failure_score` without running the metric.
+  This option defaults to `false`.
 
   The supplied-candidate mode accepts a list of instructions and an
   ordinary one- or two-argument metric.
@@ -43,6 +48,7 @@ defmodule Dspy.Teleprompt.GEPA do
     failure_score: 0,
     perfect_score: 1,
     skip_perfect_score: true,
+    add_format_failure_as_feedback: false,
     use_merge: false,
     max_merge_invocations: 5
   ]
@@ -69,6 +75,7 @@ defmodule Dspy.Teleprompt.GEPA do
           failure_score: number(),
           perfect_score: number(),
           skip_perfect_score: boolean(),
+          add_format_failure_as_feedback: boolean(),
           use_merge: boolean(),
           max_merge_invocations: non_neg_integer()
         }
@@ -155,6 +162,7 @@ defmodule Dspy.Teleprompt.GEPA do
       failure_score: opts[:failure_score],
       perfect_score: opts[:perfect_score],
       skip_perfect_score: opts[:skip_perfect_score],
+      add_format_failure_as_feedback: opts[:add_format_failure_as_feedback],
       use_merge: opts[:use_merge],
       max_merge_invocations: opts[:max_merge_invocations]
     }
@@ -171,6 +179,10 @@ defmodule Dspy.Teleprompt.GEPA do
 
     unless is_boolean(opts[:skip_perfect_score]) do
       raise ArgumentError, ":skip_perfect_score must be a boolean"
+    end
+
+    unless is_boolean(opts[:add_format_failure_as_feedback]) do
+      raise ArgumentError, ":add_format_failure_as_feedback must be a boolean"
     end
 
     unless is_boolean(opts[:use_merge]) do

@@ -69,6 +69,12 @@ from candidates with a common ancestor. A merge must match or beat both
 parents on the same validation subset. Its subset scores count toward
 the full validation result and each row is charged once.
 
+Set `add_format_failure_as_feedback: true` to include terminal parse
+failures in GEPA's reflection. The configured reflection LM receives a
+bounded excerpt of the failed completion, which may contain sensitive
+text, and format guidance for that predictor. The failed row uses
+`:failure_score` without calling the metric.
+
 ### Streaming progress messages
 
 Pass a `status_message_provider:` module to `Dspy.streamify/2` to turn
