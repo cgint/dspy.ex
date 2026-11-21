@@ -68,15 +68,7 @@ defmodule Dspy.LM.ReqLLMToolMessagesTest do
   }
 
   test "preserves assistant tool calls and tool results through the OpenAI Responses wire" do
-    lm =
-      Bridge.new(
-        model: "openai:gpt-4.1-mini",
-        default_opts: [
-          api_key: "fake-offline-key",
-          base_url: "http://127.0.0.1:1",
-          req_http_options: [adapter: OfflineResponses]
-        ]
-      )
+    lm = offline_bridge()
 
     request = %{
       messages: [
@@ -114,6 +106,39 @@ defmodule Dspy.LM.ReqLLMToolMessagesTest do
                 }
               ]
             }} = result
+  end
+
+  test "a named tool selection reaches the Responses wire and can be omitted on the next call" do
+    lm = offline_bridge(tool_choice: :auto)
+
+    request = %{
+      messages: [%{role: "user", content: "Look up x"}],
+      tools: [
+        %{
+          type: "function",
+          function: %{
+            name: "lookup",
+            description: "Look up an integer",
+            parameters: %{type: "object", properties: %{x: %{type: "integer"}}, required: ["x"]}
+          }
+        }
+      ]
+    }
+
+    selected = %{type: "function", function: %{name: "lookup"}}
+
+    Dspy.context([cache: false], fn ->
+      assert {:ok, _} = Dspy.LM.generate(lm, Map.put(request, :tool_choice, selected))
+
+      assert_received {:http_request, "/responses",
+                       %{
+                         "tool_choice" => %{"type" => "function", "name" => "lookup"},
+                         "tools" => [%{"type" => "function", "name" => "lookup"}]
+                       }}
+
+      assert {:ok, _} = Dspy.LM.generate(lm, request)
+      assert_received {:http_request, "/responses", %{"tool_choice" => "auto"}}
+    end)
   end
 
   test "preserves multipart text and ordered call metadata and excludes provider builtin calls" do
@@ -217,4 +242,16 @@ defmodule Dspy.LM.ReqLLMToolMessagesTest do
   end
 
   defp bridge, do: Bridge.new(model: "openai:gpt-4.1-mini", client_module: CapturingClient)
+
+  defp offline_bridge(opts \\ []) do
+    Bridge.new(
+      model: "openai:gpt-4.1-mini",
+      default_opts:
+        [
+          api_key: "fake-offline-key",
+          base_url: "http://127.0.0.1:1",
+          req_http_options: [adapter: OfflineResponses]
+        ] ++ opts
+    )
+  end
 end
