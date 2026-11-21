@@ -178,7 +178,7 @@ After this you can …use the stronger optimizers: real GEPA, example selection 
 | S083 | KNNFewShot | partial | M | M | 1.00 | <=2.6 | S035 S075 | N | P6 | One index and per-query BootstrapFewShot demo construction through the native compile interface. Metrics can inspect the neighbor's teacher trace. Exact upstream demo selection remains open. | M6 query-time demos |
 | S082 | InferRules | missing | M | M | 1.00 | 3.0.0 | S031 | N | - | no Elixir equivalent | todo |
 | S078 | BootstrapFinetune | missing | H | L | 0.75 | <=2.6 | - | N | - | no Elixir equivalent | todo |
-| S081 | GEPA | partial | H | L | 0.75 | 3.0.0 | S031 S087 | Y | - | Opt-in reflection LM, five-argument feedback, typed slot mutation, and budgeted strict-improvement search on validation rows. Pareto selection, merge, and full proposer parity remain open. | M6 instruction reflection |
+| S081 | GEPA | partial | H | L | 0.75 | 3.0.0 | S031 S087 | Y | - | Reflection LM, five-argument feedback, typed slot mutation, and opt-in validation-row Pareto selection with strict minibatch admission. Failure and perfect scores are configurable. Merge, additional frontier objectives, and full proposer parity remain open. | M6 Pareto instruction search |
 | S074 | BetterTogether | missing | M | L | 0.50 | <=2.6 | - | N | - | no Elixir equivalent | todo |
 | S087 | bootstrap_trace_data | partial | L | M | 0.50 | 3.1.0 | S031 | N | - | Concurrent successful traces with optional scalar scores and original row indices. Failed parse records and crash capture remain open. | M6 batch trace collection |
 | S073 | AvatarOptimizer | missing | L | L | 0.25 | <=2.6 | - | N | - | no Elixir equivalent | todo |

@@ -23,8 +23,9 @@
 > **M6, GEPA instruction reflection.** An opt-in reflection LM proposes
 > changes for one typed predictor slot at a time. The budgeted search
 > keeps candidates that improve held-out scores. The offline example
-> verifies that improvement. Pareto selection, richer proposals, and
-> parse-failure feedback remain open.
+> verifies that improvement. Opt-in Pareto selection can revisit a
+> lower-mean validation specialist after it improves a shared training
+> minibatch. Merge, richer proposals, and parse-failure feedback remain open.
 
 > **M5, status messages and exit example.** `streamify/2` accepts a
 > lifecycle status provider. The [offline ChainOfThought example](../../examples/offline/chain_of_thought_streaming_offline.exs)

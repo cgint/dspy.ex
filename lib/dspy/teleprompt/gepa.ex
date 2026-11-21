@@ -8,12 +8,18 @@ defmodule Dspy.Teleprompt.GEPA do
   three trace and predictor arguments. The metric can return a score or a
   map or prediction with `:score` and optional `:feedback` text.
 
-  Reflective search keeps strict improvements on the validation set.
+  Set `:candidate_selection_strategy` to `:pareto` to compare each proposal
+  with its parent on the same training minibatch before running validation.
+  Parent selection weights candidates by the number of validation rows they
+  lead. The returned program has the highest mean validation score.
+  The default `:current_best` searches from the best validation mean and
+  evaluates proposals directly on the validation set.
   The budget counts training and validation rows that the program attempts.
   Feedback calls and reflection LM requests use those attempts as input.
   Reflection samples up to `:reflection_minibatch_size` training examples
-  per round, defaulting to three, and uses examples with scores below one
-  for feedback. Failed validation rows contribute zero to the mean.
+  per round, defaulting to three. Feedback skips training examples that
+  reach `:perfect_score` (default 1), unless `:skip_perfect_score` is false.
+  Failed rows contribute `:failure_score` (default 0) to comparisons.
   Reflection sends previews of the selected predictor's declared fields
   and metric feedback to the configured reflection LM.
 
@@ -27,15 +33,22 @@ defmodule Dspy.Teleprompt.GEPA do
   alias Dspy.Teleprompt.GEPA.Reflective
   alias Dspy.Teleprompt.Util, as: TpUtil
 
-  defstruct [
-    :metric,
-    :seed,
-    :candidates,
-    :reflection_lm,
-    :max_metric_calls,
-    :reflection_minibatch_size,
-    :num_threads
+  @search_defaults [
+    candidate_selection_strategy: :current_best,
+    failure_score: 0,
+    perfect_score: 1,
+    skip_perfect_score: true
   ]
+
+  defstruct [
+              :metric,
+              :seed,
+              :candidates,
+              :reflection_lm,
+              :max_metric_calls,
+              :reflection_minibatch_size,
+              :num_threads
+            ] ++ @search_defaults
 
   @type t :: %__MODULE__{
           metric: function(),
@@ -44,7 +57,11 @@ defmodule Dspy.Teleprompt.GEPA do
           reflection_lm: LM.t() | nil,
           max_metric_calls: pos_integer() | nil,
           reflection_minibatch_size: pos_integer() | nil,
-          num_threads: pos_integer() | nil
+          num_threads: pos_integer() | nil,
+          candidate_selection_strategy: :current_best | :pareto,
+          failure_score: number(),
+          perfect_score: number(),
+          skip_perfect_score: boolean()
         }
 
   @impl Dspy.Teleprompt
@@ -79,15 +96,18 @@ defmodule Dspy.Teleprompt.GEPA do
 
   defp new_reflective(opts) do
     opts =
-      Keyword.validate!(opts, [
-        :metric,
-        :reflection_lm,
-        :max_metric_calls,
-        :reflection_minibatch_size,
-        :num_threads,
-        :seed,
-        :candidates
-      ])
+      Keyword.validate!(
+        opts,
+        [
+          :metric,
+          :reflection_lm,
+          :max_metric_calls,
+          :reflection_minibatch_size,
+          :num_threads,
+          :seed,
+          :candidates
+        ] ++ @search_defaults
+      )
 
     if Keyword.has_key?(opts, :candidates) do
       raise ArgumentError, ":candidates cannot be combined with :reflection_lm"
@@ -112,6 +132,7 @@ defmodule Dspy.Teleprompt.GEPA do
 
     num_threads = opts[:num_threads]
     if num_threads != nil, do: positive_integer!(:num_threads, num_threads)
+    validate_search_options!(opts)
 
     %__MODULE__{
       metric: metric,
@@ -120,8 +141,26 @@ defmodule Dspy.Teleprompt.GEPA do
       reflection_lm: lm,
       max_metric_calls: budget,
       reflection_minibatch_size: batch,
-      num_threads: num_threads
+      num_threads: num_threads,
+      candidate_selection_strategy: opts[:candidate_selection_strategy],
+      failure_score: opts[:failure_score],
+      perfect_score: opts[:perfect_score],
+      skip_perfect_score: opts[:skip_perfect_score]
     }
+  end
+
+  defp validate_search_options!(opts) do
+    unless opts[:candidate_selection_strategy] in [:current_best, :pareto] do
+      raise ArgumentError, ":candidate_selection_strategy must be :current_best or :pareto"
+    end
+
+    for key <- [:failure_score, :perfect_score] do
+      unless is_number(opts[key]), do: raise(ArgumentError, "#{key} must be a number")
+    end
+
+    unless is_boolean(opts[:skip_perfect_score]) do
+      raise ArgumentError, ":skip_perfect_score must be a boolean"
+    end
   end
 
   defp seed!(opts) do
@@ -195,13 +234,18 @@ defmodule Dspy.Teleprompt.GEPA do
 
   Use nonempty sets of examples marked with `Dspy.Example.with_inputs/2`.
   The budget must cover one baseline, one candidate, and one training row
-  before the optimizer runs the program.
+  before the optimizer runs the program. Pareto search also reserves one
+  candidate rollout for the same training row.
   """
   @spec compile(t(), Dspy.Teleprompt.program_t(), [Example.t()], keyword()) ::
           Dspy.Teleprompt.compile_result()
   def compile(%__MODULE__{reflection_lm: lm} = tp, program, trainset, opts) when lm != nil do
     opts = Keyword.validate!(opts, [:valset])
     valset = if is_nil(opts[:valset]), do: trainset, else: opts[:valset]
+
+    tp =
+      Enum.reduce(@search_defaults, tp, fn {key, value}, acc -> Map.put_new(acc, key, value) end)
+
     Reflective.compile(tp, program, trainset, valset)
   end
 
