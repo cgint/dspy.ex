@@ -105,7 +105,9 @@ defmodule Dspy.KNN do
 
   @doc false
   def example_inputs(%Example{attrs: attrs} = example) when is_map(attrs) do
-    with {:ok, selection} <- declared_inputs(example) do
+    with {:ok, keys} <- Example.declared_input_keys(example) do
+      selection = MapSet.new(keys)
+
       inputs =
         Map.filter(attrs, fn {key, _value} -> MapSet.member?(selection, field_name(key)) end)
 
@@ -114,27 +116,6 @@ defmodule Dspy.KNN do
   end
 
   def example_inputs(_value), do: {:error, :expected_example}
-
-  defp declared_inputs(%Example{metadata: nil}), do: {:error, :missing_input_keys}
-
-  defp declared_inputs(%Example{metadata: metadata}) when is_map(metadata) do
-    # Validate stored selectors before converting names so malformed metadata
-    # cannot make an unexpected field part of a hosted embedding request.
-    case Map.get(metadata, "inputs") || Map.get(metadata, :inputs) do
-      nil ->
-        {:error, :missing_input_keys}
-
-      keys when is_integer(length(keys)) ->
-        if Enum.all?(keys, &(is_atom(&1) or is_binary(&1))),
-          do: {:ok, MapSet.new(keys, &field_name/1)},
-          else: {:error, :invalid_input_keys}
-
-      _other ->
-        {:error, :invalid_input_keys}
-    end
-  end
-
-  defp declared_inputs(_example), do: {:error, :invalid_input_keys}
 
   defp query_text(inputs) when is_map(inputs) and not is_struct(inputs),
     do: serialize_inputs(inputs)

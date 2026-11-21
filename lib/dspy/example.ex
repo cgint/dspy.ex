@@ -58,8 +58,7 @@ defmodule Dspy.Example do
   @spec input_keys(t()) :: [String.t()] | nil
   def input_keys(%__MODULE__{} = example) do
     meta = example.metadata || %{}
-
-    keys = Map.get(meta, "inputs") || Map.get(meta, :inputs)
+    keys = stored_input_keys(meta)
 
     cond do
       is_list(keys) -> Enum.map(keys, &to_string/1)
@@ -67,6 +66,40 @@ defmodule Dspy.Example do
       true -> nil
     end
   end
+
+  @doc false
+  @spec declared_input_keys(t()) :: {:ok, [String.t()]} | {:error, atom()}
+  def declared_input_keys(%__MODULE__{metadata: nil}), do: {:error, :missing_input_keys}
+
+  def declared_input_keys(%__MODULE__{metadata: metadata}) when is_map(metadata) do
+    case stored_input_keys(metadata) do
+      nil ->
+        {:error, :missing_input_keys}
+
+      keys when is_integer(length(keys)) ->
+        if Enum.all?(keys, &(is_atom(&1) or is_binary(&1))),
+          do: {:ok, Enum.map(keys, &input_key_name/1)},
+          else: {:error, :invalid_input_keys}
+
+      _other ->
+        {:error, :invalid_input_keys}
+    end
+  end
+
+  def declared_input_keys(%__MODULE__{}), do: {:error, :invalid_input_keys}
+
+  @doc false
+  @spec declared_inputs(t()) :: {:ok, map()} | {:error, atom()}
+  def declared_inputs(%__MODULE__{attrs: attrs} = example) do
+    with {:ok, keys} <- declared_input_keys(example) do
+      {:ok, take_input_keys(attrs || %{}, keys)}
+    end
+  end
+
+  defp input_key_name(key) when is_atom(key), do: Atom.to_string(key)
+  defp input_key_name(key), do: key
+
+  defp stored_input_keys(metadata), do: Map.get(metadata, "inputs") || Map.get(metadata, :inputs)
 
   @doc """
   Return the inputs map for this example.
