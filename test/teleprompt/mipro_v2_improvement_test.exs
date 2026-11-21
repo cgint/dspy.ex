@@ -98,6 +98,15 @@ defmodule Dspy.Teleprompt.MIPROv2ImprovementTest do
         verbose: false
       )
 
+    assert {:ok, _} =
+             Task.async(fn ->
+               assert :rand.export_seed() == :undefined
+               result = MIPROv2.compile(tp, student, trainset)
+               assert :rand.export_seed() == :undefined
+               result
+             end)
+             |> Task.await()
+
     :rand.seed(:exsss, {1, 2, 3})
     caller_rng = :rand.export_seed()
 

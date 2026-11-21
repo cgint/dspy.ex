@@ -365,15 +365,13 @@ defmodule DspyContextS6PropagationTest do
 
     student = Dspy.Predict.new(TestQA)
 
-    # The split (seed 123, validation_split 0.5) puts these in training and these
-    # in validation (verified via Dspy.Trainset.split). They are disjoint and
-    # non-colliding (no word is a substring of another).
+    # CPython Random(123).shuffle(words), split evenly into training and validation.
     words = ["one", "two", "three", "four", "five", "six", "seven", "eight", "nine", "ten"]
 
     trainset = for w <- words, do: Dspy.Example.new(%{question: w, answer: "ok"})
 
-    train_qs = ["four", "seven", "one", "nine", "two"]
-    val_qs = ["three", "five", "six", "eight", "ten"]
+    train_qs = ["nine", "eight", "six", "ten", "three"]
+    val_qs = ["four", "seven", "two", "five", "one"]
 
     metric = fn example, prediction ->
       if example.attrs.answer == prediction.attrs.answer, do: 1.0, else: 0.0
@@ -432,7 +430,7 @@ defmodule DspyContextS6PropagationTest do
 
       saw_val_question =
         Enum.any?(prompts, fn p ->
-          Enum.any?(val_qs, fn q -> String.contains?(p, q) end)
+          Enum.any?(val_qs, fn q -> String.contains?(p, "Question: #{q}\n") end)
         end)
 
       assert saw_val_question,
@@ -444,7 +442,7 @@ defmodule DspyContextS6PropagationTest do
       # the marker in spawned work, complementing the member-examples check).
       saw_train_question =
         Enum.any?(prompts, fn p ->
-          Enum.any?(train_qs, fn q -> String.contains?(p, q) end)
+          Enum.any?(train_qs, fn q -> String.contains?(p, "Question: #{q}\n") end)
         end)
 
       assert saw_train_question,

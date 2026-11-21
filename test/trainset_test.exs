@@ -70,10 +70,12 @@ defmodule DspyTrainsetTest do
   end
 
   test "random sample uses the CPython pool and set selections" do
-    # M1-e fixture vectors for random.Random(0).sample(range(n), 3).
-    for {size, indices} <- [{10, [6, 9, 0]}, {100, [49, 97, 53]}] do
+    # M1-e fixture vectors, including the set branch just beyond the pool limit.
+    for {size, seed, indices} <- [{10, 0, [6, 9, 0]}, {22, 2, [1, 2, 11, 5, 21]}] do
       data = dataset(size)
-      assert Trainset.sample(data, 3, seed: 0) == Enum.map(indices, &Enum.at(data, &1))
+
+      assert Trainset.sample(data, length(indices), seed: seed) ==
+               Enum.map(indices, &Enum.at(data, &1))
     end
   end
 

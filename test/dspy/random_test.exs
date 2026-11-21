@@ -228,6 +228,15 @@ defmodule Dspy.RandomTest do
     assert_raise ArgumentError, fn -> Dspy.Random.sample(state, [1, 2, 3], 4) end
   end
 
+  @tag timeout: 2000
+  test "sample rejects negative counts on both selection branches" do
+    {state, _} = Dspy.Random.seed(0)
+
+    for size <- [3, 22] do
+      assert_raise ArgumentError, fn -> Dspy.Random.sample(state, Enum.to_list(1..size), -1) end
+    end
+  end
+
   # Per-test timeout: same as "seed negative seed uses abs(seed)" above —
   # without abs (mutation MG2), seed(-5) hangs and the timeout fires.
   @tag timeout: 2000

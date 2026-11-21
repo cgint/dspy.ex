@@ -135,6 +135,10 @@ defmodule Dspy.Random do
   the power with integer arithmetic).
   """
   def sample(state, population, k) when is_list(population) and is_integer(k) do
+    if k < 0 do
+      raise ArgumentError, "sample size must be non-negative, got: #{k}"
+    end
+
     n = length(population)
 
     if k > n do
