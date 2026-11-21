@@ -1,6 +1,6 @@
 # Status
 
-> **M5, Chat field listeners.** `streamify/2` can select declared string
+> **M5, Chat field listeners.** `streamify/2` can select plain string
 > fields on a standalone ChatAdapter predictor. Field events preserve
 > output order across split markers and retain the ordinary final
 > prediction. Status events, composite listeners, and the milestone

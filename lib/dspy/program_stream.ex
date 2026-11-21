@@ -18,7 +18,6 @@ defmodule Dspy.ProgramStream do
         &next_event/1,
         &stop/1
       )
-      |> listen(listeners)
     end
   end
 
@@ -42,8 +41,8 @@ defmodule Dspy.ProgramStream do
     end
 
     Enum.each(fields, fn field ->
-      unless is_atom(field) and Enum.any?(outputs, &match?(%{name: ^field, type: :string}, &1)) do
-        raise ArgumentError, "stream_listeners must name declared string output fields by atom"
+      unless is_atom(field) and Enum.any?(outputs, &plain_string_output?(&1, field)) do
+        raise ArgumentError, "stream_listeners must name declared plain string outputs by atom"
       end
     end)
 
@@ -55,21 +54,10 @@ defmodule Dspy.ProgramStream do
     raise ArgumentError, "stream_listeners must be a list of output field atoms"
   end
 
-  defp listen(stream, nil), do: stream
+  defp plain_string_output?(%{name: name, type: :string} = output, name),
+    do: not Map.has_key?(output, :schema)
 
-  defp listen(stream, {predict_name, fields}) do
-    Stream.transform(stream, ChatStream.new(fields), fn
-      {:delta, text}, state ->
-        {fragments, state} = ChatStream.push(state, text)
-        {field_events(fragments, predict_name), state}
-
-      %Prediction{} = prediction, state ->
-        {field_events(ChatStream.finish(state), predict_name) ++ [prediction], state}
-
-      {:error, _reason} = error, state ->
-        {[error], state}
-    end)
-  end
+  defp plain_string_output?(_output, _name), do: false
 
   defp field_events(fragments, predict_name) do
     for {field, chunk, last?} <- fragments do
@@ -113,7 +101,13 @@ defmodule Dspy.ProgramStream do
         send(consumer, {tag, :terminal, terminal})
       end)
 
-    {consumer, tag, worker, worker_ref}
+    listener =
+      case listeners do
+        nil -> nil
+        {predict_name, fields} -> {predict_name, ChatStream.new(fields)}
+      end
+
+    %{consumer: consumer, tag: tag, worker: {worker, worker_ref}, listener: listener, pending: []}
   end
 
   defp await_demand(tag) do
@@ -132,37 +126,63 @@ defmodule Dspy.ProgramStream do
     end
   end
 
-  defp next_event(:done), do: {:halt, :done}
+  defp next_event(%{worker: nil, pending: []} = state), do: {:halt, state}
 
-  defp next_event({consumer, tag, worker, worker_ref} = state) when consumer == self() do
+  defp next_event(%{consumer: consumer, worker: worker}) when consumer != self(),
+    do: reject_foreign_consumer!(worker)
+
+  # Yield one event at a time so a resumed enumeration always checks ownership.
+  defp next_event(%{pending: [event | pending]} = state),
+    do: {[event], %{state | pending: pending}}
+
+  defp next_event(%{tag: tag, worker: {worker, worker_ref}} = state) do
     send(worker, {tag, :demand})
 
     receive do
       {^tag, {:delta, _text} = delta} ->
-        {[delta], state}
+        next_event(queue_delta(state, delta))
 
       {^tag, :terminal, event} ->
         await_stop(worker, worker_ref)
-        {[event], :done}
+        next_event(queue_terminal(state, event))
 
       {:DOWN, ^worker_ref, :process, ^worker, reason} ->
-        {[{:error, {:stream_worker_exited, reason}}], :done}
+        next_event(queue_terminal(state, {:error, {:stream_worker_exited, reason}}))
     end
   end
 
-  defp next_event({_consumer, _tag, worker, _worker_ref}), do: reject_foreign_consumer!(worker)
+  defp queue_delta(%{listener: nil} = state, delta), do: %{state | pending: [delta]}
 
-  defp stop(:done), do: :ok
+  defp queue_delta(%{listener: {predict_name, scanner}} = state, {:delta, text}) do
+    {fragments, scanner} = ChatStream.push(scanner, text)
+    %{state | listener: {predict_name, scanner}, pending: field_events(fragments, predict_name)}
+  end
 
-  defp stop({consumer, _tag, worker, worker_ref}) when consumer == self() do
+  defp queue_terminal(%{listener: {predict_name, scanner}} = state, %Prediction{} = prediction) do
+    pending = field_events(ChatStream.finish(scanner), predict_name) ++ [prediction]
+    %{state | worker: nil, listener: nil, pending: pending}
+  end
+
+  defp queue_terminal(state, event), do: %{state | worker: nil, listener: nil, pending: [event]}
+
+  defp stop(%{worker: nil, pending: []}), do: :ok
+
+  defp stop(%{consumer: consumer, worker: worker}) when consumer != self(),
+    do: reject_foreign_consumer!(worker)
+
+  defp stop(%{worker: nil}), do: :ok
+
+  defp stop(%{worker: {worker, worker_ref}}) do
     Process.exit(worker, :shutdown)
     await_stop(worker, worker_ref)
   end
 
-  defp stop({_consumer, _tag, worker, _worker_ref}), do: reject_foreign_consumer!(worker)
-
   defp reject_foreign_consumer!(worker) do
-    Process.exit(worker, :shutdown)
+    case worker do
+      {pid, _ref} -> Process.exit(pid, :shutdown)
+      nil -> :ok
+    end
+
     raise ArgumentError, "streamify continuations belong to their original consumer"
   end
 

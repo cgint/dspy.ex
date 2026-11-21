@@ -11,7 +11,7 @@ This repo ships in **small, user-usable slices**.
 ### Chat field listeners
 
 Pass `stream_listeners: [:answer]` to `Dspy.streamify/2` to receive selected
-string outputs from a standalone ChatAdapter predictor. Each
+plain string outputs from a standalone ChatAdapter predictor. Each
 `Dspy.StreamResponse` names the predictor and field and carries a text chunk
 and an end-of-field flag. The ordinary prediction still ends a successful
 stream. A JSON fallback can produce a prediction with no field events.

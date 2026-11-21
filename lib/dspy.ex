@@ -460,10 +460,10 @@ defmodule Dspy do
   The original enumerating process must resume or halt an active continuation.
 
   With ordinary ChatAdapter markers, `stream_listeners: [:answer]` selects
-  declared string outputs and yields `Dspy.StreamResponse` chunks for them in
-  place of raw deltas. The selection must contain unique field atoms. A field
-  can end with empty text marked `is_last_chunk`. A successful call can yield
-  only the final prediction when the parser uses its JSON fallback.
+  plain string outputs and yields `Dspy.StreamResponse` chunks. The selection
+  must contain unique field atoms. A field can end with empty text marked
+  `is_last_chunk`. A successful call can yield only the final prediction when
+  the parser uses its JSON fallback.
   Omitting `:stream_listeners` or passing `[]` yields raw deltas.
 
   The remaining options are the per-call options accepted by `call/3`.

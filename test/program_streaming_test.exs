@@ -310,6 +310,47 @@ defmodule Dspy.ProgramStreamingTest do
              Enum.to_list(Dspy.streamify(program, stream_listeners: []).(@inputs))
   end
 
+  test "a foreign continuation cannot consume buffered listener chunks and releases the worker" do
+    combined = @answer_header <> @answer <> "\n[[ ## detail ## ]] More"
+    next_delta = " detail."
+    lm = scripted("owned-listeners", [combined, next_delta])
+    program = Predict.new("question -> answer, detail", lm: lm, adapter: ChatAdapter)
+    stream = Dspy.streamify(program, stream_listeners: [:answer, :detail]).(@inputs)
+    suspend = fn event, _acc -> {:suspend, event} end
+
+    assert {:suspended, first, resume} = Enumerable.reduce(stream, {:cont, nil}, suspend)
+    assert first == field_event("self", :answer, @answer, true)
+    assert_received {:stream_call, "owned-listeners", worker, _, _}
+    assert_received {:produced, ^combined}
+    refute_receive {:produced, ^next_delta}, 50
+    worker_ref = Process.monitor(worker)
+
+    assert {:raised, %ArgumentError{message: message}} = resume_in_another_process(resume)
+    assert message =~ "original consumer"
+    assert_receive {:DOWN, ^worker_ref, :process, ^worker, :shutdown}, @wait
+  end
+
+  test "the final prediction remains owned after a listener's last chunk" do
+    program = predict(scripted("owned-terminal", [@answer_header <> @answer]))
+    stream = Dspy.streamify(program, stream_listeners: [:answer]).(@inputs)
+    suspend = fn event, _acc -> {:suspend, event} end
+
+    assert {:suspended, first, next} = Enumerable.reduce(stream, {:cont, nil}, suspend)
+    assert first == field_event("self", :answer, @answer, false)
+    assert_received {:stream_call, "owned-terminal", worker, _, _}
+    worker_ref = Process.monitor(worker)
+
+    assert {:suspended, last, resume} = next.({:cont, nil})
+    assert last == field_event("self", :answer, "", true)
+    assert_receive {:DOWN, ^worker_ref, :process, ^worker, :normal}, @wait
+
+    assert {:raised, %ArgumentError{message: message}} = resume_in_another_process(resume)
+    assert message =~ "original consumer"
+
+    early_halt = Task.async(fn -> Enum.take(stream, 2) end)
+    assert Task.await(early_halt, @wait) == [first, last]
+  end
+
   test "ChainOfThought listeners use the enumeration adapter and predictor name" do
     lm = scripted("cot", ["[[ ## reasoning ## ]]Two plus two.\n", @answer_header, @answer])
     program = ChainOfThought.new("question -> answer", lm: lm)
@@ -349,6 +390,23 @@ defmodule Dspy.ProgramStreamingTest do
     program = Predict.new(signature, lm: scripted("unused", []), adapter: ChatAdapter)
 
     assert_raise ArgumentError, ~r/ordinary Chat markers/, fn ->
+      Dspy.streamify(program, stream_listeners: [:answer])
+    end
+
+    refute_received {:stream_call, _, _, _, _}
+  end
+
+  test "listeners reject schema-backed strings whose marker text is JSON" do
+    signature = Dspy.Signature.define("question -> answer")
+    [field] = signature.output_fields
+    signature = %{signature | output_fields: [Map.put(field, :schema, %{type: "string"})]}
+    model = scripted("schema-string", [@answer_header, Jason.encode!("Line one\nline two")])
+    program = Predict.new(signature, lm: model, adapter: ChatAdapter)
+
+    assert {:ok, %Prediction{attrs: %{answer: "Line one\nline two"}}} =
+             Dspy.call(program, @inputs)
+
+    assert_raise ArgumentError, ~r/declared plain string/, fn ->
       Dspy.streamify(program, stream_listeners: [:answer])
     end
 
@@ -437,6 +495,19 @@ defmodule Dspy.ProgramStreamingTest do
       chunk: chunk,
       is_last_chunk: last?
     }
+  end
+
+  defp resume_in_another_process(continuation) do
+    task =
+      Task.async(fn ->
+        try do
+          continuation.({:cont, nil})
+        rescue
+          error -> {:raised, error}
+        end
+      end)
+
+    Task.await(task, @wait)
   end
 
   defp predict(lm, opts \\ []) do
