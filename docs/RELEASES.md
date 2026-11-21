@@ -8,6 +8,13 @@ This repo ships in **small, user-usable slices**.
 
 ## Consumer notes
 
+### LM memory cache
+
+Opt-in LM response caching keeps up to 10,000 entries per VM and evicts the
+least recently used response. `Dspy.configure_cache(memory_max_entries: 500)`
+sets a different limit and clears stored responses. Clearing, reconfiguring,
+or restarting the cache discards fills from generations already in flight.
+
 ### Provider retries
 
 Predictors retry known transient HTTP and transport failures within their
