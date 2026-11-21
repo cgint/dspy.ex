@@ -245,6 +245,18 @@ defmodule Dspy.LM do
 
   @optional_callbacks [supports?: 2]
 
+  @doc false
+  def validate_binding!(nil), do: nil
+
+  def validate_binding!(lm) do
+    if is_struct(lm) and Code.ensure_loaded?(lm.__struct__) and
+         function_exported?(lm.__struct__, :generate, 2) do
+      lm
+    else
+      raise ArgumentError, "expected lm: to be a Dspy.LM struct or nil"
+    end
+  end
+
   @doc """
   Generate a completion using the configured language model.
   """
