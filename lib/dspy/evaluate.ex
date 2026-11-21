@@ -62,7 +62,7 @@ defmodule Dspy.Evaluate do
 
   - `program` - DSPy program (struct implementing `Dspy.Module`)
   - `testset` - list of test examples
-  - `metric_fn` - metric function `(example, prediction) -> score`
+  - `metric_fn` - metric function `(example, prediction) -> score` or `(example) -> score`
   - `opts` - options:
     - `:num_threads` - parallelism. Defaults to the configured `:num_threads`
       or the number of online schedulers.
@@ -131,6 +131,8 @@ defmodule Dspy.Evaluate do
     unless is_number(failure_score) do
       raise ArgumentError, "failure_score must be a number"
     end
+
+    Dspy.Teleprompt.validate_metric!(metric_fn)
 
     item_timeout = Keyword.get(opts, :timeout, :infinity)
     provide_traceback = Keyword.get(opts, :provide_traceback, false)
