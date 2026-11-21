@@ -15,8 +15,10 @@ OpenAI models through ReqLLM. It retains provider call IDs, assigns stable IDs
 to text tool calls, and returns replayable typed history with the final
 prediction. The `submit` tool validates the signature outputs. A forced final
 request selects `submit` exclusively. Optional outputs can use JSON null on
-the OpenAI strict tools wire. Failed final submissions include the history
-in the error tuple. The default mode still returns a text trajectory.
+the OpenAI strict tools wire. Submit schemas with open nested objects use
+non-strict provider declarations and retain local validation. Failed final
+submissions include the history in the error tuple. The default mode still
+returns a text trajectory.
 
 ### Typed conversation replay
 

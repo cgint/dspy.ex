@@ -1,5 +1,5 @@
 defmodule Dspy.ReActStructuredTest do
-  use ExUnit.Case, async: true
+  use ExUnit.Case, async: false
 
   alias Dspy.{History, Image, LM, ReAct, Tools}
   alias Dspy.History.Turn
@@ -53,6 +53,17 @@ defmodule Dspy.ReActStructuredTest do
     def on_tool_end(meta, _payload, pid) do
       send(pid, {:tool_end, meta.call_id})
       pid
+    end
+  end
+
+  defmodule UnsupportedLM do
+    @behaviour LM
+    defstruct []
+
+    @impl true
+    def generate(_lm, _request) do
+      send(self(), :unsupported_generation)
+      {:error, :unexpected_lm}
     end
   end
 
@@ -152,8 +163,28 @@ defmodule Dspy.ReActStructuredTest do
     assert %History{messages: [%Turn{tool_exchanges: [%{is_error: true}]}, _]} = history
 
     assert_received {:wire, "/responses", request}
-    assert [%{"parameters" => %{"properties" => %{"result" => sent}}}] = request["tools"]
+
+    assert [%{"parameters" => %{"properties" => %{"result" => sent}}, "strict" => false}] =
+             request["tools"]
+
     assert sent["properties"]["scores"]["items"] == %{"type" => "integer"}
+    refute sent["additionalProperties"] == false
+  end
+
+  test "rejects null for a required string output and leaves explicitly nullable fields valid" do
+    signature = Dspy.Signature.define("question -> answer, result: json")
+    [answer, result] = signature.output_fields
+    result = Map.put(result, :schema, %{"type" => ["integer", "null"]})
+    agent = ReAct.new(%{signature | output_fields: [answer, result]}, [], mode: :structured)
+
+    assert {:ok, %{attrs: %{answer: "ok", result: nil, history: history}}} =
+             call(agent, %{question: "q"}, [
+               [native("invalid", "submit", %{"answer" => nil, "result" => nil})],
+               [native("valid", "submit", %{"answer" => "ok", "result" => nil})]
+             ])
+
+    assert %History{messages: [%Turn{tool_exchanges: [%{id: "invalid", is_error: true}]}, _]} =
+             history
   end
 
   test "resumes text fallback with deterministic unique IDs before executing tools" do
@@ -314,6 +345,29 @@ defmodule Dspy.ReActStructuredTest do
     refute_received {:wire, _, _}
   end
 
+  test "uses the validated LM throughout the run even if a tool updates settings" do
+    Dspy.TestSupport.restore_settings_on_exit()
+    :ok = Dspy.configure(lm: offline_lm([]), cache: false)
+
+    tool =
+      Tools.new_tool("change_lm", "Update settings", fn _ ->
+        Dspy.configure(lm: %UnsupportedLM{})
+      end)
+
+    agent = ReAct.new("question -> answer", [tool], mode: :structured)
+
+    Process.put(OfflineResponses, [
+      [native("first", "change_lm", %{})],
+      [native("final", "submit", %{"answer" => "ok"})]
+    ])
+
+    assert {:ok, %{attrs: %{answer: "ok"}}} = Dspy.call(agent, %{question: "q"})
+    assert %UnsupportedLM{} = Dspy.Settings.get(:lm)
+    refute_received :unsupported_generation
+    assert_received {:wire, "/responses", _}
+    assert_received {:wire, "/responses", _}
+  end
+
   test "the structured mode reserves its history, turn and submit fields" do
     for signature <- [
           "history -> answer",
@@ -373,17 +427,20 @@ defmodule Dspy.ReActStructuredTest do
   defp call(agent, inputs, responses, context \\ [], lm_opts \\ []) do
     Process.put(OfflineResponses, responses)
 
-    lm =
-      LM.ReqLLM.new(
-        model: Keyword.get(lm_opts, :model, "openai:gpt-4.1-mini"),
-        default_opts:
-          [
-            api_key: "fake-offline-key",
-            base_url: "http://127.0.0.1:1",
-            req_http_options: [adapter: OfflineResponses]
-          ] ++ Keyword.get(lm_opts, :default_opts, [])
-      )
+    Dspy.context([lm: offline_lm(lm_opts), cache: false] ++ context, fn ->
+      Dspy.call(agent, inputs)
+    end)
+  end
 
-    Dspy.context([lm: lm, cache: false] ++ context, fn -> Dspy.call(agent, inputs) end)
+  defp offline_lm(opts) do
+    LM.ReqLLM.new(
+      model: Keyword.get(opts, :model, "openai:gpt-4.1-mini"),
+      default_opts:
+        [
+          api_key: "fake-offline-key",
+          base_url: "http://127.0.0.1:1",
+          req_http_options: [adapter: OfflineResponses]
+        ] ++ Keyword.get(opts, :default_opts, [])
+    )
   end
 end

@@ -138,29 +138,37 @@ defmodule Dspy.Signature.Adapters.JSONAdapter do
 
   @doc false
   def cast_declared_outputs(%Dspy.Signature{} = signature, values) when is_map(values) do
-    {fields, missing, present} =
-      Enum.reduce(signature.output_fields, {[], [], %{}}, fn field, {fields, missing, present} ->
-        key = Atom.to_string(field.name)
-        resolved_key = if Map.has_key?(values, field.name), do: field.name, else: key
+    signature.output_fields
+    |> Enum.reduce_while({[], [], %{}}, fn field, {fields, missing, present} ->
+      key = Atom.to_string(field.name)
+      resolved_key = if Map.has_key?(values, field.name), do: field.name, else: key
 
-        case Map.fetch(values, resolved_key) do
-          {:ok, nil} when not field.required ->
-            {fields, missing, present}
+      case {Map.fetch(values, resolved_key), Map.get(field, :schema)} do
+        {{:ok, nil}, _schema} when not field.required ->
+          {:cont, {fields, missing, present}}
 
-          {:ok, value} ->
-            {[field | fields], missing, Map.put(present, key, value)}
+        {{:ok, nil}, nil} ->
+          {:halt, {:error, {:invalid_output_value, field.name, :null_required_output}}}
 
-          :error when field.required ->
-            {fields, [field.name | missing], present}
+        {{:ok, value}, _schema} ->
+          {:cont, {[field | fields], missing, Map.put(present, key, value)}}
 
-          :error ->
-            {fields, missing, present}
-        end
-      end)
+        {:error, _schema} when field.required ->
+          {:cont, {fields, [field.name | missing], present}}
 
-    case missing do
-      [] -> map_json_to_outputs(%{signature | output_fields: Enum.reverse(fields)}, present)
-      missing -> {:error, {:missing_required_outputs, Enum.reverse(missing)}}
+        {:error, _schema} ->
+          {:cont, {fields, missing, present}}
+      end
+    end)
+    |> case do
+      {fields, [], present} ->
+        map_json_to_outputs(%{signature | output_fields: Enum.reverse(fields)}, present)
+
+      {_fields, missing, _present} ->
+        {:error, {:missing_required_outputs, Enum.reverse(missing)}}
+
+      {:error, _reason} = error ->
+        error
     end
   end
 

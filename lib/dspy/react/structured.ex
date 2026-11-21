@@ -4,6 +4,7 @@ defmodule Dspy.ReAct.Structured do
   alias Dspy.{History, LM, Module, Predict, Prediction, Settings, Signature, Tools}
   alias Dspy.History.Turn
   alias Dspy.Signature.Adapters.{ChatAdapter, JSONAdapter}
+  alias Dspy.Tools.Tool
 
   def build!(signature, tools, adapter, max_steps) do
     validate_reserved!(signature.input_fields, [:history, :tools, :turn_budget])
@@ -45,7 +46,8 @@ defmodule Dspy.ReAct.Structured do
             into: %{},
             do: {field.name, value}
 
-      run_turns(react, pending, history, ids, react.max_steps)
+      runtime = %{react | step_predictor: %{react.step_predictor | lm: lm}}
+      run_turns(runtime, pending, history, ids, runtime.max_steps)
     end
   end
 
@@ -206,8 +208,48 @@ defmodule Dspy.ReAct.Structured do
     end
   end
 
-  defp predict(predictor, inputs, history, tools),
-    do: Module.forward(predictor, Map.merge(inputs, %{history: history, tools: tools}))
+  defp predict(predictor, inputs, history, tools) do
+    declarations = Enum.map(tools, &tool_declaration/1)
+    Module.forward(predictor, Map.merge(inputs, %{history: history, tools: declarations}))
+  end
+
+  defp tool_declaration(%Tool{name: "submit", parameters: parameters} = tool) do
+    if Enum.all?(parameters["properties"], fn {_name, schema} -> strict_schema?(schema) end) do
+      tool
+    else
+      # ReqLLM strict tools close nested objects and require every nested key.
+      # Preserve the declared schema and validate required fields locally.
+      required = Enum.join(parameters["required"], ", ")
+      guidance = if required == "", do: "", else: " Required fields are #{required}."
+
+      %{
+        "type" => "function",
+        "function" => %{
+          "name" => tool.name,
+          "description" => tool.description <> guidance,
+          "parameters" => parameters,
+          "strict" => false
+        }
+      }
+    end
+  end
+
+  defp tool_declaration(tool), do: tool
+
+  defp strict_schema?(schema) when is_map(schema) do
+    if "object" in List.wrap(schema["type"]) or Map.has_key?(schema, "properties") do
+      properties = Map.get(schema, "properties", %{})
+
+      schema["additionalProperties"] == false and
+        Enum.sort(Map.keys(properties)) == Enum.sort(Map.get(schema, "required", [])) and
+        Enum.all?(properties, fn {_name, value} -> strict_schema?(value) end)
+    else
+      schema |> Map.values() |> Enum.all?(&strict_schema?/1)
+    end
+  end
+
+  defp strict_schema?(schemas) when is_list(schemas), do: Enum.all?(schemas, &strict_schema?/1)
+  defp strict_schema?(_schema), do: true
 
   defp recoverable_turn_failure({:output_parse_failed, _reason, _meta}), do: :parse_error
   defp recoverable_turn_failure({:missing_content, _reason}), do: :parse_error
