@@ -8,6 +8,11 @@ This repo ships in **small, user-usable slices**.
 
 ## Consumer notes
 
+### Multipart output retries
+
+Output retries update the primary text of the final user message. Images,
+trailing text, and other message parts keep their content and order.
+
 ### Nested predictor traces
 
 A predictor step can now reach both an inner capture and an enclosing
