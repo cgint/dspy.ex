@@ -24,7 +24,7 @@ defmodule Dspy.AdapterPipelineEdgeCasesTest do
 
   defmodule CountingLM do
     @behaviour Dspy.LM
-    defstruct [:pid, :content, :counter, :failures_before_success, :tool_calls]
+    defstruct [:pid, :content, :counter, :failures_before_success, :tool_calls, :failure]
 
     @impl true
     def generate(%__MODULE__{} = lm, request) do
@@ -37,7 +37,7 @@ defmodule Dspy.AdapterPipelineEdgeCasesTest do
         end
 
       if is_integer(lm.failures_before_success) and call_num <= lm.failures_before_success do
-        {:error, {:temporary_failure, call_num}}
+        {:error, lm.failure || {:temporary_failure, call_num}}
       else
         message = %{role: "assistant", content: lm.content || "Answer: ok"}
 
@@ -211,6 +211,62 @@ defmodule Dspy.AdapterPipelineEdgeCasesTest do
     assert {:ok, pred} = Dspy.Module.forward(program, %{question: "q"})
     assert pred.attrs.answer == "ok"
     assert Agent.get(counter, & &1) == 3
+  end
+
+  test "known permanent LM errors return unchanged after one attempt" do
+    errors = [
+      ReqLLM.Error.API.Request.exception(status: 401, reason: "PRIVATE_PROVIDER_ECHO"),
+      ReqLLM.Error.API.Response.exception(status: 501, reason: "not implemented"),
+      {:http_error, 403, "PRIVATE_PROVIDER_ECHO"},
+      ReqLLM.Error.API.Request.exception(cause: %Req.TransportError{reason: :nxdomain}),
+      :attachments_not_enabled
+    ]
+
+    counter = start_supervised!({Agent, fn -> 0 end})
+
+    for error <- errors do
+      Agent.update(counter, fn _ -> 0 end)
+      lm = %CountingLM{pid: self(), counter: counter, failures_before_success: 4, failure: error}
+      program = Dspy.Predict.new(SimpleSig, lm: lm, max_retries: 3)
+
+      log =
+        ExUnit.CaptureLog.capture_log([level: :debug], fn ->
+          assert {:error, ^error} = Dspy.Module.forward(program, %{question: "q"})
+        end)
+
+      assert Agent.get(counter, & &1) == 1
+      assert log =~ "attempts_used=1"
+      refute log =~ "dspy.adapter_retry"
+      refute log =~ "PRIVATE_PROVIDER_ECHO"
+    end
+  end
+
+  test "retry logs count attempts forward through exhaustion" do
+    error = ReqLLM.Error.API.Response.exception(status: 429, reason: "PRIVATE_PROVIDER_ECHO")
+    counter = start_supervised!({Agent, fn -> 0 end})
+    lm = %CountingLM{pid: self(), counter: counter, failures_before_success: 4, failure: error}
+    program = Dspy.Predict.new(SimpleSig, lm: lm, max_retries: 3)
+
+    log =
+      ExUnit.CaptureLog.capture_log([level: :debug], fn ->
+        assert {:error, ^error} = Dspy.Module.forward(program, %{question: "q"})
+      end)
+
+    assert Agent.get(counter, & &1) == 4
+    assert Regex.scan(~r/attempt=(\d+)\/4/, log, capture: :all_but_first) == [["2"], ["3"], ["4"]]
+    assert log =~ "attempts_used=4"
+    assert log =~ "HTTP 429"
+    refute log =~ "PRIVATE_PROVIDER_ECHO"
+  end
+
+  test "a ReqLLM error with a transient transport cause retries and parses" do
+    error = ReqLLM.Error.API.Request.exception(cause: %Req.TransportError{reason: :timeout})
+    counter = start_supervised!({Agent, fn -> 0 end})
+    lm = %CountingLM{pid: self(), counter: counter, failures_before_success: 1, failure: error}
+    program = Dspy.Predict.new(SimpleSig, lm: lm, max_retries: 1)
+
+    assert {:ok, %{attrs: %{answer: "ok"}}} = Dspy.Module.forward(program, %{question: "q"})
+    assert Agent.get(counter, & &1) == 2
   end
 
   test "transport retry/exhaustion logs carry the safe summary, never the request body" do

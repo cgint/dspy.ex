@@ -78,6 +78,11 @@ After this you can …optimize a program once, save it, load it later or elsewhe
 | S001 | *also:* `:bootstrap_rs` optimizer alias | idiom | | | | | S077 | N | P7 | Routes to `Dspy.Teleprompt.BootstrapFewShotWithRandomSearch`. | M2 first slice implemented. Included in v0.5.0. |
 
 ## M3 — Production LM
+
+The first provider retry slice classifies known HTTP, transport, and local
+failures internally. It preserves caller error tuples and keeps structured
+fallback for explicit schema or capability failures. Public error types remain
+open in the inventory below.
 After this you can …run against real providers robustly: clear error types, automatic retries, a cache that survives restarts, and hooks that trace every call.
 - **Depends on:** M2 (LM state in save/load)
 - **Exit example:** A fake provider returns 429 then 200: a typed error, then a retry. After a restart the cache hits. A callback module records module/LM/adapter start/end events.

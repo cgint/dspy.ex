@@ -78,12 +78,16 @@ defmodule Dspy.LM.ReqLLM do
             {:ok, response} ->
               normalize_object_response(lm, response)
 
-            {:error, native_reason} ->
-              Logger.warning(
-                "native structured-output generation failed; falling back to text generation: #{Dspy.LogReason.format(native_reason)}"
-              )
+            {:error, native_reason} = error ->
+              if Dspy.LM.RetryPolicy.schema_fallback?(native_reason) do
+                Logger.warning(
+                  "native structured-output generation failed; falling back to text generation: #{Dspy.LogReason.format(native_reason)}"
+                )
 
-              generate_text_response(lm, input, opts)
+                generate_text_response(lm, input, opts)
+              else
+                error
+              end
           end
 
         :fallback ->

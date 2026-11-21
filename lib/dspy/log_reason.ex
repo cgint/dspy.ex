@@ -14,7 +14,8 @@ defmodule Dspy.LogReason do
     :output_parse_failed,
     :output_validation_failed,
     :parse_failed,
-    :timeout
+    :timeout,
+    :unsupported_schema
   ]
 
   # Error messages and nested terms can contain provider echoes and request data.
@@ -23,6 +24,9 @@ defmodule Dspy.LogReason do
 
   def format(%ReqLLM.Error.API.Request{reason: "timeout"}), do: "API request failed: timeout"
   def format(%ReqLLM.Error.API.Request{}), do: "API request failed"
+
+  def format(%ReqLLM.Error.API.Response{status: status}) when status in 100..599,
+    do: "Provider response failed (HTTP #{status})"
 
   def format(%{__exception__: true}), do: "exception"
   def format(reason) when is_atom(reason), do: tag(reason)

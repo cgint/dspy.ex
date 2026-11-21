@@ -8,6 +8,19 @@ This repo ships in **small, user-usable slices**.
 
 ## Consumer notes
 
+### Provider retries
+
+Predictors retry known transient HTTP and transport failures within their
+generation retry budget. Authentication and other known permanent failures
+return after the first generation attempt. Opaque custom LM errors still use
+the configured budget. Failures return their original reason terms.
+
+ReqLLM structured generation uses text fallback for `:unsupported_schema`
+and ReqLLM's `Invalid.Schema`, `Invalid.Capability`, and
+`API.SchemaValidation` errors. Provider HTTP errors stay on the structured
+route. Retry logs count generation attempts in order. ReqLLM also manages
+HTTP retries inside each generation attempt, with a provider-specific budget.
+
 ### Metric function arity
 
 Evaluation and optimizers that score programs expect metric functions with one
