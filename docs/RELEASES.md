@@ -8,6 +8,13 @@ This repo ships in **small, user-usable slices**.
 
 ## Consumer notes
 
+### Nested predictor traces
+
+A predictor step can now reach both an inner capture and an enclosing
+optimizer capture. Each capture uses its own predictor path. If a detached
+worker finishes after an inner capture closes, the enclosing capture can
+still record the step while it is open.
+
 ### Refine rollouts
 
 `Dspy.Refine` gives each attempt a distinct rollout ID. It sets temperature
