@@ -141,7 +141,7 @@ After this you can …build tool-using agents that also take images or audio, re
 | S043 | Refine | partial | H | M | 1.50 | 3.0.0 | S038 | N | - | Distinct rollout IDs, temperature 1.0 for named predictors, and an opt-in per-call `fail_count:`. OfferFeedback advice remains open. | Rollout handling and explicit failure budget implemented |
 | U032 | dummy_rm | missing | L | S | 1.00 | <=2.6 | S061 | N | - | No dummy_rm stub retriever | todo |
 | S006 | Audio | missing | M | M | 1.00 | 3.0.0 | S018 | N | - | no audio input type; Attachments is file-only, no base64/audio parts | todo |
-| S019 | XMLAdapter | partial | M | M | 1.00 | 3.0.0 | S007 | N | P10 | Opt-in signature adapter handles literal leaves, typed scalar and JSON fields, and media-safe retry. Nested XML containers and structured tool history remain open. | Field adapter implemented |
+| S019 | XMLAdapter | partial | M | M | 1.00 | 3.0.0 | S007 | N | P10 | Opt-in signature adapter handles literal leaves, schema-directed XML objects and arrays, JSON values inside tags, and media-safe retry. Repeated list fields, mixed schema branches, and structured tool history remain open. | Field adapter and nested containers implemented |
 | S059 | Embeddings | partial | M | M | 1.00 | 3.0.0 | S060;DEP:faiss-cpu | N | - | No corpus Embeddings retriever (embed(corpus), k, normalize, save/load/from_saved, FAISS f | todo |
 | S015 | ToolCallResults | missing | L | S | 1.00 | 3.3.0 | S007,S016 | N | - | no way to pass tool results back through history | todo |
 | S005 | Adapter | partial | H | L | 0.75 | <=2.6 | - | N | - | class pipeline options + native-response-type planning missing | todo |

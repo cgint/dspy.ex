@@ -4,19 +4,30 @@ defmodule Dspy.Signature.Adapters.XMLAdapter do
 
   Text inside field tags is literal, including code, angle brackets, and
   ampersands. Use a self-closing tag for null and paired empty tags for an
-  empty string. Structured values use JSON inside their field tags.
+  empty string. Schema-backed objects and arrays can use nested tags, with
+  `<item>` for array elements and `<entry key="...">` for keys that cannot
+  be tag names. Structured fields also accept JSON inside their tags.
   """
 
   @behaviour Dspy.Signature.Adapter
 
   alias Dspy.{Attrs, Example, History, Signature, TypedOutputs}
-  alias Dspy.Signature.Adapters.ChatAdapter
+  alias Dspy.Signature.Adapters.{ChatAdapter, XMLValue}
 
   @open_tag ~r/\A<([\p{L}_][\p{L}\p{N}\p{M}_.-]*)[ \t]*(\/?)>/u
+  @tag_name ~r/\A[\p{L}_][\p{L}\p{N}\p{M}_.-]*\z/u
+  @invalid_key_char ~r/[\x00-\x08\x0B\x0C\x0E-\x1F\x{FFFE}\x{FFFF}]/u
   @fenced ~r/\A```(?:xml)?[ \t]*\r?\n(.*)\r?\n```[ \t]*(?:\r?\n[^<]*)?\z/s
   @reasoning ~r/\A<(think|thinking)>/
-  @opening_newline ~r/\A[ \t]*\r?\n/
-  @closing_newline ~r/\r?\n[ \t]*\z/
+  @key_escapes %{
+    "&" => "&amp;",
+    "\"" => "&quot;",
+    "<" => "&lt;",
+    ">" => "&gt;",
+    "\n" => "&#10;",
+    "\r" => "&#13;",
+    "\t" => "&#9;"
+  }
 
   @impl true
   def format_instructions(%Signature{} = signature, _opts \\ []) do
@@ -31,8 +42,12 @@ defmodule Dspy.Signature.Adapters.XMLAdapter do
     end
   end
 
-  defp field_instruction(%{name: name, schema: schema}) do
-    tag = "<#{name}>{JSON value}</#{name}>"
+  defp field_instruction(%{name: name, schema: schema} = field) do
+    tag =
+      case container_schema(field) do
+        nil -> "<#{name}>{JSON value}</#{name}>"
+        normalized -> render_node(name, sample_value(normalized), normalized)
+      end
 
     case TypedOutputs.prompt_schema_json(schema) do
       {:ok, json} -> tag <> "\nJSON schema for #{name}: #{json}"
@@ -59,11 +74,11 @@ defmodule Dspy.Signature.Adapters.XMLAdapter do
         |> Enum.with_index(1)
         |> Enum.map(fn {example, index} ->
           "Example #{index}:\n" <>
-            render_fields(input_fields, Example.inputs(example)) <>
+            render_fields(input_fields, Example.inputs(example), :input) <>
             "\n" <> render_fields(signature.output_fields, Example.to_map(example))
         end)
 
-      user = Enum.join(examples ++ [render_fields(input_fields, inputs)], "\n\n")
+      user = Enum.join(examples ++ [render_fields(input_fields, inputs, :input)], "\n\n")
 
       %{
         messages:
@@ -72,34 +87,174 @@ defmodule Dspy.Signature.Adapters.XMLAdapter do
     end
   end
 
-  defp render_fields(fields, values) do
+  defp render_fields(fields, values, direction \\ :output) do
     fields
     |> Enum.flat_map(fn field ->
       case Attrs.fetch(values, field.name) do
         :error ->
           []
 
-        {:ok, nil} ->
-          ["<#{field.name} />"]
-
         {:ok, value} ->
-          ["<#{field.name}>\n#{render_value(value, field)}\n</#{field.name}>"]
+          [render_field(field, value, direction)]
       end
     end)
     |> Enum.join("\n")
   end
 
-  defp render_value(value, field) do
-    if field.type == :json or Map.has_key?(field, :schema) do
-      case Jason.encode(value) do
-        {:ok, json} -> json
-        {:error, _} when is_struct(value) -> Signature.format_field_value(value)
-        {:error, _} -> ChatAdapter.render_value_for_prompt(value)
-      end
-    else
-      ChatAdapter.render_value_for_prompt(value)
+  defp render_field(field, nil, _direction), do: "<#{field.name} />"
+
+  defp render_field(field, value, direction) do
+    schema = if direction == :output, do: container_schema(field)
+
+    case schema do
+      nil ->
+        body =
+          if json_field?(field),
+            do: render_json(value),
+            else: ChatAdapter.render_value_for_prompt(value)
+
+        "<#{field.name}>\n#{body}\n</#{field.name}>"
+
+      schema ->
+        render_node(field.name, value, schema)
     end
   end
+
+  defp render_json(value) do
+    case Jason.encode(value) do
+      {:ok, json} -> json
+      {:error, _} when is_struct(value) -> Signature.format_field_value(value)
+      {:error, _} -> ChatAdapter.render_value_for_prompt(value)
+    end
+  end
+
+  defp render_node(name, value, schema, attributes \\ "")
+  defp render_node(name, nil, _schema, attributes), do: "<#{name}#{attributes} />"
+
+  defp render_node(name, value, schema, attributes) do
+    body =
+      case XMLValue.kind(schema) do
+        :object when is_map(value) -> render_object(value, XMLValue.shape(schema))
+        :array when is_integer(length(value)) -> render_array(value, XMLValue.shape(schema))
+        _ when is_binary(value) -> value
+        _ -> render_json(value)
+      end
+
+    "<#{name}#{attributes}>\n#{body}\n</#{name}>"
+  end
+
+  defp render_object(value, schema) do
+    value = if is_struct(value), do: Map.from_struct(value), else: value
+
+    if Enum.all?(Map.keys(value), &xml_key?/1) do
+      entries = value |> Enum.map(fn {key, item} -> {to_string(key), item} end) |> Enum.sort()
+
+      children =
+        for {key, item} <- entries do
+          child_schema =
+            case XMLValue.property_schema(schema, key) do
+              {:ok, child_schema} -> child_schema
+              :error -> false
+            end
+
+          {name, attributes} = entry_tag(key)
+          {name, item, child_schema, attributes}
+        end
+
+      render_children(value, children)
+    else
+      render_json(value)
+    end
+  end
+
+  defp xml_key?(key) when is_atom(key), do: xml_key?(Atom.to_string(key))
+
+  defp xml_key?(key) when is_binary(key),
+    do: String.valid?(key) and not Regex.match?(@invalid_key_char, key)
+
+  defp xml_key?(_key), do: false
+
+  defp entry_tag(key) do
+    if Regex.match?(@tag_name, key) do
+      {key, ""}
+    else
+      escaped = String.replace(key, Map.keys(@key_escapes), &Map.fetch!(@key_escapes, &1))
+      {"entry", " key=\"#{escaped}\""}
+    end
+  end
+
+  defp render_array(value, schema) do
+    children =
+      for {item, index} <- Enum.with_index(value) do
+        {"item", item, XMLValue.item_schema(schema, index), ""}
+      end
+
+    render_children(value, children)
+  end
+
+  defp render_children(value, children) do
+    if Enum.all?(children, fn {_, item, schema, _} -> literal_xml_value?(item, schema) end) do
+      Enum.map_join(children, "\n", fn {name, item, schema, attrs} ->
+        render_node(name, item, schema, attrs)
+      end)
+    else
+      render_json(value)
+    end
+  end
+
+  # When a child has no concrete type, literal text alone cannot preserve
+  # the type of a non-string value. The containing tag can still carry JSON.
+  defp literal_xml_value?(_value, false), do: false
+  defp literal_xml_value?(value, _schema) when is_binary(value) or is_nil(value), do: true
+
+  defp literal_xml_value?(value, schema) do
+    case XMLValue.shape(schema) do
+      %{"type" => "integer"} -> is_integer(value)
+      %{"type" => "number"} -> is_number(value)
+      %{"type" => "boolean"} -> is_boolean(value)
+      shaped -> XMLValue.kind(shaped) in [:object, :array]
+    end
+  end
+
+  defp sample_value(schema) do
+    case XMLValue.kind(schema) do
+      :object ->
+        case XMLValue.shape(schema) do
+          %{"properties" => properties} when map_size(properties) > 0 ->
+            Map.new(properties, fn {key, child} -> {key, sample_value(child)} end)
+
+          %{"additionalProperties" => false} ->
+            %{}
+
+          schema ->
+            {:ok, child} = XMLValue.property_schema(schema, "example key")
+            %{"example key" => sample_value(child)}
+        end
+
+      :array ->
+        case XMLValue.shape(schema) do
+          %{"prefixItems" => [_ | _] = items} -> Enum.map(items, &sample_value/1)
+          schema -> [sample_value(XMLValue.item_schema(schema, 0))]
+        end
+
+      :leaf ->
+        case XMLValue.shape(schema) do
+          %{"type" => type} when is_binary(type) -> "{#{type} value}"
+          _ -> "{JSON value}"
+        end
+    end
+  end
+
+  defp container_schema(%{schema: spec}) do
+    with {:ok, schema} <- TypedOutputs.native_schema(spec),
+         kind when kind in [:object, :array] <- XMLValue.kind(schema) do
+      schema
+    else
+      _ -> nil
+    end
+  end
+
+  defp container_schema(_field), do: nil
 
   @impl true
   def parse_outputs(%Signature{} = signature, text, _opts \\ []) when is_binary(text) do
@@ -166,8 +321,7 @@ defmodule Dspy.Signature.Adapters.XMLAdapter do
         with {:ok, field} <- fetch_field(fields, name),
              false <- Map.has_key?(outputs, field.name),
              rest = binary_part(text, byte_size(opening), byte_size(text) - byte_size(opening)),
-             {:ok, raw, rest} <- read_value(rest, name, slash, fields),
-             {:ok, value} <- cast_value(raw, field) do
+             {:ok, value, rest} <- read_field(rest, name, slash, field, fields) do
           parse_fields(rest, fields, Map.put(outputs, field.name, value))
         else
           true -> decode_error({:duplicate_xml_field, name})
@@ -186,62 +340,45 @@ defmodule Dspy.Signature.Adapters.XMLAdapter do
     end
   end
 
-  defp read_value(rest, _name, "/", _fields), do: {:ok, nil, rest}
-
-  defp read_value(text, name, "", fields) do
-    # A literal closing tag inside code is not a boundary unless a sibling
-    # field or the end of the completion follows it.
-    escaped_name = Regex.escape(name)
-
-    close =
-      if Regex.match?(@opening_newline, text) do
-        "</#{escaped_name}[ \\t]*>(?=[ \\t]*(?:\\r?\\n|\\z))"
-      else
-        "</#{escaped_name}\\s*>"
+  defp read_field(rest, _name, "/", field, _fields) do
+    result =
+      case container_schema(field) do
+        nil -> cast_value(nil, field)
+        schema -> validate_term(XMLValue.empty(schema), field)
       end
 
-    candidates =
-      close
-      |> Regex.compile!()
-      |> Regex.scan(text, return: :index, capture: :first)
-      |> Enum.map(fn [position] -> position end)
+    with {:ok, value} <- result, do: {:ok, value, rest}
+  end
 
-    boundary =
-      Enum.find(candidates, fn {offset, length} ->
-        suffix = String.trim_leading(after_offset(text, offset + length))
+  defp read_field(text, name, "", field, fields) do
+    boundary? = fn suffix ->
+      case Regex.run(@open_tag, suffix) do
+        [_, sibling, _] -> Map.has_key?(fields, sibling)
+        nil -> not String.contains?(suffix, "<")
+      end
+    end
 
-        case Regex.run(@open_tag, suffix) do
-          [_, sibling, _] -> Map.has_key?(fields, sibling)
-          nil -> suffix == ""
-        end
-      end) || List.last(candidates)
+    schema = container_schema(field)
 
-    case boundary do
-      {offset, length} ->
-        rest = after_offset(text, offset + length)
+    if schema && String.starts_with?(String.trim_leading(text), "<") do
+      with {:ok, term, rest} <- XMLValue.container(text, name, schema, boundary?),
+           {:ok, value} <- validate_term(term, field) do
+        {:ok, value, rest}
+      end
+    else
+      mode = if json_field?(field), do: :json, else: :text
 
-        if rest != "" and not String.starts_with?(rest, "<") and
-             rest == String.trim_leading(rest) do
-          decode_error({:invalid_xml_close, name})
-        else
-          {:ok, trim_framing(binary_part(text, 0, offset)), rest}
-        end
-
-      nil ->
-        decode_error({:unclosed_xml_field, name})
+      with {:ok, raw, rest} <- XMLValue.literal(text, name, boundary?, mode),
+           {:ok, value} <- cast_value(raw, field) do
+        {:ok, value, rest}
+      end
     end
   end
 
-  defp after_offset(text, offset), do: binary_part(text, offset, byte_size(text) - offset)
+  defp json_field?(field), do: field.type == :json or Map.has_key?(field, :schema)
 
-  defp trim_framing(value) do
-    if Regex.match?(@opening_newline, value) do
-      value
-      |> String.replace(@opening_newline, "")
-      |> String.replace(@closing_newline, "")
-    else
-      String.trim(value)
-    end
+  defp validate_term(term, %{schema: schema, name: name}) do
+    wrap_cast_result(TypedOutputs.validate_term(term, schema), name)
   end
 
   defp cast_value(raw, field) do
@@ -253,11 +390,13 @@ defmodule Dspy.Signature.Adapters.XMLAdapter do
         {value, _} -> ChatAdapter.cast_output_value(value, field)
       end
 
-    case result do
-      {:ok, _} = success -> success
-      {:error, reason} -> {:error, {:invalid_output_value, field.name, reason}}
-    end
+    wrap_cast_result(result, field.name)
   end
+
+  defp wrap_cast_result({:ok, _} = success, _name), do: success
+
+  defp wrap_cast_result({:error, reason}, name),
+    do: {:error, {:invalid_output_value, name, reason}}
 
   defp decode_error(reason), do: {:error, {:output_decode_failed, reason}}
 end

@@ -13,8 +13,11 @@ This repo ships in **small, user-usable slices**.
 Select `Dspy.Signature.Adapters.XMLAdapter` on a predictor to format field
 tags and parse literal text, typed scalars, and JSON-valued fields. Optional
 fields support defaults and self-closing nulls. Output retries request XML
-tags and preserve multipart images and trailing text. Structured values in
-this slice use JSON inside XML field tags.
+tags and preserve multipart images and trailing text. Schema-backed output
+records, lists, and dictionaries support nested XML in responses and demos.
+Lists use `<item>` and dictionary keys that need escaping use `<entry key="...">`.
+Structured fields still accept JSON inside their XML tags, including schemas
+that rely on `patternProperties` or have multiple non-null branches.
 
 ### Refine failure allowance
 
