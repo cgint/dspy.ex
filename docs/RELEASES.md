@@ -24,6 +24,10 @@ matching passages and their zero-based indices in a prediction.
 exact, with earlier corpus positions first on ties. Vectors are normalized
 by default. Pass `normalize: false` for raw dot products.
 
+`query_batch/3` accepts a list of queries and returns predictions in
+input order. It uses the configured embedder batch size. Set
+`include_scores: true` to return similarity scores with each prediction.
+
 `Dspy.Embeddings.save/2` writes a versioned JSON checkpoint for the
 corpus index. `from_saved/2` accepts a caller-supplied embedder and
 restores the stored vectors, settings, and corpus order.
