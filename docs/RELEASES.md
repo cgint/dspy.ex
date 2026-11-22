@@ -247,9 +247,9 @@ remain in M5.
 composite. Pass a unique output atom or `{predict_name, field}` using
 the name from `Dspy.Module.named_predictors/1`. Selected calls emit
 their own field chunks, and unselected calls retain ordinary inference.
-An empty selection streams raw deltas. This covers calls made in the
-program worker. Streaming predictors invoked in another process report
-an explicit error.
+An empty selection streams raw deltas. While a stream scope is active,
+invoking a selected predictor outside the program worker returns
+`{:error, :stream_predictor_outside_owner}`.
 
 ### LM streaming transport
 

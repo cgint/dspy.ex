@@ -471,6 +471,8 @@ defmodule Dspy do
   `Dspy.Module.named_predictors/1`. With a selection, other slots use ordinary
   inference. With an empty selection, all discovered predictor slots stream
   raw deltas. Streaming slots must execute inside the program worker.
+  Cancelling a composite stream kills its worker, so `after` blocks in that
+  worker do not run.
 
   Set `:status_message_provider` to a module implementing
   `Dspy.StatusMessageProvider` to receive `Dspy.StatusMessage` progress events
