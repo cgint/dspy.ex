@@ -1,11 +1,12 @@
 defmodule Dspy.ProgramStream do
   @moduledoc false
 
-  alias Dspy.{ChainOfThought, Context, Predict, Prediction, StatusMessage, StreamResponse}
+  alias Dspy.{ChainOfThought, Context, Predict, Prediction, ProcessOwnership, StatusMessage}
   alias Dspy.Module.PredictorSlots
-  alias Dspy.ProgramStream.{Composite, StatusCallback}
+  alias Dspy.ProgramStream.{Channel, Composite, StatusCallback}
   alias Dspy.Signature.AdapterPipeline
   alias Dspy.Signature.Adapters.{ChatAdapter, ChatStream}
+  alias Dspy.StreamResponse
 
   @delta_key {__MODULE__, :on_delta}
 
@@ -89,13 +90,14 @@ defmodule Dspy.ProgramStream do
 
   defp plain_string_output?(_output, _name), do: false
 
-  def field_events(fragments, predict_name) do
+  def field_events(fragments, predict_name, invocation_id \\ nil) do
     for {field, chunk, last?} <- fragments do
       %StreamResponse{
         predict_name: predict_name,
         signature_field_name: field,
         chunk: chunk,
-        is_last_chunk: last?
+        is_last_chunk: last?,
+        invocation_id: invocation_id
       }
     end
   end
@@ -104,32 +106,28 @@ defmodule Dspy.ProgramStream do
     consumer = self()
     tag = make_ref()
     context = Context.capture()
+    composite? = match?({:composite, _}, listeners)
 
     cancel_reason =
-      if listeners == :status_only or match?({:composite, _}, listeners),
+      if listeners == :status_only or composite?,
         do: :kill,
         else: :shutdown
 
-    {worker, worker_ref} =
-      spawn_monitor(fn ->
-        worker = self()
-        spawn(fn -> watch_consumer(consumer, worker, cancel_reason) end)
-        await_demand(tag)
+    run = fn ->
+      ProcessOwnership.watch(consumer, self(), cancel_reason)
+      {destination, publish} = publisher(composite?, consumer, tag)
 
-        publish = fn event ->
-          send(consumer, {tag, event})
-          await_demand(tag)
-        end
-
-        terminal =
-          Context.with_context(context, fn ->
-            StatusCallback.with_provider(provider, publish, fn ->
-              call_program(program, inputs, opts, listeners, publish)
-            end)
+      terminal =
+        Context.with_context(context, fn ->
+          StatusCallback.with_provider(provider, publish, fn ->
+            call_program(program, inputs, opts, listeners, publish)
           end)
+        end)
 
-        send(consumer, {tag, :terminal, terminal})
-      end)
+      send(destination, {tag, :terminal, terminal})
+    end
+
+    worker = if composite?, do: Channel.start(run), else: spawn_monitor(run)
 
     listener =
       case listeners do
@@ -142,26 +140,29 @@ defmodule Dspy.ProgramStream do
     %{
       consumer: consumer,
       tag: tag,
-      worker: {worker, worker_ref},
+      worker: worker,
+      channel: if(composite?, do: :initial),
       cancel_reason: cancel_reason,
       listener: listener,
       pending: []
     }
   end
 
+  defp publisher(true, _consumer, tag), do: Channel.publisher(tag, self())
+
+  defp publisher(false, consumer, tag) do
+    await_demand(tag)
+
+    {consumer,
+     fn event ->
+       send(consumer, {tag, event})
+       await_demand(tag)
+     end}
+  end
+
   defp await_demand(tag) do
     receive do
       {^tag, :demand} -> :ok
-    end
-  end
-
-  defp watch_consumer(consumer, worker, cancel_reason) do
-    consumer_ref = Process.monitor(consumer)
-    worker_ref = Process.monitor(worker)
-
-    receive do
-      {:DOWN, ^consumer_ref, :process, ^consumer, _reason} -> Process.exit(worker, cancel_reason)
-      {:DOWN, ^worker_ref, :process, ^worker, _reason} -> :ok
     end
   end
 
@@ -173,6 +174,23 @@ defmodule Dspy.ProgramStream do
   # Yield one event at a time so a resumed enumeration always checks ownership.
   defp next_event(%{pending: [event | pending]} = state),
     do: {[event], %{state | pending: pending}}
+
+  defp next_event(%{tag: tag, worker: {worker, inbox}, channel: channel} = state)
+       when not is_nil(channel) do
+    case Channel.next(tag, worker, inbox, channel) do
+      {:event, receipt, event} ->
+        {[event], %{state | channel: receipt}}
+
+      {:terminal, event} ->
+        close_channel(state)
+        await_stop(worker, inbox)
+        next_event(queue_terminal(state, event))
+
+      {:down, reason} ->
+        close_channel(state)
+        next_event(queue_terminal(state, {:error, {:stream_worker_exited, reason}}))
+    end
+  end
 
   defp next_event(%{tag: tag, worker: {worker, worker_ref}} = state) do
     send(worker, {tag, :demand})
@@ -215,10 +233,14 @@ defmodule Dspy.ProgramStream do
 
   defp stop(%{worker: nil}), do: :ok
 
-  defp stop(%{worker: {worker, worker_ref}, cancel_reason: cancel_reason}) do
+  defp stop(%{worker: {worker, worker_ref}, cancel_reason: cancel_reason} = state) do
+    close_channel(state)
     Process.exit(worker, cancel_reason)
     await_stop(worker, worker_ref)
   end
+
+  defp close_channel(%{channel: nil}), do: :ok
+  defp close_channel(%{tag: tag, worker: {_worker, inbox}}), do: Channel.close(tag, inbox)
 
   defp reject_foreign_consumer!(%{worker: worker, cancel_reason: cancel_reason}) do
     case worker do

@@ -60,6 +60,7 @@ defmodule Dspy.Parallel do
   """
 
   alias Dspy.{Context, Example, Module, Settings}
+  alias Dspy.ProgramStream.Composite
 
   @type t :: %__MODULE__{
           num_threads: pos_integer(),
@@ -154,11 +155,15 @@ defmodule Dspy.Parallel do
     # process dictionary; capture it here and reinstall it inside every task
     # (tasks do not inherit the dictionary).
     ctx = Context.capture()
+    stream_scope = Composite.capture_scope()
+    caller = self()
 
     exec_pairs
     |> Task.async_stream(
       fn {module, input} ->
-        Context.with_context(ctx, fn -> run_pair(module, input, parallel) end)
+        Composite.with_parallel_scope(stream_scope, caller, fn ->
+          Context.with_context(ctx, fn -> run_pair(module, input, parallel) end)
+        end)
       end,
       max_concurrency: num_threads,
       ordered: true,

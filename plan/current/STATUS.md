@@ -89,7 +89,11 @@
 > **M5, composite Chat listeners.** Named slots can stream independently
 > inside one program worker. Slots omitted from the selection still run
 > ordinary inference. Each selected call closes its own fields on success.
-> Parallel publishers and wider adapter support remain open.
+> Wider adapter support remains open.
+
+> **M5, parallel program streaming.** Managed predictor calls share
+> consumer demand and keep per-invocation field IDs. The final prediction
+> retains ordered parallel results. Cancellation stops active tasks.
 
 > **M5, tool progress.** A status provider can format tool start and end
 > events in the program worker. The built-in provider emits generic tool

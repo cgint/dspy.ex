@@ -1,7 +1,7 @@
 defmodule Dspy.ProgramStream.Composite do
   @moduledoc false
 
-  alias Dspy.{Prediction, ProgramStream}
+  alias Dspy.{Prediction, ProcessOwnership, ProgramStream}
   alias Dspy.Module.PredictorSlots
   alias Dspy.Signature.AdapterPipeline
   alias Dspy.Signature.Adapters.{ChatAdapter, ChatStream}
@@ -80,12 +80,30 @@ defmodule Dspy.ProgramStream.Composite do
         end
       end)
 
-    Process.put(@scope_key, {scope, publish})
+    with_scope({owner, scope, publish}, fn -> run.(program) end)
+  end
+
+  def capture_scope, do: Process.get(@scope_key)
+
+  def with_parallel_scope(nil, _caller, run), do: run.()
+
+  def with_parallel_scope(scope, caller, run) do
+    # A trapping task can outlive the async stream when its caller exits.
+    ProcessOwnership.watch(caller, self(), :kill)
+    with_scope(scope, run)
+  end
+
+  def active_publisher?(owner, publish) do
+    match?({^owner, _scope, ^publish}, capture_scope())
+  end
+
+  defp with_scope(scope, run) do
+    previous = Process.put(@scope_key, scope)
 
     try do
-      run.(program)
+      run.()
     after
-      Process.delete(@scope_key)
+      if previous, do: Process.put(@scope_key, previous), else: Process.delete(@scope_key)
     end
   end
 
@@ -99,57 +117,62 @@ defmodule Dspy.ProgramStream.Composite do
     end
   end
 
-  defp forward_selected(module, predictor, inputs, {owner, scope, selected})
-       when owner == self() do
-    case Process.get(@scope_key) do
-      {^scope, publish} -> stream_selected(module, predictor, inputs, selected, publish)
-      _expired -> module.forward(predictor, inputs, nil)
+  defp forward_selected(module, predictor, inputs, {owner, scope, selected}) do
+    case capture_scope() do
+      {^owner, ^scope, publish} ->
+        stream_selected(module, predictor, inputs, selected, publish, owner)
+
+      _expired ->
+        if owner == self() or (node(owner) == node() and not Process.alive?(owner)) do
+          module.forward(predictor, inputs, nil)
+        else
+          {:error, :stream_predictor_outside_owner}
+        end
     end
   end
 
-  defp forward_selected(module, predictor, inputs, {owner, _scope, _selected}) do
-    if node(owner) == node() and not Process.alive?(owner) do
-      module.forward(predictor, inputs, nil)
-    else
-      {:error, :stream_predictor_outside_owner}
-    end
+  defp stream_selected(module, predictor, inputs, :raw, publish, owner) do
+    stream_invocation(module, predictor, inputs, :raw, publish, owner)
   end
 
-  defp stream_selected(module, predictor, inputs, :raw, publish) do
-    stream_invocation(module, predictor, inputs, :raw, publish)
-  end
-
-  defp stream_selected(module, predictor, inputs, {name, fields}, publish) do
+  defp stream_selected(module, predictor, inputs, {name, fields}, publish, owner) do
     case AdapterPipeline.active_adapter(adapter: predictor.adapter) do
       ChatAdapter ->
         selection = {name, ChatStream.new(fields)}
-        stream_invocation(module, %{predictor | adapter: ChatAdapter}, inputs, selection, publish)
+
+        stream_invocation(
+          module,
+          %{predictor | adapter: ChatAdapter},
+          inputs,
+          selection,
+          publish,
+          owner
+        )
 
       adapter ->
         {:error, {:unsupported_streaming_adapter, adapter}}
     end
   end
 
-  defp stream_invocation(module, predictor, inputs, state, publish) do
+  defp stream_invocation(module, predictor, inputs, state, publish, owner) do
     # Each call owns its callback and scanner, including reentrant calls.
-    key = {__MODULE__, make_ref()}
+    ref = make_ref()
+    key = {__MODULE__, ref}
+    invocation_id = if owner != self(), do: ref
     Process.put(key, state)
-    on_delta = ProgramStream.delta_callback(&emit_delta(key, &1, publish))
+    on_delta = ProgramStream.delta_callback(&emit_delta(key, &1, publish, invocation_id))
 
     try do
-      result = module.forward(predictor, inputs, on_delta)
-
-      if match?({:ok, %Prediction{}}, result) do
-        finish_fields(Process.get(key), publish)
+      with {:ok, %Prediction{}} = result <- module.forward(predictor, inputs, on_delta),
+           :ok <- finish_fields(Process.get(key), publish, invocation_id) do
+        result
       end
-
-      result
     after
       Process.delete(key)
     end
   end
 
-  defp emit_delta(key, text, publish) do
+  defp emit_delta(key, text, publish, invocation_id) do
     case Process.get(key) do
       nil ->
         {:error, :expired_stream_delta}
@@ -160,13 +183,24 @@ defmodule Dspy.ProgramStream.Composite do
       {name, scanner} ->
         {fragments, scanner} = ChatStream.push(scanner, text)
         Process.put(key, {name, scanner})
-        Enum.each(ProgramStream.field_events(fragments, name), publish)
+        publish_fields(fragments, name, invocation_id, publish)
     end
   end
 
-  defp finish_fields(:raw, _publish), do: :ok
+  defp finish_fields(:raw, _publish, _invocation_id), do: :ok
 
-  defp finish_fields({name, scanner}, publish) do
-    Enum.each(ProgramStream.field_events(ChatStream.finish(scanner), name), publish)
+  defp finish_fields({name, scanner}, publish, invocation_id) do
+    publish_fields(ChatStream.finish(scanner), name, invocation_id, publish)
+  end
+
+  defp publish_fields(fragments, name, invocation_id, publish) do
+    fragments
+    |> ProgramStream.field_events(name, invocation_id)
+    |> Enum.reduce_while(:ok, fn event, :ok ->
+      case publish.(event) do
+        :ok -> {:cont, :ok}
+        {:error, _reason} = error -> {:halt, error}
+      end
+    end)
   end
 end
