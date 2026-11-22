@@ -2,8 +2,9 @@ defmodule Dspy.StatusMessageProvider do
   @moduledoc """
   Formats lifecycle events for `Dspy.streamify/2`.
 
-  The provider runs synchronously in the program worker. Return a binary to
-  emit a progress message, or `nil` to skip the event. Formatter failures and
+  The provider runs synchronously in the program worker or in a managed
+  `Dspy.Parallel` task when streaming a composite. Return a binary to emit
+  a progress message, or `nil` to skip the event. Formatter failures and
   other return values are ignored. The metadata contains lifecycle identifiers,
   the implementation module, and on end events the status and elapsed time.
   Implement optional `tool_message/2` to format tool start and end events.
