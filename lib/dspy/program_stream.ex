@@ -2,6 +2,7 @@ defmodule Dspy.ProgramStream do
   @moduledoc false
 
   alias Dspy.{ChainOfThought, Context, Predict, Prediction, StatusMessage, StreamResponse}
+  alias Dspy.Module.PredictorSlots
   alias Dspy.ProgramStream.{Composite, StatusCallback}
   alias Dspy.Signature.AdapterPipeline
   alias Dspy.Signature.Adapters.{ChatAdapter, ChatStream}
@@ -43,6 +44,11 @@ defmodule Dspy.ProgramStream do
              function_exported?(provider, :message, 2) do
       raise ArgumentError, "status_message_provider must be a module exporting message/2 or nil"
     end
+  end
+
+  defp listeners(program, :none) do
+    PredictorSlots.list(program)
+    :status_only
   end
 
   defp listeners(%{__struct__: type} = program, fields) when type in [Predict, ChainOfThought],
@@ -98,7 +104,11 @@ defmodule Dspy.ProgramStream do
     consumer = self()
     tag = make_ref()
     context = Context.capture()
-    cancel_reason = if match?({:composite, _}, listeners), do: :kill, else: :shutdown
+
+    cancel_reason =
+      if listeners == :status_only or match?({:composite, _}, listeners),
+        do: :kill,
+        else: :shutdown
 
     {worker, worker_ref} =
       spawn_monitor(fn ->
@@ -124,6 +134,7 @@ defmodule Dspy.ProgramStream do
     listener =
       case listeners do
         nil -> nil
+        :status_only -> nil
         {:composite, _} -> nil
         {predict_name, fields} -> {predict_name, ChatStream.new(fields)}
       end
@@ -227,6 +238,9 @@ defmodule Dspy.ProgramStream do
   defp call_program(program, inputs, opts, listeners, publish) do
     result =
       case listeners do
+        :status_only ->
+          invoke(program, inputs, opts)
+
         {:composite, slots} ->
           Composite.with_listeners(program, slots, publish, &invoke(&1, inputs, opts))
 

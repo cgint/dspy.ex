@@ -95,6 +95,14 @@
 > ordinary inference. Each selected call closes its own fields on success.
 > Parallel publishers and wider adapter support remain open.
 
+> **M5, tool progress.** A status provider can format tool start and end
+> events in the program worker. The built-in provider emits generic tool
+> messages. Existing formatters keep their module and LM events.
+
+> **Tool task ownership.** An exiting caller stops its direct tool task,
+> even if the tool traps exit signals. This covers an active tool in a
+> cancelled program stream and preserves ordinary timeouts and results.
+
 > **M5, Chat field listeners.** `streamify/2` can select plain string
 > fields on a standalone ChatAdapter predictor. Field events preserve
 > output order across split markers and retain the ordinary final
