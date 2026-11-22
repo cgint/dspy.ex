@@ -4,12 +4,6 @@
 > uses `Dspy.Embedder` for exact text retrieval. Results carry passages
 > and corpus indices, with similarity scores in the scored view.
 > Approximate search, query coalescing, and index persistence remain open.
-
-> **M5, composite Chat listeners.** Named slots can stream independently
-> inside one program worker. Slots omitted from the selection still run
-> ordinary inference. Each selected call closes its own fields on success.
-> Parallel publishers and wider adapter support remain open.
-
 > **M6, KNNFewShot.** The optimizer builds one neighbor index and
 > prepares demos for each query. Bootstrap acceptance metrics receive
 > the original training labels. The [offline example](../../examples/offline/knn_few_shot_offline.exs)
@@ -91,11 +85,15 @@
 > cancellation with status enabled. Broader listener and adapter parity
 > remain open.
 
+> **M5, composite Chat listeners.** Named slots can stream independently
+> inside one program worker. Slots omitted from the selection still run
+> ordinary inference. Each selected call closes its own fields on success.
+> Parallel publishers and wider adapter support remain open.
+
 > **M5, Chat field listeners.** `streamify/2` can select plain string
 > fields on a standalone ChatAdapter predictor. Field events preserve
 > output order across split markers and retain the ordinary final
-> prediction. Status events, composite listeners, and the milestone
-> exit example remain open.
+> prediction.
 
 > **M5, program streaming.** `Dspy.streamify/2` wraps standalone
 > Predict and ChainOfThought in a lazy enumerable. The consumer receives
