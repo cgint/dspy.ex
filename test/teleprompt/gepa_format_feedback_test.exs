@@ -178,6 +178,50 @@ defmodule Dspy.Teleprompt.GEPAFormatFeedbackTest do
     end
   end
 
+  test "selector previews include parse failure status without an unparsed completion" do
+    owner = self()
+
+    selector = fn snapshot ->
+      send(owner, {:selector, snapshot})
+      []
+    end
+
+    program = pair()
+
+    optimizer =
+      optimizer(
+        add_format_failure_as_feedback: true,
+        candidate_selection_strategy: :current_best,
+        component_selector: selector,
+        max_metric_calls: 3,
+        failure_score: -3
+      )
+
+    failed_path = [{:field, :predictors}, {:key, "1"}]
+    assert {:ok, ^program} = compile(optimizer, program)
+
+    assert_received {:selector,
+                     %{
+                       eligible_paths: [^failed_path],
+                       observations: %{
+                         ^failed_path => [
+                           %{
+                             example_index: 0,
+                             score: -3,
+                             inputs: %{"question" => "slot_train_right"},
+                             outputs: %{},
+                             status: :output_parse_failed
+                           }
+                         ]
+                       }
+                     } = snapshot}
+
+    refute inspect(snapshot) =~ "MALFORMED_COMPLETION"
+    refute_received {:reflection, _}
+    assert_received {:scored, "slot_validation", "0", nil, nil, nil}
+    refute_received {:scored, _, _, _, _, _}
+  end
+
   test "a recovered row scores with successful steps and reflects on the first failure" do
     program = %Recovers{predictor: predictor()}
 

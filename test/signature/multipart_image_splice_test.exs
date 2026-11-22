@@ -1,5 +1,6 @@
 defmodule Dspy.Signature.MultipartImageSpliceTest do
-  use ExUnit.Case, async: true
+  # Exact warning counts require isolation from other tests' Logger events.
+  use ExUnit.Case, async: false
 
   import ExUnit.CaptureLog
 

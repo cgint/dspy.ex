@@ -47,6 +47,16 @@ defmodule Dspy.Teleprompt.GEPA do
   observed slot in the same training minibatch and score one joint candidate.
   Built-in reflection generates one proposal per selected slot.
 
+  A unary `:component_selector` callback receives a snapshot before reflection
+  when the current minibatch has eligible observations. `:parent_id` identifies
+  the parent, `:candidate` maps its current instructions by typed slot path,
+  and `:eligible_paths` lists observed paths in seeded order. `:observations`
+  maps those paths to declared input and output previews, scalar scores,
+  zero-based minibatch indices, and status (`:ok` or `:output_parse_failed`).
+  Each slot's encoded observations are capped at 16 KiB. The callback runs in
+  the caller's LM context. Return a list of distinct eligible paths in the
+  desired proposal order, or `[]` to skip the round.
+
   A custom `:instruction_proposer` gets the current instructions, bounded
   observations for the selected slots, and their ordered paths.
   Both maps and the selection list use typed paths with `{:field, name}`,
@@ -100,6 +110,21 @@ defmodule Dspy.Teleprompt.GEPA do
 
   @type observation :: %{inputs: map(), outputs: map() | String.t(), feedback: String.t()}
   @type instructions :: %{optional(PredictorSlots.path()) => String.t()}
+  @type selector_observation :: %{
+          example_index: non_neg_integer(),
+          score: number(),
+          inputs: map(),
+          outputs: map(),
+          status: :ok | :output_parse_failed
+        }
+  @type selector_snapshot :: %{
+          parent_id: non_neg_integer(),
+          candidate: instructions(),
+          eligible_paths: [PredictorSlots.path()],
+          observations: %{optional(PredictorSlots.path()) => [selector_observation()]}
+        }
+  @type component_selector ::
+          :round_robin | :all | (selector_snapshot() -> [PredictorSlots.path()])
   @type instruction_proposer ::
           (instructions(),
            %{optional(PredictorSlots.path()) => [observation()]},
@@ -116,7 +141,7 @@ defmodule Dspy.Teleprompt.GEPA do
           reflection_minibatch_size: pos_integer() | nil,
           num_threads: pos_integer() | nil,
           candidate_selection_strategy: :current_best | :pareto,
-          component_selector: :round_robin | :all,
+          component_selector: component_selector(),
           frontier_type: :instance | :objective | :hybrid | :cartesian,
           failure_score: number(),
           perfect_score: number(),
@@ -140,6 +165,10 @@ defmodule Dspy.Teleprompt.GEPA do
   end
 
   defp new_from_candidates(opts) do
+    if is_function(opts[:component_selector]) do
+      raise ArgumentError, ":component_selector callbacks require reflective search"
+    end
+
     if opts[:frontier_type] in @objective_frontiers do
       raise ArgumentError,
             ":frontier_type #{inspect(opts[:frontier_type])} requires reflective Pareto search"
@@ -254,8 +283,9 @@ defmodule Dspy.Teleprompt.GEPA do
       raise ArgumentError, ":candidate_selection_strategy must be :current_best or :pareto"
     end
 
-    unless opts[:component_selector] in [:round_robin, :all] do
-      raise ArgumentError, ":component_selector must be :round_robin or :all"
+    unless opts[:component_selector] in [:round_robin, :all] or
+             is_function(opts[:component_selector], 1) do
+      raise ArgumentError, ":component_selector must be :round_robin, :all, or a unary callback"
     end
 
     unless opts[:frontier_type] in [:instance | @objective_frontiers] do

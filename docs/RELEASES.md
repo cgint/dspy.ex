@@ -101,6 +101,13 @@ observations in the same training minibatch. GEPA batches their instruction
 updates into one candidate and scores it within the existing rollout budget.
 The default `:round_robin` selects one slot at a time.
 
+Pass a unary `component_selector:` callback to choose observed slots from
+the current training minibatch. It receives the parent ID, current
+instructions keyed by typed slot path, eligible paths in seeded order,
+and bounded declared-field observations with row indices and scores.
+Return the selected paths in proposal order, or `[]` to skip the round.
+The snapshot uses the existing rollout results.
+
 `Dspy.Teleprompt.GEPA.InstructionProposer.new/1` configures GEPA's
 LM-driven proposer. Set a base prompt, additional instructions, a signature
 adapter, or reference skills. Skill strings are inline text. An explicit
