@@ -8,6 +8,7 @@ defmodule Dspy.Embeddings do
   """
 
   alias Dspy.{Embedder, Prediction}
+  alias Dspy.Embeddings.Checkpoint
 
   @norm_floor 1.0e-10
   @enforce_keys [:embedder, :rows, :dimension, :k, :normalize]
@@ -53,6 +54,29 @@ defmodule Dspy.Embeddings do
   end
 
   def new(_corpus, _embedder, _opts), do: {:error, :invalid_embedder}
+
+  @doc """
+  Save the UTF-8 corpus, prepared vectors, and search settings as native JSON.
+
+  A successful save replaces the destination after the new checkpoint is written.
+  """
+  @spec save(t(), Path.t()) :: :ok | {:error, term()}
+  def save(%__MODULE__{} = index, path), do: Checkpoint.save(index, path)
+
+  @doc """
+  Restore a saved index and bind an embedder for new queries.
+
+  The embedder must use the same vector space as the original corpus. The stored
+  vectors are used as saved.
+  """
+  @spec from_saved(Path.t(), Embedder.t()) :: {:ok, t()} | {:error, term()}
+  def from_saved(path, %Embedder{} = embedder) do
+    with {:ok, attrs} <- Checkpoint.load(path) do
+      {:ok, struct!(__MODULE__, Map.put(attrs, :embedder, embedder))}
+    end
+  end
+
+  def from_saved(_path, _embedder), do: {:error, :invalid_embedder}
 
   @doc """
   Return a prediction with ranked `:passages` and matching corpus `:indices`.
