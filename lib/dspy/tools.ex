@@ -13,7 +13,7 @@ defmodule Dspy.Tools do
   For the current stable surface + evidence, see `docs/OVERVIEW.md`.
   """
 
-  alias Dspy.{Context, Lifecycle}
+  alias Dspy.{Context, Lifecycle, ProcessOwnership}
   alias Dspy.Signature.Adapter.Callbacks
 
   defmodule Tool do
@@ -753,8 +753,7 @@ defmodule Dspy.Tools do
 
     task =
       Task.async(fn ->
-        worker = self()
-        spawn(fn -> monitor_tool_worker(caller, worker) end)
+        ProcessOwnership.watch(caller, self(), :kill)
 
         Context.with_context(context, fn ->
           try do
@@ -775,16 +774,6 @@ defmodule Dspy.Tools do
       {:ok, result} -> result
       {:exit, reason} -> {:error, %{kind: :exit, message: format_exit(reason)}}
       nil -> {:error, %{kind: :timeout, message: "Tool execution timed out"}}
-    end
-  end
-
-  defp monitor_tool_worker(caller, worker) do
-    caller_ref = Process.monitor(caller)
-    worker_ref = Process.monitor(worker)
-
-    receive do
-      {:DOWN, ^caller_ref, :process, ^caller, _reason} -> Process.exit(worker, :kill)
-      {:DOWN, ^worker_ref, :process, ^worker, _reason} -> :ok
     end
   end
 

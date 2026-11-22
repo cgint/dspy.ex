@@ -271,9 +271,16 @@ remain in M5.
 composite. Pass a unique output atom or `{predict_name, field}` using
 the name from `Dspy.Module.named_predictors/1`. Selected calls emit
 their own field chunks, and unselected calls retain ordinary inference.
-An empty selection streams raw deltas. While a stream scope is active,
-invoking a selected predictor outside the program worker returns
+An empty selection streams raw deltas. Invoking a selected predictor in
+a bare task during an active stream returns
 `{:error, :stream_predictor_outside_owner}`.
+
+Managed calls inside `Dspy.Parallel.run/3` can share the composite
+stream. Field chunks from each parallel call carry an `invocation_id`,
+so concurrent calls to one predictor can be rendered independently.
+The final prediction preserves the program's ordinary result order.
+Parallel timeouts include time waiting for demand. A paused consumer can
+accumulate small offers from expired tasks, which are skipped on resume.
 
 ### LM streaming transport
 

@@ -68,6 +68,11 @@ defmodule Dspy.TestSupport.StreamingSSE do
 
   defp finish_fixture(peer, :close, _second), do: :gen_tcp.recv(peer, 0, @wait)
 
+  defp finish_fixture(peer, {:close, observer, ready}, second) do
+    send(observer, {ready, :first_sent})
+    finish_fixture(peer, :close, second)
+  end
+
   defp read_request(peer, buffer) do
     case :binary.split(buffer, "\r\n\r\n") do
       [header, body] ->

@@ -470,7 +470,10 @@ defmodule Dspy do
   Use `{predict_name, field}` to select a slot explicitly by its name from
   `Dspy.Module.named_predictors/1`. With a selection, other slots use ordinary
   inference. With an empty selection, all discovered predictor slots stream
-  raw deltas. Streaming slots must execute inside the program worker.
+  raw deltas. Streaming slots can execute in the program worker or in tasks
+  managed by `Dspy.Parallel.run/3`. Parallel calls share consumer demand.
+  Their raw deltas can interleave, and selected field chunks carry an
+  `:invocation_id` for grouping. The program result keeps its ordinary order.
   Cancelling a composite stream kills its worker, so `after` blocks in that
   worker do not run.
 

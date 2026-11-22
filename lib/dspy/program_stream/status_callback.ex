@@ -4,6 +4,7 @@ defmodule Dspy.ProgramStream.StatusCallback do
   @behaviour Dspy.Module.Callback
   @behaviour Dspy.LM.Callback
 
+  alias Dspy.ProgramStream.Composite
   alias Dspy.StatusMessage
 
   @formatting_key {__MODULE__, :formatting}
@@ -52,8 +53,9 @@ defmodule Dspy.ProgramStream.StatusCallback do
   def on_lm_end(meta, payload, state), do: emit(:lm_end, meta, payload, state)
 
   @doc false
-  def emit(event, meta, payload, {worker, format, publish}) when worker == self() do
-    unless Process.get(@formatting_key) do
+  def emit(event, meta, payload, {owner, format, publish}) do
+    if (owner == self() or Composite.active_publisher?(owner, publish)) and
+         !Process.get(@formatting_key) do
       Process.put(@formatting_key, true)
 
       try do
