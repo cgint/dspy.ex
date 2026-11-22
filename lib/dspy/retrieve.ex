@@ -971,9 +971,9 @@ defmodule Dspy.Retrieve do
     do: forward(retrieve, %{query: query})
 
   def forward(%__MODULE__{} = retrieve, inputs) when is_map(inputs) do
-    query = Attrs.get(inputs, :query)
-    k = effective_k(Attrs.get(inputs, :k), retrieve.k)
-    options = Attrs.get(inputs, :rm_opts, [])
+    query = map_field(inputs, :query)
+    k = effective_k(map_field(inputs, :k), retrieve.k)
+    options = map_field(inputs, :rm_opts, [])
 
     with :ok <- validate_query(query),
          :ok <- validate_k(k),
@@ -985,6 +985,13 @@ defmodule Dspy.Retrieve do
   end
 
   def forward(%__MODULE__{}, _inputs), do: {:error, :invalid_query}
+
+  defp map_field(map, key, default \\ nil) do
+    case Attrs.fetch_map(map, key) do
+      {:ok, value} -> value
+      :error -> default
+    end
+  end
 
   defp effective_k(nil, default), do: default
   defp effective_k(k, _default), do: k
@@ -1056,7 +1063,7 @@ defmodule Dspy.Retrieve do
 
   defp passage_text(%Document{content: content}), do: content
   defp passage_text(row) when is_binary(row), do: row
-  defp passage_text(row) when is_map(row), do: Attrs.get(row, :long_text)
+  defp passage_text(row) when is_map(row), do: map_field(row, :long_text)
   defp passage_text(_row), do: nil
 
   @doc """

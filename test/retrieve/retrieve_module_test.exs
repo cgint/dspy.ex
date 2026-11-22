@@ -110,6 +110,17 @@ defmodule Dspy.RetrieveModuleTest do
     assert passages(Retrieve.new(rm: fn _, _ -> {:ok, []} end), %{query: "empty"}) == []
   end
 
+  test "reads the query and passage fields at the top level of plain maps" do
+    rm = fn query, opts ->
+      send(self(), {:lookup, query, opts})
+      [%{long_text: "passage", attrs: %{long_text: "metadata"}}]
+    end
+
+    inputs = %{query: "query", k: 2, attrs: %{query: "metadata", k: 99}}
+    assert passages(Retrieve.new(rm: rm), inputs) == ["passage"]
+    assert_received {:lookup, "query", [k: 2]}
+  end
+
   test "passes backend failures through and rejects malformed results as a whole" do
     failure = {:error, {:http_status, 503}}
     assert Dspy.call(Retrieve.new(rm: fn _, _ -> failure end), %{query: "query"}) == failure
@@ -164,8 +175,9 @@ defmodule Dspy.RetrieveModuleTest do
       assert {^status, _} = Dspy.call(program, %{query: "private query"})
       assert_received {:retrieval_start, id, empty}
       assert empty == %{}
-      assert_received {:retrieval_end, ^id, %{status: ^status, duration_us: duration}}
+      assert_received {:retrieval_end, ^id, %{status: ^status, duration_us: duration} = payload}
       assert is_integer(duration) and duration >= 0
+      assert payload == %{status: status, duration_us: duration}
       refute_received {:retrieval_start, _, _}
       refute_received {:retrieval_end, _, _}
     end
