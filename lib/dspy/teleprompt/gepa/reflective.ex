@@ -10,6 +10,7 @@ defmodule Dspy.Teleprompt.GEPA.Reflective do
 
   alias Dspy.Teleprompt.GEPA.{
     CandidatePool,
+    ComponentSelector,
     InstructionProposer,
     Merger,
     ObservationHistory,
@@ -72,15 +73,22 @@ defmodule Dspy.Teleprompt.GEPA.Reflective do
       state = %{state | random: random, remaining: state.remaining - count}
       round = %{parent: parent, parent_id: parent_id, batch: batch, records: records}
 
-      case select_slots(optimizer, state.paths, records) do
-        [] when optimizer.candidate_selection_strategy == :pareto or count < length(trainset) ->
+      case select_slots(optimizer, state.paths, round) do
+        :skip ->
           search(optimizer, trainset, valset, state)
 
-        [] ->
+        {:ok, []}
+        when optimizer.candidate_selection_strategy == :pareto or count < length(trainset) ->
+          search(optimizer, trainset, valset, state)
+
+        {:ok, []} ->
           {:ok, CandidatePool.best(state.pool)}
 
-        selected ->
+        {:ok, selected} ->
           improve(optimizer, trainset, valset, state, round, selected)
+
+        {:error, _reason} = error ->
+          error
       end
     end
   end
@@ -109,7 +117,7 @@ defmodule Dspy.Teleprompt.GEPA.Reflective do
   defp advance_paths(:round_robin, paths, [{path, _observations}]),
     do: Enum.reject(paths, &(&1 === path)) ++ [path]
 
-  defp advance_paths(:all, paths, _selected), do: paths
+  defp advance_paths(_selector, paths, _selected), do: paths
 
   defp evaluate_proposal(_optimizer, _valset, state, _round, updates) when map_size(updates) == 0,
     do: {:ok, state}
@@ -258,9 +266,9 @@ defmodule Dspy.Teleprompt.GEPA.Reflective do
      %{state | remaining: state.remaining - count}}
   end
 
-  defp select_slots(optimizer, paths, records) do
+  defp select_slots(optimizer, paths, round) do
     records =
-      for record <- records,
+      for record <- round.records,
           not optimizer.skip_perfect_score or record.score < optimizer.perfect_score do
         index_steps(record)
       end
@@ -278,8 +286,14 @@ defmodule Dspy.Teleprompt.GEPA.Reflective do
       |> Stream.reject(fn {_path, observations} -> observations == [] end)
 
     case optimizer.component_selector do
-      :round_robin -> Enum.take(eligible, 1)
-      :all -> Enum.to_list(eligible)
+      :round_robin ->
+        {:ok, Enum.take(eligible, 1)}
+
+      :all ->
+        {:ok, Enum.to_list(eligible)}
+
+      selector ->
+        ComponentSelector.select(selector, Enum.to_list(eligible), round.parent, round.parent_id)
     end
   end
 

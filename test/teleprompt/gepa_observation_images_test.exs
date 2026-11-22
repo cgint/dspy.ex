@@ -311,6 +311,56 @@ defmodule Dspy.Teleprompt.GEPAObservationImagesTest do
     ])
   end
 
+  test "selector snapshots preview media even when the proposer opts into image content" do
+    owner = self()
+    program = program(false)
+
+    optimizer =
+      GEPA.new(
+        metric: fn _, _, _, _, _ -> 0 end,
+        instruction_proposer: InstructionProposer.new(include_observation_images: true),
+        component_selector: fn snapshot ->
+          send(owner, {:selector, snapshot})
+          []
+        end,
+        max_metric_calls: 3,
+        num_threads: 1
+      )
+
+    Dspy.context([cache: false], fn ->
+      training = [example("training row", [Image.new(@first), Image.new(@second)], @detail)]
+      held_out = [example("held-out row", Image.new(@held_out), @held_out)]
+      assert {:ok, ^program} = GEPA.compile(optimizer, program, training, valset: held_out)
+    end)
+
+    path = [{:field, :predictor}]
+
+    assert_received {:selector,
+                     %{
+                       eligible_paths: [^path],
+                       observations: %{
+                         ^path => [
+                           %{
+                             inputs: %{
+                               "photo" => "[omitted]",
+                               "detail" => "[omitted]",
+                               "metadata" => %{"embedded" => "[omitted]"}
+                             },
+                             outputs: %{"illustration" => "[omitted]"}
+                           }
+                         ]
+                       }
+                     } = snapshot}
+
+    inspected = inspect(snapshot)
+
+    for url <- [@first, @second, @detail, @generated, @hidden, @nested, @held_out, @demo] do
+      refute inspected =~ url
+    end
+
+    assert_rollouts([{:held_out, "0"}, {:training, "0"}])
+  end
+
   test "image inclusion requires a boolean" do
     assert_raise ArgumentError, ~r/include_observation_images.*boolean/, fn ->
       InstructionProposer.new(include_observation_images: :yes)

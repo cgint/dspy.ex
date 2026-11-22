@@ -378,10 +378,249 @@ defmodule Dspy.Teleprompt.GEPACustomProposerTest do
     end)
   end
 
-  test "reflective component selectors are limited to round-robin and all" do
-    assert_raise ArgumentError, ~r/component_selector.*round_robin.*all/, fn ->
-      optimizer(fn _, _, _ -> %{} end, component_selector: :unknown)
+  test "a selector chooses a later observed typed slot and improves within the same budget" do
+    owner = self()
+    program = program_with_dormant_slot()
+    ambient = %ScriptedLM{owner: owner, label: :ambient}
+    reflection = %ScriptedLM{owner: owner, label: :reflection}
+
+    metric = fn example, prediction, _trace, name, _steps ->
+      send(owner, {:metric, example[:question], name})
+      if prediction[:sibling] == "4", do: 1, else: 0
     end
+
+    proposer = fn _, _, paths ->
+      send(owner, {:selected, paths, Settings.get(:lm)})
+      Map.new(paths, &{&1, @improved})
+    end
+
+    selector = fn snapshot ->
+      send(owner, {:snapshot, snapshot, Settings.get(:lm)})
+
+      Enum.filter(snapshot.eligible_paths, fn path ->
+        [%{inputs: %{"question" => question}}] = Map.fetch!(snapshot.observations, path)
+        String.ends_with?(question, "string slot")
+      end)
+    end
+
+    Dspy.context([lm: ambient, cache: false], fn ->
+      for {mode, path, held_answers} <- [
+            {:round_robin, @integer_slot, {"4", "0"}},
+            {selector, @string_slot, {"0", "4"}}
+          ] do
+        tp =
+          optimizer(proposer, metric: metric, component_selector: mode, reflection_lm: reflection)
+
+        assert {:ok, result} = GEPA.compile(tp, program, [training()], valset: [held_out()])
+
+        if mode == :round_robin do
+          assert result === program
+        else
+          assert result === put_in(program.slots["1"].signature.instructions, @improved)
+
+          assert_received {:snapshot,
+                           %{
+                             parent_id: 0,
+                             candidate: candidate,
+                             eligible_paths: [@integer_slot, @string_slot],
+                             observations: observations
+                           } = snapshot, ^ambient}
+
+          assert map_size(snapshot) == 4
+
+          assert candidate == %{
+                   @integer_slot => @starting,
+                   @string_slot => @starting,
+                   @dormant_slot => @starting
+                 }
+
+          assert observations == %{
+                   @integer_slot => [selector_observation("integer")],
+                   @string_slot => [selector_observation("string")]
+                 }
+        end
+
+        assert_received {:selected, [^path], ^reflection}
+        refute_received {:selected, _, _}
+        refute_received {:snapshot, _, _}
+        assert Settings.get(:lm) == ambient
+
+        assert_received {:metric, "held-out row", nil}
+        assert_received {:metric, "training row", nil}
+        assert_received {:metric, "training row", feedback_slot} when is_binary(feedback_slot)
+        assert feedback_slot == Dspy.Module.PredictorSlots.name(path, program.slots[1])
+        assert_received {:metric, "held-out row", nil}
+        refute_received {:metric, _, _}
+
+        {left, right} = held_answers
+
+        assert_rollouts([
+          {:held_out, 1, "0", ambient},
+          {:held_out, "1", "0", ambient},
+          {:train, 1, "0", ambient},
+          {:train, "1", "0", ambient},
+          {:held_out, 1, left, ambient},
+          {:held_out, "1", right, ambient}
+        ])
+      end
+    end)
+  end
+
+  test "an empty custom selection skips the round and a later selection keeps callback order" do
+    owner = self()
+    program = program()
+
+    selector = fn snapshot ->
+      send(owner, {:visited, snapshot.parent_id})
+
+      receive do
+        :select_next -> [@string_slot, @integer_slot]
+      after
+        0 ->
+          send(owner, :select_next)
+          []
+      end
+    end
+
+    proposer = fn _, _, paths ->
+      send(owner, {:selected, paths})
+      Map.new(paths, &{&1, @improved})
+    end
+
+    tp =
+      optimizer(proposer,
+        component_selector: selector,
+        metric: &joint_score/5,
+        max_metric_calls: 4
+      )
+
+    Dspy.context([lm: nil, cache: false], fn ->
+      assert {:ok, result} = GEPA.compile(tp, program, [training()], valset: [held_out()])
+      assert result.slots[1].signature.instructions == @improved
+      assert result.slots["1"].signature.instructions == @improved
+      assert_received {:visited, 0}
+      assert_received {:visited, 0}
+      refute_received {:visited, _}
+      assert_received {:selected, [@string_slot, @integer_slot]}
+      refute_received {:selected, _}
+
+      assert_rollouts([
+        {:held_out, 1, "0", nil},
+        {:held_out, "1", "0", nil},
+        {:train, 1, "0", nil},
+        {:train, "1", "0", nil},
+        {:train, 1, "0", nil},
+        {:train, "1", "0", nil},
+        {:held_out, 1, "4", nil},
+        {:held_out, "1", "4", nil}
+      ])
+    end)
+  end
+
+  test "invalid custom selections stop before feedback, proposal, or candidate validation" do
+    owner = self()
+    proposer = fn _, _, _ -> send(owner, :proposal) end
+
+    metric = fn _, _, _, name, _ ->
+      if name, do: send(owner, :feedback)
+      0
+    end
+
+    Dspy.context([lm: nil, cache: false], fn ->
+      for {selector, reason} <- [
+            {fn _ -> nil end, :invalid_selection},
+            {fn _ -> [@integer_slot | :improper] end, :invalid_selection},
+            {fn _ -> [@integer_slot, @integer_slot] end, :duplicate_path},
+            {fn _ -> [@dormant_slot] end, :unobserved_path},
+            {fn _ -> [[{:field, :missing}]] end, :unobserved_path},
+            {fn _ -> raise "PRIVATE_SELECTOR_ERROR" end, :selector_raised}
+          ] do
+        tp = optimizer(proposer, component_selector: selector, metric: metric)
+
+        assert {:error, {:component_selection_failed, ^reason}} =
+                 GEPA.compile(tp, program_with_dormant_slot(), [training()], valset: [held_out()])
+
+        refute_received :feedback
+        refute_received :proposal
+        assert_baseline_rollouts(nil)
+      end
+    end)
+  end
+
+  test "the custom selector is skipped when no observations are eligible" do
+    owner = self()
+    selector = fn _ -> send(owner, :selector) end
+    proposer = fn _, _, _ -> send(owner, :proposal) end
+    program = program()
+    tp = optimizer(proposer, component_selector: selector, metric: fn _, _, _, _, _ -> 1 end)
+
+    Dspy.context([lm: nil, cache: false], fn ->
+      assert {:ok, ^program} = GEPA.compile(tp, program, [training()], valset: [held_out()])
+      refute_received :selector
+      refute_received :proposal
+      assert_baseline_rollouts(nil)
+    end)
+  end
+
+  test "each custom selector observation list fits the encoded byte budget" do
+    owner = self()
+
+    selector = fn snapshot ->
+      send(owner, {:snapshot, snapshot})
+      []
+    end
+
+    rows =
+      for _ <- 1..80 do
+        Example.new(question: "training row " <> String.duplicate("\\", 300) <> "PRIVATE_TAIL")
+        |> Example.with_inputs(:question)
+      end
+
+    tp =
+      optimizer(fn _, _, _ -> %{} end,
+        component_selector: selector,
+        max_metric_calls: 82,
+        reflection_minibatch_size: 80
+      )
+
+    Dspy.context([lm: nil, cache: false], fn ->
+      program = program()
+      assert {:ok, ^program} = GEPA.compile(tp, program, rows, valset: [held_out()])
+      assert_received {:snapshot, %{observations: observations}}
+      refute_received {:snapshot, _}
+      assert map_size(observations) == 2
+
+      for {_path, items} <- observations do
+        assert length(items) in 1..79
+        assert Enum.map(items, & &1.example_index) == Enum.to_list(0..(length(items) - 1))
+        encoded = Jason.encode!(items)
+        assert byte_size(encoded) <= 16_384
+        assert encoded =~ "[truncated]"
+        refute encoded =~ "PRIVATE_TAIL"
+      end
+    end)
+  end
+
+  test "component selectors must be built-in or unary reflective callbacks" do
+    for invalid <- [:unknown, fn _, _ -> [] end] do
+      assert_raise ArgumentError, ~r/component_selector.*round_robin.*all/, fn ->
+        optimizer(fn _, _, _ -> %{} end, component_selector: invalid)
+      end
+    end
+
+    assert_raise ArgumentError, ~r/component_selector.*reflective/, fn ->
+      GEPA.new(metric: fn _, _ -> 0 end, component_selector: fn _ -> [] end)
+    end
+  end
+
+  defp selector_observation(slot) do
+    %{
+      example_index: 0,
+      score: 0,
+      inputs: %{"question" => "training row #{slot} slot"},
+      outputs: %{"answer" => "0"},
+      status: :ok
+    }
   end
 
   defp optimizer(proposer, opts \\ []) do
