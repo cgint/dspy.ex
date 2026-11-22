@@ -8,6 +8,7 @@ defmodule Dspy.Embeddings do
   """
 
   alias Dspy.{Embedder, Prediction}
+  alias Dspy.Embeddings.Checkpoint
 
   @norm_floor 1.0e-10
   @enforce_keys [:embedder, :rows, :dimension, :k, :normalize]
@@ -55,6 +56,29 @@ defmodule Dspy.Embeddings do
   def new(_corpus, _embedder, _opts), do: {:error, :invalid_embedder}
 
   @doc """
+  Save the UTF-8 corpus, prepared vectors, and search settings as native JSON.
+
+  A successful save replaces the destination after the new checkpoint is written.
+  """
+  @spec save(t(), Path.t()) :: :ok | {:error, term()}
+  def save(%__MODULE__{} = index, path), do: Checkpoint.save(index, path)
+
+  @doc """
+  Restore a saved index and bind an embedder for new queries.
+
+  The embedder must use the same vector space as the original corpus. The stored
+  vectors are used as saved.
+  """
+  @spec from_saved(Path.t(), Embedder.t()) :: {:ok, t()} | {:error, term()}
+  def from_saved(path, %Embedder{} = embedder) do
+    with {:ok, attrs} <- Checkpoint.load(path) do
+      {:ok, struct!(__MODULE__, Map.put(attrs, :embedder, embedder))}
+    end
+  end
+
+  def from_saved(_path, _embedder), do: {:error, :invalid_embedder}
+
+  @doc """
   Return a prediction with ranked `:passages` and matching corpus `:indices`.
 
   An incompatible query dimension or floating-point overflow returns a
@@ -69,6 +93,23 @@ defmodule Dspy.Embeddings do
   """
   @spec query_with_scores(t(), String.t()) :: {:ok, Prediction.t()} | {:error, term()}
   def query_with_scores(%__MODULE__{} = index, text), do: search(index, text, true)
+
+  @doc """
+  Return one ranked prediction per query in input order.
+
+  The index uses its embedder's configured batch size. Pass
+  `include_scores: true` to include the similarity scores in each prediction.
+  An empty query list returns `{:ok, []}`. A failed embedding or ranking
+  returns its error for the whole request.
+  """
+  @spec query_batch(t(), [String.t()], keyword()) :: {:ok, [Prediction.t()]} | {:error, term()}
+  def query_batch(%__MODULE__{} = index, queries, opts \\ []) do
+    with {:ok, include_scores?} <- validate_batch_options(opts),
+         :ok <- validate_queries(queries),
+         {:ok, vectors} <- Embedder.embed(index.embedder, queries) do
+      batch_predictions(index, vectors, include_scores?)
+    end
+  end
 
   defp validate_corpus([_ | _] = corpus) when is_integer(length(corpus)) do
     if Enum.all?(corpus, &is_binary/1), do: :ok, else: {:error, :invalid_corpus}
@@ -91,6 +132,24 @@ defmodule Dspy.Embeddings do
 
   defp validate_options(_opts), do: {:error, :invalid_options}
 
+  defp validate_batch_options(opts) when is_integer(length(opts)) do
+    with true <- Keyword.keyword?(opts),
+         {:ok, [include_scores: include_scores?]} when is_boolean(include_scores?) <-
+           Keyword.validate(opts, include_scores: false) do
+      {:ok, include_scores?}
+    else
+      _ -> {:error, :invalid_options}
+    end
+  end
+
+  defp validate_batch_options(_opts), do: {:error, :invalid_options}
+
+  defp validate_queries(queries) when is_integer(length(queries)) do
+    if Enum.all?(queries, &is_binary/1), do: :ok, else: {:error, :invalid_queries}
+  end
+
+  defp validate_queries(_queries), do: {:error, :invalid_queries}
+
   defp prepare_vectors(vectors, normalize) do
     {:ok, Enum.map(vectors, &prepare_vector(&1, normalize))}
   rescue
@@ -98,8 +157,29 @@ defmodule Dspy.Embeddings do
   end
 
   defp search(index, text, include_scores?) when is_binary(text) do
-    with {:ok, vector} <- Embedder.embed(index.embedder, text),
-         :ok <- validate_dimension(index.dimension, length(vector)),
+    with {:ok, vector} <- Embedder.embed(index.embedder, text) do
+      prediction(index, vector, include_scores?)
+    end
+  end
+
+  defp search(_index, _text, _include_scores?), do: {:error, :invalid_query}
+
+  defp batch_predictions(index, vectors, include_scores?) do
+    vectors
+    |> Enum.reduce_while({:ok, []}, fn vector, {:ok, predictions} ->
+      case prediction(index, vector, include_scores?) do
+        {:ok, prediction} -> {:cont, {:ok, [prediction | predictions]}}
+        {:error, _} = error -> {:halt, error}
+      end
+    end)
+    |> case do
+      {:ok, predictions} -> {:ok, Enum.reverse(predictions)}
+      {:error, _} = error -> error
+    end
+  end
+
+  defp prediction(index, vector, include_scores?) do
+    with :ok <- validate_dimension(index.dimension, length(vector)),
          {:ok, rows} <- rank(index, vector) do
       attrs = %{indices: Enum.map(rows, &elem(&1, 0)), passages: Enum.map(rows, &elem(&1, 1))}
 
@@ -109,8 +189,6 @@ defmodule Dspy.Embeddings do
       {:ok, Prediction.new(attrs)}
     end
   end
-
-  defp search(_index, _text, _include_scores?), do: {:error, :invalid_query}
 
   defp rank(index, vector) do
     query_vector = prepare_vector(vector, index.normalize)
