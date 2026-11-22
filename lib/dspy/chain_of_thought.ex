@@ -123,7 +123,7 @@ defmodule Dspy.ChainOfThought do
   end
 
   @impl true
-  def forward(%__MODULE__{} = cot, inputs), do: forward(cot, inputs, nil)
+  def forward(%__MODULE__{} = cot, inputs), do: Dspy.ProgramStream.Composite.forward(cot, inputs)
 
   @doc false
   def forward(%__MODULE__{} = cot, inputs, on_delta) do

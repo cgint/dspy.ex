@@ -88,11 +88,15 @@
 > cancellation with status enabled. Broader listener and adapter parity
 > remain open.
 
+> **M5, composite Chat listeners.** Named slots can stream independently
+> inside one program worker. Slots omitted from the selection still run
+> ordinary inference. Each selected call closes its own fields on success.
+> Parallel publishers and wider adapter support remain open.
+
 > **M5, Chat field listeners.** `streamify/2` can select plain string
 > fields on a standalone ChatAdapter predictor. Field events preserve
 > output order across split markers and retain the ordinary final
-> prediction. Status events, composite listeners, and the milestone
-> exit example remain open.
+> prediction.
 
 > **M5, program streaming.** `Dspy.streamify/2` wraps standalone
 > Predict and ChainOfThought in a lazy enumerable. The consumer receives
