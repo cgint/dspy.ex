@@ -252,6 +252,8 @@ defmodule Dspy.Signature.Adapters.ChatAdapter do
   end
 
   @doc false
+  def render_value_for_prompt(%Dspy.BoundingBox{} = box), do: Jason.encode!(box)
+
   def render_value_for_prompt(%Dspy.Attachments{}), do: "<attachments>"
 
   def render_value_for_prompt(%Dspy.Image{}),
