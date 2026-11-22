@@ -35,6 +35,7 @@ defmodule Dspy.LM.ReqLLM do
   @behaviour Dspy.LM
 
   alias Dspy.{Context, LM}
+  alias Dspy.LM.ReqLLM.StructuredStream
 
   defstruct [
     :model,
@@ -127,7 +128,8 @@ defmodule Dspy.LM.ReqLLM do
   end
 
   @doc """
-  Stream text with the delta callback running in the caller.
+  Stream text or a structured OpenAI response with the delta callback
+  running in the caller. Structured deltas use the configured output mode.
 
   A monitored process opens ReqLLM with the caller's DSPy context. It owns the
   provider resources until the stream finishes or the caller exits, including
@@ -141,15 +143,15 @@ defmodule Dspy.LM.ReqLLM do
   @impl true
   def stream_generate(%__MODULE__{} = lm, request, on_delta)
       when is_map(request) and is_function(on_delta, 1) do
-    with :ok <- LM.validate_stream_options(request),
+    with {:ok, operation} <- LM.stream_operation(lm, request),
          {:ok, {input, opts}} <- to_req_llm_input_and_opts(lm, request),
          :ok <- LM.validate_stream_options(opts),
          :ok <- LM.validate_stream_options(Keyword.get(opts, :provider_options)) do
-      stream_text_response(lm, input, ReqLLM.Cache.request_opts(opts), on_delta)
+      stream_response(lm, input, ReqLLM.Cache.request_opts(opts), operation, on_delta)
     end
   end
 
-  defp stream_text_response(lm, input, opts, on_delta) do
+  defp stream_response(lm, input, opts, operation, on_delta) do
     caller = self()
     tag = make_ref()
     context = Context.capture()
@@ -160,7 +162,7 @@ defmodule Dspy.LM.ReqLLM do
         spawn(fn -> monitor_stream_owner(caller, owner) end)
 
         result =
-          Context.with_context(context, fn -> open_provider_stream(lm, input, opts) end)
+          Context.with_context(context, fn -> open_provider_stream(lm, input, opts, operation) end)
 
         send(caller, {tag, result})
 
@@ -175,7 +177,7 @@ defmodule Dspy.LM.ReqLLM do
     receive do
       {^tag, result} ->
         try do
-          with {:ok, stream} <- result, do: consume_stream(lm, stream, on_delta)
+          with {:ok, stream} <- result, do: consume_stream(lm, stream, opts, operation, on_delta)
         after
           send(owner, {tag, :release})
 
@@ -199,8 +201,11 @@ defmodule Dspy.LM.ReqLLM do
     end
   end
 
-  defp open_provider_stream(lm, input, opts) do
-    lm.client_module.stream_text(lm.model, input, opts)
+  defp open_provider_stream(lm, input, opts, operation) do
+    case operation do
+      :text -> lm.client_module.stream_text(lm.model, input, opts)
+      {:object, contract} -> lm.generation_module.stream_object(lm.model, input, contract, opts)
+    end
   rescue
     error -> {:error, error}
   catch
@@ -208,11 +213,11 @@ defmodule Dspy.LM.ReqLLM do
     :throw, reason -> {:error, {:stream_owner_threw, reason}}
   end
 
-  defp consume_stream(lm, stream, on_delta) do
+  defp consume_stream(lm, stream, opts, operation, on_delta) do
     ref = make_ref()
 
     # A throw stops the enumerable and runs its cancellation finalizer.
-    on_result = fn delta ->
+    publish = fn delta ->
       case on_delta.(delta) do
         :halt -> throw({ref, :cancelled})
         {:error, reason} -> throw({ref, reason})
@@ -221,11 +226,25 @@ defmodule Dspy.LM.ReqLLM do
     end
 
     try do
-      with {:ok, response} <- ReqLLM.StreamResponse.process_stream(stream, on_result: on_result) do
-        normalize_text_response(lm, response)
-      end
+      consume_stream(lm, stream, opts, operation, publish, ref)
     catch
       {^ref, reason} -> {:error, reason}
+    end
+  end
+
+  defp consume_stream(lm, stream, _opts, :text, publish, _ref) do
+    with {:ok, response} <- ReqLLM.StreamResponse.process_stream(stream, on_result: publish) do
+      normalize_text_response(lm, response)
+    end
+  end
+
+  defp consume_stream(lm, stream, opts, {:object, _contract}, publish, ref) do
+    with {:ok, response, text} <- StructuredStream.consume(stream, opts, publish, ref) do
+      normalized_response(
+        text,
+        lm.response_module.finish_reason(response),
+        lm.response_module.usage(response)
+      )
     end
   end
 
@@ -303,6 +322,8 @@ defmodule Dspy.LM.ReqLLM do
   def supports?(%__MODULE__{model: model}, :structured_output),
     do: native_structured_model?(model)
 
+  def supports?(%__MODULE__{model: "openai:" <> _model}, :structured_streaming), do: true
+  def supports?(_lm, :structured_streaming), do: false
   def supports?(%__MODULE__{model: "openai:" <> _model}, :structured_react), do: true
   def supports?(_lm, :structured_react), do: false
   def supports?(_lm, :multiple_choices), do: false
