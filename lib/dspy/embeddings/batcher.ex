@@ -4,6 +4,8 @@ defmodule Dspy.Embeddings.Batcher do
 
   The batcher is a caller-owned process linked to its starter. It runs one
   batch at a time in its own process using the index's configured embedder.
+  Call `stop/1` when finished. A normal exit of the starter leaves the
+  batcher running.
   """
 
   use GenServer
@@ -29,8 +31,9 @@ defmodule Dspy.Embeddings.Batcher do
   @doc """
   Queue a query and return its prediction or the batch's error.
 
-  The call waits for the batch to run. A batcher that has stopped returns
-  `{:error, :batcher_closed}`.
+  The call waits for the batch to run. If the batcher is gone or shuts down
+  normally, the call returns `{:error, :batcher_closed}`. A crash during the
+  call propagates its exit reason.
   """
   @spec query(pid(), String.t()) :: {:ok, Prediction.t()} | {:error, term()}
   def query(batcher, text) when is_pid(batcher) and is_binary(text) do
@@ -48,7 +51,8 @@ defmodule Dspy.Embeddings.Batcher do
   @doc """
   Stop the batcher and release pending callers.
 
-  If an embedder is running, stop waits for that batch to finish.
+  If an embedder is running, stop waits for that batch to finish. Calling
+  `stop/1` after the batcher has exited raises a process exit.
   """
   @spec stop(pid()) :: :ok
   def stop(batcher) when is_pid(batcher), do: GenServer.stop(batcher, :normal, :infinity)
