@@ -130,7 +130,11 @@ defmodule Dspy.StreamingResponseTest do
           {{:unsupported, "private-event"}, "private-event"},
           {{:delta, self()}, inspect(self())},
           {Prediction.new(%{"private-key" => 1, :"private-key" => 2}), "private-key"},
-          {Prediction.new(%{answer: %{{:pair, "private-tuple"} => 1}}), "private-tuple"}
+          {Prediction.new(%{answer: %{{:pair, "private-tuple"} => 1}}), "private-tuple"},
+          {Prediction.new(answer: Jason.Fragment.new(fn _ -> throw("private-throw") end)),
+           "private-throw"},
+          {Prediction.new(answer: Jason.Fragment.new(fn _ -> exit("private-exit") end)),
+           "private-exit"}
         ] do
       source = tracked([{:delta, "first"}, event, {:delta, "tail"}])
 

@@ -49,7 +49,7 @@ defmodule Dspy.StreamingResponse do
   defp data(payload) do
     json = Jason.encode!(payload, maps: :strict)
     "data: " <> String.replace(json, ["\r\n", "\r", "\n"], "\ndata: ") <> "\n\n"
-  rescue
-    _error -> raise ArgumentError, "streaming response event is not JSON encodable"
+  catch
+    _kind, _reason -> raise ArgumentError, "streaming response event is not JSON encodable"
   end
 end
