@@ -82,7 +82,7 @@ The lead-only workflow is in [LEAD.md](LEAD.md).
 
 Persisted learnings from experimenting in this repo:
 
-- Prefer **simple delegated runs** using `pi-profile minimal -p @file ... "goal"` for scouting, inventories, and bounded edits.
+- Prefer **simple delegated runs** using `pi -p @file ... "goal"` for scouting, inventories, and bounded edits.
 - Use handoffs when the task would otherwise bloat/taint the driver context window: multi-file scans, evidence collection, repetitive changes across many files, or independent verification.
 - Avoid handoffs for tiny edits (single-line/single-file obvious changes).
 - If you run handoffs concurrently (batch scripts), expect possible provider/rate-limit failures; be ready to rerun only the failed handoffs.

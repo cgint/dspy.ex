@@ -3,7 +3,7 @@ set -euo pipefail
 
 # Plan-only helper: run sub-agent investigations for OpenSpec adapter-parity changes.
 #
-# NOTE: this script runs sequentially (no parallelism) to avoid pi-profile lock contention
+# NOTE: this script runs sequentially (no parallelism) to avoid lock contention
 # and to make the first run easier to observe.
 
 usage() {
@@ -103,7 +103,7 @@ EOF
 
   set +e
   # Single -p enables print-mode; then we pass @files as context, then the prompt.
-  pi-profile minimal -p "${ctx_files[@]}" "$prompt" >"$out_handback_file" 2>"$out_err_file"
+  pi -p "${ctx_files[@]}" "$prompt" >"$out_handback_file" 2>"$out_err_file"
   local status=$?
   set -e
 
