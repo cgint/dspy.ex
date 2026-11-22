@@ -42,6 +42,8 @@ Recommended next order:
 ## Team process (2026-09-26)
 Parity work runs as lead (Horst) + architect buddy (Greta) + controller→worker sub-teams. Read `plan/HOW_WE_WORK.md` before briefing or accepting any slice.
 
+The lead-only workflow is in [LEAD.md](LEAD.md).
+
 ## Directory intent
 - `docs/`
   - “Classic docs”: technical references, user-facing docs, integration notes.
