@@ -76,12 +76,12 @@ defmodule Dspy.Module.PredictorSlots do
 
   defp walk(_value, _path), do: []
 
-  defp module_struct?(module) do
+  def module_struct?(module) do
     Code.ensure_loaded?(module) and function_exported?(module, :__struct__, 0) and
       function_exported?(module, :forward, 2)
   end
 
-  defp invalid_program!,
+  def invalid_program!,
     do: raise(ArgumentError, "expected a module struct implementing forward/2")
 
   defp walk_module(%Predict{} = predictor, path), do: [{Enum.reverse(path), predictor}]
@@ -119,7 +119,7 @@ defmodule Dspy.Module.PredictorSlots do
 
   defp walk_list(_improper_tail, _path, _index, _slots), do: []
 
-  defp render(path) do
+  def render(path) do
     path
     |> Enum.map_join(&segment/1)
     |> String.trim_leading(".")
