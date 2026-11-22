@@ -19,9 +19,15 @@ defmodule Dspy.Signature.Adapters.JSONStream do
 
   def push(%__MODULE__{} = state, text) do
     case :unicode.characters_to_binary(state.tail <> text) do
-      complete when is_binary(complete) -> collect(complete, state, "")
-      {:incomplete, complete, tail} -> collect(complete, state, :binary.copy(tail))
-      {:error, _complete, _rest} -> {[], stop(state)}
+      complete when is_binary(complete) ->
+        collect(complete, state, "")
+
+      {:incomplete, complete, tail} ->
+        collect(complete, state, :binary.copy(tail))
+
+      {:error, complete, _rest} ->
+        {events, state} = collect(complete, state, "")
+        {events, stop(state)}
     end
   end
 

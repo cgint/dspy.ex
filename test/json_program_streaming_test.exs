@@ -220,6 +220,24 @@ defmodule Dspy.JSONProgramStreamingTest do
     assert Enum.map_join(chunks, & &1.chunk) == "Visible"
   end
 
+  test "invalid UTF-8 after valid text preserves the prefix across chunk boundaries" do
+    wire = ~s({"answer":"a,, ]","note":"b",}) <> <<0x80>>
+
+    for width <- [1, 7, byte_size(wire)] do
+      predictor = scripted("question -> answer, note", wire, width)
+
+      assert {:ok, %Prediction{attrs: %{answer: "a,]", note: "b"}}} =
+               Dspy.call(predictor, @inputs)
+
+      {chunks, terminal} = predictor |> selected([:answer, :note]) |> Enum.split(-1)
+      assert terminal == [{:error, {:streamed_field_mismatch, :answer}}]
+      assert Enum.all?(chunks, &match?(%StreamResponse{is_last_chunk: false}, &1))
+      assert Enum.map_join(field_chunks(chunks, :answer), & &1.chunk) == "a,, ]"
+      assert Enum.map_join(field_chunks(chunks, :note), & &1.chunk) == "b"
+      assert Enum.all?(chunks, &String.valid?(&1.chunk))
+    end
+  end
+
   test "managed parallel calls keep each field text and completion associated with its own invocation" do
     json = fn request ->
       prompt = List.last(request.messages).content
