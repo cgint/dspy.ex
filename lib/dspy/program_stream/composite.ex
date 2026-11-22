@@ -3,8 +3,6 @@ defmodule Dspy.ProgramStream.Composite do
 
   alias Dspy.{Prediction, ProcessOwnership, ProgramStream}
   alias Dspy.Module.PredictorSlots
-  alias Dspy.Signature.AdapterPipeline
-  alias Dspy.Signature.Adapters.{ChatAdapter, ChatStream}
 
   @slot_key {__MODULE__, :slot}
   @scope_key {__MODULE__, :scope}
@@ -24,7 +22,7 @@ defmodule Dspy.ProgramStream.Composite do
 
     Enum.reduce(selectors, %{}, fn selector, selections ->
       {path, name, outputs, field} = resolve_selector(selector, named_slots)
-      ProgramStream.validate_chat_fields!(outputs, [field])
+      ProgramStream.validate_fields!(outputs, [field])
 
       Map.update(selections, path, {name, [field]}, fn {name, fields} ->
         if field in fields do
@@ -136,21 +134,8 @@ defmodule Dspy.ProgramStream.Composite do
   end
 
   defp stream_selected(module, predictor, inputs, {name, fields}, publish, owner) do
-    case AdapterPipeline.active_adapter(adapter: predictor.adapter) do
-      ChatAdapter ->
-        selection = {name, ChatStream.new(fields)}
-
-        stream_invocation(
-          module,
-          %{predictor | adapter: ChatAdapter},
-          inputs,
-          selection,
-          publish,
-          owner
-        )
-
-      adapter ->
-        {:error, {:unsupported_streaming_adapter, adapter}}
+    with {:ok, predictor, scanner} <- ProgramStream.open_field_listener(predictor, fields) do
+      stream_invocation(module, predictor, inputs, {name, scanner}, publish, owner)
     end
   end
 
@@ -163,8 +148,9 @@ defmodule Dspy.ProgramStream.Composite do
     on_delta = ProgramStream.delta_callback(&emit_delta(key, &1, publish, invocation_id))
 
     try do
-      with {:ok, %Prediction{}} = result <- module.forward(predictor, inputs, on_delta),
-           :ok <- finish_fields(Process.get(key), publish, invocation_id) do
+      with {:ok, %Prediction{} = prediction} = result <-
+             module.forward(predictor, inputs, on_delta),
+           :ok <- finish_fields(Process.get(key), prediction, publish, invocation_id) do
         result
       end
     after
@@ -181,16 +167,17 @@ defmodule Dspy.ProgramStream.Composite do
         publish.({:delta, text})
 
       {name, scanner} ->
-        {fragments, scanner} = ChatStream.push(scanner, text)
+        {fragments, scanner} = ProgramStream.push_field_listener(scanner, text)
         Process.put(key, {name, scanner})
         publish_fields(fragments, name, invocation_id, publish)
     end
   end
 
-  defp finish_fields(:raw, _publish, _invocation_id), do: :ok
+  defp finish_fields(:raw, _prediction, _publish, _invocation_id), do: :ok
 
-  defp finish_fields({name, scanner}, publish, invocation_id) do
-    publish_fields(ChatStream.finish(scanner), name, invocation_id, publish)
+  defp finish_fields({name, scanner}, prediction, publish, invocation_id) do
+    fragments = ProgramStream.finish_field_listener(scanner, prediction)
+    publish_fields(fragments, name, invocation_id, publish)
   end
 
   defp publish_fields(fragments, name, invocation_id, publish) do

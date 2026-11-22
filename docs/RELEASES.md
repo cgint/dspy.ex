@@ -240,11 +240,18 @@ process. Streaming makes one DSPy generation attempt and uses the ordinary
 adapter to parse the final prediction. Field listeners and status events
 remain in M5.
 
+### XML output field streaming
+
+Select plain string outputs when the effective adapter is `XMLAdapter`.
+The stream preserves literal field text and the adapter's whitespace rules.
+Leading thought blocks, XML fences, and nested fields in unselected
+siblings are skipped. The ordinary XML parser validates the final result.
+
 ### Composite program streaming
 
-`Dspy.streamify/2` can select Chat text fields from predictors in a
-composite. Pass a unique output atom or `{predict_name, field}` using
-the name from `Dspy.Module.named_predictors/1`. Selected calls emit
+`Dspy.streamify/2` can select ChatAdapter and XMLAdapter text fields from
+predictors in a composite. Pass a unique output atom or `{predict_name, field}`
+using the name from `Dspy.Module.named_predictors/1`. Selected calls emit
 their own field chunks, and unselected calls retain ordinary inference.
 An empty selection streams raw deltas. Streaming predictors invoked in
 a bare task report an explicit ownership error.
