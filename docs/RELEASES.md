@@ -24,6 +24,12 @@ matching passages and their zero-based indices in a prediction.
 exact, with earlier corpus positions first on ties. Vectors are normalized
 by default. Pass `normalize: false` for raw dot products.
 
+### Named submodules
+
+`Dspy.Module.named_sub_modules/1` lists a program and its nested modules in
+breadth-first order. Paths begin at `self` and identify each occurrence,
+including equal module values stored at different paths.
+
 ### BetterTogether optimizer
 
 `Dspy.Teleprompt.BetterTogether` composes named prompt and weight optimizers
