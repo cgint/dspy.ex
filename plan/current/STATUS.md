@@ -3,7 +3,9 @@
 > **S059 and S060, corpus embedding retrieval.** An immutable index
 > uses `Dspy.Embedder` for exact text retrieval. Results carry passages
 > and corpus indices, with similarity scores in the scored view.
-> Approximate search, query coalescing, and index persistence remain open.
+> A native JSON checkpoint restores the prepared vectors and index
+> settings with a caller-supplied embedder. Approximate search, query
+> coalescing, and Python index-file exchange remain open.
 
 > **M6, KNNFewShot.** The optimizer builds one neighbor index and
 > prepares demos for each query. Bootstrap acceptance metrics receive
