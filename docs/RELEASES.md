@@ -279,6 +279,11 @@ ReqLLM OpenAI models with the complete output schema. JSON-schema mode
 streams text. Strict-tool mode streams the named schema tool's JSON
 arguments. The ordinary JSONAdapter validates the terminal prediction.
 
+JSONAdapter also accepts plain-string `stream_listeners`. Chunks show the
+decoded field text. Field end markers follow validation of the final
+response. A selected stream reports `{:streamed_field_mismatch, field}`
+if the final value disagrees with text already shown.
+
 ### Composite program streaming
 
 `Dspy.streamify/2` can select ChatAdapter and XMLAdapter text fields from

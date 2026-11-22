@@ -176,8 +176,9 @@ defmodule Dspy.ProgramStream.Composite do
   defp finish_fields(:raw, _prediction, _publish, _invocation_id), do: :ok
 
   defp finish_fields({name, scanner}, prediction, publish, invocation_id) do
-    fragments = ProgramStream.finish_field_listener(scanner, prediction)
-    publish_fields(fragments, name, invocation_id, publish)
+    with {:ok, fragments} <- ProgramStream.finish_field_listener(scanner, prediction) do
+      publish_fields(fragments, name, invocation_id, publish)
+    end
   end
 
   defp publish_fields(fragments, name, invocation_id, publish) do

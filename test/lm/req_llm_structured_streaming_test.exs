@@ -1,7 +1,7 @@
 defmodule Dspy.LM.ReqLLMStructuredStreamingTest do
   use ExUnit.Case, async: false
 
-  alias Dspy.{LM, Predict, Prediction}
+  alias Dspy.{LM, Predict, Prediction, StreamResponse}
   alias Dspy.Signature.Adapters.JSONAdapter
   alias Dspy.TestSupport.StreamingSSE
 
@@ -123,11 +123,29 @@ defmodule Dspy.LM.ReqLLMStructuredStreamingTest do
     assert {:error, :closed} = Task.await(server, @wait)
   end
 
+  test "strict-tool arguments feed selected field chunks before the object is complete" do
+    {server, url} = function_fixture(:finish)
+    consumer = start_program(lm(url), stream_listeners: [:answer])
+    assert_strict_tool_schema(wire_request(consumer, "POST /v1/responses HTTP/1.1"))
+
+    assert_receive {:program_event,
+                    %StreamResponse{signature_field_name: :answer, is_last_chunk: false}},
+                   @wait
+
+    send(server.pid, :finish)
+    {chunks, terminal} = consumer |> Task.await(@wait) |> Enum.split(-1)
+    assert [%Prediction{attrs: %{answer: "Hello 雪", summary: "done"}}] = terminal
+    assert Enum.all?(chunks, &match?(%StreamResponse{signature_field_name: :answer}, &1))
+    assert Enum.map_join(chunks, & &1.chunk) == "Hello 雪"
+    assert Enum.count(chunks, & &1.is_last_chunk) == 1
+    assert List.last(chunks).is_last_chunk
+    assert :ok = Task.await(server, @wait)
+  end
+
   for {name, index} <- [{"structured_output", 1}, {"structured_output", 2}, {"unrelated", 1}] do
     test "a competing #{name} identity at index #{index} stops publication" do
       {server, url} = function_fixture({:duplicate, unquote(name), unquote(index)})
       consumer = start_program(lm(url))
-
       assert_strict_tool_schema(wire_request(consumer, "POST /v1/responses HTTP/1.1"))
       assert_receive {:program_event, {:delta, @first}}, @wait
       send(server.pid, :finish)
@@ -283,18 +301,18 @@ defmodule Dspy.LM.ReqLLMStructuredStreamingTest do
     )
   end
 
-  defp program_stream(lm) do
+  defp program_stream(lm, opts \\ []) do
     Contract
     |> Predict.new(adapter: JSONAdapter, lm: lm, max_retries: 2, max_output_retries: 2)
-    |> Dspy.streamify()
+    |> Dspy.streamify(opts)
     |> then(& &1.(@question))
   end
 
-  defp start_program(lm) do
+  defp start_program(lm, opts \\ []) do
     owner = self()
 
     Task.async(fn ->
-      Enum.map(program_stream(lm), &tap(&1, fn e -> send(owner, {:program_event, e}) end))
+      Enum.map(program_stream(lm, opts), &tap(&1, fn e -> send(owner, {:program_event, e}) end))
     end)
   end
 

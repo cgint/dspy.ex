@@ -488,7 +488,7 @@ defmodule Dspy.ProgramStreamingTest do
     assert event == field_event("self", :answer, @answer, false)
   end
 
-  test "invalid listener selections and non-Chat adapters fail before the LM opens" do
+  test "invalid selections and unadvertised structured streams fail before the LM opens" do
     lm = scripted("unused-listener", [@answer_header, @answer])
     program = Predict.new("question -> answer, count: int", lm: lm)
 
@@ -509,7 +509,7 @@ defmodule Dspy.ProgramStreamingTest do
     stream = Dspy.streamify(program, stream_listeners: [:answer]).(@inputs)
 
     Dspy.context([adapter: JSONAdapter], fn ->
-      assert [{:error, {:unsupported_streaming_adapter, JSONAdapter}}] = Enum.to_list(stream)
+      assert [{:error, {:unsupported_streaming_option, :output_contract}}] = Enum.to_list(stream)
     end)
 
     refute_received {:stream_call, _, _, _, _}
