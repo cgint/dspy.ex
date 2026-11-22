@@ -31,6 +31,10 @@ defmodule Dspy.LM.ReqLLMStructuredStreamingTest do
     def stream_generate(_, _, _), do: flunk("unadvertised structured streams must not start")
   end
 
+  defmodule BatchOnlyGeneration do
+    def generate_object(_, _, _, _), do: flunk("streaming must not use batch generation")
+  end
+
   test "default Responses mode streams only the named schema tool's arguments" do
     {server, url} = function_fixture(:finish)
     observer = self()
@@ -106,6 +110,20 @@ defmodule Dspy.LM.ReqLLMStructuredStreamingTest do
     assert {:error, :closed} = Task.await(server, @wait)
   end
 
+  test "a competing identity at the schema tool's index stops publication" do
+    {server, url} = function_fixture(:duplicate)
+    consumer = start_program(lm(url))
+
+    assert_strict_tool_schema(wire_request(consumer, "POST /v1/responses HTTP/1.1"))
+    assert_receive {:program_event, {:delta, @first}}, @wait
+    send(server.pid, :finish)
+
+    assert [{:delta, @first}, {:error, :ambiguous_structured_output}] =
+             Task.await(consumer, @wait)
+
+    assert :ok = Task.await(server, @wait)
+  end
+
   test "Chat Completions preserves the initial named chunk's partial JSON" do
     {server, url} = function_fixture(:chat)
     consumer = start_program(lm(url, @chat_model, openai_structured_output_mode: :tool_strict))
@@ -158,6 +176,13 @@ defmodule Dspy.LM.ReqLLMStructuredStreamingTest do
              LM.stream_generate(%TextOnlyLM{}, request(), fn _ ->
                flunk("a rejected request must not yield a delta")
              end)
+  end
+
+  test "a batch-only ReqLLM generation module cannot advertise structured streaming" do
+    client = LM.ReqLLM.new(model: @model, generation_module: BatchOnlyGeneration)
+
+    assert {:error, {:unsupported_streaming_option, :output_contract}} =
+             LM.stream_generate(client, request(), fn _ -> flunk("unexpected delta") end)
   end
 
   defp request, do: JSONAdapter.format_request(Contract.signature(), @question, [])
@@ -262,6 +287,30 @@ defmodule Dspy.LM.ReqLLMStructuredStreamingTest do
 
   defp complete(peer, :close), do: :gen_tcp.recv(peer, 0, @wait)
 
+  defp complete(peer, :duplicate) do
+    await_finish()
+    identity = tool_item("structured_output", 1)
+
+    duplicate = %{
+      identity
+      | item: %{identity.item | id: "fc_duplicate", call_id: "call_duplicate"}
+    }
+
+    fragment = %{tool_delta("structured_output", 1, @second) | item_id: "fc_duplicate"}
+
+    terminal = %{
+      type: "response.completed",
+      response: %{id: "resp_loopback", status: "completed"}
+    }
+
+    :gen_tcp.send(peer, [
+      sse_chunk(duplicate),
+      sse_chunk(fragment),
+      sse_chunk(terminal),
+      "0\r\n\r\n"
+    ])
+  end
+
   defp complete(peer, :chat) do
     await_finish()
     :ok = event(peer, chat_args(@second))
@@ -350,10 +399,12 @@ defmodule Dspy.LM.ReqLLMStructuredStreamingTest do
     %{choices: [%{index: 0, delta: %{tool_calls: [call]}}]}
   end
 
-  defp event(peer, data) do
+  defp event(peer, data), do: :gen_tcp.send(peer, sse_chunk(data))
+
+  defp sse_chunk(data) do
     data = if data == "[DONE]", do: data, else: Jason.encode!(data)
     sse = "data: " <> data <> "\n\n"
-    :gen_tcp.send(peer, [Integer.to_string(byte_size(sse), 16), "\r\n", sse, "\r\n"])
+    [Integer.to_string(byte_size(sse), 16), "\r\n", sse, "\r\n"]
   end
 
   defp read_request(peer, buffer \\ "") do
