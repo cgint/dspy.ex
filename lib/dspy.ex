@@ -509,6 +509,28 @@ defmodule Dspy do
           (Dspy.Module.inputs() -> Enumerable.t())
   def streamify(program, opts \\ []), do: Dspy.ProgramStream.wrap(program, opts)
 
+  @doc """
+  Convert a program stream into a lazy enumerable of server-sent event frames.
+
+  Serve the frames as `text/event-stream`. Each frame uses the `data:` prefix
+  and a blank line. Raw deltas use a JSON `chunk` key, predictions contain
+  their attributes under `prediction`, and selected fields and progress use
+  `field` and `status`. Concurrent field chunks carry a string invocation ID.
+
+  Trusted binaries beginning with `data:` pass through unchanged. Normal
+  exhaustion emits one canonical `[DONE]` data frame. A canonical end
+  frame in the input stops consumption at that point. Program errors,
+  unsupported events, and unencodable JSON raise `ArgumentError` before
+  the end frame.
+
+      program
+      |> Dspy.streamify(stream_listeners: [:answer])
+      |> then(& &1.(inputs))
+      |> Dspy.streaming_response()
+  """
+  @spec streaming_response(Enumerable.t()) :: Enumerable.t()
+  def streaming_response(events), do: Dspy.StreamingResponse.encode(events)
+
   @doc "Alias for `forward!/2`."
   @spec call!(Dspy.Module.t(), Dspy.Module.inputs()) :: Dspy.Module.outputs()
   def call!(program, inputs) when is_list(inputs) do
