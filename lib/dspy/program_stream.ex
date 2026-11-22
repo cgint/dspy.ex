@@ -35,23 +35,12 @@ defmodule Dspy.ProgramStream do
     listeners = listeners(program, fields)
 
     fn inputs ->
-      stream =
-        Stream.resource(
-          fn -> start(program, inputs, call_opts, listeners, provider) end,
-          &next_event/1,
-          &stop/1
-        )
-
-      if include_final?, do: stream, else: omit_streamed_prediction(stream)
+      Stream.resource(
+        fn -> start(program, inputs, call_opts, listeners, provider, include_final?) end,
+        &next_event/1,
+        &stop/1
+      )
     end
-  end
-
-  defp omit_streamed_prediction(stream) do
-    Stream.transform(stream, false, fn
-      %StreamResponse{chunk: chunk} = event, _streamed? when chunk != "" -> {[event], true}
-      %Prediction{}, true -> {[], true}
-      event, streamed? -> {[event], streamed?}
-    end)
   end
 
   def take_delta, do: Process.delete(@delta_key)
@@ -159,7 +148,7 @@ defmodule Dspy.ProgramStream do
     end
   end
 
-  defp start(program, inputs, opts, listeners, provider) do
+  defp start(program, inputs, opts, listeners, provider, include_final?) do
     consumer = self()
     tag = make_ref()
     context = Context.capture()
@@ -192,6 +181,8 @@ defmodule Dspy.ProgramStream do
       worker: worker,
       channel: if(composite?, do: :initial),
       cancel_reason: cancel_reason,
+      include_final?: include_final?,
+      field_text?: false,
       listener: nil,
       pending: []
     }
@@ -222,13 +213,13 @@ defmodule Dspy.ProgramStream do
 
   # Yield one event at a time so a resumed enumeration always checks ownership.
   defp next_event(%{pending: [event | pending]} = state),
-    do: {[event], %{state | pending: pending}}
+    do: yield_event(event, %{state | pending: pending})
 
   defp next_event(%{tag: tag, worker: {worker, inbox}, channel: channel} = state)
        when not is_nil(channel) do
     case Channel.next(tag, worker, inbox, channel) do
       {:event, receipt, event} ->
-        {[event], %{state | channel: receipt}}
+        yield_event(event, %{state | channel: receipt})
 
       {:terminal, event} ->
         close_channel(state)
@@ -245,6 +236,15 @@ defmodule Dspy.ProgramStream do
     send(worker, {tag, :demand})
     receive_event(state, tag, worker, worker_ref)
   end
+
+  defp yield_event(%Prediction{}, %{include_final?: false, field_text?: true} = state),
+    do: next_event(state)
+
+  defp yield_event(%StreamResponse{chunk: chunk} = event, %{include_final?: false} = state)
+       when chunk != "",
+       do: {[event], %{state | field_text?: true}}
+
+  defp yield_event(event, state), do: {[event], state}
 
   defp receive_event(state, tag, worker, worker_ref) do
     receive do

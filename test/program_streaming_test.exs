@@ -466,6 +466,24 @@ defmodule Dspy.ProgramStreamingTest do
     assert closing == field_event("self", :answer, "", true)
   end
 
+  test "field-only streams bind the original consumer before the first pull" do
+    program = predict(scripted("owned-before-pull", [@answer_header, @answer]))
+
+    stream =
+      Dspy.streamify(program,
+        stream_listeners: [:answer],
+        include_final_prediction_in_output_stream: false
+      ).(@inputs)
+
+    reducer = fn _event, acc -> {:cont, acc} end
+    assert {:suspended, nil, resume} = Enumerable.reduce(stream, {:suspend, nil}, reducer)
+    refute_received {:stream_call, "owned-before-pull", _, _, _}
+
+    assert {:raised, %ArgumentError{message: message}} = resume_in_another_process(resume)
+    assert message =~ "original consumer"
+    refute_received {:stream_call, "owned-before-pull", _, _, _}
+  end
+
   test "omitting the final prediction preserves errors, raw streams, and status-only streams" do
     opts = [include_final_prediction_in_output_stream: false]
 
