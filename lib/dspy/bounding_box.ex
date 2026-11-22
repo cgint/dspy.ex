@@ -15,15 +15,21 @@ defmodule Dspy.BoundingBox do
 
   use JSV.Schema
 
-  @derive Jason.Encoder
+  @derive {Jason.Encoder, only: [:top, :bottom, :left, :right]}
   @enforce_keys [:top, :left, :bottom, :right]
   defstruct [:top, :left, :bottom, :right]
 
   @type t :: %__MODULE__{top: number(), left: number(), bottom: number(), right: number()}
 
-  @doc "Validate a JSON object and construct a bounding box."
+  @doc "Validate a string-keyed JSON object and construct a bounding box."
   @spec new(term()) :: {:ok, t()} | {:error, term()}
-  def new(value), do: Dspy.TypedOutputs.validate_term(value, __MODULE__)
+  def new(value) do
+    if is_map(value) and Enum.all?(Map.keys(value), &is_binary/1) do
+      Dspy.TypedOutputs.validate_term(value, __MODULE__)
+    else
+      {:error, :invalid_bounding_box_object}
+    end
+  end
 
   @doc false
   def encode_containing(value) do
@@ -46,10 +52,19 @@ defmodule Dspy.BoundingBox do
     %{
       type: :object,
       properties: %{
-        top: %{type: :number, description: "Top edge as a fraction of image height."},
-        bottom: %{type: :number, description: "Bottom edge as a fraction of image height."},
-        left: %{type: :number, description: "Left edge as a fraction of image width."},
-        right: %{type: :number, description: "Right edge as a fraction of image width."}
+        top: %{type: :number, description: "Top edge as a fraction of image height, from 0 to 1."},
+        bottom: %{
+          type: :number,
+          description: "Bottom edge as a fraction of image height, from 0 to 1."
+        },
+        left: %{
+          type: :number,
+          description: "Left edge as a fraction of image width, from 0 to 1."
+        },
+        right: %{
+          type: :number,
+          description: "Right edge as a fraction of image width, from 0 to 1."
+        }
       },
       required: [:top, :left, :bottom, :right],
       additionalProperties: false

@@ -105,6 +105,22 @@ defmodule Dspy.BoundingBoxTest do
              BoundingBox.new(Map.put(@valid, "top", 1))
   end
 
+  test "returns errors for constructor inputs that are not string-keyed JSON objects" do
+    for input <- [
+          %{top: 0, bottom: 1, left: 0.1, right: 0.9},
+          %BoundingBox{top: 0, bottom: 1, left: 0.1, right: 0.9},
+          Map.put(@valid, :top, 0),
+          nil
+        ] do
+      assert {:error, _} = BoundingBox.new(input)
+    end
+  end
+
+  test "encodes boxes in top, bottom, left, right order" do
+    assert {:ok, box} = BoundingBox.new(@valid)
+    assert Jason.encode!(box) == ~s({"top":0,"bottom":1,"left":0.1,"right":0.9})
+  end
+
   test "validates shape, bounds and strict geometry and casts nested boxes" do
     assert {:ok, %BoundingBox{top: 0, bottom: 1}} =
              Dspy.TypedOutputs.validate_term(@valid, BoundingBox)
@@ -138,9 +154,15 @@ defmodule Dspy.BoundingBoxTest do
     refute Jason.encode!(schema) =~ "minimum"
     refute Jason.encode!(schema) =~ "maximum"
     assert Enum.sort(schema["items"]["required"]) == ~w(bottom left right top)
+
+    for edge <- ~w(top bottom left right) do
+      assert schema["items"]["properties"][edge]["description"] =~ "from 0 to 1"
+    end
+
     refute Jason.encode!(schema) =~ "jsv-cast"
     assert {:ok, prompt} = Dspy.TypedOutputs.prompt_schema_json(BoundingBox)
     refute prompt =~ "jsv-cast"
+    assert prompt =~ "from 0 to 1"
   end
 
   test "serializes boxes in examples" do
