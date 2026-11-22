@@ -272,6 +272,83 @@ defmodule Dspy.Teleprompt.GEPAParetoTest do
     refute_received {:scored, ^specialist, "row_val_a"}
   end
 
+  test "hybrid search samples both scalar and objective specialists" do
+    [baseline, specialist, champion | _] = @variants
+
+    objectives = fn
+      ^baseline, _row -> %{"coverage" => 0.5}
+      ^specialist, _row -> %{"coverage" => 0.7}
+      ^champion, _row -> %{"coverage" => 0.1}
+    end
+
+    for {mode, seed, parent} <- [
+          {:instance, 5, baseline},
+          {:objective, 0, specialist},
+          {:hybrid, 0, baseline},
+          {:hybrid, 5, specialist}
+        ] do
+      assert_frontier_search(mode, seed, objectives, parent)
+    end
+  end
+
+  test "cartesian search keeps pair specialists and omits missing objective pairs" do
+    [baseline, specialist, champion | _] = @variants
+
+    objectives = fn
+      ^baseline, _row -> %{"coverage" => -0.4, "reported_by_seed" => -0.2}
+      ^specialist, "row_val_b" -> %{"coverage" => 0.8}
+      ^specialist, "row_val_c" -> %{"coverage" => -2}
+      ^champion, _row -> %{"coverage" => -3}
+    end
+
+    # The specialist loses on both scalar rows and the coverage mean. Only
+    # the Cartesian frontier leads with its coverage on row_val_b.
+    for mode <- [:instance, :objective, :hybrid] do
+      assert_frontier_search(mode, 7, objectives, baseline)
+    end
+
+    assert_frontier_search(:cartesian, 7, objectives, specialist)
+
+    # This draw selects the baseline with three leading pairs. Filling the
+    # two unreported negative pairs with zero hands those leads to the specialist.
+    assert_frontier_search(:cartesian, 1, objectives, baseline)
+  end
+
+  test "hybrid and cartesian require reflective Pareto search and validation objectives" do
+    [baseline | _] = @variants
+    program = program(self(), baseline)
+    trainset = [row("row_train")]
+    validation = [row("row_val_b")]
+
+    for mode <- [:hybrid, :cartesian] do
+      opts = [
+        metric: fn _, _, _, _, _ -> 0 end,
+        reflection_lm: %ReflectionLM{owner: self()},
+        max_metric_calls: 4,
+        num_threads: 1,
+        frontier_type: mode
+      ]
+
+      assert_raise ArgumentError, ~r/:frontier_type.*pareto/, fn -> GEPA.new(opts) end
+
+      assert_raise ArgumentError, ~r/:frontier_type.*reflective/, fn ->
+        GEPA.new(metric: fn _example, _prediction -> 0 end, frontier_type: mode)
+      end
+
+      optimizer = GEPA.new(opts ++ [candidate_selection_strategy: :pareto])
+
+      assert {:error, :missing_objective_scores} =
+               GEPA.compile(optimizer, program, trainset, valset: validation)
+
+      malformed = fn _, _, _, _, _ -> %{score: 0, objective_scores: %{"coverage" => true}} end
+
+      assert {:error, {:invalid_objective_scores, 0}} =
+               GEPA.compile(%{optimizer | metric: malformed}, program, trainset,
+                 valset: validation
+               )
+    end
+  end
+
   test "objective frontier validates strategy, metadata, and full-candidate presence" do
     [baseline, specialist | _] = @variants
     program = program(self(), baseline)
@@ -405,6 +482,65 @@ defmodule Dspy.Teleprompt.GEPAParetoTest do
   defp program(owner, instruction) do
     signature = %{Signature.define("question -> answer") | instructions: instruction}
     Predict.new(signature, lm: %TaskLM{owner: owner}, adapter: JSONAdapter, max_retries: 0)
+  end
+
+  defp assert_frontier_search(mode, seed, objectives, parent) do
+    [baseline, specialist, champion | _] = @variants
+    owner = self()
+    program = program(owner, baseline)
+    trainset = [row("row_train")]
+    valset = Enum.map(["row_val_b", "row_val_c"], &row/1)
+
+    metric = fn example, prediction, trace, name, _selected ->
+      variant = prediction[:answer]
+      question = example[:question]
+      if name == nil, do: send(owner, {:scored, variant, question})
+
+      case {trace, variant} do
+        {nil, ^baseline} -> %{score: 1, objective_scores: objectives.(variant, question)}
+        {nil, ^specialist} -> %{score: 0.5, objective_scores: objectives.(variant, question)}
+        {nil, ^champion} -> %{score: 2, objective_scores: objectives.(variant, question)}
+        {_, ^baseline} -> %{score: 0.2, objective_scores: :ignored_in_training}
+        {_, ^specialist} -> 0.5
+        {_, ^champion} -> 1
+      end
+    end
+
+    optimizer =
+      GEPA.new(
+        metric: metric,
+        reflection_lm: %ReflectionLM{owner: owner},
+        candidate_selection_strategy: :pareto,
+        frontier_type: mode,
+        max_metric_calls: 10,
+        num_threads: 1,
+        seed: seed
+      )
+
+    Dspy.context([cache: false], fn ->
+      assert {:ok, optimized} = GEPA.compile(optimizer, program, trainset, valset: valset)
+      assert_received {:reflected, ^baseline}
+      assert_received {:reflected, ^parent}
+      refute_received {:reflected, _}
+
+      {child, winner} =
+        if parent == specialist, do: {champion, champion}, else: {specialist, baseline}
+
+      assert optimized.signature.instructions == winner
+
+      validation_rows =
+        for variant <- [baseline, specialist, child], row <- valset, do: {variant, row[:question]}
+
+      training_rows = Enum.map([baseline, specialist, parent, child], &{&1, "row_train"})
+
+      for {variant, question} <- validation_rows ++ training_rows do
+        assert_received {:rollout, ^variant, ^question}
+        assert_received {:scored, ^variant, ^question}
+      end
+
+      refute_received {:rollout, _, _}
+      refute_received {:scored, _, _}
+    end)
   end
 
   defp row(question), do: Example.new(question: question) |> Example.with_inputs(:question)
