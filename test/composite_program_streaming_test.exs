@@ -163,6 +163,49 @@ defmodule Dspy.CompositeProgramStreamingTest do
     refute_received {:lm_call, _, _}
   end
 
+  test "named composite JSON listener streams raw text and preserves decoded prediction" do
+    text = ~s(["猫",{"value":2}])
+
+    predictor =
+      Predict.new("question -> answer: json",
+        lm: scripted("json-slot", [@answer_header, text]),
+        adapter: ChatAdapter
+      )
+
+    program = %Sequence{slots: %{first: predictor}, order: [:first]}
+
+    {events, [prediction]} =
+      Dspy.streamify(program, stream_listeners: [{"slots[:first]", :answer}]).(@inputs)
+      |> Enum.split(-1)
+
+    assert %Prediction{attrs: %{steps: [%{answer: ["猫", %{"value" => 2}]}]}} = prediction
+    assert Enum.map_join(events, & &1.chunk) == text
+    assert List.last(events).is_last_chunk
+  end
+
+  test "named JSON listeners resolve an unbound adapter at enumeration" do
+    lm = scripted("json-context", [@answer_header, "true"])
+    predictor = Predict.new("question -> answer: json", lm: lm)
+    program = %Sequence{slots: %{first: predictor}, order: [:first]}
+    stream = Dspy.streamify(program, stream_listeners: [{"slots[:first]", :answer}]).(@inputs)
+
+    Dspy.context([adapter: JSONAdapter], fn ->
+      assert [{:error, {:unsupported_streaming_adapter, JSONAdapter}}] = Enum.to_list(stream)
+    end)
+
+    refute_received {:lm_call, "json-context", _}
+
+    Dspy.context([adapter: ChatAdapter], fn ->
+      assert %Prediction{attrs: %{steps: [%{answer: true}]}} = List.last(Enum.to_list(stream))
+    end)
+
+    explicit = %{program | slots: %{first: %{predictor | adapter: JSONAdapter}}}
+
+    assert_raise ArgumentError, ~r/stream_listeners/, fn ->
+      Dspy.streamify(explicit, stream_listeners: [{"slots[:first]", :answer}])
+    end
+  end
+
   test "multiple selected slots emit and close separately when a predictor repeats" do
     draft =
       Predict.new("question -> draft",

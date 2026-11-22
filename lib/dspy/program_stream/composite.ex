@@ -17,12 +17,13 @@ defmodule Dspy.ProgramStream.Composite do
   defp resolve_selectors(selectors, slots) when is_integer(length(selectors)) do
     named_slots =
       Enum.map(slots, fn {path, predictor} ->
-        {path, PredictorSlots.name(path, predictor), predictor.signature.output_fields}
+        {path, PredictorSlots.name(path, predictor), predictor.signature.output_fields,
+         predictor.adapter}
       end)
 
     Enum.reduce(selectors, %{}, fn selector, selections ->
-      {path, name, outputs, field} = resolve_selector(selector, named_slots)
-      ProgramStream.validate_fields!(outputs, [field])
+      {path, name, outputs, adapter, field} = resolve_selector(selector, named_slots)
+      ProgramStream.validate_fields!(outputs, [field], adapter)
 
       Map.update(selections, path, {name, [field]}, fn {name, fields} ->
         if field in fields do
@@ -41,14 +42,16 @@ defmodule Dspy.ProgramStream.Composite do
 
   defp resolve_selector(field, slots) when is_atom(field) do
     slots
-    |> Enum.filter(fn {_path, _name, outputs} -> Enum.any?(outputs, &(&1.name == field)) end)
+    |> Enum.filter(fn {_path, _name, outputs, _adapter} ->
+      Enum.any?(outputs, &(&1.name == field))
+    end)
     |> resolve_match(field, field)
   end
 
   defp resolve_selector({name, field} = selector, slots)
        when is_binary(name) and is_atom(field) do
     slots
-    |> Enum.filter(fn {_path, slot_name, _outputs} -> slot_name == name end)
+    |> Enum.filter(fn {_path, slot_name, _outputs, _adapter} -> slot_name == name end)
     |> resolve_match(field, selector)
   end
 
@@ -56,7 +59,8 @@ defmodule Dspy.ProgramStream.Composite do
     raise ArgumentError, "invalid stream_listeners selector #{inspect(selector)}"
   end
 
-  defp resolve_match([{path, name, outputs}], field, _selector), do: {path, name, outputs, field}
+  defp resolve_match([{path, name, outputs, adapter}], field, _selector),
+    do: {path, name, outputs, adapter, field}
 
   defp resolve_match([], _field, selector) do
     raise ArgumentError, "stream_listeners selector #{inspect(selector)} matched no predictor"
