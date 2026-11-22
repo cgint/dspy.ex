@@ -474,6 +474,8 @@ defmodule Dspy do
   managed by `Dspy.Parallel.run/3`. Parallel calls share consumer demand.
   Their raw deltas can interleave, and selected field chunks carry an
   `:invocation_id` for grouping. The program result keeps its ordinary order.
+  Cancelling a composite stream kills its worker, so `after` blocks in that
+  worker do not run.
 
   Set `:status_message_provider` to a module implementing
   `Dspy.StatusMessageProvider` to receive `Dspy.StatusMessage` progress events
