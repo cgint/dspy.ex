@@ -27,12 +27,12 @@ defmodule Dspy.Teleprompt.GEPA.Reflective do
          [_ | _] = slots <- PredictorSlots.list(program),
          valset = Enum.with_index(valset),
          {:ok, {scores, objective_rows}} <- validation_batch(optimizer, program, valset),
-         {:ok, objectives} <- frontier_scores(optimizer.frontier_type, objective_rows) do
+         {:ok, dimensions} <- frontier_dimensions(optimizer.frontier_type, scores, objective_rows) do
       {random, _seed} = Random.seed(optimizer.seed)
       {random, paths} = Random.shuffle(random, Enum.map(slots, &elem(&1, 0)))
 
       state = %{
-        pool: CandidatePool.new(program, scores, objectives),
+        pool: CandidatePool.new(program, scores, dimensions),
         remaining: optimizer.max_metric_calls - length(valset),
         random: random,
         paths: paths,
@@ -130,9 +130,10 @@ defmodule Dspy.Teleprompt.GEPA.Reflective do
 
     if evaluate? do
       with {:ok, {scores, objective_rows}} <- validation_batch(optimizer, candidate, valset),
-           {:ok, objectives} <- frontier_scores(optimizer.frontier_type, objective_rows) do
+           {:ok, dimensions} <-
+             frontier_dimensions(optimizer.frontier_type, scores, objective_rows) do
         state = %{state | remaining: state.remaining - length(valset)}
-        {:ok, update_pool(optimizer, state, candidate, scores, round.parent_id, objectives)}
+        {:ok, update_pool(optimizer, state, candidate, scores, round.parent_id, dimensions)}
       end
     else
       {:ok, state}
@@ -145,11 +146,11 @@ defmodule Dspy.Teleprompt.GEPA.Reflective do
          candidate,
          scores,
          parent_id,
-         objectives
+         dimensions
        ) do
     %{
       state
-      | pool: CandidatePool.add(state.pool, candidate, scores, [parent_id], objectives),
+      | pool: CandidatePool.add(state.pool, candidate, scores, [parent_id], dimensions),
         merge_pending?: optimizer.use_merge
     }
   end
@@ -160,7 +161,7 @@ defmodule Dspy.Teleprompt.GEPA.Reflective do
          candidate,
          scores,
          _parent_id,
-         _objectives
+         _dimensions
        ),
        do: %{state | pool: CandidatePool.keep_best(state.pool, candidate, scores)}
 
@@ -205,9 +206,10 @@ defmodule Dspy.Teleprompt.GEPA.Reflective do
       if Enum.sum(sample_scores) >= max(left_total, right_total) do
         with {:ok, {scores, objective_rows}} <-
                finish_merge_validation(optimizer, proposal, sample, sample_result, rest),
-             {:ok, objectives} <- frontier_scores(optimizer.frontier_type, objective_rows) do
+             {:ok, dimensions} <-
+               frontier_dimensions(optimizer.frontier_type, scores, objective_rows) do
           pool =
-            CandidatePool.add(state.pool, proposal.program, scores, proposal.parents, objectives)
+            CandidatePool.add(state.pool, proposal.program, scores, proposal.parents, dimensions)
 
           {:attempted,
            %{state | pool: pool, remaining: state.remaining - length(rest), merge_pending?: true}}
@@ -303,7 +305,7 @@ defmodule Dspy.Teleprompt.GEPA.Reflective do
 
   defp validation_objectives(:instance, _records, _indices), do: {:ok, %{}}
 
-  defp validation_objectives(:objective, records, indices) do
+  defp validation_objectives(_frontier_type, records, indices) do
     indices = List.to_tuple(indices)
 
     Enum.reduce_while(records, {:ok, %{}}, fn record, {:ok, rows} ->
@@ -326,12 +328,33 @@ defmodule Dspy.Teleprompt.GEPA.Reflective do
 
   defp valid_objectives?(_objectives), do: false
 
-  defp frontier_scores(:instance, _rows), do: {:ok, nil}
+  defp frontier_dimensions(:instance, _scores, _rows), do: {:ok, nil}
 
-  defp frontier_scores(:objective, rows) when map_size(rows) == 0,
+  defp frontier_dimensions(_frontier_type, _scores, rows) when map_size(rows) == 0,
     do: {:error, :missing_objective_scores}
 
-  defp frontier_scores(:objective, rows) do
+  defp frontier_dimensions(:objective, _scores, rows), do: {:ok, objective_means(rows)}
+
+  defp frontier_dimensions(:hybrid, scores, rows) do
+    scalar_dimensions =
+      Map.new(Enum.with_index(scores), fn {score, index} -> {{:row, index}, score} end)
+
+    objective_dimensions =
+      Map.new(objective_means(rows), fn {name, score} -> {{:objective, name}, score} end)
+
+    {:ok, Map.merge(scalar_dimensions, objective_dimensions)}
+  end
+
+  defp frontier_dimensions(:cartesian, _scores, rows) do
+    dimensions =
+      for {index, objectives} <- rows, {name, score} <- objectives, into: %{} do
+        {{index, name}, score}
+      end
+
+    {:ok, dimensions}
+  end
+
+  defp objective_means(rows) do
     totals =
       rows
       |> Enum.sort()
@@ -341,7 +364,7 @@ defmodule Dspy.Teleprompt.GEPA.Reflective do
         end)
       end)
 
-    {:ok, Map.new(totals, fn {name, {sum, count}} -> {name, sum / count} end)}
+    Map.new(totals, fn {name, {sum, count}} -> {name, sum / count} end)
   end
 
   defp ordered_scores(records, count, fallback) do
@@ -353,7 +376,7 @@ defmodule Dspy.Teleprompt.GEPA.Reflective do
     capture_failed_parses? =
       mode == :reflection and Map.get(optimizer, :add_format_failure_as_feedback, false)
 
-    capture_objectives? = mode == :validation and optimizer.frontier_type == :objective
+    capture_objectives? = mode == :validation and optimizer.frontier_type != :instance
 
     metric = fn example, prediction, trace ->
       trace =

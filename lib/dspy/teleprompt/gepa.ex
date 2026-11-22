@@ -11,14 +11,16 @@ defmodule Dspy.Teleprompt.GEPA do
 
   Set `:candidate_selection_strategy` to `:pareto` to compare each proposal
   with its parent on the same training minibatch before running validation.
-  Parent selection weights candidates by the number of validation rows they
-  lead. With Pareto search, set `frontier_type: :objective` to select parents
-  and merge partners by their mean scores on named objectives. On validation
-  rows, a metric can include `:objective_scores` as a map of nonblank string
-  names to numbers. Each candidate needs at least one reported objective,
-  and each objective mean uses only the rows reporting it. The default
-  `frontier_type: :instance` selects by validation rows. The returned program
-  has the highest mean scalar validation score in both modes.
+  Pareto search weights parent candidates by the frontier dimensions they
+  lead. The default `frontier_type: :instance` tracks scalar validation rows.
+  `:objective` tracks named objective means, `:hybrid` combines scalar rows
+  and objective means, and `:cartesian` tracks each reported row-objective pair.
+  The same frontier supplies merge partners.
+  On validation rows, a metric can include `:objective_scores` as a map of
+  nonblank string names to numbers. In objective-based modes, a candidate
+  needs at least one reported objective to join the frontier. Each mean uses
+  only rows reporting that objective. The returned program has the highest
+  mean scalar validation score in all modes.
   The default `:current_best` searches from the best validation mean and
   evaluates proposals directly on the validation set.
   The budget counts training and validation rows that the program attempts.
@@ -71,6 +73,8 @@ defmodule Dspy.Teleprompt.GEPA do
   alias Dspy.Teleprompt.GEPA.{InstructionProposer, Reflective}
   alias Dspy.Teleprompt.Util, as: TpUtil
 
+  @objective_frontiers [:objective, :hybrid, :cartesian]
+
   @search_defaults [
     candidate_selection_strategy: :current_best,
     component_selector: :round_robin,
@@ -113,7 +117,7 @@ defmodule Dspy.Teleprompt.GEPA do
           num_threads: pos_integer() | nil,
           candidate_selection_strategy: :current_best | :pareto,
           component_selector: :round_robin | :all,
-          frontier_type: :instance | :objective,
+          frontier_type: :instance | :objective | :hybrid | :cartesian,
           failure_score: number(),
           perfect_score: number(),
           skip_perfect_score: boolean(),
@@ -136,8 +140,9 @@ defmodule Dspy.Teleprompt.GEPA do
   end
 
   defp new_from_candidates(opts) do
-    if opts[:frontier_type] == :objective do
-      raise ArgumentError, ":frontier_type :objective requires reflective Pareto search"
+    if opts[:frontier_type] in @objective_frontiers do
+      raise ArgumentError,
+            ":frontier_type #{inspect(opts[:frontier_type])} requires reflective Pareto search"
     end
 
     case Dspy.Teleprompt.validate_config(opts) do
@@ -253,13 +258,14 @@ defmodule Dspy.Teleprompt.GEPA do
       raise ArgumentError, ":component_selector must be :round_robin or :all"
     end
 
-    unless opts[:frontier_type] in [:instance, :objective] do
-      raise ArgumentError, ":frontier_type must be :instance or :objective"
+    unless opts[:frontier_type] in [:instance | @objective_frontiers] do
+      raise ArgumentError, ":frontier_type must be :instance, :objective, :hybrid, or :cartesian"
     end
 
-    if opts[:frontier_type] == :objective and opts[:candidate_selection_strategy] != :pareto do
+    if opts[:frontier_type] in @objective_frontiers and
+         opts[:candidate_selection_strategy] != :pareto do
       raise ArgumentError,
-            ":frontier_type :objective requires candidate_selection_strategy: :pareto"
+            ":frontier_type #{inspect(opts[:frontier_type])} requires candidate_selection_strategy: :pareto"
     end
 
     for key <- [:failure_score, :perfect_score] do

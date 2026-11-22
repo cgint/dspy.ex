@@ -73,6 +73,11 @@ merging. The primary score still governs minibatch acceptance, merge
 acceptance, and the final winner. The default `:instance` uses per-example
 leaders.
 
+`frontier_type: :hybrid` combines scalar row leaders and named objective
+mean leaders. `frontier_type: :cartesian` tracks each reported validation
+row and objective pair separately. Both modes use the existing validation
+calls and scalar acceptance rules. An absent objective creates no pair.
+
 With Pareto selection, `use_merge: true` combines compatible instructions
 from candidates with a common ancestor. A merge must match or beat both
 parents on the same validation subset. Its subset scores count toward

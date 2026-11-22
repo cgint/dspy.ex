@@ -143,6 +143,71 @@ defmodule Dspy.Teleprompt.GEPAMergeTest do
     assert compile.(remaining) == sample_then_rest
   end
 
+  test "cartesian merges retain the original row index of leaders from either subset" do
+    {fixture, program, training, validation} = fixture(true)
+    owner = self()
+
+    # At seed 9 right_a is outside the merge sample and neutral is inside it.
+    # If either score is indexed within its subset, the merged candidate does
+    # not displace the incumbent on that pair and the final draw selects right.
+    for merged_lead <- ["neutral", "right_a"] do
+      metric = fn example, prediction, trace, name, selected ->
+        score = fixture.metric.(example, prediction, trace, name, selected)
+        variant = prediction[:variant]
+        question = example[:question]
+        if trace == nil, do: send(owner, {:scored_validation, variant, question})
+
+        objectives =
+          case {variant, question} do
+            {:merged, ^merged_lead} -> %{"coverage" => 2}
+            {:left, "neutral"} -> %{"coverage" => 1}
+            {:right, "right_a"} -> %{"coverage" => 1}
+            {:base, question} when question in ["neutral", "right_a"] -> %{"coverage" => 0}
+            _ -> %{}
+          end
+
+        %{score: score, objective_scores: objectives}
+      end
+
+      optimizer =
+        GEPA.new(
+          metric: metric,
+          reflection_lm: fixture.reflection_lm,
+          candidate_selection_strategy: :pareto,
+          frontier_type: :cartesian,
+          use_merge: true,
+          max_merge_invocations: 1,
+          max_metric_calls: 36,
+          num_threads: 1,
+          seed: 9
+        )
+
+      assert {:ok, result} = GEPA.compile(optimizer, program, training, valset: validation)
+      assert result.slots[1].signature.instructions == @specialist
+      assert result.slots["1"].signature.instructions == @specialist
+      assert_parent_rollouts(validation)
+
+      for variant <- [:base, :left, :right, :merged], row <- validation do
+        question = row[:question]
+        assert_received {:scored_validation, ^variant, ^question}
+      end
+
+      merged_rows =
+        for _ <- validation do
+          assert_received {:rollout, :merged, question}
+          question
+        end
+
+      assert List.last(merged_rows) == "right_a"
+      assert Enum.sort(merged_rows) == Enum.sort(Enum.map(validation, & &1[:question]))
+
+      assert_received {:rollout, :merged, "training"}
+      refute_received {:rollout, _, _}
+      refute_received {:scored_validation, _, _}
+      refute_received :reflection
+    end
+  end
+
   test "a merge that beats only one parent on the shared subset stays out of the pool" do
     {optimizer, program, training, validation} = fixture(false)
 
