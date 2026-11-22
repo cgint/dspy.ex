@@ -15,6 +15,12 @@ defmodule Dspy.BoundingBoxTest do
     output_field(:answer, :string, "Answer")
   end
 
+  defmodule ContainerInputSignature do
+    use Dspy.Signature
+    input_field(:items, :json, "Items")
+    output_field(:answer, :string, "Answer")
+  end
+
   defmodule LM do
     @behaviour Dspy.LM
     defstruct [:content, :pid]
@@ -30,6 +36,59 @@ defmodule Dspy.BoundingBoxTest do
     end
 
     def supports?(_, _), do: true
+  end
+
+  for adapter <- [Dspy.Signature.Adapters.ChatAdapter, Dspy.Signature.Adapters.JSONAdapter] do
+    test "serializes nested box inputs through #{inspect(adapter)}" do
+      Dspy.configure(lm: %LM{pid: self(), content: ~s({"answer":"ok"})})
+
+      predictor =
+        Dspy.Predict.new(ContainerInputSignature, adapter: unquote(adapter), max_retries: 0)
+
+      box = %BoundingBox{top: 0, left: 0.1, bottom: 1, right: 0.9}
+
+      for items <- [[box], %{"nested" => [%{"box" => box}]}] do
+        assert {:ok, _} = Dspy.Module.forward(predictor, %{items: items})
+        assert_receive {:request, request}
+        text = Enum.map_join(request.messages, "\n", & &1.content)
+        assert text =~ Jason.encode!(items)
+      end
+
+      items = %{"nested" => [1 | :tail]}
+      assert {:ok, _} = Dspy.Module.forward(predictor, %{items: items})
+      assert_receive {:request, request}
+      assert Enum.map_join(request.messages, "\n", & &1.content) =~ inspect(items)
+    end
+  end
+
+  test "XML Predict renders typed box input and validates typed box output" do
+    adapter = Dspy.Signature.Adapters.XMLAdapter
+    box = %BoundingBox{top: 0, left: 0.1, bottom: 1, right: 0.9}
+    Dspy.configure(lm: %LM{pid: self(), content: "<answer>ok</answer>"})
+    predictor = Dspy.Predict.new(InputSignature, adapter: adapter, max_retries: 0)
+    assert {:ok, _} = Dspy.Module.forward(predictor, %{box: box})
+    assert_receive {:request, request}
+    assert Enum.map_join(request.messages, "\n", & &1.content) =~ Jason.encode!(box)
+
+    predictor =
+      Dspy.Predict.new(BoxSignature, adapter: adapter, max_retries: 0, max_output_retries: 0)
+
+    Dspy.configure(
+      lm: %LM{
+        content: "<box><top>0</top><left>0.1</left><bottom>1</bottom><right>0.9</right></box>"
+      }
+    )
+
+    assert {:ok, %{attrs: %{box: %BoundingBox{top: +0.0, left: 0.1, bottom: 1.0, right: 0.9}}}} =
+             Dspy.Module.forward(predictor, %{question: "q"})
+
+    Dspy.configure(
+      lm: %LM{
+        content: "<box><top>1</top><left>0.1</left><bottom>1</bottom><right>0.9</right></box>"
+      }
+    )
+
+    assert {:error, _} = Dspy.Module.forward(predictor, %{question: "q"})
   end
 
   @valid %{"top" => 0, "left" => 0.1, "bottom" => 1, "right" => 0.9}

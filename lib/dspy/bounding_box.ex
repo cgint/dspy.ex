@@ -26,6 +26,22 @@ defmodule Dspy.BoundingBox do
   def new(value), do: Dspy.TypedOutputs.validate_term(value, __MODULE__)
 
   @doc false
+  def encode_containing(value) do
+    if contains_box?(value), do: Jason.encode(value, maps: :strict), else: :error
+  end
+
+  defp contains_box?(%__MODULE__{}), do: true
+  defp contains_box?(value) when is_struct(value), do: false
+
+  defp contains_box?(value) when is_map(value),
+    do: Enum.any?(value, fn {_k, v} -> contains_box?(v) end)
+
+  defp contains_box?(value) when is_integer(length(value)),
+    do: Enum.any?(value, &contains_box?/1)
+
+  defp contains_box?(_value), do: false
+
+  @doc false
   def json_schema do
     %{
       type: :object,

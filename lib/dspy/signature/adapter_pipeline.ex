@@ -201,12 +201,13 @@ defmodule Dspy.Signature.AdapterPipeline do
     end)
   end
 
-  defp format_input_value(%Dspy.BoundingBox{} = box), do: Jason.encode!(box)
-
   defp format_input_value(value) when is_binary(value), do: value
 
   defp format_input_value(value) do
-    inspect(value, pretty: false, limit: 100, sort_maps: true)
+    case Dspy.BoundingBox.encode_containing(value) do
+      {:ok, json} -> json
+      _ -> inspect(value, pretty: false, limit: 100, sort_maps: true)
+    end
   end
 
   @doc """

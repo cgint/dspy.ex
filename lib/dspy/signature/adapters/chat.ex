@@ -252,8 +252,6 @@ defmodule Dspy.Signature.Adapters.ChatAdapter do
   end
 
   @doc false
-  def render_value_for_prompt(%Dspy.BoundingBox{} = box), do: Jason.encode!(box)
-
   def render_value_for_prompt(%Dspy.Attachments{}), do: "<attachments>"
 
   def render_value_for_prompt(%Dspy.Image{}),
@@ -283,7 +281,10 @@ defmodule Dspy.Signature.Adapters.ChatAdapter do
   defp format_value_for_prompt(value) when is_binary(value), do: value
 
   defp format_value_for_prompt(value) do
-    inspect(value, pretty: false, limit: 100, sort_maps: true)
+    case Dspy.BoundingBox.encode_containing(value) do
+      {:ok, json} -> json
+      _ -> inspect(value, pretty: false, limit: 100, sort_maps: true)
+    end
   end
 
   defp marker_header(field_name) when is_binary(field_name) do
