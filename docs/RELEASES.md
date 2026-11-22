@@ -63,6 +63,14 @@ returns the original examples ranked by dot product. Training and query
 field names share a lexical order. Equal scores favor the later training
 row. Scoring uses Elixir's native numeric representation.
 
+### ColBERTv2 server search
+
+`Dspy.Retrieve.colbert/1` accepts a ColBERTv2 server URL. Pass the
+configured value to `Dspy.Retrieve.ColBERTv2.search/3` for ranked results
+and server metadata. GET is the default and supports up to 100 results.
+Set `post_requests: true` for JSON POST or `simplify: true` on the
+search for passage strings.
+
 ### Trace-aware bootstrap metrics
 
 BootstrapRS, BootstrapFewShot, and KNNFewShot accept an arity-three metric

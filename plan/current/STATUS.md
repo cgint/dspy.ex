@@ -60,6 +60,11 @@
 > bindings. Candidate results retain validation scores and any stopped
 > stage outside the program struct.
 
+> **S029, ColBERTv2 server search.** A configured retriever value
+> supports ranked GET and JSON POST queries, with metadata or passage
+> strings. Real loopback HTTP verifies the request and response
+> contracts. Local indexing and request caching remain open.
+
 > **M4, multipart image splicing.** Separate marker-bearing text parts
 > share one ordered stream of typed images. A count mismatch strips the
 > markers and appends each supplied image once before new attachments.
