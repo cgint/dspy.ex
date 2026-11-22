@@ -22,7 +22,9 @@
 > Crash capture and partial-format scoring remain open.
 
 > **M6, GEPA instruction reflection.** An opt-in reflection LM proposes
-> changes for one typed predictor slot at a time. The budgeted search
+> changes for typed predictor slots. The default selects one slot per
+> round. `component_selector: :all` combines updates to observed slots
+> in one candidate from a shared training minibatch. The budgeted search
 > keeps candidates that improve held-out scores. The offline example
 > verifies that improvement. Opt-in Pareto selection can revisit a
 > lower-mean validation specialist after it improves a shared training
@@ -35,7 +37,8 @@
 > instructions and adapters, and one correction for oversized drafts.
 > It can also include declared training images with numbered references
 > or typed training history with shortened tool results in the reflection
-> request. Additional frontier objectives remain open.
+> request. Custom component selectors and additional frontier objectives
+> remain open.
 
 > **M4, multipart image splicing.** Separate marker-bearing text parts
 > share one ordered stream of typed images. A count mismatch strips the

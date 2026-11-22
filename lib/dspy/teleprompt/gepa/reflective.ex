@@ -68,41 +68,57 @@ defmodule Dspy.Teleprompt.GEPA.Reflective do
       state = %{state | random: random, remaining: state.remaining - count}
       round = %{parent: parent, parent_id: parent_id, batch: batch, records: records}
 
-      case select_slot(optimizer, state.paths, records) do
-        nil when optimizer.candidate_selection_strategy == :pareto or count < length(trainset) ->
+      case select_slots(optimizer, state.paths, records) do
+        [] when optimizer.candidate_selection_strategy == :pareto or count < length(trainset) ->
           search(optimizer, trainset, valset, state)
 
-        nil ->
+        [] ->
           {:ok, CandidatePool.best(state.pool)}
 
-        {path, observations} ->
-          improve(optimizer, trainset, valset, state, round, path, observations)
+        selected ->
+          improve(optimizer, trainset, valset, state, round, selected)
       end
     end
   end
 
-  defp improve(optimizer, trainset, valset, state, round, path, observations) do
+  defp improve(optimizer, trainset, valset, state, round, selected) do
     slots = round.parent |> PredictorSlots.list() |> Map.new()
-    predictor = Map.fetch!(slots, path)
-    name = PredictorSlots.name(path, predictor)
-    report = reflection_report(optimizer, predictor, name, observations)
 
-    with {:ok, instruction} <- propose(optimizer, slots, path, report) do
-      state = evaluate_proposal(optimizer, valset, state, round, path, instruction)
-      paths = Enum.reject(state.paths, &(&1 === path)) ++ [path]
+    reports =
+      Enum.flat_map(selected, fn {path, observations} ->
+        predictor = Map.fetch!(slots, path)
+        name = PredictorSlots.name(path, predictor)
+
+        case reflection_report(optimizer, predictor, name, observations) do
+          {[], _images} -> []
+          report -> [{path, report}]
+        end
+      end)
+
+    with {:ok, updates} <- propose(optimizer, slots, reports) do
+      state = evaluate_proposal(optimizer, valset, state, round, updates)
+      paths = advance_paths(optimizer.component_selector, state.paths, selected)
       search(optimizer, trainset, valset, %{state | paths: paths})
     end
   end
 
-  defp evaluate_proposal(_optimizer, _valset, state, _round, _path, nil), do: state
+  defp advance_paths(:round_robin, paths, [{path, _observations}]),
+    do: Enum.reject(paths, &(&1 === path)) ++ [path]
 
-  defp evaluate_proposal(optimizer, valset, state, round, selected_path, instruction) do
+  defp advance_paths(:all, paths, _selected), do: paths
+
+  defp evaluate_proposal(_optimizer, _valset, state, _round, updates) when map_size(updates) == 0,
+    do: state
+
+  defp evaluate_proposal(optimizer, valset, state, round, updates) do
     candidate =
       PredictorSlots.map(round.parent, fn path, predictor ->
-        if path === selected_path do
-          %{predictor | signature: %{predictor.signature | instructions: instruction}}
-        else
-          predictor
+        case Map.fetch(updates, path) do
+          {:ok, instruction} ->
+            %{predictor | signature: %{predictor.signature | instructions: instruction}}
+
+          :error ->
+            predictor
         end
       end)
 
@@ -220,21 +236,29 @@ defmodule Dspy.Teleprompt.GEPA.Reflective do
      %{state | remaining: state.remaining - count}}
   end
 
-  defp select_slot(optimizer, paths, records) do
+  defp select_slots(optimizer, paths, records) do
     records =
       for record <- records,
           not optimizer.skip_perfect_score or record.score < optimizer.perfect_score do
         index_steps(record)
       end
 
-    Enum.find_value(paths, fn path ->
-      observations =
-        for {record, steps} <- records, {:ok, step} <- [Map.fetch(steps, path)] do
-          {record, step}
-        end
+    eligible =
+      paths
+      |> Stream.map(fn path ->
+        observations =
+          for {record, steps} <- records, {:ok, step} <- [Map.fetch(steps, path)] do
+            {record, step}
+          end
 
-      if observations != [], do: {path, observations}
-    end)
+        {path, observations}
+      end)
+      |> Stream.reject(fn {_path, observations} -> observations == [] end)
+
+    case optimizer.component_selector do
+      :round_robin -> Enum.take(eligible, 1)
+      :all -> Enum.to_list(eligible)
+    end
   end
 
   defp index_steps(record) do
@@ -287,40 +311,41 @@ defmodule Dspy.Teleprompt.GEPA.Reflective do
   defp score(result) when is_map(result), do: Attrs.get(result, :score, result)
   defp score(result), do: result
 
-  defp propose(_optimizer, _slots, _path, {[], []}), do: {:ok, nil}
+  defp propose(_optimizer, _slots, []), do: {:ok, %{}}
 
-  defp propose(optimizer, slots, path, {report, images}) do
-    previous = Map.fetch!(slots, path).signature.instructions || ""
-
+  defp propose(optimizer, slots, reports) do
     case Map.get(optimizer, :instruction_proposer) do
-      nil ->
-        propose_with_lm(optimizer.reflection_lm, previous, report)
-
-      %InstructionProposer{} = proposer ->
-        preview = PromptPreview.truncate(previous, @instruction_bytes)
-
-        case InstructionProposer.propose(
-               proposer,
-               optimizer.reflection_lm,
-               preview,
-               report,
-               images
-             ) do
-          {:ok, instruction} -> validate_proposal(instruction, previous)
-          {:error, reason} -> {:error, {:reflection_failed, reason}}
-        end
+      proposer when is_nil(proposer) or is_struct(proposer, InstructionProposer) ->
+        collect_updates(reports, fn path, report ->
+          previous = Map.fetch!(slots, path).signature.instructions || ""
+          propose_instruction(proposer, optimizer.reflection_lm, previous, report)
+        end)
 
       proposer ->
         candidate =
-          Map.new(slots, fn {slot, predictor} ->
-            {slot, predictor.signature.instructions || ""}
+          Map.new(slots, fn {path, predictor} ->
+            {path, predictor.signature.instructions || ""}
           end)
 
-        invoke = fn -> proposer.(candidate, %{path => report}, [path]) end
+        dataset = Map.new(reports, fn {path, {report, _images}} -> {path, report} end)
+        paths = Enum.map(reports, &elem(&1, 0))
+        invoke = fn -> proposer.(candidate, dataset, paths) end
 
         with {:ok, updates} <- call_instruction_proposer(invoke, optimizer.reflection_lm) do
-          validate_instruction_updates(updates, path, previous)
+          validate_instruction_updates(updates, candidate, paths)
         end
+    end
+  end
+
+  defp propose_instruction(nil, lm, previous, {report, _images}),
+    do: propose_with_lm(lm, previous, report)
+
+  defp propose_instruction(%InstructionProposer{} = proposer, lm, previous, {report, images}) do
+    preview = PromptPreview.truncate(previous, @instruction_bytes)
+
+    case InstructionProposer.propose(proposer, lm, preview, report, images) do
+      {:ok, instruction} -> validate_proposal(instruction, previous)
+      {:error, reason} -> {:error, {:reflection_failed, reason}}
     end
   end
 
@@ -331,21 +356,31 @@ defmodule Dspy.Teleprompt.GEPA.Reflective do
     _error -> {:error, {:reflection_failed, :instruction_proposer_raised}}
   end
 
-  defp validate_instruction_updates(updates, path, previous)
+  defp validate_instruction_updates(updates, candidate, paths)
        when is_map(updates) and not is_struct(updates) do
-    case updates do
-      %{} when map_size(updates) == 0 ->
-        {:ok, nil}
+    selected_updates =
+      for path <- paths, {:ok, value} <- [Map.fetch(updates, path)], do: {path, value}
 
-      %{^path => instruction} when map_size(updates) == 1 ->
-        validate_proposal(instruction, previous)
-
-      %{} ->
-        {:error, {:reflection_failed, :unselected_instruction_slot}}
+    if length(selected_updates) == map_size(updates) do
+      collect_updates(selected_updates, fn path, value ->
+        validate_proposal(value, Map.fetch!(candidate, path))
+      end)
+    else
+      {:error, {:reflection_failed, :unselected_instruction_slot}}
     end
   end
 
-  defp validate_instruction_updates(_updates, _path, _previous), do: invalid_proposal()
+  defp validate_instruction_updates(_updates, _candidate, _paths), do: invalid_proposal()
+
+  defp collect_updates(items, propose) do
+    Enum.reduce_while(items, {:ok, %{}}, fn {path, item}, {:ok, updates} ->
+      case propose.(path, item) do
+        {:ok, nil} -> {:cont, {:ok, updates}}
+        {:ok, instruction} -> {:cont, {:ok, Map.put(updates, path, instruction)}}
+        {:error, _reason} = error -> {:halt, error}
+      end
+    end)
+  end
 
   defp propose_with_lm(lm, previous, report) do
     context =

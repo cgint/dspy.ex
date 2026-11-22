@@ -77,10 +77,15 @@ text, and format guidance for that predictor. The failed row uses
 
 Pass an arity-three `instruction_proposer:` callback to supply GEPA
 instruction updates in Elixir. It receives all current instructions,
-bounded reflective observations, and the selected slot, keyed by exact
-typed paths. Return a map with the new instruction for that slot, or an
-empty map to skip the proposal. A supplied reflection LM is scoped to
-the callback. Callers can also use the callback by itself.
+bounded reflective observations, and the selected slots, keyed by exact
+typed paths. Return new instructions for selected slots or an empty map
+to skip the proposal. A supplied reflection LM is scoped to the callback.
+Callers can also use the callback by itself.
+
+Set `component_selector: :all` to propose changes for all slots with
+observations in the same training minibatch. GEPA batches their instruction
+updates into one candidate and scores it within the existing rollout budget.
+The default `:round_robin` selects one slot at a time.
 
 `Dspy.Teleprompt.GEPA.InstructionProposer.new/1` configures GEPA's
 LM-driven proposer. Set a base prompt, additional instructions, a signature

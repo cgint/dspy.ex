@@ -4,15 +4,17 @@ defmodule Dspy.Teleprompt.GEPACustomProposerTest do
   alias Dspy.{Example, Predict, Prediction, Settings, Signature, Teleprompt}
   alias Dspy.Signature.Adapters.JSONAdapter
   alias Dspy.Teleprompt.GEPA
+  alias Dspy.Teleprompt.GEPA.InstructionProposer
 
   @starting "Answer zero."
   @improved "Answer four."
   @integer_slot [{:field, :slots}, {:key, 1}]
   @string_slot [{:field, :slots}, {:key, "1"}]
+  @dormant_slot [{:field, :slots}, {:key, :dormant}]
 
   defmodule ScriptedLM do
     @behaviour Dspy.LM
-    defstruct [:owner, :label]
+    defstruct [:owner, :label, fail_string_slot?: false]
 
     @impl true
     def generate(%__MODULE__{label: :rollout, owner: owner}, request) do
@@ -22,6 +24,17 @@ defmodule Dspy.Teleprompt.GEPACustomProposerTest do
       answer = if prompt =~ "Answer four.", do: "4", else: "0"
       send(owner, {:rollout, question, slot, answer, Settings.get(:lm)})
       {:ok, Jason.encode!(%{answer: answer})}
+    end
+
+    def generate(%__MODULE__{label: :all_reflection, owner: owner} = lm, request) do
+      prompt = List.last(request.messages).content
+      send(owner, {:joint_reflection, prompt})
+
+      if lm.fail_string_slot? and prompt =~ "training row string slot" do
+        {:error, :failed_reflection}
+      else
+        {:ok, Jason.encode!(%{new_instruction: "Answer four."})}
+      end
     end
 
     def generate(%__MODULE__{owner: owner, label: label}, _request) do
@@ -131,6 +144,142 @@ defmodule Dspy.Teleprompt.GEPACustomProposerTest do
     end)
   end
 
+  test "selecting all observed slots produces one joint candidate in the same Pareto budget" do
+    owner = self()
+    program = program_with_dormant_slot()
+    assert program.slots[1] === program.slots["1"]
+
+    proposer = fn candidate, observations, paths ->
+      send(owner, {:proposal, candidate, observations, paths, Settings.get(:lm)})
+      Map.new(paths, &{&1, @improved})
+    end
+
+    reflection = %ScriptedLM{owner: self(), label: :reflection}
+
+    tp =
+      optimizer(proposer,
+        component_selector: :all,
+        candidate_selection_strategy: :pareto,
+        max_metric_calls: 4,
+        metric: &joint_score/5,
+        reflection_lm: reflection
+      )
+
+    Dspy.context([lm: nil, cache: false], fn ->
+      assert {:ok, optimized} = GEPA.compile(tp, program, [training()], valset: [held_out()])
+      assert optimized.slots[1].signature.instructions == @improved
+      assert optimized.slots["1"].signature.instructions == @improved
+      assert optimized.slots[:dormant] === program.slots[:dormant]
+      assert program.slots[1].signature.instructions == @starting
+      assert Settings.get(:lm) == nil
+
+      assert_received {:proposal, candidate, observations, [@integer_slot, @string_slot],
+                       ^reflection}
+
+      assert candidate == %{
+               @integer_slot => @starting,
+               @string_slot => @starting,
+               @dormant_slot => @starting
+             }
+
+      assert %{@integer_slot => [integer], @string_slot => [string]} = observations
+      assert map_size(observations) == 2
+      assert integer.inputs == %{"question" => "training row integer slot"}
+      assert string.inputs == %{"question" => "training row string slot"}
+      assert integer.outputs == %{"answer" => "0"}
+      assert string.outputs == %{"answer" => "0"}
+      assert integer.feedback == "Improve both answers."
+      assert string.feedback == "Improve both answers."
+      refute_received {:proposal, _, _, _, _}
+
+      assert_joint_rollouts()
+    end)
+  end
+
+  test "both built-in reflection paths collect per-slot proposals before scoring one candidate" do
+    Dspy.context([lm: nil, cache: false], fn ->
+      for proposer <- [nil, InstructionProposer.new()] do
+        tp =
+          optimizer(proposer,
+            component_selector: :all,
+            candidate_selection_strategy: :pareto,
+            max_metric_calls: 4,
+            metric: &joint_score/5,
+            reflection_lm: %ScriptedLM{owner: self(), label: :all_reflection}
+          )
+
+        program = program_with_dormant_slot()
+        assert {:ok, optimized} = GEPA.compile(tp, program, [training()], valset: [held_out()])
+        assert optimized.slots[1].signature.instructions == @improved
+        assert optimized.slots["1"].signature.instructions == @improved
+        assert optimized.slots[:dormant] === program.slots[:dormant]
+
+        assert_joint_reflections()
+        assert_joint_rollouts()
+      end
+    end)
+  end
+
+  test "a later built-in proposal failure discards earlier changes before candidate scoring" do
+    Dspy.context([lm: nil, cache: false], fn ->
+      for proposer <- [nil, InstructionProposer.new()] do
+        tp =
+          optimizer(proposer,
+            component_selector: :all,
+            reflection_lm: %ScriptedLM{
+              owner: self(),
+              label: :all_reflection,
+              fail_string_slot?: true
+            }
+          )
+
+        assert {:error, {:reflection_failed, :failed_reflection}} =
+                 GEPA.compile(tp, program_with_dormant_slot(), [training()], valset: [held_out()])
+
+        assert_joint_reflections()
+        assert_baseline_rollouts(nil)
+      end
+    end)
+  end
+
+  test "all-slot proposals reject unobserved or invalid updates before scoring" do
+    Dspy.context([lm: nil, cache: false], fn ->
+      for {updates, expected} <- [
+            {%{@integer_slot => @improved, @dormant_slot => @improved},
+             :unselected_instruction_slot},
+            {%{@integer_slot => @improved, @string_slot => 42}, :invalid_instruction_proposal}
+          ] do
+        tp = optimizer(fn _, _, _ -> updates end, component_selector: :all)
+
+        assert {:error, {:reflection_failed, ^expected}} =
+                 GEPA.compile(tp, program_with_dormant_slot(), [training()], valset: [held_out()])
+
+        assert_baseline_rollouts(nil)
+      end
+    end)
+  end
+
+  test "all-slot proposals can update just one of the observed slots" do
+    tp = optimizer(fn _, _, _ -> %{@integer_slot => @improved} end, component_selector: :all)
+    program = program_with_dormant_slot()
+
+    Dspy.context([lm: nil, cache: false], fn ->
+      assert {:ok, optimized} = GEPA.compile(tp, program, [training()], valset: [held_out()])
+      assert optimized.slots[1].signature.instructions == @improved
+      assert optimized.slots["1"] === program.slots["1"]
+      assert optimized.slots[:dormant] === program.slots[:dormant]
+
+      assert_rollouts([
+        {:held_out, 1, "0", nil},
+        {:held_out, "1", "0", nil},
+        {:train, 1, "0", nil},
+        {:train, "1", "0", nil},
+        {:held_out, 1, "4", nil},
+        {:held_out, "1", "0", nil}
+      ])
+    end)
+  end
+
   test "a raised callback restores the LM and reports a static error" do
     owner = self()
     ambient = %ScriptedLM{owner: owner, label: :ambient}
@@ -219,7 +368,7 @@ defmodule Dspy.Teleprompt.GEPACustomProposerTest do
       )
 
     Dspy.context([lm: nil, cache: false], fn ->
-      for variant <- [tp, Map.delete(tp, :instruction_proposer)] do
+      for variant <- [tp, Map.drop(tp, [:instruction_proposer, :component_selector])] do
         assert {:ok, optimized} =
                  GEPA.compile(variant, program(), [training()], valset: [held_out()])
 
@@ -227,6 +376,12 @@ defmodule Dspy.Teleprompt.GEPACustomProposerTest do
         assert_received {:reflection_lm_called, :reflection}
       end
     end)
+  end
+
+  test "reflective component selectors are limited to round-robin and all" do
+    assert_raise ArgumentError, ~r/component_selector.*round_robin.*all/, fn ->
+      optimizer(fn _, _, _ -> %{} end, component_selector: :unknown)
+    end
   end
 
   defp optimizer(proposer, opts \\ []) do
@@ -247,6 +402,13 @@ defmodule Dspy.Teleprompt.GEPACustomProposerTest do
     }
   end
 
+  defp joint_score(_example, prediction, _trace, _name, _steps) do
+    %{
+      score: if(prediction[:answer] == "4" and prediction[:sibling] == "4", do: 1.0, else: 0.0),
+      feedback: "Improve both answers."
+    }
+  end
+
   defp program do
     signature = %{Signature.define("question -> answer") | instructions: @starting}
 
@@ -258,6 +420,11 @@ defmodule Dspy.Teleprompt.GEPACustomProposerTest do
       )
 
     %PairedPredictors{slots: %{1 => predictor, "1" => predictor}}
+  end
+
+  defp program_with_dormant_slot do
+    program = program()
+    put_in(program.slots[:dormant], program.slots[1])
   end
 
   defp training do
@@ -274,6 +441,29 @@ defmodule Dspy.Teleprompt.GEPACustomProposerTest do
       {:train, 1, "0", ambient},
       {:train, "1", "0", ambient}
     ])
+  end
+
+  defp assert_joint_rollouts do
+    assert_rollouts([
+      {:held_out, 1, "0", nil},
+      {:held_out, "1", "0", nil},
+      {:train, 1, "0", nil},
+      {:train, "1", "0", nil},
+      {:train, 1, "4", nil},
+      {:train, "1", "4", nil},
+      {:held_out, 1, "4", nil},
+      {:held_out, "1", "4", nil}
+    ])
+  end
+
+  defp assert_joint_reflections do
+    assert_received {:joint_reflection, integer}
+    assert integer =~ "training row integer slot"
+    refute integer =~ "training row string slot"
+    assert_received {:joint_reflection, string}
+    assert string =~ "training row string slot"
+    refute string =~ "training row integer slot"
+    refute_received {:joint_reflection, _}
   end
 
   defp assert_rollouts(expected) do
