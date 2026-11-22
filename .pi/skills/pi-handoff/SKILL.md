@@ -15,10 +15,10 @@ Use this when you want to keep the **driver** agent focused on North Star + deci
 
 ## Usage (recommended: simplest)
 
-If you want the simplest working sub-agent call (no model/tool flags), use the minimal profile in print mode:
+If you want the simplest working sub-agent call (no model/tool flags), run plain `pi` in print mode:
 
 ```bash
-pi-profile minimal -p \
+pi -p \
   @plan/research/adapter_parity/CONTEXT.md \
   @lib/dspy/signature.ex \
   "Goal: inventory signature parsing + where atoms are created. Return paths + line ranges and a short plan."
