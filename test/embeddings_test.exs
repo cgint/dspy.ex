@@ -170,20 +170,20 @@ defmodule Dspy.EmbeddingsTest do
     assert_received {:embedded, ["axis", "wide"]}
     assert_received {:embedded, ["axis", "opposite"]}
 
-    queries = ["backwards", "forwards", "backwards"]
+    queries = ["backwards", "backwards", "forwards"]
 
     assert {:ok, plain_results} = Embeddings.query_batch(index, queries)
     assert_received {:embedded, first_batch}
-    assert first_batch == ["backwards", "forwards"]
+    assert first_batch == ["backwards", "backwards"]
     assert_received {:embedded, second_batch}
-    assert second_batch == ["backwards"]
+    assert second_batch == ["forwards"]
     refute_received {:embedded, _}
 
-    assert Enum.map(plain_results, & &1[:indices]) == [[3, 1, 0], [0, 2, 1], [3, 1, 0]]
+    assert Enum.map(plain_results, & &1[:indices]) == [[3, 1, 0], [3, 1, 0], [0, 2, 1]]
 
     assert {:ok, scored_results} = Embeddings.query_batch(index, queries, include_scores: true)
-    assert_received {:embedded, ["backwards", "forwards"]}
-    assert_received {:embedded, ["backwards"]}
+    assert_received {:embedded, ["backwards", "backwards"]}
+    assert_received {:embedded, ["forwards"]}
     refute_received {:embedded, _}
 
     expected_plain =
