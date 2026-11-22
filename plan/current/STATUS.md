@@ -26,8 +26,7 @@
 > round. `component_selector: :all` combines updates to observed slots
 > in one candidate from a shared training minibatch. A custom selector
 > can choose an ordered subset using bounded observations from that batch.
-> The budgeted search
-> keeps candidates that improve held-out scores. The offline example
+> The budgeted search keeps candidates that improve held-out scores. The offline example
 > verifies that improvement. Opt-in Pareto selection can revisit a
 > lower-mean validation specialist after it improves a shared training
 > minibatch. The objective frontier uses named metric means to find
@@ -45,6 +44,11 @@
 > or typed training history with shortened tool results in the reflection
 > request. Upstream optimizer-state and advanced evaluation policies
 > remain open.
+
+> **M6, InferRules.** The optimizer bootstraps once, induces rules for
+> each typed predictor slot from training examples, and ranks candidates
+> on held-out rows. A context-limit retry removes the last training row
+> and uses a fresh induction rollout.
 
 > **M4, multipart image splicing.** Separate marker-bearing text parts
 > share one ordered stream of typed images. A count mismatch strips the

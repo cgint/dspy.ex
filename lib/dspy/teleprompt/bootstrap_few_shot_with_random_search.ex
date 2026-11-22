@@ -133,6 +133,18 @@ defmodule Dspy.Teleprompt.BootstrapFewShotWithRandomSearch do
     end
   end
 
+  @doc false
+  def bootstrap(%__MODULE__{} = optimizer, student, trainset, opts) do
+    teacher = Keyword.get(opts, :teacher) || student
+
+    with {:ok, trainset} <- Trainset.validate(trainset),
+         {:ok, zero_shot} <- prepare_student(student),
+         :ok <- validate_teacher(zero_shot, teacher, [-1]) do
+      optimizer = %{optimizer | max_errors: optimizer.max_errors || Settings.get(:max_errors)}
+      build_candidate(-1, optimizer, zero_shot, teacher, trainset, opts)
+    end
+  end
+
   defp select_seeds(count, nil), do: {:ok, Enum.to_list(-3..(count - 1))}
 
   defp select_seeds(count, restrict) when is_list(restrict) do
