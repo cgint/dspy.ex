@@ -108,12 +108,29 @@ defmodule Dspy.StreamingResponseTest do
     refute_received :exhausted
   end
 
+  test "multiline JSON stays in one event, with a data prefix on each physical line" do
+    fragment = Jason.Fragment.new("{\r\n\"count\": 1,\r\"ready\": true\n}")
+
+    assert [frame, @done] =
+             Enum.to_list(Dspy.streaming_response([Prediction.new(answer: fragment)]))
+
+    assert [
+             "data: {\"prediction\":{\"answer\":{",
+             "data: \"count\": 1,",
+             "data: \"ready\": true",
+             "data: }}}",
+             "",
+             ""
+           ] == String.split(frame, "\n")
+  end
+
   test "terminal errors and unsupported or unencodable events raise without leaking values or pulling the tail" do
     for {event, secret} <- [
           {{:error, "private-error"}, "private-error"},
           {{:unsupported, "private-event"}, "private-event"},
           {{:delta, self()}, inspect(self())},
-          {Prediction.new(%{"private-key" => 1, :"private-key" => 2}), "private-key"}
+          {Prediction.new(%{"private-key" => 1, :"private-key" => 2}), "private-key"},
+          {Prediction.new(%{answer: %{{:pair, "private-tuple"} => 1}}), "private-tuple"}
         ] do
       source = tracked([{:delta, "first"}, event, {:delta, "tail"}])
 

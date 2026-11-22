@@ -47,9 +47,9 @@ defmodule Dspy.StreamingResponse do
   defp invocation_id(_other), do: raise(ArgumentError, "invalid streaming invocation ID")
 
   defp data(payload) do
-    case Jason.encode(payload, maps: :strict) do
-      {:ok, json} -> "data: " <> json <> "\n\n"
-      {:error, _error} -> raise ArgumentError, "streaming response event is not JSON encodable"
-    end
+    json = Jason.encode!(payload, maps: :strict)
+    "data: " <> String.replace(json, ["\r\n", "\r", "\n"], "\ndata: ") <> "\n\n"
+  rescue
+    _error -> raise ArgumentError, "streaming response event is not JSON encodable"
   end
 end
