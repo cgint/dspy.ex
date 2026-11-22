@@ -53,6 +53,14 @@ defmodule Dspy.CompositeProgramStreamingTest do
     end
   end
 
+  defmodule DetailedAnswer do
+    use Dspy.Signature
+
+    input_field(:question, :string, "Question")
+    output_field(:answer, :string, "Answer")
+    output_field(:detail, :string, "Required detail")
+  end
+
   defmodule TrapExitProgram do
     @behaviour Dspy.Module
     defstruct [:sequence, :owner]
@@ -193,7 +201,7 @@ defmodule Dspy.CompositeProgramStreamingTest do
 
   test "a recovered parse failure leaves its field open and the next selected slot starts cleanly" do
     broken =
-      Predict.new("question -> answer, detail",
+      Predict.new(DetailedAnswer,
         lm: scripted("broken", [@answer_header, "Incomplete."]),
         adapter: ChatAdapter
       )
