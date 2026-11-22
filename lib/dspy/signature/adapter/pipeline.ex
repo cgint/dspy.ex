@@ -52,7 +52,7 @@ defmodule Dspy.Signature.Adapter.Pipeline do
       when is_map(inputs) and is_list(demos) and is_list(opts),
       do: run(signature, inputs, demos, nil, opts)
 
-  defp run(%Signature{} = signature, inputs, demos, on_delta, opts)
+  defp run(%Signature{} = signature, inputs, demos, stream_callbacks, opts)
        when is_map(inputs) and is_list(demos) and is_list(opts) do
     adapter = AdapterPipeline.active_adapter(adapter: Keyword.get(opts, :adapter))
 
@@ -65,12 +65,19 @@ defmodule Dspy.Signature.Adapter.Pipeline do
     {request_options, cache_options} =
       opts |> Keyword.get(:config, %{}) |> PredictorConfig.execution_options()
 
+    {on_delta, on_cache_hit} =
+      case stream_callbacks do
+        {on_delta, on_cache_hit} -> {on_delta, on_cache_hit}
+        on_delta -> {on_delta, nil}
+      end
+
     count = Map.get(request_options, :n)
     lm = choice_lm(Keyword.get(opts, :lm), count)
 
     lm_options = %{
       lm: lm,
       on_delta: on_delta,
+      on_cache_hit: on_cache_hit,
       count: count,
       prediction_signature: Keyword.get(opts, :prediction_signature, signature),
       max_retries: if(on_delta, do: 0, else: Keyword.get(opts, :max_retries, 3)),
@@ -900,12 +907,21 @@ defmodule Dspy.Signature.Adapter.Pipeline do
     end
   end
 
-  defp invoke_lm(request, %{lm: bound_lm, on_delta: on_delta}) when is_function(on_delta, 1) do
+  defp invoke_lm(request, %{lm: bound_lm, on_delta: on_delta} = options)
+       when is_function(on_delta, 1) do
     lm = if is_nil(bound_lm), do: Settings.get(:lm), else: bound_lm
 
-    if is_nil(lm),
-      do: {:error, :no_lm_configured},
-      else: LM.stream_generate(lm, request, on_delta)
+    case {lm, options.on_cache_hit} do
+      {nil, _} ->
+        {:error, :no_lm_configured}
+
+      {lm, nil} ->
+        LM.stream_generate(lm, request, on_delta)
+
+      {lm, notify} ->
+        opts = Keyword.put(options.cache_options, :on_cache_hit, notify)
+        LM.stream_generate_with_options(lm, request, on_delta, opts)
+    end
   end
 
   defp invoke_lm(request, %{lm: lm, cache_options: options}),

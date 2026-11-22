@@ -52,7 +52,7 @@ defmodule Dspy.Module do
   - a `%Dspy.Example{}` (converted via `Dspy.Example.inputs/1`)
   """
   def forward(module, inputs) do
-    on_delta = ProgramStream.take_delta()
+    stream_callbacks = ProgramStream.take_stream_callbacks()
     {track_usage, global_callbacks, telemetry?} = Dspy.Settings.module_observability()
 
     with %{__struct__: type} when is_atom(type) <- module,
@@ -62,12 +62,12 @@ defmodule Dspy.Module do
         type,
         callbacks,
         {:module_start, :module_end},
-        fn -> forward_with_usage(module, inputs, track_usage, on_delta) end,
+        fn -> forward_with_usage(module, inputs, track_usage, stream_callbacks) end,
         nil,
         telemetry?
       )
     else
-      _ -> forward_with_usage(module, inputs, track_usage, on_delta)
+      _ -> forward_with_usage(module, inputs, track_usage, stream_callbacks)
     end
   end
 
@@ -77,12 +77,12 @@ defmodule Dspy.Module do
 
   defp program_callbacks(_module), do: []
 
-  defp forward_with_usage(module, inputs, true, on_delta) do
+  defp forward_with_usage(module, inputs, true, stream_callbacks) do
     outer? = Dspy.LM.UsageAcc.enter()
 
     result =
       try do
-        forward_untracked(module, inputs, on_delta)
+        forward_untracked(module, inputs, stream_callbacks)
       catch
         kind, reason ->
           Dspy.LM.UsageAcc.exit()
@@ -98,15 +98,15 @@ defmodule Dspy.Module do
     end
   end
 
-  defp forward_with_usage(module, inputs, _track_usage, on_delta),
-    do: forward_untracked(module, inputs, on_delta)
+  defp forward_with_usage(module, inputs, _track_usage, stream_callbacks),
+    do: forward_untracked(module, inputs, stream_callbacks)
 
-  defp forward_untracked(module, inputs, on_delta) do
+  defp forward_untracked(module, inputs, stream_callbacks) do
     type = module.__struct__
     inputs = normalize_inputs(type, inputs)
 
-    if type in [Predict, ChainOfThought] and is_function(on_delta, 1) do
-      type.forward(module, inputs, on_delta)
+    if type in [Predict, ChainOfThought] and not is_nil(stream_callbacks) do
+      type.forward(module, inputs, stream_callbacks)
     else
       type.forward(module, inputs)
     end

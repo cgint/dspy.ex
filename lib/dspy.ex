@@ -477,6 +477,11 @@ defmodule Dspy do
   markers still appear. Without field text, the prediction is the fallback.
   Errors and other terminal results are always delivered.
 
+  With `cache: true` in the DSPy context, matches in the ordinary LM cache
+  yield no deltas or field events. A hit in a streamed predictor keeps the
+  final prediction. A live call stores its completed LM response under the
+  same request and rollout ID as an ordinary call.
+
   For a composite program, an output atom must identify a unique predictor.
   Use `{predict_name, field}` to select a slot explicitly by its name from
   `Dspy.Module.named_predictors/1`. With a selection, other slots use ordinary

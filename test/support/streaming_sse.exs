@@ -7,6 +7,20 @@ defmodule Dspy.TestSupport.StreamingSSE do
   @wait 5_000
 
   def fixture(mode, first \\ "first ", second \\ "second") do
+    fixture_events(mode, %{type: "response.output_text.delta", delta: first}, [
+      %{type: "response.output_text.delta", delta: second},
+      %{
+        type: "response.completed",
+        response: %{
+          id: "resp_loopback",
+          status: "completed",
+          usage: %{input_tokens: 2, output_tokens: 3, total_tokens: 5}
+        }
+      }
+    ])
+  end
+
+  def fixture_events(mode, first, terminal) do
     {listener, url} = listener()
     owner = self()
 
@@ -26,8 +40,8 @@ defmodule Dspy.TestSupport.StreamingSSE do
               "Connection: close\r\n\r\n"
             ])
 
-          :ok = send_event(peer, %{type: "response.output_text.delta", delta: first})
-          finish_fixture(peer, mode, second)
+          :ok = send_event(peer, first)
+          finish_fixture(peer, mode, terminal)
         after
           :gen_tcp.close(peer)
         end
@@ -45,28 +59,16 @@ defmodule Dspy.TestSupport.StreamingSSE do
     {listener, "http://127.0.0.1:#{port}/v1"}
   end
 
-  defp finish_fixture(peer, :finish, second) do
+  defp finish_fixture(peer, :finish, terminal) do
     receive do
       :finish ->
-        :ok = send_event(peer, %{type: "response.output_text.delta", delta: second})
-
-        :ok =
-          send_event(peer, %{
-            type: "response.completed",
-            response: %{
-              id: "resp_loopback",
-              status: "completed",
-              usage: %{input_tokens: 2, output_tokens: 3, total_tokens: 5}
-            }
-          })
-
-        :gen_tcp.send(peer, "0\r\n\r\n")
+        :gen_tcp.send(peer, [Enum.map(terminal, &event_chunk/1), "0\r\n\r\n"])
     after
       @wait -> flunk("consumer never requested fixture completion")
     end
   end
 
-  defp finish_fixture(peer, :close, _second), do: :gen_tcp.recv(peer, 0, @wait)
+  defp finish_fixture(peer, :close, _terminal), do: :gen_tcp.recv(peer, 0, @wait)
 
   defp finish_fixture(peer, {:close, observer, ready}, second) do
     send(observer, {ready, :first_sent})
@@ -98,8 +100,10 @@ defmodule Dspy.TestSupport.StreamingSSE do
 
   defp read_body(_peer, body, length), do: binary_part(body, 0, length)
 
-  defp send_event(peer, data) do
+  defp send_event(peer, data), do: :gen_tcp.send(peer, event_chunk(data))
+
+  defp event_chunk(data) do
     chunk = "data: " <> Jason.encode!(data) <> "\n\n"
-    :gen_tcp.send(peer, [Integer.to_string(byte_size(chunk), 16), "\r\n", chunk, "\r\n"])
+    [Integer.to_string(byte_size(chunk), 16), "\r\n", chunk, "\r\n"]
   end
 end

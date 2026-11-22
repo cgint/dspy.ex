@@ -270,6 +270,11 @@ prediction when a selected field delivers text. End markers and errors
 still reach the consumer. The prediction remains the fallback when no
 selected field delivers text.
 
+Program streams honor the ordinary LM cache when enabled. Cache hits keep
+the final prediction and emit no deltas or field end markers. Cache keys
+include the same request and rollout ID as batch calls. Direct
+`Dspy.LM.stream_generate/3` continues to bypass the cache.
+
 ### XML output field streaming
 
 Select plain string outputs when the effective adapter is `XMLAdapter`.

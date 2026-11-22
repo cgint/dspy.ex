@@ -94,7 +94,11 @@ defmodule Dspy.CompositeProgramStreamingTest do
 
   defmodule ScriptedLM do
     @behaviour Dspy.LM
-    defstruct [:owner, :model, :deltas]
+    defstruct [:owner, :model, :deltas, structured?: false]
+
+    @impl true
+    def supports?(lm, :structured_streaming), do: lm.structured?
+    def supports?(_lm, _feature), do: false
 
     @impl true
     def generate(lm, _request) do
@@ -245,6 +249,48 @@ defmodule Dspy.CompositeProgramStreamingTest do
 
     assert Enum.to_list(Dspy.streamify(program, opts).(@inputs)) ==
              field_chunks("child", :answer, @answer) ++ [%{answer: @answer}]
+  end
+
+  test "a selected cache hit retains the final prediction beside live selected fields" do
+    cached_lm = %{scripted("cached in composite", [~s({"answer":"Four."})]) | structured?: true}
+    cached = Predict.new("question -> answer", lm: cached_lm, adapter: JSONAdapter)
+    live = predict(scripted("live in composite", [@answer_header, "Live."]))
+    program = %Sequence{slots: %{cached: cached, live: live}, order: [:live, :cached]}
+
+    stream =
+      Dspy.streamify(program,
+        stream_listeners: [{"slots[:cached]", :answer}, {"slots[:live]", :answer}],
+        include_final_prediction_in_output_stream: false
+      )
+
+    Dspy.context([cache: true], fn ->
+      assert {:ok, %Prediction{}} = Dspy.call(cached, @inputs)
+      assert_received {:lm_call, "cached in composite", :batch}
+
+      {chunks, final} = stream.(@inputs) |> Enum.to_list() |> Enum.split(-1)
+      assert chunks == field_chunks("slots[:live]", :answer, "Live.")
+      assert [%Prediction{attrs: %{steps: [%{answer: "Live."}, %{answer: @answer}]}}] = final
+      assert_received {:lm_call, "live in composite", :stream}
+      refute_received {:lm_call, "cached in composite", _mode}
+    end)
+  end
+
+  test "ending a cached program stream early leaves nothing to replay" do
+    child = predict(scripted("cancelled cache fill", [@answer_header, @answer]))
+    program = %Sequence{slots: %{child: child}, order: [:child]}
+    stream = Dspy.streamify(program)
+
+    Dspy.context([cache: true], fn ->
+      assert Enum.take(stream.(@inputs), 1) == [{:delta, @answer_header}]
+      assert_received {:lm_call, "cancelled cache fill", :stream}
+
+      assert [{:delta, @answer_header}, {:delta, @answer}, %Prediction{} = final] =
+               Enum.to_list(stream.(@inputs))
+
+      assert_received {:lm_call, "cancelled cache fill", :stream}
+      assert [^final] = Enum.to_list(stream.(@inputs))
+      refute_received {:lm_call, "cancelled cache fill", _mode}
+    end)
   end
 
   test "a recovered parse failure leaves its field open and the next selected slot starts cleanly" do

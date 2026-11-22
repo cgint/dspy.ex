@@ -147,9 +147,14 @@ defmodule Dspy.ProgramStream.Composite do
     Process.put(key, state)
     on_delta = ProgramStream.delta_callback(&emit_delta(key, &1, publish, invocation_id))
 
+    on_cache_hit = fn ->
+      Process.put(key, :cache_hit)
+      publish.(:stream_cache_hit)
+    end
+
     try do
       with {:ok, %Prediction{} = prediction} = result <-
-             module.forward(predictor, inputs, on_delta),
+             module.forward(predictor, inputs, {on_delta, on_cache_hit}),
            :ok <- finish_fields(Process.get(key), prediction, publish, invocation_id) do
         result
       end
@@ -173,7 +178,9 @@ defmodule Dspy.ProgramStream.Composite do
     end
   end
 
-  defp finish_fields(:raw, _prediction, _publish, _invocation_id), do: :ok
+  defp finish_fields(state, _prediction, _publish, _invocation_id)
+       when state in [:raw, :cache_hit],
+       do: :ok
 
   defp finish_fields({name, scanner}, prediction, publish, invocation_id) do
     with {:ok, fragments} <- ProgramStream.finish_field_listener(scanner, prediction) do
