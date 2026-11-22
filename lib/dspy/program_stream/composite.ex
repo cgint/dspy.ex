@@ -83,11 +83,11 @@ defmodule Dspy.ProgramStream.Composite do
 
   def capture_scope, do: Process.get(@scope_key)
 
-  def with_parallel_scope(nil, _caller, run), do: run.()
+  def with_worker_scope(nil, _owner, run), do: run.()
 
-  def with_parallel_scope(scope, caller, run) do
-    # A trapping task can outlive the async stream when its caller exits.
-    ProcessOwnership.watch(caller, self(), :kill)
+  def with_worker_scope(scope, owner, run) do
+    # A trapping task can outlive its linked owner.
+    ProcessOwnership.watch(owner, self(), :kill)
     with_scope(scope, run)
   end
 

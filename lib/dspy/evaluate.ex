@@ -22,7 +22,8 @@ defmodule Dspy.Evaluate do
 
   require Logger
 
-  alias Dspy.{Example, Lifecycle, Module, Prediction, Random}
+  alias Dspy.{Example, Lifecycle, Module, Prediction, ProcessOwnership, Random}
+  alias Dspy.ProgramStream.Composite
   alias Dspy.Signature.Adapter.Callbacks
 
   @type evaluation_error ::
@@ -180,63 +181,69 @@ defmodule Dspy.Evaluate do
     # the stream and kills pending item tasks before the consumer reports the
     # terminal outcome to the caller.
     ctx = Dspy.Context.capture()
+    stream_scope = Composite.capture_scope()
     caller = self()
 
     # Consumer process driving the stream (see the mechanism note above).
     _consumer =
       spawn_link(fn ->
+        coordinator = self()
+        if stream_scope, do: ProcessOwnership.watch(caller, coordinator, :kill)
+
         testset
         |> Enum.with_index()
         |> Task.async_stream(
           fn {example, index} ->
-            Dspy.Context.with_context(ctx, fn ->
-              # M1-a (upstream `provide_traceback`): the stacktrace is captured
-              # HERE, in the child process — it is lost across the task boundary
-              # otherwise. It is carried in the failure item ONLY for the log
-              # path (transient key, stripped below); the H0b-2 `error` tuple
-              # stays byte-identical (A5.1). The `throw`s from `evaluate_item`
-              # (TRAP 2 / D-U1) do NOT hit the `kind, reason` clause — a
-              # `throw` is not an `:exception`/`:exit`, so it still reaches its
-              # own labelled `catch` clauses, exactly as before.
-              try do
-                evaluate_item(
-                  program,
-                  example,
-                  metric_fn,
-                  failure_score,
-                  index,
-                  provide_traceback
-                )
-              catch
-                # A raising metric (D-U1) must stay a failed example
-                # (`failure_score`, counted toward `max_errors`) — not a hard
-                # error. Rebuild the failure item here, outside the per-example
-                # task, so `Task.async_stream` sees a `{:ok, item}` element.
-                :throw, {:metric_raised, :error} ->
-                  %{
-                    example: example,
-                    prediction: nil,
-                    score: failure_score,
-                    error: {:metric_error, :raised}
-                  }
-
-                # Q2 (H0b-2): a non-numeric / non-boolean metric result must
-                # not be swallowed by `Task` (which would convert an uncaught
-                # throw to `{:exit, {:nocatch, _}}`). Return a tagged value so
-                # the stream consumer can re-raise it (TRAP 2).
-                :throw, {:invalid_metric_result, value, ex_index} ->
-                  {:invalid_metric_result, value, ex_index}
-
-                kind, reason ->
-                  item_error_from(
-                    kind,
-                    reason,
+            Composite.with_worker_scope(stream_scope, coordinator, fn ->
+              Dspy.Context.with_context(ctx, fn ->
+                # M1-a (upstream `provide_traceback`): the stacktrace is captured
+                # HERE, in the child process — it is lost across the task boundary
+                # otherwise. It is carried in the failure item ONLY for the log
+                # path (transient key, stripped below); the H0b-2 `error` tuple
+                # stays byte-identical (A5.1). The `throw`s from `evaluate_item`
+                # (TRAP 2 / D-U1) do NOT hit the `kind, reason` clause — a
+                # `throw` is not an `:exception`/`:exit`, so it still reaches its
+                # own labelled `catch` clauses, exactly as before.
+                try do
+                  evaluate_item(
+                    program,
                     example,
+                    metric_fn,
                     failure_score,
-                    provide_traceback,
-                    __STACKTRACE__
+                    index,
+                    provide_traceback
                   )
-              end
+                catch
+                  # A raising metric (D-U1) must stay a failed example
+                  # (`failure_score`, counted toward `max_errors`) — not a hard
+                  # error. Rebuild the failure item here, outside the per-example
+                  # task, so `Task.async_stream` sees a `{:ok, item}` element.
+                  :throw, {:metric_raised, :error} ->
+                    %{
+                      example: example,
+                      prediction: nil,
+                      score: failure_score,
+                      error: {:metric_error, :raised}
+                    }
+
+                  # Q2 (H0b-2): a non-numeric / non-boolean metric result must
+                  # not be swallowed by `Task` (which would convert an uncaught
+                  # throw to `{:exit, {:nocatch, _}}`). Return a tagged value so
+                  # the stream consumer can re-raise it (TRAP 2).
+                  :throw, {:invalid_metric_result, value, ex_index} ->
+                    {:invalid_metric_result, value, ex_index}
+
+                  kind, reason ->
+                    item_error_from(
+                      kind,
+                      reason,
+                      example,
+                      failure_score,
+                      provide_traceback,
+                      __STACKTRACE__
+                    )
+                end
+              end)
             end)
           end,
           max_concurrency: num_threads,
