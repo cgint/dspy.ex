@@ -171,10 +171,44 @@ defmodule Dspy.Teleprompt.BetterTogetherTest do
     refute_received {:stage, _, _, _, _}
   end
 
+  test "a synchronous stage signal keeps completed candidates and stops the sequence" do
+    for {signal, stop} <- [
+          throw: fn -> throw(:private_reason) end,
+          exit: fn -> exit(:shutdown) end
+        ] do
+      optimizer =
+        BetterTogether.new(
+          metric: fn _, prediction -> prediction[:version] == :prompted end,
+          optimizers: %{
+            p: stage(:p, fn student -> {:ok, %{student | version: :prompted}} end),
+            w: stage(:w, fn _student -> stop.() end),
+            later: stage(:later)
+          }
+        )
+
+      assert {:ok, %{program: %Program{version: :prompted}, candidates: candidates, error: error}} =
+               BetterTogether.compile_with_candidates(optimizer, program(), [row("train")],
+                 strategy: "p -> w -> later",
+                 valset: [row("validation")]
+               )
+
+      assert Enum.map(candidates, & &1.strategy) == ["p", ""]
+      assert error == %{stage: "w", index: 1, reason: signal}
+      assert_received {:stage, :p, _, _, _}
+      assert_received {:stage, :w, %Program{version: :prompted}, _, _}
+      refute_received {:stage, _, _, _, _}
+    end
+  end
+
   test "validates every step, compile argument and initial binding before evaluation" do
+    owner = self()
+
     optimizer =
       BetterTogether.new(
-        metric: fn _, _ -> flunk("invalid configuration must not reach evaluation") end,
+        metric: fn _, _ ->
+          send(owner, :evaluated)
+          0
+        end,
         optimizers: %{p: stage(:p)}
       )
 
@@ -202,6 +236,7 @@ defmodule Dspy.Teleprompt.BetterTogetherTest do
              BetterTogether.compile(optimizer, unbound, [row("train")], strategy: "p")
 
     refute_received {:stage, _, _, _, _}
+    refute_received :evaluated
   end
 
   test "a per-stage teacher override preserves the shared list for multi-teacher training" do

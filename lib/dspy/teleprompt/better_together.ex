@@ -392,6 +392,8 @@ defmodule Dspy.Teleprompt.BetterTogether do
     end
   rescue
     error -> {:error, {:exception, error.__struct__}}
+  catch
+    kind, _reason when kind in [:throw, :exit] -> {:error, kind}
   end
 
   defp invoke(:search, optimizer, program, training, args) do
