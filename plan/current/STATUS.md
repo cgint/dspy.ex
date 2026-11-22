@@ -6,8 +6,8 @@
 > A native JSON checkpoint restores the prepared vectors and index
 > settings with a caller-supplied embedder. Explicit query batches retain
 > input order and use the index's configured embedder batch size.
-> Approximate search, cross-caller coalescing, and Python index-file
-> exchange remain open.
+> An opt-in batcher groups concurrent queries under one linked process.
+> Approximate search and Python index-file exchange remain open.
 
 > **M6, KNNFewShot.** The optimizer builds one neighbor index and
 > prepares demos for each query. Bootstrap acceptance metrics receive
