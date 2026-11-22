@@ -16,6 +16,14 @@ during LLMDB startup. Applications that require Zoi 0.20 or newer will
 see a dependency resolution conflict. Existing compatible locks can
 keep their selected Zoi version.
 
+### Corpus embedding retrieval
+
+`Dspy.Embeddings.new/3` embeds a text corpus once. `query/2` returns
+matching passages and their zero-based indices in a prediction.
+`query_with_scores/2` also returns aligned similarity scores. Ranking is
+exact, with earlier corpus positions first on ties. Vectors are normalized
+by default. Pass `normalize: false` for raw dot products.
+
 ### BetterTogether optimizer
 
 `Dspy.Teleprompt.BetterTogether` composes named prompt and weight optimizers

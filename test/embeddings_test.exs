@@ -1,0 +1,165 @@
+defmodule Dspy.EmbeddingsTest do
+  use ExUnit.Case, async: true
+
+  alias Dspy.{Embedder, Embeddings, Prediction}
+
+  test "normalization changes the winner and the scored view stays aligned" do
+    corpus = ["axis", "wide", "axis", "zero", "opposite"]
+
+    embedder =
+      recording_embedder(%{
+        "axis" => [1, 0],
+        "wide" => [2, 2],
+        "zero" => [0, 0],
+        "opposite" => [-1, 0],
+        "query" => [2, 0]
+      })
+
+    assert {:ok, raw} = Embeddings.new(corpus, embedder, normalize: false, k: 8)
+    assert {:ok, normalized} = Embeddings.new(corpus, embedder, k: 8)
+
+    assert {:ok, %Prediction{} = result} = Embeddings.query_with_scores(raw, "query")
+
+    assert Prediction.to_map(result) == %{
+             passages: ["wide", "axis", "axis", "zero", "opposite"],
+             indices: [1, 0, 2, 3, 4],
+             scores: [4, 2, 2, 0, -2]
+           }
+
+    assert {:ok, %Prediction{} = result} = Embeddings.query_with_scores(normalized, "query")
+
+    assert %{passages: ["axis", "axis", "wide", "zero", "opposite"], indices: [0, 2, 1, 3, 4]} =
+             Prediction.to_map(result)
+
+    assert [1.0, 1.0, diagonal, zero_score, -1.0] = result[:scores]
+    assert_in_delta diagonal, :math.sqrt(0.5), 1.0e-12
+    assert zero_score == 0.0
+
+    assert {:ok, %Prediction{} = plain} = Embeddings.query(normalized, "query")
+    assert Prediction.to_map(plain) == Map.drop(Prediction.to_map(result), [:scores])
+  end
+
+  test "applies a norm floor to both corpus and query vectors" do
+    embedder =
+      recording_embedder(%{
+        "tiny" => [1.0e-12, 0.0],
+        "zero" => [0.0, 0.0],
+        "tiny query" => [2.0e-12, 0.0]
+      })
+
+    assert {:ok, index} = Embeddings.new(["zero", "tiny"], embedder)
+    assert {:ok, %Prediction{} = result} = Embeddings.query_with_scores(index, "tiny query")
+    assert result[:indices] == [1, 0]
+    assert [tiny, zero_score] = result[:scores]
+    assert_in_delta tiny, 0.0002, 1.0e-12
+    assert zero_score == 0.0
+
+    assert {:ok, %Prediction{} = zero_query} = Embeddings.query_with_scores(index, "zero")
+    assert zero_query[:indices] == [0, 1]
+    assert zero_query[:scores] == [0.0, 0.0]
+  end
+
+  test "uses configured embedder batches once and ranks each query against the same corpus" do
+    corpus = ~w(a b c d e f)
+
+    vectors =
+      corpus
+      |> Enum.with_index(1)
+      |> Map.new(fn {passage, i} -> {passage, [i]} end)
+      |> Map.merge(%{"forwards" => [1], "backwards" => [-1]})
+
+    embedder = recording_embedder(vectors, batch_size: 4)
+    assert {:ok, index} = Embeddings.new(corpus, embedder, normalize: false)
+    assert_received {:embedded, ["a", "b", "c", "d"]}
+    assert_received {:embedded, ["e", "f"]}
+
+    assert {:ok, %Prediction{} = forwards} = Embeddings.query(index, "forwards")
+    assert forwards[:indices] == [5, 4, 3, 2, 1]
+    assert forwards[:passages] == ~w(f e d c b)
+    assert_received {:embedded, ["forwards"]}
+
+    assert {:ok, %Prediction{} = backwards} = Embeddings.query(index, "backwards")
+    assert backwards[:indices] == [0, 1, 2, 3, 4]
+    assert backwards[:passages] == ~w(a b c d e)
+    assert_received {:embedded, ["backwards"]}
+    refute_received {:embedded, _}
+  end
+
+  test "supports requesting zero results and ties across numeric types" do
+    embedder = recording_embedder(%{"first" => [1], "later" => [1.0], "query" => [1]})
+    corpus = ["first", "later"]
+
+    assert {:ok, empty} = Embeddings.new(corpus, embedder, k: 0)
+    assert {:ok, %Prediction{} = result} = Embeddings.query_with_scores(empty, "query")
+    assert Prediction.to_map(result) == %{passages: [], indices: [], scores: []}
+
+    assert {:ok, ties} = Embeddings.new(corpus, embedder, normalize: false)
+    assert {:ok, %Prediction{} = result} = Embeddings.query_with_scores(ties, "query")
+    assert result[:indices] == [0, 1]
+    assert result[:scores] === [1, 1.0]
+  end
+
+  test "validates corpus and index options before invoking the embedder" do
+    embedder = recording_embedder(%{"a" => [1]})
+
+    for invalid <- [[], "a", ["a", 0], ["a" | :improper]] do
+      assert Embeddings.new(invalid, embedder) == {:error, :invalid_corpus}
+    end
+
+    for invalid <- [-1, 0.5, nil] do
+      assert Embeddings.new(["a"], embedder, k: invalid) == {:error, :invalid_k}
+    end
+
+    assert Embeddings.new(["a"], embedder, normalize: 0) == {:error, :invalid_normalize}
+    assert Embeddings.new(["a"], embedder, cache: true) == {:error, :invalid_options}
+    assert Embeddings.new(["a"], embedder, %{k: 1}) == {:error, :invalid_options}
+    assert Embeddings.new(["a"], embedder, [{:k, 1} | :tail]) == {:error, :invalid_options}
+    assert Embeddings.new(["a"], :other) == {:error, :invalid_embedder}
+
+    refute_received {:embedded, _}
+  end
+
+  test "propagates embedder failures and rejects queries of a different dimension" do
+    embedder =
+      Embedder.new(fn
+        ["a"] -> [[1, 0]]
+        ["short response"] -> []
+        ["wrong dimension"] -> [[1]]
+        ["model unavailable"] -> {:error, :unavailable}
+        _ -> flunk("invalid query must fail before embedding")
+      end)
+
+    assert Embeddings.new(["model unavailable"], embedder) == {:error, :unavailable}
+
+    assert Embeddings.new(["short response"], embedder) ==
+             {:error, {:embedding_count_mismatch, expected: 1, got: 0}}
+
+    assert {:ok, index} = Embeddings.new(["a"], embedder)
+    assert Embeddings.query(index, ["a"]) == {:error, :invalid_query}
+    assert Embeddings.query(index, "model unavailable") == {:error, :unavailable}
+
+    assert Embeddings.query_with_scores(index, "wrong dimension") ==
+             {:error, {:embedding_dimension_mismatch, expected: 2, got: 1}}
+  end
+
+  test "normalizes large finite vectors and returns an error when a raw score overflows" do
+    embedder = recording_embedder(%{"large passage" => [1.0e200], "large query" => [1.0e200]})
+
+    assert {:ok, normalized} = Embeddings.new(["large passage"], embedder)
+    assert {:ok, %Prediction{} = result} = Embeddings.query_with_scores(normalized, "large query")
+    assert result[:scores] == [1.0]
+
+    assert {:ok, raw} = Embeddings.new(["large passage"], embedder, normalize: false)
+    assert Embeddings.query(raw, "large query") == {:error, :embedding_score_overflow}
+  end
+
+  defp recording_embedder(vectors, opts \\ []) do
+    Embedder.new(
+      fn texts ->
+        send(self(), {:embedded, texts})
+        Enum.map(texts, &Map.fetch!(vectors, &1))
+      end,
+      opts
+    )
+  end
+end
