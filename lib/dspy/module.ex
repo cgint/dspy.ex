@@ -138,6 +138,18 @@ defmodule Dspy.Module do
   defp attach_usage_to_result(other, _usage), do: other
 
   @doc """
+  List the root and its nested module structs in breadth-first order.
+
+  Names begin with `self` and identify each occurrence, including equal values
+  at different paths. Declared fields and entries in nested lists, tuples, and
+  maps count toward depth and are visited deterministically. Other structs and
+  improper lists are ignored.
+  Raises `ArgumentError` unless the root is a module struct implementing `forward/2`.
+  """
+  @spec named_sub_modules(t()) :: [{String.t(), t()}]
+  def named_sub_modules(program), do: Dspy.Module.SubModules.list(program)
+
+  @doc """
   List the named Predict and ChainOfThought values in a program.
 
   Names follow declared module fields and the immediate entries of proper list,
