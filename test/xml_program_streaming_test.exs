@@ -157,6 +157,37 @@ defmodule Dspy.XMLProgramStreamingTest do
            ] = Enum.to_list(selected(predict, [:answer, :note]))
   end
 
+  test "a same-line sibling header cannot confirm a multiline field close" do
+    answer = "First\n</answer><metadata>literal\nSecond"
+    xml = "<answer>\n#{answer}\n</answer>\n" <> @nested
+
+    for width <- [1, byte_size(xml)] do
+      predict = predictor(Result, xml, width)
+      assert {:ok, %Prediction{attrs: %{answer: ^answer}} = batch} = Dspy.call(predict, @inputs)
+
+      {chunks, terminal} = selected(predict, [:answer]) |> Enum.split(-1)
+      assert terminal == [batch]
+      assert complete_text(chunks, :answer) == answer
+    end
+  end
+
+  test "a duplicate selected field reports the batch error without another chunk" do
+    xml = @nested <> "<answer></answer><answer>Duplicate</answer><note>Following</note>"
+
+    for width <- [1, byte_size(xml)] do
+      predict = predictor(Result, xml, width)
+
+      assert {:error,
+              {:output_parse_failed, {:output_decode_failed, {:duplicate_xml_field, "answer"}}, _}} =
+               batch = Dspy.call(predict, @inputs)
+
+      assert [
+               %StreamResponse{signature_field_name: :answer, chunk: "", is_last_chunk: true},
+               ^batch
+             ] = Enum.to_list(selected(predict, [:answer]))
+    end
+  end
+
   test "a repeated list of records cannot contribute nested answer bytes to the selected field" do
     xml = @nested <> "<metadata><answer>SECOND_NESTED</answer></metadata><answer>Top</answer>"
     predict = predictor(Repeated, xml, 1)
