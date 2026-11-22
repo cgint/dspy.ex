@@ -311,7 +311,8 @@ An empty selection streams raw deltas. Invoking a selected predictor in
 a bare task during an active stream returns
 `{:error, :stream_predictor_outside_owner}`.
 
-Managed calls inside `Dspy.Parallel.run/3` can share the composite
+Managed calls inside `Dspy.Parallel.run/3`, `Dspy.Module.parallel/2`, and
+`Dspy.Evaluate.evaluate/4` can share the composite
 stream. Field chunks from each parallel call carry an `invocation_id`,
 so concurrent calls to one predictor can be rendered independently.
 The final prediction preserves the program's ordinary result order.

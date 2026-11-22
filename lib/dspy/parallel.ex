@@ -161,7 +161,7 @@ defmodule Dspy.Parallel do
     exec_pairs
     |> Task.async_stream(
       fn {module, input} ->
-        Composite.with_parallel_scope(stream_scope, caller, fn ->
+        Composite.with_worker_scope(stream_scope, caller, fn ->
           Context.with_context(ctx, fn -> run_pair(module, input, parallel) end)
         end)
       end,

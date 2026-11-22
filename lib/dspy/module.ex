@@ -8,6 +8,7 @@ defmodule Dspy.Module do
 
   alias Dspy.{ChainOfThought, Lifecycle, Predict, ProgramStream}
   alias Dspy.Module.{PredictorSlots, ProgramState}
+  alias Dspy.ProgramStream.Composite
   alias Dspy.Signature.Adapter.Callbacks
 
   @type t :: struct()
@@ -384,20 +385,24 @@ defmodule Dspy.Module do
       # Capture process-local DSPy state (overrides + callback stack) in the
       # caller; reinstall it in each task (tasks do not inherit the dictionary).
       ctx = Dspy.Context.capture()
+      stream_scope = Composite.capture_scope()
+      caller = self()
 
       tasks =
         modules
         |> Enum.map(fn module ->
           Task.async(fn ->
-            Dspy.Context.with_context(ctx, fn ->
-              try do
-                forward(module, inputs)
-              rescue
-                e -> {:error, {:raised, e}}
-              catch
-                :exit, reason -> {:error, {:exit, reason}}
-                kind, reason -> {:error, {:thrown, kind, reason}}
-              end
+            Composite.with_worker_scope(stream_scope, caller, fn ->
+              Dspy.Context.with_context(ctx, fn ->
+                try do
+                  forward(module, inputs)
+                rescue
+                  e -> {:error, {:raised, e}}
+                catch
+                  :exit, reason -> {:error, {:exit, reason}}
+                  kind, reason -> {:error, {:thrown, kind, reason}}
+                end
+              end)
             end)
           end)
         end)

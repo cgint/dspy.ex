@@ -487,7 +487,8 @@ defmodule Dspy do
   `Dspy.Module.named_predictors/1`. With a selection, other slots use ordinary
   inference. With an empty selection, all discovered predictor slots stream
   raw deltas. Streaming slots can execute in the program worker or in tasks
-  managed by `Dspy.Parallel.run/3`. Parallel calls share consumer demand.
+  managed by `Dspy.Parallel.run/3`, `Dspy.Module.parallel/2`, or
+  `Dspy.Evaluate.evaluate/4`. Managed calls share consumer demand.
   Their raw deltas can interleave, and selected field chunks carry an
   `:invocation_id` for grouping. The program result keeps its ordinary order.
   Cancelling a composite stream kills its worker, so `after` blocks in that
@@ -502,6 +503,7 @@ defmodule Dspy do
   Pass `stream_listeners: :none` to receive progress and the terminal result
   through ordinary inference. This preserves the program's adapters, retries,
   and cache behavior and supports batch-only LMs and structured tool requests.
+  Managed parallel and evaluation tasks stop when the stream consumer exits.
 
   The remaining options are the per-call options accepted by `call/3`.
   """

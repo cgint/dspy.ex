@@ -330,7 +330,7 @@ defmodule Dspy.ProgramStream do
     result =
       case listeners do
         :status_only ->
-          invoke(program, inputs, opts)
+          Composite.with_lifetime_scope(fn -> invoke(program, inputs, opts) end)
 
         {:composite, slots} ->
           Composite.with_listeners(program, slots, publish, &invoke(&1, inputs, opts))
