@@ -145,7 +145,7 @@ After this you can …build tool-using agents that also take images or audio, re
 | S059 | Embeddings | partial | M | M | 1.00 | 3.0.0 | S060;DEP:faiss-cpu | N | - | No corpus Embeddings retriever (embed(corpus), k, normalize, save/load/from_saved, FAISS f | todo |
 | S015 | ToolCallResults | missing | L | S | 1.00 | 3.3.0 | S007,S016 | N | - | no way to pass tool results back through history | todo |
 | S005 | Adapter | partial | H | L | 0.75 | <=2.6 | - | N | - | class pipeline options + native-response-type planning missing | todo |
-| S029 | ColBERTv2 | partial | H | L | 0.75 | <=2.6 | - | Y | - | deliberate stub returning {:error}; v2 GET/POST request functions and ColBERTv2RetrieverLo | todo |
+| S029 | ColBERTv2 | partial | H | L | 0.75 | <=2.6 | - | Y | - | Configured GET and POST server search with ranked results or passage strings. Local indexing, request caching, and generic retriever integration remain open. | M4 remote search |
 | S013 | Reasoning | missing | L | M | 0.50 | 3.1.0 | S005,S018 | N | - | no dspy.Reasoning type; CoT :reasoning field and LM reasoning_effort opt exist but are sep | todo |
 | S018 | Type | missing | L | L | 0.25 | 3.0.0 | - | N | - | no custom-type framework; Dspy.TypedOutputs JSON schemas cover output-side only | todo |
 | +1 | BAMLAdapter (public class, not in `__all__`; added +1) | missing | M | M | | 3.x | S012 | N | P11 | OpenSpec `adapter-baml-schema-rendering` | todo |
