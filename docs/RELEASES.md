@@ -28,6 +28,10 @@ by default. Pass `normalize: false` for raw dot products.
 input order. It uses the configured embedder batch size. Set
 `include_scores: true` to return similarity scores with each prediction.
 
+`Dspy.Embeddings.Batcher` groups concurrent queries for one index.
+`start_link/2` configures the size and wait limits. Each `query/2`
+returns that caller's prediction. Use `stop/1` when the group is done.
+
 `Dspy.Embeddings.save/2` writes a versioned JSON checkpoint for the
 corpus index. `from_saved/2` accepts a caller-supplied embedder and
 restores the stored vectors, settings, and corpus order.
