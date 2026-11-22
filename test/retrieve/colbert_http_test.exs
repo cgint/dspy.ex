@@ -39,6 +39,22 @@ defmodule Dspy.Retrieve.ColBERTv2HTTPTest do
     assert_receive {:wire, "GET /search?query=topic&k=100 HTTP/1.1", _, ""}, @wire_timeout
   end
 
+  test "a scoped ColBERTv2 binding returns a retrieval module prediction through Dspy.call" do
+    rows = [%{"text" => "first", "pid" => 10}, %{"text" => "second", "pid" => 11}]
+    client = Dspy.Retrieve.colbert(url: endpoint(serve(200, %{"topk" => rows})))
+    retrieve = Dspy.Retrieve.new(k: 5)
+
+    Dspy.context([rm: client], fn ->
+      assert {:ok, %Dspy.Prediction{attrs: attrs}} =
+               Dspy.call(retrieve, %{"query" => "first + second", "k" => 1})
+
+      assert attrs == %{passages: ["first"]}
+    end)
+
+    assert_receive {:wire, "GET /search?query=first+%2B+second&k=1 HTTP/1.1", _, ""},
+                   @wire_timeout
+  end
+
   test "POST sends JSON, allows k above the GET maximum, and preserves its raw rows" do
     rows = [%{"opaque" => [7, 8]}, %{"text" => "short", "long_text" => "full", "pid" => 4}]
     port = serve(200, %{"topk" => rows})

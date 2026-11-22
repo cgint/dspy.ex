@@ -573,6 +573,7 @@ Evidence:
 |---|---|---|---|
 | tools + ReAct | `Dspy.Tools.new_tool/4`, `Dspy.Tools.React` | Callback hooks for tool logging | `test/acceptance/simplest_tool_logging_acceptance_test.exs` |
 | `ColBERTv2` | `Dspy.Retrieve.ColBERTv2.search/3` | Configured server queries via GET or POST, with an optional passage-only result. Local index construction remains open. | [Loopback HTTP tests](../test/retrieve/colbert_http_test.exs) |
+| `Retrieve` | `Dspy.Retrieve.new/1` and `Dspy.call/2` | Retrieval-only predictions use a local, scoped, or global retriever. The module participates in the ordinary lifecycle callbacks. | [Retrieval module tests](../test/retrieve/retrieve_module_test.exs) |
 | retrieval + RAG | `Dspy.Retrieve.*` | RAG pipeline with mocked embeddings provider; includes built-in `Dspy.Retrieve.InMemoryRetriever` | `test/acceptance/retrieve_rag_with_embeddings_acceptance_test.exs`, `test/acceptance/retrieve_rag_in_memory_retriever_acceptance_test.exs` |
 
 ### Providers

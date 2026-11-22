@@ -10,6 +10,7 @@ defmodule Dspy.Settings do
 
   defstruct [
     :lm,
+    :rm,
     :two_step_extraction_lm,
     adapter: Dspy.Signature.Adapters.Default,
     two_step_extraction_adapter: Dspy.Signature.Adapters.JSONAdapter,
@@ -32,6 +33,7 @@ defmodule Dspy.Settings do
 
   @type t :: %__MODULE__{
           lm: Dspy.LM.t() | nil,
+          rm: Dspy.Retrieve.rm() | nil,
           two_step_extraction_lm: Dspy.LM.t() | nil,
           adapter: module(),
           two_step_extraction_adapter: module(),

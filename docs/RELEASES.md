@@ -71,6 +71,13 @@ and server metadata. GET is the default and supports up to 100 results.
 Set `post_requests: true` for JSON POST or `simplify: true` on the
 search for passage strings.
 
+### Retrieval modules
+
+`Dspy.Retrieve.new/1` creates a module that returns a prediction
+with ordered passages. Bind a ColBERTv2 client, a retriever module,
+or a function with `rm:`. An unbound module uses the scoped or
+global `rm` setting. Pass `k` with the query to override the default.
+
 ### Trace-aware bootstrap metrics
 
 BootstrapRS, BootstrapFewShot, and KNNFewShot accept an arity-three metric

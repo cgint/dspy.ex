@@ -72,7 +72,7 @@ defmodule Dspy.Module do
   end
 
   defp program_callbacks(%{__struct__: type} = module)
-       when type in [Dspy.Predict, Dspy.ChainOfThought],
+       when type in [Dspy.Predict, Dspy.ChainOfThought, Dspy.Retrieve],
        do: Map.get(module, :callbacks)
 
   defp program_callbacks(_module), do: []

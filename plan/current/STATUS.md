@@ -65,6 +65,11 @@
 > strings. Real loopback HTTP verifies the request and response
 > contracts. Local indexing and request caching remain open.
 
+> **S061, retrieval modules.** An immutable retrieval module supports
+> configured ColBERTv2 values, existing retriever modules, and callable
+> backends. It uses the usual module call lifecycle and returns ordered
+> passages from a local or ambient retriever binding.
+
 > **M4, multipart image splicing.** Separate marker-bearing text parts
 > share one ordered stream of typed images. A count mismatch strips the
 > markers and appends each supplied image once before new attachments.
