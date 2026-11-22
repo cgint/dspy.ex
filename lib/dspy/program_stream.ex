@@ -81,7 +81,7 @@ defmodule Dspy.ProgramStream do
       raise ArgumentError, "stream_listeners cannot contain duplicate fields"
     end
 
-    validate_fields!(program.signature.output_fields, fields)
+    validate_fields!(program.signature.output_fields, fields, program.adapter)
     [{predict_name, _predictor}] = Dspy.Module.named_predictors(program)
     {predict_name, fields}
   end
@@ -90,28 +90,42 @@ defmodule Dspy.ProgramStream do
     raise ArgumentError, "stream_listeners must be a list of output field atoms"
   end
 
-  def validate_fields!(outputs, fields) do
+  def validate_fields!(outputs, fields, adapter) do
     if Enum.any?(outputs, &match?(%{type: :tool_calls, tool_call_format: :structured}, &1)) do
       raise ArgumentError, "stream_listeners require ordinary Chat markers"
     end
 
     Enum.each(fields, fn field ->
-      unless is_atom(field) and Enum.any?(outputs, &plain_string_output?(&1, field)) do
+      unless is_atom(field) and Enum.any?(outputs, &streamable_output?(&1, field, adapter)) do
         raise ArgumentError, "stream_listeners must name declared plain string outputs by atom"
       end
     end)
   end
 
-  defp plain_string_output?(%{name: name, type: :string} = output, name),
+  defp streamable_output?(%{name: name, type: :string} = output, name, _adapter),
     do: not Map.has_key?(output, :schema)
 
-  defp plain_string_output?(_output, _name), do: false
+  defp streamable_output?(%{name: name, type: :json}, name, adapter),
+    do: adapter in [nil, ChatAdapter]
+
+  defp streamable_output?(_output, _name, _adapter), do: false
 
   def open_field_listener(predictor, fields) do
     case AdapterPipeline.active_adapter(adapter: predictor.adapter) do
       ChatAdapter ->
         {:ok, %{predictor | adapter: ChatAdapter}, ChatStream.new(fields)}
 
+      adapter ->
+        if Enum.any?(predictor.signature.output_fields, &(&1.name in fields and &1.type == :json)) do
+          {:error, {:unsupported_streaming_adapter, adapter}}
+        else
+          open_string_listener(predictor, fields, adapter)
+        end
+    end
+  end
+
+  defp open_string_listener(predictor, fields, adapter) do
+    case adapter do
       JSONAdapter ->
         {:ok, %{predictor | adapter: JSONAdapter}, JSONStream.new(predictor.signature, fields)}
 

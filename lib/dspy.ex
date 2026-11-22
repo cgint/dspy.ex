@@ -460,8 +460,13 @@ defmodule Dspy do
   The original enumerating process must resume or halt an active continuation.
 
   With ChatAdapter, XMLAdapter, or JSONAdapter, `stream_listeners: [:answer]`
-  selects plain string outputs and yields `Dspy.StreamResponse` chunks. The
-  selection must contain unique field atoms. A field can end with empty text
+  selects plain string outputs and yields `Dspy.StreamResponse` chunks.
+  ChatAdapter also accepts `:json` outputs, streaming their raw marker-delimited
+  JSON text while the final prediction contains the decoded value. Chat marker
+  syntax inside a JSON literal is still parsed as a section boundary. Field
+  chunks describe the text received so far, and the terminal result determines
+  whether parsing succeeded.
+  The selection must contain unique field atoms. A field can end with empty text
   marked `is_last_chunk`. ChatAdapter's JSON fallback can yield only the final
   prediction. XMLAdapter preserves literal field text and can hold an
   ambiguous close until the next declared field or end of the response.

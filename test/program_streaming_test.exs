@@ -566,6 +566,63 @@ defmodule Dspy.ProgramStreamingTest do
     refute_received {:stream_call, _, _, _, _}
   end
 
+  test "Chat listeners stream raw JSON text and return decoded values" do
+    signature = Dspy.Signature.define("question -> answer: json")
+
+    for {text, decoded} <- [{~s({"grüße":["猫",2]}), %{"grüße" => ["猫", 2]}}, {"42", 42}] do
+      program =
+        Predict.new(signature, lm: scripted("json", [@answer_header, text]), adapter: ChatAdapter)
+
+      {events, [prediction]} =
+        Dspy.streamify(program, stream_listeners: [:answer]).(@inputs) |> Enum.split(-1)
+
+      assert %Prediction{attrs: %{answer: ^decoded}} = prediction
+      assert Enum.map_join(events, & &1.chunk) == text
+      assert List.last(events).is_last_chunk
+    end
+  end
+
+  test "invalid JSON at EOF yields a parse error without closing the active field" do
+    program =
+      Predict.new("question -> answer: json",
+        lm: scripted("invalid-json", [@answer_header, "{oops"]),
+        adapter: ChatAdapter
+      )
+
+    {events, [terminal]} =
+      Dspy.streamify(program, stream_listeners: [:answer]).(@inputs) |> Enum.split(-1)
+
+    assert {:error, {:output_parse_failed, _, _}} = terminal
+    refute Enum.any?(events, & &1.is_last_chunk)
+  end
+
+  test "JSON listeners check explicit and enumeration-time adapters before opening the LM" do
+    lm = scripted("adapter-json", [@answer_header, "42"])
+
+    for adapter <- [JSONAdapter, Dspy.Signature.Adapters.XMLAdapter, TwoStep] do
+      assert_raise ArgumentError, ~r/stream_listeners/, fn ->
+        Dspy.streamify(Predict.new("question -> answer: json", lm: lm, adapter: adapter),
+          stream_listeners: [:answer]
+        )
+      end
+    end
+
+    stream =
+      Dspy.streamify(Predict.new("question -> answer: json", lm: lm), stream_listeners: [:answer]).(
+        @inputs
+      )
+
+    Dspy.context([adapter: JSONAdapter], fn ->
+      assert [{:error, {:unsupported_streaming_adapter, JSONAdapter}}] = Enum.to_list(stream)
+    end)
+
+    refute_received {:stream_call, _, _, _, _}
+
+    Dspy.context([adapter: ChatAdapter], fn ->
+      assert %Prediction{attrs: %{answer: 42}} = List.last(Enum.to_list(stream))
+    end)
+  end
+
   test "an error ends the listener stream without closing the active field" do
     lm = scripted("incomplete", [@answer_header, @answer])
     program = Predict.new("question -> answer, detail", lm: lm, adapter: ChatAdapter)
