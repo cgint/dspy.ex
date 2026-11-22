@@ -84,7 +84,16 @@ defmodule Dspy.ParallelProgramStreamingTest do
     def stream_generate(lm, request, on_delta) do
       Process.flag(:trap_exit, true)
       send(lm.observer, {:trapping_producer, self()})
-      LM.stream_generate(lm.inner, request, on_delta)
+
+      case lm.inner do
+        nil ->
+          receive do
+            :release -> {:error, :released}
+          end
+
+        inner ->
+          LM.stream_generate(inner, request, on_delta)
+      end
     end
   end
 
@@ -221,8 +230,9 @@ defmodule Dspy.ParallelProgramStreamingTest do
   end
 
   test "halting with two active parallel streams closes both sockets and trapping tasks" do
-    {first_socket, first_url} = fixture(:close, @header <> "One", "unread")
-    {second_socket, second_url} = fixture(:close, @header <> "Two", "unread")
+    ready = make_ref()
+    {first_socket, first_url} = fixture({:close, self(), ready}, @header <> "One", "unread")
+    {second_socket, second_url} = fixture({:close, self(), ready}, @header <> "Two", "unread")
 
     program = %Program{
       predictors: Enum.map([first_url, second_url], &loopback_predictor/1),
@@ -243,14 +253,33 @@ defmodule Dspy.ParallelProgramStreamingTest do
 
     assert_receive {:wire, "POST /v1/responses HTTP/1.1", %{"stream" => true}}, @wait
     assert_receive {:wire, "POST /v1/responses HTTP/1.1", %{"stream" => true}}, @wait
+    assert_receive {^ready, :first_sent}, @wait
+    assert_receive {^ready, :first_sent}, @wait
 
     send(consumer, {ref, :continue})
     assert_receive {^ref, :collected, [{:delta, _}], {:messages, []}}, @wait
 
-    assert_receive {:DOWN, ^first_ref, :process, ^first, :killed}, @wait
-    assert_receive {:DOWN, ^second_ref, :process, ^second, :killed}, @wait
+    assert_receive {:DOWN, ^first_ref, :process, ^first, _reason}, @wait
+    assert_receive {:DOWN, ^second_ref, :process, ^second, _reason}, @wait
     assert {:error, :closed} = Task.await(first_socket, @wait)
     assert {:error, :closed} = Task.await(second_socket, @wait)
+  end
+
+  test "halting kills a trapping producer blocked outside the stream channel" do
+    program = program(%{"READY_QUESTION" => "Ready"}, gated?: false)
+    blocked = Predict.new(Signature, adapter: ChatAdapter, lm: %TrappingLM{observer: self()})
+    program = %{program | predictors: [program.predictor, blocked]}
+    stream = Dspy.streamify(program, stream_listeners: [])
+    {consumer, ref} = consume(stream, ["READY_QUESTION", "BLOCKED_QUESTION"], :halt)
+
+    assert_receive {:trapping_producer, producer}, @wait
+    stop_on_exit(producer)
+    monitor = Process.monitor(producer)
+    assert {:delta, _} = first_event(ref)
+
+    send(consumer, {ref, :continue})
+    assert_receive {^ref, :collected, [{:delta, _}], {:messages, []}}, @wait
+    assert_receive {:DOWN, ^monitor, :process, ^producer, :killed}, @wait
   end
 
   defp program(responses, opts \\ []) do
