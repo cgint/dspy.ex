@@ -96,6 +96,14 @@ references in the text preview point to the images in wire order.
 Each proposal transfers up to eight image parts and eight MiB of image
 URL text, including data URIs. The default keeps the text preview.
 
+### Multipart image requests
+
+Custom adapters can place image markers in several text parts of one
+user message. Each marker now consumes the next image once. Existing
+parts retain their order and supplied file attachments follow the
+message content. When marker and image counts differ, the adapter
+pipeline removes the markers and appends the supplied images once.
+
 ### Streaming progress messages
 
 Pass a `status_message_provider:` module to `Dspy.streamify/2` to turn

@@ -37,6 +37,10 @@
 > in the reflection request. Typed history and additional frontier
 > objectives remain open.
 
+> **M4, multipart image splicing.** Separate marker-bearing text parts
+> share one ordered stream of typed images. A count mismatch strips the
+> markers and appends each supplied image once before new attachments.
+
 > **M5, status messages and exit example.** `streamify/2` accepts a
 > lifecycle status provider. The [offline ChainOfThought example](../../examples/offline/chain_of_thought_streaming_offline.exs)
 > emits status and field chunks, returns the validated prediction, and
