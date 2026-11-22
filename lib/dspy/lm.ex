@@ -326,23 +326,17 @@ defmodule Dspy.LM do
   """
   @spec stream_generate(t(), request(), (String.t() -> term())) ::
           {:ok, response()} | {:error, term()}
-  def stream_generate(%module{} = lm, request, on_delta)
+  def stream_generate(lm, request, on_delta),
+    do: stream_generate_with_options(lm, request, on_delta, :uncached)
+
+  @doc false
+  def stream_generate_with_options(%module{} = lm, request, on_delta, opts)
       when is_map(request) and is_function(on_delta, 1) do
     with true <- Code.ensure_loaded?(module) and function_exported?(module, :stream_generate, 3),
          {:ok, _operation} <- stream_operation(lm, request) do
-      observe_generation(lm, fn telemetry?, capture ->
-        request = apply_settings_defaults(request)
-        started_at_ms = System.monotonic_time(:millisecond)
-
-        with {:ok, response} = result <- module.stream_generate(lm, request, on_delta) do
-          record_success(lm, request, response, telemetry?, capture,
-            cache_hit?: false,
-            duration_ms: System.monotonic_time(:millisecond) - started_at_ms
-          )
-
-          result
-        end
-      end)
+      opts = if opts == :uncached, do: opts, else: Keyword.put(opts, :streaming?, true)
+      generate = &module.stream_generate(lm, &1, on_delta)
+      observed_request(lm, request, opts, generate)
     else
       false -> {:error, :streaming_unsupported}
       {:error, _} = error -> error
@@ -407,7 +401,10 @@ defmodule Dspy.LM do
   def generate_with_options(lm, request, opts), do: generate_request(lm, request, opts)
 
   defp generate_request(lm, request, opts),
-    do: observe_generation(lm, &do_generate_request(lm, request, opts, &1, &2))
+    do: observed_request(lm, request, opts, &lm.__struct__.generate(lm, &1))
+
+  defp observed_request(lm, request, opts, generate),
+    do: observe_generation(lm, &do_generate_request(lm, request, opts, generate, &1, &2))
 
   defp observe_generation(lm, generation) do
     {callbacks, telemetry?} = Dspy.Settings.lifecycle_observability()
@@ -432,11 +429,11 @@ defmodule Dspy.LM do
     end
   end
 
-  defp do_generate_request(lm, request, opts, telemetry?, capture) do
+  defp do_generate_request(lm, request, opts, generate, telemetry?, capture) do
     request = apply_settings_defaults(request)
     started_at_ms = System.monotonic_time(:millisecond)
 
-    if cache_enabled?() and cacheable_request?(request) do
+    if opts != :uncached and cache_enabled?() and cacheable_request?(request) do
       rollout_id = Keyword.get_lazy(opts, :rollout_id, fn -> Dspy.Settings.get(:rollout_id) end)
       cache_opts = [rollout_id: rollout_id, table: Dspy.LM.Cache.table_ref()]
 
@@ -449,10 +446,13 @@ defmodule Dspy.LM do
             duration_ms: duration_ms
           )
 
-          {:ok, cached}
+          case Keyword.get(opts, :on_cache_hit) do
+            nil -> {:ok, cached}
+            notify -> with :ok <- notify.(), do: {:ok, cached}
+          end
 
         {:miss, disk} ->
-          case lm.__struct__.generate(lm, request) do
+          case generate.(request) do
             {:ok, response} ->
               duration_ms = System.monotonic_time(:millisecond) - started_at_ms
 
@@ -461,8 +461,11 @@ defmodule Dspy.LM do
                 duration_ms: duration_ms
               )
 
-              :ok = Dspy.LM.Cache.put(lm, request, response, cache_opts)
-              :ok = maybe_store_disk(disk, lm, request, response, cache_opts)
+              if cacheable_response?(response, Keyword.get(opts, :streaming?, false)) do
+                :ok = Dspy.LM.Cache.put(lm, request, response, cache_opts)
+                :ok = maybe_store_disk(disk, lm, request, response, cache_opts)
+              end
+
               {:ok, response}
 
             {:error, reason} ->
@@ -470,7 +473,7 @@ defmodule Dspy.LM do
           end
       end
     else
-      case lm.__struct__.generate(lm, request) do
+      case generate.(request) do
         {:ok, response} = ok ->
           duration_ms = System.monotonic_time(:millisecond) - started_at_ms
 
@@ -484,6 +487,28 @@ defmodule Dspy.LM do
         other ->
           other
       end
+    end
+  end
+
+  defp cacheable_response?(_response, false), do: true
+
+  defp cacheable_response?(response, true) do
+    # An HTTP EOF without a provider completion can still return an OK response.
+    case stream_option(response, :choices) do
+      choices when is_integer(length(choices)) ->
+        Enum.all?(choices, fn choice ->
+          stream_option(choice, :finish_reason) not in [
+            :incomplete,
+            :cancelled,
+            :error,
+            "incomplete",
+            "cancelled",
+            "error"
+          ]
+        end)
+
+      _ ->
+        true
     end
   end
 

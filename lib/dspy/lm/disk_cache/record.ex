@@ -9,6 +9,7 @@ defmodule Dspy.LM.DiskCache.Record do
   @atoms ~w[
     choices message role content finish_reason usage
     input_tokens output_tokens prompt_tokens completion_tokens total_tokens
+    input output reasoning cached_input cache_creation input_includes_cached
     cached_tokens cache_creation_tokens reasoning_tokens add_reasoning_to_cost
     prompt_tokens_details completion_tokens_details
     cost total tokens tools images storage input_cost output_cost reasoning_cost total_cost

@@ -17,7 +17,7 @@ defmodule Dspy.ProgramStream do
 
   alias Dspy.StreamResponse
 
-  @delta_key {__MODULE__, :on_delta}
+  @stream_key {__MODULE__, :stream_callbacks}
 
   def wrap(program, opts) do
     unless Keyword.keyword?(opts), do: raise(ArgumentError, "expected streamify call options")
@@ -43,7 +43,7 @@ defmodule Dspy.ProgramStream do
     end
   end
 
-  def take_delta, do: Process.delete(@delta_key)
+  def take_stream_callbacks, do: Process.delete(@stream_key)
 
   def delta_callback(consume) do
     worker = self()
@@ -218,6 +218,9 @@ defmodule Dspy.ProgramStream do
   defp next_event(%{tag: tag, worker: {worker, inbox}, channel: channel} = state)
        when not is_nil(channel) do
     case Channel.next(tag, worker, inbox, channel) do
+      {:event, receipt, :stream_cache_hit} ->
+        receive_cache_hit(%{state | channel: receipt})
+
       {:event, receipt, event} ->
         yield_event(event, %{state | channel: receipt})
 
@@ -251,6 +254,9 @@ defmodule Dspy.ProgramStream do
       {^tag, :field_listener, listener} ->
         receive_event(%{state | listener: listener}, tag, worker, worker_ref)
 
+      {^tag, :stream_cache_hit} ->
+        receive_cache_hit(state)
+
       {^tag, {:delta, _text} = delta} ->
         next_event(queue_delta(state, delta))
 
@@ -266,6 +272,9 @@ defmodule Dspy.ProgramStream do
         next_event(queue_terminal(state, {:error, {:stream_worker_exited, reason}}))
     end
   end
+
+  defp receive_cache_hit(state),
+    do: next_event(%{state | include_final?: true, listener: nil})
 
   defp queue_delta(%{listener: nil} = state, delta), do: %{state | pending: [delta]}
 
@@ -329,12 +338,12 @@ defmodule Dspy.ProgramStream do
         {name, fields} ->
           with {:ok, program, scanner} <- open_field_listener(program, fields) do
             send(destination, {tag, :field_listener, {name, scanner}})
-            Process.put(@delta_key, delta_callback(&publish.({:delta, &1})))
+            put_stream_callbacks(publish)
             invoke(program, inputs, opts)
           end
 
         nil ->
-          Process.put(@delta_key, delta_callback(&publish.({:delta, &1})))
+          put_stream_callbacks(publish)
           invoke(program, inputs, opts)
       end
 
@@ -347,6 +356,11 @@ defmodule Dspy.ProgramStream do
   catch
     :exit, reason -> {:error, {:stream_worker_exited, reason}}
     :throw, reason -> {:error, {:stream_worker_threw, reason}}
+  end
+
+  defp put_stream_callbacks(publish) do
+    on_delta = delta_callback(&publish.({:delta, &1}))
+    Process.put(@stream_key, {on_delta, fn -> publish.(:stream_cache_hit) end})
   end
 
   defp invoke(program, inputs, []), do: Dspy.call(program, inputs)

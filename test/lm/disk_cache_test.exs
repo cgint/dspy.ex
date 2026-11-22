@@ -1,6 +1,9 @@
 defmodule Dspy.LM.DiskCacheTest do
   use ExUnit.Case, async: false
 
+  alias Dspy.Signature.Adapters.ChatAdapter
+  alias Dspy.TestSupport.StreamingSSE
+
   @fixture Path.expand("../fixtures/lm_disk_cache_roundtrip.exs", __DIR__)
   @managed ".dspy-lm-cache-v1"
 
@@ -27,6 +30,72 @@ defmodule Dspy.LM.DiskCacheTest do
     for record <- records(dir) do
       refute File.read!(record) =~ "synthetic-disk-"
     end
+  end
+
+  @tag :tmp_dir
+  test "a finished program stream replays from disk after a memory clear", %{tmp_dir: dir} do
+    configure_disk(dir)
+
+    header = "[[ ## answer ## ]]\n"
+    {server, endpoint} = StreamingSSE.fixture(:finish, header, "Four.")
+
+    program =
+      Dspy.Predict.new("question -> answer", lm: lm(endpoint, "stream"), adapter: ChatAdapter)
+
+    wrapped = Dspy.streamify(program)
+    inputs = %{question: "What is two plus two?"}
+
+    Dspy.context([cache: true], fn ->
+      events =
+        wrapped.(inputs)
+        |> Stream.each(fn
+          {:delta, ^header} -> send(server.pid, :finish)
+          _event -> :ok
+        end)
+        |> Enum.to_list()
+
+      assert [
+               {:delta, ^header},
+               {:delta, "Four."},
+               %Dspy.Prediction{attrs: %{answer: "Four."}} = prediction
+             ] = events
+
+      assert_receive {:wire, "POST /v1/responses HTTP/1.1", %{"stream" => true}}
+      assert :ok = Task.await(server)
+      assert [_record] = records(dir)
+
+      assert :ok = Dspy.LM.Cache.clear()
+      assert [^prediction] = Enum.to_list(wrapped.(inputs))
+      refute_received {:wire, _, _}
+    end)
+  end
+
+  @tag :tmp_dir
+  test "EOF without a provider completion leaves memory and disk empty", %{tmp_dir: dir} do
+    configure_disk(dir)
+    text = "[[ ## answer ## ]]\nFour."
+    first = %{type: "response.output_text.delta", delta: text}
+    {server, endpoint} = StreamingSSE.fixture_events(:finish, first, [])
+    model = lm(endpoint, "missing-terminal")
+    program = Dspy.Predict.new("question -> answer", lm: model, adapter: ChatAdapter)
+    inputs = %{question: "What is two plus two?"}
+    request = ChatAdapter.format_request(program.signature, inputs, [])
+
+    Dspy.context([cache: true], fn ->
+      events =
+        Dspy.streamify(program).(inputs)
+        |> Stream.each(fn
+          {:delta, ^text} -> send(server.pid, :finish)
+          _event -> :ok
+        end)
+        |> Enum.to_list()
+
+      assert [{:delta, ^text}, %Dspy.Prediction{attrs: %{answer: "Four."}}] = events
+      assert_receive {:wire, "POST /v1/responses HTTP/1.1", %{"stream" => true}}
+      assert :ok = Task.await(server)
+      assert :miss = Dspy.LM.Cache.fetch(model, request)
+      assert records(dir) == []
+    end)
   end
 
   @tag :tmp_dir
