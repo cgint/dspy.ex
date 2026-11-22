@@ -1,7 +1,7 @@
 defmodule Dspy.Teleprompt.GEPAParetoTest do
   use ExUnit.Case, async: true
 
-  alias Dspy.{Example, Predict, Random, Signature}
+  alias Dspy.{Example, Predict, Prediction, Random, Signature}
   alias Dspy.Signature.Adapters.JSONAdapter
   alias Dspy.Teleprompt.GEPA
   alias Dspy.Teleprompt.GEPA.CandidatePool
@@ -159,6 +159,186 @@ defmodule Dspy.Teleprompt.GEPAParetoTest do
 
     refute_received {:rollout, _, _}
     refute_received {:reflected, _}
+  end
+
+  test "a sparse objective can lead from a scalar loser to the final scalar winner" do
+    [baseline, specialist, champion, _] = @variants
+    owner = self()
+    program = program(owner, baseline)
+    trainset = [row("row_train")]
+    valset = Enum.map(["row_val_b", "row_val_c"], &row/1)
+
+    metric = fn example, prediction, trace, name, _selected ->
+      variant = prediction[:answer]
+      question = example[:question]
+
+      if name == nil, do: send(owner, {:scored, variant, question})
+
+      case {trace, variant, question} do
+        {[_ | _], ^baseline, _} ->
+          %{score: 0.2, objective_scores: :ignored_on_training}
+
+        {[_ | _], ^specialist, _} ->
+          0.5
+
+        {[_ | _], ^champion, _} ->
+          1.0
+
+        {nil, ^baseline, _} ->
+          %{score: true, objective_scores: %{"coverage" => 0.5}}
+
+        {nil, ^specialist, "row_val_b"} ->
+          Prediction.new(%{"score" => 0.5, "objective_scores" => %{"coverage" => 0.7}})
+
+        {nil, ^specialist, "row_val_c"} ->
+          0.5
+
+        {nil, ^champion, _} ->
+          %{score: 2.0, objective_scores: %{"coverage" => 0.1}}
+      end
+    end
+
+    opts = [
+      metric: metric,
+      reflection_lm: %ReflectionLM{owner: owner},
+      candidate_selection_strategy: :pareto,
+      max_metric_calls: 10,
+      num_threads: 1
+    ]
+
+    Dspy.context([cache: false], fn ->
+      default = GEPA.new(opts)
+      objective = GEPA.new(opts ++ [frontier_type: :objective])
+
+      for {optimizer, expected, parent, child} <- [
+            {Map.delete(default, :frontier_type), baseline, baseline, specialist},
+            {objective, champion, specialist, champion}
+          ] do
+        assert {:ok, optimized} = GEPA.compile(optimizer, program, trainset, valset: valset)
+        assert optimized.signature.instructions == expected
+        assert_received {:reflected, ^baseline}
+        assert_received {:reflected, ^parent}
+        refute_received {:reflected, _}
+
+        expected_rows =
+          for variant <- [baseline, specialist, child], row <- valset do
+            {variant, row[:question]}
+          end
+
+        expected_rows =
+          expected_rows ++ Enum.map([baseline, specialist, parent, child], &{&1, "row_train"})
+
+        for {variant, question} <- expected_rows do
+          assert_received {:rollout, ^variant, ^question}
+          assert_received {:scored, ^variant, ^question}
+        end
+
+        refute_received {:rollout, _, _}
+        refute_received {:scored, _, _}
+      end
+    end)
+  end
+
+  test "objective validation counts failed rows only in the scalar result" do
+    [baseline, specialist | _] = @variants
+    owner = self()
+    program = program(owner, baseline)
+    valset = Enum.map(["row_val_a", "row_val_b"], &row/1)
+
+    metric = fn example, prediction, trace, _, _ ->
+      variant = prediction[:answer]
+      send(owner, {:scored, variant, example[:question]})
+
+      case {trace, variant} do
+        {nil, ^baseline} -> %{score: 0.75, objective_scores: %{"coverage" => 0}}
+        {nil, ^specialist} -> %{score: 1, objective_scores: %{"coverage" => 1}}
+        {_, ^baseline} -> 0
+        {_, ^specialist} -> 1
+      end
+    end
+
+    optimizer =
+      GEPA.new(
+        metric: metric,
+        reflection_lm: %ReflectionLM{owner: self(), fixed: specialist},
+        candidate_selection_strategy: :pareto,
+        frontier_type: :objective,
+        max_metric_calls: 6,
+        num_threads: 1
+      )
+
+    assert {:ok, ^program} = GEPA.compile(optimizer, program, [row("row_train")], valset: valset)
+    assert_received {:rollout, ^specialist, "row_val_a"}
+    refute_received {:scored, ^specialist, "row_val_a"}
+  end
+
+  test "objective frontier validates strategy, metadata, and full-candidate presence" do
+    [baseline, specialist | _] = @variants
+    program = program(self(), baseline)
+    trainset = [row("row_train")]
+    validation = [row("row_val_b")]
+
+    opts = [
+      metric: fn _, _, _, _, _ -> 0 end,
+      reflection_lm: %ReflectionLM{owner: self(), fixed: specialist},
+      max_metric_calls: 4,
+      num_threads: 1
+    ]
+
+    assert_raise ArgumentError, ~r/:frontier_type.*pareto/, fn ->
+      GEPA.new(opts ++ [frontier_type: :objective])
+    end
+
+    assert_raise ArgumentError, ~r/:frontier_type.*reflective/, fn ->
+      GEPA.new(metric: fn _example, _prediction -> 0 end, frontier_type: :objective)
+    end
+
+    assert_raise ArgumentError, ~r/:frontier_type/, fn ->
+      GEPA.new(opts ++ [frontier_type: :unknown])
+    end
+
+    instance = GEPA.new(opts ++ [candidate_selection_strategy: :pareto])
+
+    objective =
+      GEPA.new(opts ++ [candidate_selection_strategy: :pareto, frontier_type: :objective])
+
+    for value <- [
+          [],
+          %URI{},
+          %{coverage: 1},
+          %{"" => 1},
+          %{"   " => 1},
+          %{<<255>> => 1},
+          %{"coverage" => true}
+        ] do
+      metric = fn _, _, _, _, _ -> %{score: 0, objective_scores: value} end
+
+      assert {:error, {:invalid_objective_scores, 0}} =
+               GEPA.compile(%{objective | metric: metric}, program, trainset, valset: validation)
+
+      assert {:ok, ^program} =
+               GEPA.compile(%{instance | metric: metric}, program, trainset, valset: validation)
+    end
+
+    assert {:error, :missing_objective_scores} =
+             GEPA.compile(objective, program, trainset, valset: validation)
+
+    missing_child = fn _, prediction, _, _, _ ->
+      if prediction[:answer] == baseline,
+        do: %{score: 0, objective_scores: %{"coverage" => 1}},
+        else: %{score: 1, objective_scores: nil}
+    end
+
+    assert {:error, :missing_objective_scores} =
+             GEPA.compile(%{objective | metric: missing_child}, program, trainset,
+               valset: validation
+             )
+
+    invalid_primary = fn _, _, _, _, _ -> %{score: :invalid_primary, objective_scores: []} end
+
+    assert_raise Dspy.Evaluate.InvalidMetricResult, fn ->
+      GEPA.compile(%{objective | metric: invalid_primary}, program, trainset, valset: validation)
+    end
   end
 
   test "the configured failure score handles signed validation rewards" do

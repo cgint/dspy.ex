@@ -64,6 +64,15 @@ validation. Parent sampling uses per-example validation leaders, so a
 specialist can remain eligible with a lower mean. Failed rows retain
 their positions and use the configured `:failure_score`.
 
+With Pareto selection, `frontier_type: :objective` lets the metric
+return named `objective_scores` alongside its primary `score`. For each
+objective, GEPA averages only the validation rows that report a value.
+Every admitted candidate needs at least one objective across its full
+validation set. The means determine eligibility for parent sampling and
+merging. The primary score still governs minibatch acceptance, merge
+acceptance, and the final winner. The default `:instance` uses per-example
+leaders.
+
 With Pareto selection, `use_merge: true` combines compatible instructions
 from candidates with a common ancestor. A merge must match or beat both
 parents on the same validation subset. Its subset scores count toward

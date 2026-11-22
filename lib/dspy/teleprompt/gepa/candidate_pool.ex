@@ -6,26 +6,18 @@ defmodule Dspy.Teleprompt.GEPA.CandidatePool do
   @enforce_keys [:best_id, :candidates, :leaders]
   defstruct [:best_id, :candidates, :leaders]
 
-  def new(program, scores) do
+  def new(program, scores, objectives \\ nil) do
     %__MODULE__{
       best_id: 0,
       candidates: %{0 => entry(program, scores, MapSet.new())},
-      leaders: Enum.map(scores, &{&1, MapSet.new([0])})
+      leaders: update_leaders(%{}, scores, objectives, 0)
     }
   end
 
-  def add(pool, program, scores, parents \\ []) do
+  def add(pool, program, scores, parents \\ [], objectives \\ nil) do
     index = map_size(pool.candidates)
     entry = entry(program, scores, ancestors(pool, parents))
-
-    leaders =
-      Enum.zip_with(pool.leaders, scores, fn {best_score, ids} = leader, score ->
-        cond do
-          score > best_score -> {score, MapSet.new([index])}
-          score == best_score -> {best_score, MapSet.put(ids, index)}
-          true -> leader
-        end
-      end)
+    leaders = update_leaders(pool.leaders, scores, objectives, index)
 
     best_id = if entry.mean > fetch(pool, pool.best_id).mean, do: index, else: pool.best_id
 
@@ -57,8 +49,20 @@ defmodule Dspy.Teleprompt.GEPA.CandidatePool do
 
   def frontier(pool), do: Enum.map(frontier_weights(pool), &elem(&1, 0))
 
+  defp update_leaders(leaders, scores, objectives, id) do
+    dimensions = objectives || Enum.with_index(scores, &{&2, &1})
+
+    Enum.reduce(dimensions, leaders, fn {key, score}, acc ->
+      case Map.get(acc, key) do
+        {best, _ids} when best > score -> acc
+        {best, ids} when best == score -> Map.put(acc, key, {best, MapSet.put(ids, id)})
+        _ -> Map.put(acc, key, {score, MapSet.new([id])})
+      end
+    end)
+  end
+
   defp frontier_weights(pool) do
-    rows = Enum.map(pool.leaders, &elem(&1, 1))
+    rows = Enum.map(pool.leaders, fn {_key, {_score, ids}} -> ids end)
     counts = rows |> Enum.map(&MapSet.size/1) |> Enum.with_index(&{&2, &1}) |> Map.new()
 
     support =

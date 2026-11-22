@@ -74,6 +74,75 @@ defmodule Dspy.Teleprompt.GEPAMergeTest do
     refute_received :reflection
   end
 
+  test "objective merges retain both validation subsets without repeating rows" do
+    {optimizer, program, training, validation} = fixture(true)
+    owner = self()
+
+    compile = fn objective_row ->
+      metric = fn example, prediction, trace, name, selected ->
+        score = optimizer.metric.(example, prediction, trace, name, selected)
+        variant = prediction[:variant]
+        question = example[:question]
+
+        if trace == nil, do: send(owner, {:scored_validation, variant, question})
+
+        objectives =
+          case variant do
+            :base -> %{"left" => 0, "right" => 0}
+            :left -> %{"left" => 1}
+            :right -> %{"right" => 1}
+            :merged when question == objective_row -> %{"left" => 2}
+            :merged -> %{}
+          end
+
+        %{score: score, objective_scores: objectives}
+      end
+
+      optimizer =
+        GEPA.new(
+          metric: metric,
+          reflection_lm: optimizer.reflection_lm,
+          candidate_selection_strategy: :pareto,
+          frontier_type: :objective,
+          use_merge: true,
+          max_merge_invocations: 1,
+          max_metric_calls: 28,
+          num_threads: 1,
+          seed: 7
+        )
+
+      assert {:ok, result} = GEPA.compile(optimizer, program, training, valset: validation)
+      assert result.slots[1].signature.instructions == @specialist
+      assert result.slots["1"].signature.instructions == @specialist
+      assert_parent_rollouts(validation)
+
+      merged_rows =
+        for _ <- validation do
+          assert_received {:rollout, :merged, question}
+          question
+        end
+
+      assert Enum.sort(merged_rows) == Enum.sort(Enum.map(validation, & &1[:question]))
+
+      for variant <- [:base, :left, :right, :merged], row <- validation do
+        question = row[:question]
+        assert_received {:scored_validation, ^variant, ^question}
+      end
+
+      refute_received {:rollout, _, _}
+      refute_received {:scored_validation, _, _}
+      refute_received :reflection
+      merged_rows
+    end
+
+    # The neutral row always belongs to the five-row merge sample. The
+    # remaining validation row is scored last, after admission of the merge.
+    sample_then_rest = compile.("neutral")
+    remaining = List.last(sample_then_rest)
+    refute remaining == "neutral"
+    assert compile.(remaining) == sample_then_rest
+  end
+
   test "a merge that beats only one parent on the shared subset stays out of the pool" do
     {optimizer, program, training, validation} = fixture(false)
 

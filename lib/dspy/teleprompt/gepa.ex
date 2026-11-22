@@ -12,7 +12,13 @@ defmodule Dspy.Teleprompt.GEPA do
   Set `:candidate_selection_strategy` to `:pareto` to compare each proposal
   with its parent on the same training minibatch before running validation.
   Parent selection weights candidates by the number of validation rows they
-  lead. The returned program has the highest mean validation score.
+  lead. With Pareto search, set `frontier_type: :objective` to select parents
+  and merge partners by their mean scores on named objectives. On validation
+  rows, a metric can include `:objective_scores` as a map of nonblank string
+  names to numbers. Each candidate needs at least one reported objective,
+  and each objective mean uses only the rows reporting it. The default
+  `frontier_type: :instance` selects by validation rows. The returned program
+  has the highest mean scalar validation score in both modes.
   The default `:current_best` searches from the best validation mean and
   evaluates proposals directly on the validation set.
   The budget counts training and validation rows that the program attempts.
@@ -68,6 +74,7 @@ defmodule Dspy.Teleprompt.GEPA do
   @search_defaults [
     candidate_selection_strategy: :current_best,
     component_selector: :round_robin,
+    frontier_type: :instance,
     failure_score: 0,
     perfect_score: 1,
     skip_perfect_score: true,
@@ -106,6 +113,7 @@ defmodule Dspy.Teleprompt.GEPA do
           num_threads: pos_integer() | nil,
           candidate_selection_strategy: :current_best | :pareto,
           component_selector: :round_robin | :all,
+          frontier_type: :instance | :objective,
           failure_score: number(),
           perfect_score: number(),
           skip_perfect_score: boolean(),
@@ -128,6 +136,10 @@ defmodule Dspy.Teleprompt.GEPA do
   end
 
   defp new_from_candidates(opts) do
+    if opts[:frontier_type] == :objective do
+      raise ArgumentError, ":frontier_type :objective requires reflective Pareto search"
+    end
+
     case Dspy.Teleprompt.validate_config(opts) do
       :ok ->
         :ok
@@ -222,6 +234,7 @@ defmodule Dspy.Teleprompt.GEPA do
       num_threads: num_threads,
       candidate_selection_strategy: opts[:candidate_selection_strategy],
       component_selector: opts[:component_selector],
+      frontier_type: opts[:frontier_type],
       failure_score: opts[:failure_score],
       perfect_score: opts[:perfect_score],
       skip_perfect_score: opts[:skip_perfect_score],
@@ -238,6 +251,15 @@ defmodule Dspy.Teleprompt.GEPA do
 
     unless opts[:component_selector] in [:round_robin, :all] do
       raise ArgumentError, ":component_selector must be :round_robin or :all"
+    end
+
+    unless opts[:frontier_type] in [:instance, :objective] do
+      raise ArgumentError, ":frontier_type must be :instance or :objective"
+    end
+
+    if opts[:frontier_type] == :objective and opts[:candidate_selection_strategy] != :pareto do
+      raise ArgumentError,
+            ":frontier_type :objective requires candidate_selection_strategy: :pareto"
     end
 
     for key <- [:failure_score, :perfect_score] do
