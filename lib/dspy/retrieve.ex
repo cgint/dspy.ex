@@ -14,6 +14,12 @@ defmodule Dspy.Retrieve do
   See `docs/OVERVIEW.md` for the current stable surface + evidence.
   """
 
+  @behaviour Dspy.Module
+
+  alias Dspy.{Attrs, Prediction, Settings}
+
+  defstruct [:rm, k: 3, callbacks: []]
+
   defmodule Retriever do
     @moduledoc """
     Base retriever behavior.
@@ -912,6 +918,153 @@ defmodule Dspy.Retrieve do
   end
 
   # Main API
+
+  @type rm ::
+          %ColBERTv2{}
+          | module()
+          | (String.t(), keyword() -> list() | {:ok, list()} | {:error, term()})
+
+  @type t :: %__MODULE__{
+          rm: rm() | nil,
+          k: non_neg_integer(),
+          callbacks: Dspy.Signature.Adapter.Callbacks.callbacks()
+        }
+
+  @doc """
+  Create a retrieval module that returns a prediction of ordered passages.
+
+  Set `k:` to the default result limit, which starts at 3. Set `rm:` to a
+  configured ColBERTv2 value, a module exporting `retrieve/2`, or a function
+  accepting a query and keyword options. A local binding takes precedence
+  over process-scoped and global `:rm` settings. Set `callbacks:` to register
+  module lifecycle handlers.
+  """
+  @spec new(keyword()) :: t()
+  def new(opts \\ [])
+
+  def new(opts) when is_integer(length(opts)) do
+    with true <- Keyword.keyword?(opts),
+         {:ok, opts} <- Keyword.validate(opts, k: 3, rm: nil, callbacks: []),
+         :ok <- validate_k(opts[:k]),
+         true <- valid_rm?(opts[:rm]),
+         true <- valid_callbacks?(opts[:callbacks]) do
+      struct!(__MODULE__, opts)
+    else
+      _ -> raise ArgumentError, "invalid retrieval module options"
+    end
+  end
+
+  def new(_opts), do: raise(ArgumentError, "invalid retrieval module options")
+
+  @doc """
+  Retrieve passages for a query. Call through `Dspy.call/2` to run module
+  lifecycle callbacks and accept keyword or example inputs.
+
+  Inputs accept a query string or a map with `:query`, an optional `:k`
+  override, and optional keyword `:rm_opts`. The effective `:k` takes
+  precedence over any value in `:rm_opts`. Retriever results can be lists
+  of strings, documents, or maps with `:long_text` fields.
+  """
+  @impl Dspy.Module
+  @spec forward(t(), map() | String.t()) :: {:ok, Prediction.t()} | {:error, term()}
+  def forward(%__MODULE__{} = retrieve, query) when is_binary(query),
+    do: forward(retrieve, %{query: query})
+
+  def forward(%__MODULE__{} = retrieve, inputs) when is_map(inputs) do
+    query = map_field(inputs, :query)
+    k = effective_k(map_field(inputs, :k), retrieve.k)
+    options = map_field(inputs, :rm_opts, [])
+
+    with :ok <- validate_query(query),
+         :ok <- validate_k(k),
+         {:ok, opts} <- retriever_options(options, k),
+         result <- run_retriever(effective_rm(retrieve.rm), query, opts),
+         {:ok, passages} <- normalize_retrieval_result(result) do
+      {:ok, Prediction.new(passages: passages)}
+    end
+  end
+
+  def forward(%__MODULE__{}, _inputs), do: {:error, :invalid_query}
+
+  defp map_field(map, key, default \\ nil) do
+    case Attrs.fetch_map(map, key) do
+      {:ok, value} -> value
+      :error -> default
+    end
+  end
+
+  defp effective_k(nil, default), do: default
+  defp effective_k(k, _default), do: k
+
+  defp effective_rm(nil), do: Settings.get(:rm)
+  defp effective_rm(rm), do: rm
+
+  defp validate_query(query) do
+    if is_binary(query) and String.valid?(query), do: :ok, else: {:error, :invalid_query}
+  end
+
+  defp validate_k(k) when is_integer(k) and k >= 0, do: :ok
+  defp validate_k(_k), do: {:error, :invalid_k}
+
+  defp retriever_options(opts, k) when is_integer(length(opts)) do
+    if Keyword.keyword?(opts),
+      do: {:ok, Keyword.put(opts, :k, k)},
+      else: {:error, :invalid_rm_opts}
+  end
+
+  defp retriever_options(_opts, _k), do: {:error, :invalid_rm_opts}
+
+  defp valid_rm?(nil), do: true
+  defp valid_rm?(%ColBERTv2{}), do: true
+  defp valid_rm?(rm) when is_function(rm, 2), do: true
+
+  defp valid_rm?(module) when is_atom(module),
+    do: Code.ensure_loaded?(module) and function_exported?(module, :retrieve, 2)
+
+  defp valid_rm?(_rm), do: false
+
+  defp valid_callbacks?(callbacks) when is_integer(length(callbacks)) do
+    Enum.all?(callbacks, fn
+      {module, _state} when is_atom(module) and not is_nil(module) -> true
+      _invalid -> false
+    end)
+  end
+
+  defp valid_callbacks?(_callbacks), do: false
+
+  defp run_retriever(nil, _query, _opts), do: {:error, :no_rm_configured}
+
+  defp run_retriever(%ColBERTv2{} = client, query, opts),
+    do: ColBERTv2.search(client, query, opts)
+
+  defp run_retriever(rm, query, opts) when is_function(rm, 2), do: rm.(query, opts)
+
+  defp run_retriever(module, query, opts) when is_atom(module) do
+    if valid_rm?(module), do: module.retrieve(query, opts), else: {:error, :invalid_rm}
+  end
+
+  defp run_retriever(_rm, _query, _opts), do: {:error, :invalid_rm}
+
+  defp normalize_retrieval_result({:error, _reason} = error), do: error
+  defp normalize_retrieval_result({:ok, rows}), do: collect_passages(rows, [])
+  defp normalize_retrieval_result(rows), do: collect_passages(rows, [])
+
+  defp collect_passages([], passages), do: {:ok, Enum.reverse(passages)}
+
+  defp collect_passages([row | rest], passages) do
+    text = passage_text(row)
+
+    if is_binary(text) and String.valid?(text),
+      do: collect_passages(rest, [text | passages]),
+      else: {:error, :invalid_retrieval_result}
+  end
+
+  defp collect_passages(_rows, _passages), do: {:error, :invalid_retrieval_result}
+
+  defp passage_text(%Document{content: content}), do: content
+  defp passage_text(row) when is_binary(row), do: row
+  defp passage_text(row) when is_map(row), do: map_field(row, :long_text)
+  defp passage_text(_row), do: nil
 
   @doc """
   Create a new ColBERTv2 retriever.
