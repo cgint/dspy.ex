@@ -5,7 +5,7 @@ defmodule Dspy.ProgramStream do
   alias Dspy.Module.PredictorSlots
   alias Dspy.ProgramStream.{Channel, Composite, StatusCallback}
   alias Dspy.Signature.AdapterPipeline
-  alias Dspy.Signature.Adapters.{ChatAdapter, ChatStream}
+  alias Dspy.Signature.Adapters.{ChatAdapter, ChatStream, XMLAdapter, XMLStream}
   alias Dspy.StreamResponse
 
   @delta_key {__MODULE__, :on_delta}
@@ -64,7 +64,7 @@ defmodule Dspy.ProgramStream do
       raise ArgumentError, "stream_listeners cannot contain duplicate fields"
     end
 
-    validate_chat_fields!(program.signature.output_fields, fields)
+    validate_fields!(program.signature.output_fields, fields)
     [{predict_name, _predictor}] = Dspy.Module.named_predictors(program)
     {predict_name, fields}
   end
@@ -73,7 +73,7 @@ defmodule Dspy.ProgramStream do
     raise ArgumentError, "stream_listeners must be a list of output field atoms"
   end
 
-  def validate_chat_fields!(outputs, fields) do
+  def validate_fields!(outputs, fields) do
     if Enum.any?(outputs, &match?(%{type: :tool_calls, tool_call_format: :structured}, &1)) do
       raise ArgumentError, "stream_listeners require ordinary Chat markers"
     end
@@ -89,6 +89,27 @@ defmodule Dspy.ProgramStream do
     do: not Map.has_key?(output, :schema)
 
   defp plain_string_output?(_output, _name), do: false
+
+  def open_field_listener(predictor, fields) do
+    case AdapterPipeline.active_adapter(adapter: predictor.adapter) do
+      ChatAdapter ->
+        {:ok, %{predictor | adapter: ChatAdapter}, ChatStream.new(fields)}
+
+      XMLAdapter ->
+        {:ok, %{predictor | adapter: XMLAdapter}, XMLStream.new(predictor.signature, fields)}
+
+      adapter ->
+        {:error, {:unsupported_streaming_adapter, adapter}}
+    end
+  end
+
+  def push_field_listener(%ChatStream{} = scanner, text), do: ChatStream.push(scanner, text)
+  def push_field_listener(%XMLStream{} = scanner, text), do: XMLStream.push(scanner, text)
+
+  def finish_field_listener(%ChatStream{} = scanner, _prediction), do: ChatStream.finish(scanner)
+
+  def finish_field_listener(%XMLStream{} = scanner, prediction),
+    do: XMLStream.finish(scanner, prediction)
 
   def field_events(fragments, predict_name, invocation_id \\ nil) do
     for {field, chunk, last?} <- fragments do
@@ -120,7 +141,7 @@ defmodule Dspy.ProgramStream do
       terminal =
         Context.with_context(context, fn ->
           StatusCallback.with_provider(provider, publish, fn ->
-            call_program(program, inputs, opts, listeners, publish)
+            call_program(program, inputs, opts, listeners, publish, {destination, tag})
           end)
         end)
 
@@ -129,21 +150,13 @@ defmodule Dspy.ProgramStream do
 
     worker = if composite?, do: Channel.start(run), else: spawn_monitor(run)
 
-    listener =
-      case listeners do
-        nil -> nil
-        :status_only -> nil
-        {:composite, _} -> nil
-        {predict_name, fields} -> {predict_name, ChatStream.new(fields)}
-      end
-
     %{
       consumer: consumer,
       tag: tag,
       worker: worker,
       channel: if(composite?, do: :initial),
       cancel_reason: cancel_reason,
-      listener: listener,
+      listener: nil,
       pending: []
     }
   end
@@ -194,8 +207,14 @@ defmodule Dspy.ProgramStream do
 
   defp next_event(%{tag: tag, worker: {worker, worker_ref}} = state) do
     send(worker, {tag, :demand})
+    receive_event(state, tag, worker, worker_ref)
+  end
 
+  defp receive_event(state, tag, worker, worker_ref) do
     receive do
+      {^tag, :field_listener, listener} ->
+        receive_event(%{state | listener: listener}, tag, worker, worker_ref)
+
       {^tag, {:delta, _text} = delta} ->
         next_event(queue_delta(state, delta))
 
@@ -215,12 +234,14 @@ defmodule Dspy.ProgramStream do
   defp queue_delta(%{listener: nil} = state, delta), do: %{state | pending: [delta]}
 
   defp queue_delta(%{listener: {predict_name, scanner}} = state, {:delta, text}) do
-    {fragments, scanner} = ChatStream.push(scanner, text)
+    {fragments, scanner} = push_field_listener(scanner, text)
     %{state | listener: {predict_name, scanner}, pending: field_events(fragments, predict_name)}
   end
 
   defp queue_terminal(%{listener: {predict_name, scanner}} = state, %Prediction{} = prediction) do
-    pending = field_events(ChatStream.finish(scanner), predict_name) ++ [prediction]
+    pending =
+      field_events(finish_field_listener(scanner, prediction), predict_name) ++ [prediction]
+
     %{state | worker: nil, listener: nil, pending: pending}
   end
 
@@ -257,7 +278,7 @@ defmodule Dspy.ProgramStream do
     end
   end
 
-  defp call_program(program, inputs, opts, listeners, publish) do
+  defp call_program(program, inputs, opts, listeners, publish, {destination, tag}) do
     result =
       case listeners do
         :status_only ->
@@ -266,11 +287,16 @@ defmodule Dspy.ProgramStream do
         {:composite, slots} ->
           Composite.with_listeners(program, slots, publish, &invoke(&1, inputs, opts))
 
-        _standalone ->
-          with {:ok, program} <- select_adapter(program, listeners) do
+        {name, fields} ->
+          with {:ok, program, scanner} <- open_field_listener(program, fields) do
+            send(destination, {tag, :field_listener, {name, scanner}})
             Process.put(@delta_key, delta_callback(&publish.({:delta, &1})))
             invoke(program, inputs, opts)
           end
+
+        nil ->
+          Process.put(@delta_key, delta_callback(&publish.({:delta, &1})))
+          invoke(program, inputs, opts)
       end
 
     case result do
@@ -286,13 +312,4 @@ defmodule Dspy.ProgramStream do
 
   defp invoke(program, inputs, []), do: Dspy.call(program, inputs)
   defp invoke(program, inputs, opts), do: Dspy.call(program, inputs, opts)
-
-  defp select_adapter(program, nil), do: {:ok, program}
-
-  defp select_adapter(program, _listeners) do
-    case AdapterPipeline.active_adapter(adapter: program.adapter) do
-      ChatAdapter -> {:ok, %{program | adapter: ChatAdapter}}
-      adapter -> {:error, {:unsupported_streaming_adapter, adapter}}
-    end
-  end
 end

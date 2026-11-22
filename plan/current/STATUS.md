@@ -99,6 +99,10 @@
 > consumer demand and keep per-invocation field IDs. The final prediction
 > retains ordered parallel results. Cancellation stops active tasks.
 
+> **M5, XML field streaming.** Standalone and composite XML predictors
+> stream selected plain strings with their literal text and whitespace
+> preserved. Structured siblings still use the ordinary XML reader.
+
 > **M5, tool progress.** A status provider can format tool start and end
 > events in the program worker. The built-in provider emits generic tool
 > messages. Existing formatters keep their module and LM events.

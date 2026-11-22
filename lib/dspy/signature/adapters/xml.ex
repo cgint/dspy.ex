@@ -17,7 +17,9 @@ defmodule Dspy.Signature.Adapters.XMLAdapter do
   @open_tag ~r/\A<([\p{L}_][\p{L}\p{N}\p{M}_.-]*)[ \t]*(\/?)>/u
   @tag_name ~r/\A[\p{L}_][\p{L}\p{N}\p{M}_.-]*\z/u
   @invalid_key_char ~r/[\x00-\x08\x0B\x0C\x0E-\x1F\x{FFFE}\x{FFFF}]/u
-  @fenced ~r/\A```(?:xml)?[ \t]*\r?\n(.*)\r?\n```[ \t]*(?:\r?\n[^<]*)?\z/s
+  @fence_opening ~S/```(?:xml)?[ \t]*\r?\n/
+  @fenced ~r/\A#{@fence_opening}(.*)\r?\n```[ \t]*(?:\r?\n[^<]*)?\z/s
+  @stream_fence ~r/\A#{@fence_opening}/
   @reasoning ~r/\A<(think|thinking)>/
   @key_escapes %{
     "&" => "&amp;",
@@ -407,10 +409,7 @@ defmodule Dspy.Signature.Adapters.XMLAdapter do
 
   @impl true
   def parse_outputs(%Signature{} = signature, text, _opts \\ []) when is_binary(text) do
-    fields =
-      Map.new(signature.output_fields, fn field ->
-        {Atom.to_string(field.name), {field, container_schema(field)}}
-      end)
+    fields = field_definitions(signature)
 
     with true <- String.valid?(text),
          {:ok, text} <- unwrap_completion(String.trim(text), fields),
@@ -428,6 +427,68 @@ defmodule Dspy.Signature.Adapters.XMLAdapter do
     else
       false -> decode_error(:invalid_xml_encoding)
       {:error, _} = error -> error
+    end
+  end
+
+  @doc false
+  def field_definitions(%Signature{} = signature) do
+    Map.new(signature.output_fields, fn field ->
+      {Atom.to_string(field.name), {field, container_schema(field)}}
+    end)
+  end
+
+  @doc false
+  def stream_prefix(text, fields) do
+    case thought_opening(text, fields) do
+      {:ok, tag, rest} ->
+        {:thought, "</#{tag}>", rest}
+
+      :none ->
+        case Regex.run(@stream_fence, text) do
+          [opening] -> {:fence, after_tag(text, opening)}
+          nil -> :none
+        end
+    end
+  end
+
+  @doc false
+  def open_field(text, fields) do
+    case Regex.run(@open_tag, text) do
+      [opening, name, slash] when is_map_key(fields, name) ->
+        {:ok, name, slash == "/", after_tag(text, opening)}
+
+      _ ->
+        :none
+    end
+  end
+
+  @doc false
+  def skip_stream_field(text, name, self_close?, fields, previous) do
+    boundary? = &match?({:ok, _, _, _}, open_field(&1, fields))
+
+    with {:ok, value, rest} <-
+           read_output_with_boundary(
+             text,
+             name,
+             self_close?,
+             Map.fetch!(fields, name),
+             previous,
+             boundary?
+           ) do
+      rest = String.trim_leading(rest)
+
+      if self_close? or boundary?.(rest) do
+        # Only the item index is needed to decode another repeated list field.
+        seen =
+          case value do
+            {:list_items, _items, index} -> {:list_items, [], index}
+            {:value, _value} -> :seen
+          end
+
+        {:ok, seen, rest}
+      else
+        :incomplete
+      end
     end
   end
 
@@ -456,18 +517,28 @@ defmodule Dspy.Signature.Adapters.XMLAdapter do
   end
 
   defp unwrap_completion(text, fields) do
-    case Regex.run(@reasoning, text) do
-      [opening, tag] when not is_map_key(fields, tag) ->
-        rest = binary_part(text, byte_size(opening), byte_size(text) - byte_size(opening))
-
+    case thought_opening(text, fields) do
+      {:ok, tag, rest} ->
         case String.split(rest, "</#{tag}>", parts: 2) do
           [_reasoning, rest] -> unwrap_completion(String.trim_leading(rest), fields)
           _ -> decode_error(:unclosed_reasoning)
         end
 
-      _ ->
+      :none ->
         unwrap_fence(text, fields)
     end
+  end
+
+  defp thought_opening(text, fields) do
+    case Regex.run(@reasoning, text) do
+      [opening, tag] when not is_map_key(fields, tag) -> {:ok, tag, after_tag(text, opening)}
+      _ -> :none
+    end
+  end
+
+  defp after_tag(text, tag) do
+    size = byte_size(tag)
+    binary_part(text, size, byte_size(text) - size)
   end
 
   defp unwrap_fence(<<"```", _::binary>> = text, fields) do
@@ -490,7 +561,7 @@ defmodule Dspy.Signature.Adapters.XMLAdapter do
     case Regex.run(@open_tag, text) do
       [opening, name, slash] ->
         with {:ok, {field, _schema} = definition} <- fetch_field(fields, name),
-             rest = binary_part(text, byte_size(opening), byte_size(text) - byte_size(opening)),
+             rest = after_tag(text, opening),
              previous = Map.fetch(outputs, field.name),
              {:ok, value, rest} <-
                read_output(rest, name, slash == "/", definition, fields, previous) do
@@ -517,6 +588,10 @@ defmodule Dspy.Signature.Adapters.XMLAdapter do
       end
     end
 
+    read_output_with_boundary(text, name, self_close?, {field, schema}, previous, boundary?)
+  end
+
+  defp read_output_with_boundary(text, name, self_close?, {field, schema}, previous, boundary?) do
     cond do
       XMLValue.list_item?(text, name, self_close?, schema, boundary?) ->
         XMLValue.read_list_item(text, {name, name}, schema, boundary?, previous)

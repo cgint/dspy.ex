@@ -459,11 +459,12 @@ defmodule Dspy do
   Halting the enumeration cancels the run. LM text streaming makes one attempt.
   The original enumerating process must resume or halt an active continuation.
 
-  With ordinary ChatAdapter markers, `stream_listeners: [:answer]` selects
+  With ChatAdapter or XMLAdapter, `stream_listeners: [:answer]` selects
   plain string outputs and yields `Dspy.StreamResponse` chunks. The selection
   must contain unique field atoms. A field can end with empty text marked
-  `is_last_chunk`. A successful call can yield only the final prediction when
-  the parser uses its JSON fallback.
+  `is_last_chunk`. ChatAdapter's JSON fallback can yield only the final
+  prediction. XMLAdapter preserves literal field text and can hold an
+  ambiguous close until the next declared field or end of the response.
   Omitting `:stream_listeners` or passing `[]` yields raw deltas.
 
   For a composite program, an output atom must identify a unique predictor.
