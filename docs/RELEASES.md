@@ -24,6 +24,12 @@ matching passages and their zero-based indices in a prediction.
 exact, with earlier corpus positions first on ties. Vectors are normalized
 by default. Pass `normalize: false` for raw dot products.
 
+### Named submodules
+
+`Dspy.Module.named_sub_modules/1` lists a program and its nested modules in
+breadth-first order. Paths begin at `self` and identify each occurrence,
+including equal module values stored at different paths.
+
 ### BetterTogether optimizer
 
 `Dspy.Teleprompt.BetterTogether` composes named prompt and weight optimizers
@@ -42,6 +48,13 @@ LM implements `finetune/3` and returns the trained LM. The optimizer runs
 the jobs in order and binds the returned LMs after all jobs succeed.
 The built-in Chat formatter accepts text conversations and checks that
 the assistant target parses back to the recorded outputs.
+
+### Typed bounding boxes
+
+Use `Dspy.BoundingBox` as a JSON signature schema for a rectangular image
+region. Its edges are normalized to `[0, 1]`, and validation requires
+positive width and height. Chat, JSON, and XML predictor tests cover
+prompt rendering and typed outputs.
 
 ### InferRules optimizer
 
@@ -246,9 +259,9 @@ remain in M5.
 composite. Pass a unique output atom or `{predict_name, field}` using
 the name from `Dspy.Module.named_predictors/1`. Selected calls emit
 their own field chunks, and unselected calls retain ordinary inference.
-An empty selection streams raw deltas. This covers calls made in the
-program worker. Streaming predictors invoked in another process report
-an explicit error.
+An empty selection streams raw deltas. While a stream scope is active,
+invoking a selected predictor outside the program worker returns
+`{:error, :stream_predictor_outside_owner}`.
 
 ### LM streaming transport
 
