@@ -58,6 +58,7 @@ defmodule Dspy.Teleprompt.BootstrapFinetuneTest do
       case lm.outcome do
         nil -> {:ok, %{lm | trained: true}}
         :invalid -> {:ok, :invalid}
+        :invalid_struct_module -> {:ok, %{__struct__: Dspy.LM}}
         {:error, _} = error -> error
       end
     end
@@ -69,6 +70,11 @@ defmodule Dspy.Teleprompt.BootstrapFinetuneTest do
 
     @impl true
     def generate(_, _), do: {:ok, "[[ ## answer ## ]]\nunused"}
+  end
+
+  defmodule RejectingFormatter do
+    def format_finetune_data(_signature, _demos, _inputs, _outputs),
+      do: {:error, :cannot_format_row}
   end
 
   test "multitask trains an exact shared LM once on all accepted teacher steps" do
@@ -216,6 +222,7 @@ defmodule Dspy.Teleprompt.BootstrapFinetuneTest do
 
     for {outcome, reason} <- [
           {:invalid, :invalid_trained_lm},
+          {:invalid_struct_module, :invalid_trained_lm},
           {{:error, :provider_refused}, :provider_refused}
         ] do
       student = program(left, %{lm("second") | outcome: outcome}, "student demo")
@@ -237,6 +244,24 @@ defmodule Dspy.Teleprompt.BootstrapFinetuneTest do
         assert [%Example{}] = student.slots[1].examples
       end)
     end
+  end
+
+  test "a later group's formatting failure prevents every training callback" do
+    left = lm("first")
+    right = lm("second")
+    student = program(left, right, "student demo")
+
+    optimizer =
+      BootstrapFinetune.new(
+        multitask: false,
+        adapter: %{left => ChatAdapter, right => RejectingFormatter},
+        num_threads: 1
+      )
+
+    assert {:error, {:finetune_format_failed, @right, :cannot_format_row}} =
+             BootstrapFinetune.compile(optimizer, student, [row("all")])
+
+    refute_received {:job, _, _, _}
   end
 
   test "Chat uses its inference prompt and a typed, round-trippable assistant target" do

@@ -209,7 +209,7 @@ defmodule Dspy.Teleprompt.BootstrapFinetune do
 
   defp valid_lm?(%_{} = lm) do
     LM.validate_binding!(lm)
-    true
+    function_exported?(lm.__struct__, :__struct__, 0)
   rescue
     ArgumentError -> false
   end
