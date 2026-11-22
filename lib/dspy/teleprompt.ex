@@ -33,7 +33,7 @@ defmodule Dspy.Teleprompt do
   alias Dspy.Example
   alias Dspy.Teleprompt.{LabeledFewShot, BootstrapFewShot, COPRO, MIPROv2, SIMBA, Ensemble, GEPA}
   alias Dspy.Teleprompt.{BootstrapFewShotWithRandomSearch, BootstrapTrace, InferRules, KNNFewShot}
-  alias Dspy.Teleprompt.BootstrapFinetune
+  alias Dspy.Teleprompt.{BetterTogether, BootstrapFinetune}
 
   @type metric_fun :: (Example.t() -> number()) | (Example.t(), Dspy.Prediction.t() -> number())
 
@@ -112,6 +112,7 @@ defmodule Dspy.Teleprompt do
   def new(:knn_few_shot, opts), do: KNNFewShot.new(opts)
   def new(:infer_rules, opts), do: InferRules.new(opts)
   def new(:bootstrap_finetune, opts), do: BootstrapFinetune.new(opts)
+  def new(:better_together, opts), do: BetterTogether.new(opts)
 
   def new(type, opts) when type in [:bootstrap_few_shot_with_random_search, :bootstrap_rs],
     do: BootstrapFewShotWithRandomSearch.new(opts)
@@ -152,6 +153,9 @@ defmodule Dspy.Teleprompt do
 
   def compile(%BootstrapFinetune{} = tp, program, trainset),
     do: BootstrapFinetune.compile(tp, program, trainset)
+
+  def compile(%BetterTogether{} = tp, program, trainset),
+    do: BetterTogether.compile(tp, program, trainset)
 
   def compile(%BootstrapFewShotWithRandomSearch{} = tp, program, trainset),
     do: BootstrapFewShotWithRandomSearch.compile(tp, program, trainset)

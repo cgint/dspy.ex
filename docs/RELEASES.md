@@ -8,6 +8,14 @@ This repo ships in **small, user-usable slices**.
 
 ## Consumer notes
 
+### BetterTogether optimizer
+
+`Dspy.Teleprompt.BetterTogether` composes named prompt and weight optimizers
+in a strategy such as `"p -> w -> p"`. Each stage receives the previous
+stage's program. The optimizer returns the best held-out candidate, or the
+latest completed program when validation is disabled. Use
+`compile_with_candidates/4` to inspect stage scores and a stopped stage.
+
 ### BootstrapFinetune optimizer
 
 `Dspy.Teleprompt.BootstrapFinetune` prepares Chat training conversations

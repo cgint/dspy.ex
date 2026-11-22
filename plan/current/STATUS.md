@@ -55,6 +55,11 @@
 > LM training callback handles each group, and the student receives
 > the trained bindings as one immutable update.
 
+> **M6, BetterTogether.** Named prompt and weight optimizers compose
+> in a strategy. Stages use the latest program and preserve trained
+> bindings. Candidate results retain validation scores and any stopped
+> stage outside the program struct.
+
 > **M4, multipart image splicing.** Separate marker-bearing text parts
 > share one ordered stream of typed images. A count mismatch strips the
 > markers and appends each supplied image once before new attachments.
