@@ -116,42 +116,57 @@ defmodule Dspy.ProgramStream.Composite do
   end
 
   defp stream_selected(module, predictor, inputs, :raw, publish) do
-    module.forward(predictor, inputs, ProgramStream.delta_callback(&publish.({:delta, &1})))
+    stream_invocation(module, predictor, inputs, :raw, publish)
   end
 
   defp stream_selected(module, predictor, inputs, {name, fields}, publish) do
     case AdapterPipeline.active_adapter(adapter: predictor.adapter) do
       ChatAdapter ->
-        stream_chat(module, %{predictor | adapter: ChatAdapter}, inputs, name, fields, publish)
+        selection = {name, ChatStream.new(fields)}
+        stream_invocation(module, %{predictor | adapter: ChatAdapter}, inputs, selection, publish)
 
       adapter ->
         {:error, {:unsupported_streaming_adapter, adapter}}
     end
   end
 
-  defp stream_chat(module, predictor, inputs, name, fields, publish) do
-    # Separate scanner state for each invocation, even if it reenters a tagged predictor.
+  defp stream_invocation(module, predictor, inputs, state, publish) do
+    # Each call owns its callback and scanner, including reentrant calls.
     key = {__MODULE__, make_ref()}
-    Process.put(key, ChatStream.new(fields))
-
-    on_delta =
-      ProgramStream.delta_callback(fn text ->
-        {fragments, scanner} = ChatStream.push(Process.get(key), text)
-        Process.put(key, scanner)
-        Enum.each(ProgramStream.field_events(fragments, name), publish)
-      end)
+    Process.put(key, state)
+    on_delta = ProgramStream.delta_callback(&emit_delta(key, &1, publish))
 
     try do
       result = module.forward(predictor, inputs, on_delta)
 
       if match?({:ok, %Prediction{}}, result) do
-        fragments = ChatStream.finish(Process.get(key))
-        Enum.each(ProgramStream.field_events(fragments, name), publish)
+        finish_fields(Process.get(key), publish)
       end
 
       result
     after
       Process.delete(key)
     end
+  end
+
+  defp emit_delta(key, text, publish) do
+    case Process.get(key) do
+      nil ->
+        {:error, :expired_stream_delta}
+
+      :raw ->
+        publish.({:delta, text})
+
+      {name, scanner} ->
+        {fragments, scanner} = ChatStream.push(scanner, text)
+        Process.put(key, {name, scanner})
+        Enum.each(ProgramStream.field_events(fragments, name), publish)
+    end
+  end
+
+  defp finish_fields(:raw, _publish), do: :ok
+
+  defp finish_fields({name, scanner}, publish) do
+    Enum.each(ProgramStream.field_events(ChatStream.finish(scanner), name), publish)
   end
 end
