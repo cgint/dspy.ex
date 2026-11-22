@@ -95,7 +95,7 @@ defmodule Dspy.LM.ReqLLM.StructuredStream do
            type: :meta,
            metadata: %{tool_call_args: %{index: index, fragment: text} = args} = metadata
          },
-         {:arguments, index} = selection
+         {:tool, index, _id, :arguments} = selection
        )
        when is_binary(text) do
     if ToolCall.flagged_builtin?(metadata) or ToolCall.flagged_builtin?(args),
@@ -105,22 +105,30 @@ defmodule Dspy.LM.ReqLLM.StructuredStream do
 
   defp fragment(
          :tool_strict,
-         %StreamChunk{type: :tool_call, name: name, metadata: %{index: index} = metadata},
-         {:arguments, index}
-       )
-       when name != @schema_tool do
-    if ToolCall.flagged_builtin?(metadata), do: :ignore, else: :ambiguous
+         %StreamChunk{type: :tool_call, name: name, metadata: metadata},
+         {:tool, index, id, _kind}
+       ) do
+    other_index = Map.get(metadata, :index, 0)
+    other_id = Map.get(metadata, :id)
+
+    cond do
+      ToolCall.flagged_builtin?(metadata) -> :ignore
+      name == @schema_tool and {other_index, other_id} == {index, id} -> :ignore
+      name == @schema_tool or other_index == index -> :ambiguous
+      true -> :ignore
+    end
   end
 
   defp fragment(_mode, _chunk, _selection), do: :ignore
 
   defp select_tool(%StreamChunk{metadata: metadata, arguments: arguments}) do
     index = Map.get(metadata, :index, 0)
+    id = Map.get(metadata, :id)
 
     case metadata do
-      %{raw_arguments: raw} when is_binary(raw) -> {{:arguments, index}, raw}
-      %{expects_arg_fragments: true} -> {{:arguments, index}, ""}
-      _ -> {:complete, Jason.encode!(arguments)}
+      %{raw_arguments: raw} when is_binary(raw) -> {{:tool, index, id, :arguments}, raw}
+      %{expects_arg_fragments: true} -> {{:tool, index, id, :arguments}, ""}
+      _ -> {{:tool, index, id, :complete}, Jason.encode!(arguments)}
     end
   end
 end

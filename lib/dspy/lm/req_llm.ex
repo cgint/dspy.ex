@@ -322,7 +322,14 @@ defmodule Dspy.LM.ReqLLM do
   def supports?(%__MODULE__{model: model}, :structured_output),
     do: native_structured_model?(model)
 
-  def supports?(%__MODULE__{model: "openai:" <> _model}, :structured_streaming), do: true
+  def supports?(
+        %__MODULE__{model: "openai:" <> _model, generation_module: generation},
+        :structured_streaming
+      )
+      when is_atom(generation) do
+    Code.ensure_loaded?(generation) and function_exported?(generation, :stream_object, 4)
+  end
+
   def supports?(_lm, :structured_streaming), do: false
   def supports?(%__MODULE__{model: "openai:" <> _model}, :structured_react), do: true
   def supports?(_lm, :structured_react), do: false
