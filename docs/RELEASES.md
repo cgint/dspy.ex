@@ -49,6 +49,13 @@ the jobs in order and binds the returned LMs after all jobs succeed.
 The built-in Chat formatter accepts text conversations and checks that
 the assistant target parses back to the recorded outputs.
 
+### Typed bounding boxes
+
+Use `Dspy.BoundingBox` as a JSON signature schema for a rectangular image
+region. Its edges are normalized to `[0, 1]`, and validation requires
+positive width and height. Chat, JSON, and XML predictor tests cover
+prompt rendering and typed outputs.
+
 ### InferRules optimizer
 
 `Dspy.Teleprompt.InferRules` bootstraps one program, induces natural-language
