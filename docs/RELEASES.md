@@ -216,6 +216,10 @@ Use `stream_listeners: :none` to receive progress and the final prediction
 through ordinary inference, including for batch-only models and structured
 tool requests.
 
+The direct tool task now stops when its caller exits, including when the
+tool function traps exit signals. This also applies when an active tool
+loses its program stream consumer.
+
 ### Chat field listeners
 
 Pass `stream_listeners: [:answer]` to `Dspy.streamify/2` to receive selected

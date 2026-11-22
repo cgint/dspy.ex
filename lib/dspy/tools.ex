@@ -748,10 +748,14 @@ defmodule Dspy.Tools do
   defp tool_summary({:ok, _result}), do: %{}
 
   defp run_tool_worker(%Tool{} = tool, args, timeout) do
+    caller = self()
     context = Context.capture()
 
     task =
       Task.async(fn ->
+        worker = self()
+        spawn(fn -> monitor_tool_worker(caller, worker) end)
+
         Context.with_context(context, fn ->
           try do
             {:ok, tool.function.(args)}
@@ -774,8 +778,21 @@ defmodule Dspy.Tools do
     end
   end
 
+  defp monitor_tool_worker(caller, worker) do
+    caller_ref = Process.monitor(caller)
+    worker_ref = Process.monitor(worker)
+
+    receive do
+      {:DOWN, ^caller_ref, :process, ^caller, _reason} -> Process.exit(worker, :kill)
+      {:DOWN, ^worker_ref, :process, ^worker, _reason} -> :ok
+    end
+  end
+
   @doc """
   Execute a tool with arguments.
+
+  The direct tool task stops when the calling process exits, even if the tool
+  traps exits.
 
   Register `Dspy.Tools.LifecycleCallback` handlers to observe tool execution.
   """
