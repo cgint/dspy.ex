@@ -103,7 +103,8 @@ defmodule Dspy.Predict do
   end
 
   @impl true
-  def forward(%__MODULE__{} = predict, inputs), do: forward(predict, inputs, nil)
+  def forward(%__MODULE__{} = predict, inputs),
+    do: Dspy.ProgramStream.Composite.forward(predict, inputs)
 
   @doc false
   def forward(%__MODULE__{} = predict, inputs, on_delta) do

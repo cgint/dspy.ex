@@ -228,6 +228,16 @@ process. Streaming makes one DSPy generation attempt and uses the ordinary
 adapter to parse the final prediction. Field listeners and status events
 remain in M5.
 
+### Composite program streaming
+
+`Dspy.streamify/2` can select Chat text fields from predictors in a
+composite. Pass a unique output atom or `{predict_name, field}` using
+the name from `Dspy.Module.named_predictors/1`. Selected calls emit
+their own field chunks, and unselected calls retain ordinary inference.
+An empty selection streams raw deltas. This covers calls made in the
+program worker. Streaming predictors invoked in another process report
+an explicit error.
+
 ### LM streaming transport
 
 `Dspy.LM.stream_generate/3` delivers ReqLLM text deltas to a callback in the

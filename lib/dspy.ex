@@ -451,7 +451,7 @@ defmodule Dspy do
   def call(program, inputs, opts) when is_list(opts), do: forward(program, inputs, opts)
 
   @doc """
-  Wrap a standalone Predict or ChainOfThought in a lazy callable stream.
+  Wrap a DSPy program in a lazy callable stream.
 
   Call the returned function with the program's inputs. Each enumeration uses
   the enumerating process's DSPy context and yields `{:delta, text}` events
@@ -466,13 +466,19 @@ defmodule Dspy do
   the parser uses its JSON fallback.
   Omitting `:stream_listeners` or passing `[]` yields raw deltas.
 
+  For a composite program, an output atom must identify a unique predictor.
+  Use `{predict_name, field}` to select a slot explicitly by its name from
+  `Dspy.Module.named_predictors/1`. With a selection, other slots use ordinary
+  inference. With an empty selection, all discovered predictor slots stream
+  raw deltas. Streaming slots must execute inside the program worker.
+
   Set `:status_message_provider` to a module implementing
   `Dspy.StatusMessageProvider` to receive `Dspy.StatusMessage` progress events
   alongside raw deltas or selected field chunks.
 
   The remaining options are the per-call options accepted by `call/3`.
   """
-  @spec streamify(Predict.t() | ChainOfThought.t(), keyword()) ::
+  @spec streamify(Dspy.Module.t(), keyword()) ::
           (Dspy.Module.inputs() -> Enumerable.t())
   def streamify(program, opts \\ []), do: Dspy.ProgramStream.wrap(program, opts)
 

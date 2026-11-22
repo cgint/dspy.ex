@@ -5,6 +5,11 @@
 > and corpus indices, with similarity scores in the scored view.
 > Approximate search, query coalescing, and index persistence remain open.
 
+> **M5, composite Chat listeners.** Named slots can stream independently
+> inside one program worker. Slots omitted from the selection still run
+> ordinary inference. Each selected call closes its own fields on success.
+> Parallel publishers and wider adapter support remain open.
+
 > **M6, KNNFewShot.** The optimizer builds one neighbor index and
 > prepares demos for each query. Bootstrap acceptance metrics receive
 > the original training labels. The [offline example](../../examples/offline/knn_few_shot_offline.exs)
