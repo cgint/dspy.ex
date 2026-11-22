@@ -5,7 +5,16 @@ defmodule Dspy.ProgramStream do
   alias Dspy.Module.PredictorSlots
   alias Dspy.ProgramStream.{Channel, Composite, StatusCallback}
   alias Dspy.Signature.AdapterPipeline
-  alias Dspy.Signature.Adapters.{ChatAdapter, ChatStream, XMLAdapter, XMLStream}
+
+  alias Dspy.Signature.Adapters.{
+    ChatAdapter,
+    ChatStream,
+    JSONAdapter,
+    JSONStream,
+    XMLAdapter,
+    XMLStream
+  }
+
   alias Dspy.StreamResponse
 
   @delta_key {__MODULE__, :on_delta}
@@ -95,6 +104,9 @@ defmodule Dspy.ProgramStream do
       ChatAdapter ->
         {:ok, %{predictor | adapter: ChatAdapter}, ChatStream.new(fields)}
 
+      JSONAdapter ->
+        {:ok, %{predictor | adapter: JSONAdapter}, JSONStream.new(predictor.signature, fields)}
+
       XMLAdapter ->
         {:ok, %{predictor | adapter: XMLAdapter}, XMLStream.new(predictor.signature, fields)}
 
@@ -104,12 +116,17 @@ defmodule Dspy.ProgramStream do
   end
 
   def push_field_listener(%ChatStream{} = scanner, text), do: ChatStream.push(scanner, text)
+  def push_field_listener(%JSONStream{} = scanner, text), do: JSONStream.push(scanner, text)
   def push_field_listener(%XMLStream{} = scanner, text), do: XMLStream.push(scanner, text)
 
-  def finish_field_listener(%ChatStream{} = scanner, _prediction), do: ChatStream.finish(scanner)
+  def finish_field_listener(%ChatStream{} = scanner, _prediction),
+    do: {:ok, ChatStream.finish(scanner)}
+
+  def finish_field_listener(%JSONStream{} = scanner, prediction),
+    do: JSONStream.finish(scanner, prediction)
 
   def finish_field_listener(%XMLStream{} = scanner, prediction),
-    do: XMLStream.finish(scanner, prediction)
+    do: {:ok, XMLStream.finish(scanner, prediction)}
 
   def field_events(fragments, predict_name, invocation_id \\ nil) do
     for {field, chunk, last?} <- fragments do
@@ -240,7 +257,10 @@ defmodule Dspy.ProgramStream do
 
   defp queue_terminal(%{listener: {predict_name, scanner}} = state, %Prediction{} = prediction) do
     pending =
-      field_events(finish_field_listener(scanner, prediction), predict_name) ++ [prediction]
+      case finish_field_listener(scanner, prediction) do
+        {:ok, fragments} -> field_events(fragments, predict_name) ++ [prediction]
+        {:error, _reason} = error -> [error]
+      end
 
     %{state | worker: nil, listener: nil, pending: pending}
   end

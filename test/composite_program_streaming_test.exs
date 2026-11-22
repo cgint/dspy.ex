@@ -280,7 +280,7 @@ defmodule Dspy.CompositeProgramStreamingTest do
     refute_received {:lm_call, _, _}
   end
 
-  test "a selected non-Chat slot returns a terminal error without opening its LM" do
+  test "a selected JSON slot with an unadvertised LM rejects its contract before startup" do
     predictor =
       Predict.new("question -> answer",
         lm: scripted("unsupported", [@answer_header, @answer]),
@@ -291,7 +291,7 @@ defmodule Dspy.CompositeProgramStreamingTest do
     stream = Dspy.streamify(program, stream_listeners: [:answer]).(@inputs)
 
     Dspy.context([adapter: ChatAdapter], fn ->
-      assert Enum.to_list(stream) == [{:error, {:unsupported_streaming_adapter, JSONAdapter}}]
+      assert Enum.to_list(stream) == [{:error, {:unsupported_streaming_option, :output_contract}}]
     end)
 
     refute_received {:lm_call, _, _}

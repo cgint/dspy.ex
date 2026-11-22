@@ -107,6 +107,10 @@
 > OpenAI keep the full output contract and the configured output mode.
 > The ordinary adapter validates the final JSON prediction.
 
+> **M5, selected JSON fields.** Plain strings emit decoded prefixes from
+> bare JSON. All prefixes must match the final validated values before
+> the stream emits field end markers and the prediction.
+
 > **M5, tool progress.** A status provider can format tool start and end
 > events in the program worker. The built-in provider emits generic tool
 > messages. Existing formatters keep their module and LM events.
