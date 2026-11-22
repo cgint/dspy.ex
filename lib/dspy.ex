@@ -466,6 +466,8 @@ defmodule Dspy do
   prediction. XMLAdapter preserves literal field text and can hold an
   ambiguous close until the next declared field or end of the response.
   Omitting `:stream_listeners` or passing `[]` yields raw deltas.
+  A JSONAdapter predictor with a supported ReqLLM OpenAI binding streams
+  raw JSON deltas under its output contract.
 
   For a composite program, an output atom must identify a unique predictor.
   Use `{predict_name, field}` to select a slot explicitly by its name from

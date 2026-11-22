@@ -361,7 +361,7 @@ defmodule Dspy.LM.ReqLLMStreamingTest do
 
   test "unsupported request and effective provider options never reach the HTTP client" do
     requests = [
-      {:output_contract, %{output_contract: %{type: "object"}}},
+      {:output_contract, %{output_contract: "not a schema map"}},
       {:tools, %{"tools" => [%{name: "search"}]}},
       {:tool_choice, %{tool_choice: :auto}},
       {:n, %{n: 2}}

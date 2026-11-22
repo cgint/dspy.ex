@@ -272,6 +272,13 @@ The stream preserves literal field text and the adapter's whitespace rules.
 Leading thought blocks, XML fences, and nested fields in unselected
 siblings are skipped. The ordinary XML parser validates the final result.
 
+### JSON output-contract streaming
+
+Raw `Dspy.streamify/2` streams JSONAdapter responses through supported
+ReqLLM OpenAI models with the complete output schema. JSON-schema mode
+streams text. Strict-tool mode streams the named schema tool's JSON
+arguments. The ordinary JSONAdapter validates the terminal prediction.
+
 ### Composite program streaming
 
 `Dspy.streamify/2` can select ChatAdapter and XMLAdapter text fields from

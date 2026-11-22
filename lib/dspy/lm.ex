@@ -268,6 +268,9 @@ defmodule Dspy.LM do
 
   @doc """
   Check if the language model supports a specific feature.
+
+  Return `true` for `:structured_streaming` when `stream_generate/3` accepts
+  a map output contract and emits its JSON response fragments.
   """
   @callback supports?(lm :: t(), feature :: atom()) :: boolean()
 
@@ -311,19 +314,22 @@ defmodule Dspy.LM do
   end
 
   @doc """
-  Stream a single text completion using an LM that implements streaming.
+  Stream a single completion using an LM that implements streaming.
 
   Applies the same request defaults as `generate/2`. A delta is a text fragment
   in provider order. A callback returning `:halt` yields `{:error, :cancelled}`.
   A callback returning `{:error, reason}` stops the stream with that error.
   Streaming bypasses DSPy caching and retries.
+
+  A map `:output_contract` requires an LM that advertises
+  `:structured_streaming`. Its deltas are JSON fragments.
   """
   @spec stream_generate(t(), request(), (String.t() -> term())) ::
           {:ok, response()} | {:error, term()}
   def stream_generate(%module{} = lm, request, on_delta)
       when is_map(request) and is_function(on_delta, 1) do
     with true <- Code.ensure_loaded?(module) and function_exported?(module, :stream_generate, 3),
-         :ok <- validate_stream_options(request) do
+         {:ok, _operation} <- stream_operation(lm, request) do
       observe_generation(lm, fn telemetry?, capture ->
         request = apply_settings_defaults(request)
         started_at_ms = System.monotonic_time(:millisecond)
@@ -344,10 +350,27 @@ defmodule Dspy.LM do
   end
 
   @doc false
-  def validate_stream_options(options) do
+  def stream_operation(lm, request) do
+    contract = stream_option(request, :output_contract)
+
+    operation =
+      if is_map(contract) and not is_struct(contract) and
+           supports?(lm, :structured_streaming) === true do
+        {:object, contract}
+      else
+        :text
+      end
+
+    with :ok <- validate_stream_options(request, operation), do: {:ok, operation}
+  end
+
+  @doc false
+  def validate_stream_options(options), do: validate_stream_options(options, :text)
+
+  defp validate_stream_options(options, operation) do
     unsupported =
       Enum.find([:output_contract, :response_format, :tools, :tool_choice, :n], fn key ->
-        not streaming_option_allowed?(key, stream_option(options, key))
+        not streaming_option_allowed?(key, stream_option(options, key), operation)
       end)
 
     if unsupported, do: {:error, {:unsupported_streaming_option, unsupported}}, else: :ok
@@ -363,14 +386,15 @@ defmodule Dspy.LM do
   defp stream_option(options, key) when is_list(options), do: Keyword.get(options, key)
   defp stream_option(_options, _key), do: nil
 
-  defp streaming_option_allowed?(_key, nil), do: true
-  defp streaming_option_allowed?(:tools, []), do: true
-  defp streaming_option_allowed?(:n, 1), do: true
+  defp streaming_option_allowed?(_key, nil, _operation), do: true
+  defp streaming_option_allowed?(:output_contract, contract, {:object, contract}), do: true
+  defp streaming_option_allowed?(:tools, [], _operation), do: true
+  defp streaming_option_allowed?(:n, 1, _operation), do: true
 
-  defp streaming_option_allowed?(:response_format, %{} = format),
+  defp streaming_option_allowed?(:response_format, %{} = format, _operation),
     do: stream_option(format, :type) in [:text, "text"]
 
-  defp streaming_option_allowed?(_key, _value), do: false
+  defp streaming_option_allowed?(_key, _value, _operation), do: false
 
   @doc false
   def generate_with_options(nil, request, opts) do

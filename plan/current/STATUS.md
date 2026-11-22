@@ -103,6 +103,10 @@
 > stream selected plain strings with their literal text and whitespace
 > preserved. Structured siblings still use the ordinary XML reader.
 
+> **M5, structured JSON transport.** Raw JSONAdapter streams on ReqLLM
+> OpenAI keep the full output contract and the configured output mode.
+> The ordinary adapter validates the final JSON prediction.
+
 > **M5, tool progress.** A status provider can format tool start and end
 > events in the program worker. The built-in provider emits generic tool
 > messages. Existing formatters keep their module and LM events.
