@@ -96,6 +96,15 @@ references in the text preview point to the images in wire order.
 Each proposal transfers up to eight image parts and eight MiB of image
 URL text, including data URIs. The default keeps the text preview.
 
+Set `include_observation_history: true` on the configured proposer to
+include declared training histories as structured report data. Setting
+`truncate_history_outputs: true` includes those histories and shortens
+each long tool result to 500 Unicode code points plus a cut marker.
+Call IDs, names, arguments, and error status stay associated with the
+same turn. History counts toward the existing 16 KiB report budget.
+Typed media within history appears as a placeholder. The original
+history and rollout prompts stay intact.
+
 ### Multipart image requests
 
 Custom adapters can place image markers in several text parts of one

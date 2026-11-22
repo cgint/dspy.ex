@@ -34,8 +34,8 @@
 > The configurable LM-driven proposer supports reference skills, custom
 > instructions and adapters, and one correction for oversized drafts.
 > It can also include declared training images with numbered references
-> in the reflection request. Typed history and additional frontier
-> objectives remain open.
+> or typed training history with shortened tool results in the reflection
+> request. Additional frontier objectives remain open.
 
 > **M4, multipart image splicing.** Separate marker-bearing text parts
 > share one ordered stream of typed images. A count mismatch strips the
