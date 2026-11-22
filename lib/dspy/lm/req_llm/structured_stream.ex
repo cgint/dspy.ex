@@ -15,8 +15,14 @@ defmodule Dspy.LM.ReqLLM.StructuredStream do
       on_chunk = &consume_chunk(&1, mode, publish, ref)
 
       with {:ok, response} <- StreamResponse.process_stream(stream, on_chunk: on_chunk) do
-        {_selection, fragments} = Process.get(ref)
-        {:ok, response, fragments |> Enum.reverse() |> IO.iodata_to_binary()}
+        case Process.get(ref) do
+          {{:tool, _, _, :empty_object}, []} ->
+            publish.("{}")
+            {:ok, response, "{}"}
+
+          {_selection, fragments} ->
+            {:ok, response, fragments |> Enum.reverse() |> IO.iodata_to_binary()}
+        end
       end
     after
       Process.delete(ref)
@@ -95,12 +101,12 @@ defmodule Dspy.LM.ReqLLM.StructuredStream do
            type: :meta,
            metadata: %{tool_call_args: %{index: index, fragment: text} = args} = metadata
          },
-         {:tool, index, _id, :arguments} = selection
+         {:tool, index, id, kind}
        )
-       when is_binary(text) do
+       when kind in [:arguments, :empty_object] and is_binary(text) and text != "" do
     if ToolCall.flagged_builtin?(metadata) or ToolCall.flagged_builtin?(args),
       do: :ignore,
-      else: {selection, text}
+      else: {{:tool, index, id, :arguments}, text}
   end
 
   defp fragment(
@@ -128,6 +134,8 @@ defmodule Dspy.LM.ReqLLM.StructuredStream do
     case metadata do
       %{raw_arguments: raw} when is_binary(raw) -> {{:tool, index, id, :arguments}, raw}
       %{expects_arg_fragments: true} -> {{:tool, index, id, :arguments}, ""}
+      # ReqLLM decodes both a complete empty object and null initial arguments as %{}.
+      _ when arguments == %{} -> {{:tool, index, id, :empty_object}, ""}
       _ -> {{:tool, index, id, :complete}, Jason.encode!(arguments)}
     end
   end

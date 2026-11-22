@@ -35,6 +35,19 @@ defmodule Dspy.LM.ReqLLMStructuredStreamingTest do
     def generate_object(_, _, _, _), do: flunk("streaming must not use batch generation")
   end
 
+  defmodule UnsupportedGeneration do
+    def stream_object(_, _, _, _), do: flunk("unsupported providers must not open a stream")
+  end
+
+  defmodule ChatResponse do
+    def usage(response), do: ReqLLM.Response.usage(response)
+
+    def finish_reason(response) do
+      assert ReqLLM.Response.object(response) == %{"answer" => "Hello 雪", "summary" => "done"}
+      ReqLLM.Response.finish_reason(response)
+    end
+  end
+
   test "default Responses mode streams only the named schema tool's arguments" do
     {server, url} = function_fixture(:finish)
     observer = self()
@@ -110,23 +123,26 @@ defmodule Dspy.LM.ReqLLMStructuredStreamingTest do
     assert {:error, :closed} = Task.await(server, @wait)
   end
 
-  test "a competing identity at the schema tool's index stops publication" do
-    {server, url} = function_fixture(:duplicate)
-    consumer = start_program(lm(url))
+  for {name, index} <- [{"structured_output", 1}, {"structured_output", 2}, {"unrelated", 1}] do
+    test "a competing #{name} identity at index #{index} stops publication" do
+      {server, url} = function_fixture({:duplicate, unquote(name), unquote(index)})
+      consumer = start_program(lm(url))
 
-    assert_strict_tool_schema(wire_request(consumer, "POST /v1/responses HTTP/1.1"))
-    assert_receive {:program_event, {:delta, @first}}, @wait
-    send(server.pid, :finish)
+      assert_strict_tool_schema(wire_request(consumer, "POST /v1/responses HTTP/1.1"))
+      assert_receive {:program_event, {:delta, @first}}, @wait
+      send(server.pid, :finish)
 
-    assert [{:delta, @first}, {:error, :ambiguous_structured_output}] =
-             Task.await(consumer, @wait)
+      assert [{:delta, @first}, {:error, :ambiguous_structured_output}] =
+               Task.await(consumer, @wait)
 
-    assert :ok = Task.await(server, @wait)
+      assert :ok = Task.await(server, @wait)
+    end
   end
 
   test "Chat Completions preserves the initial named chunk's partial JSON" do
-    {server, url} = function_fixture(:chat)
-    consumer = start_program(lm(url, @chat_model, openai_structured_output_mode: :tool_strict))
+    {server, url} = function_fixture({:chat, @first, [@second]})
+    client = lm(url, @chat_model, openai_structured_output_mode: :tool_strict)
+    consumer = start_program(%{client | response_module: ChatResponse})
 
     wire = wire_request(consumer, "POST /v1/chat/completions HTTP/1.1")
 
@@ -147,6 +163,41 @@ defmodule Dspy.LM.ReqLLMStructuredStreamingTest do
              %Prediction{attrs: %{answer: "Hello 雪", summary: "done"}}
            ] = Task.await(consumer, @wait)
 
+    assert :ok = Task.await(server, @wait)
+  end
+
+  test "Chat Completions waits for fragments after null initial arguments" do
+    {server, url} = function_fixture({:chat, nil, [@first, @second]})
+    consumer = start_program(lm(url, @chat_model, openai_structured_output_mode: :tool_strict))
+
+    assert %{"stream" => true} = wire_request(consumer, "POST /v1/chat/completions HTTP/1.1")
+    send(server.pid, :finish)
+
+    assert [
+             {:delta, @first},
+             {:delta, @second},
+             %Prediction{attrs: %{answer: "Hello 雪", summary: "done"}}
+           ] = Task.await(consumer, @wait)
+
+    assert :ok = Task.await(server, @wait)
+  end
+
+  test "Chat Completions accepts a complete empty argument object when no fragments follow" do
+    {server, url} = function_fixture({:chat, "{}", []})
+    observer = self()
+
+    consumer =
+      Task.async(fn ->
+        client = lm(url, @chat_model, openai_structured_output_mode: :tool_strict)
+        LM.stream_generate(client, request(), &send(observer, {:delta, &1}))
+      end)
+
+    assert %{"stream" => true} = wire_request(consumer, "POST /v1/chat/completions HTTP/1.1")
+    send(server.pid, :finish)
+
+    assert {:ok, %{choices: [%{message: %{content: "{}"}}]}} = Task.await(consumer, @wait)
+    assert_receive {:delta, "{}"}, @wait
+    refute_received {:delta, _}
     assert :ok = Task.await(server, @wait)
   end
 
@@ -183,6 +234,17 @@ defmodule Dspy.LM.ReqLLMStructuredStreamingTest do
 
     assert {:error, {:unsupported_streaming_option, :output_contract}} =
              LM.stream_generate(client, request(), fn _ -> flunk("unexpected delta") end)
+  end
+
+  test "ReqLLM providers outside the structured streaming scope reject a valid contract" do
+    for model <- ["anthropic:claude-haiku-4-5", "google_vertex:gemini-2.5-flash"] do
+      client = LM.ReqLLM.new(model: model, generation_module: UnsupportedGeneration)
+
+      refute LM.supports?(client, :structured_streaming)
+
+      assert {:error, {:unsupported_streaming_option, :output_contract}} =
+               LM.stream_generate(client, request(), fn _ -> flunk("unexpected delta") end)
+    end
   end
 
   defp request, do: JSONAdapter.format_request(Contract.signature(), @question, [])
@@ -266,14 +328,16 @@ defmodule Dspy.LM.ReqLLMStructuredStreamingTest do
               "Connection: close\r\n\r\n"
             ])
 
-          if mode == :chat do
-            :ok = event(peer, chat_args(@first, "structured_output"))
-          else
-            :ok = event(peer, %{type: "response.output_text.delta", delta: "non-JSON preamble"})
-            :ok = event(peer, tool_item("unrelated", 0))
-            :ok = event(peer, tool_delta("unrelated", 0, ~s({"ignore":"me"})))
-            :ok = event(peer, tool_item("structured_output", 1))
-            :ok = event(peer, tool_delta("structured_output", 1, @first))
+          case mode do
+            {:chat, initial, _fragments} ->
+              :ok = event(peer, chat_args(initial, "structured_output"))
+
+            _ ->
+              :ok = event(peer, %{type: "response.output_text.delta", delta: "non-JSON preamble"})
+              :ok = event(peer, tool_item("unrelated", 0))
+              :ok = event(peer, tool_delta("unrelated", 0, ~s({"ignore":"me"})))
+              :ok = event(peer, tool_item("structured_output", 1))
+              :ok = event(peer, tool_delta("structured_output", 1, @first))
           end
 
           complete(peer, mode)
@@ -287,16 +351,16 @@ defmodule Dspy.LM.ReqLLMStructuredStreamingTest do
 
   defp complete(peer, :close), do: :gen_tcp.recv(peer, 0, @wait)
 
-  defp complete(peer, :duplicate) do
+  defp complete(peer, {:duplicate, name, index}) do
     await_finish()
-    identity = tool_item("structured_output", 1)
+    identity = tool_item(name, index)
 
     duplicate = %{
       identity
       | item: %{identity.item | id: "fc_duplicate", call_id: "call_duplicate"}
     }
 
-    fragment = %{tool_delta("structured_output", 1, @second) | item_id: "fc_duplicate"}
+    fragment = %{tool_delta(name, index, @second) | item_id: "fc_duplicate"}
 
     terminal = %{
       type: "response.completed",
@@ -311,17 +375,22 @@ defmodule Dspy.LM.ReqLLMStructuredStreamingTest do
     ])
   end
 
-  defp complete(peer, :chat) do
+  defp complete(peer, {:chat, _initial, fragments}) do
     await_finish()
-    :ok = event(peer, chat_args(@second))
-    :ok = event(peer, %{choices: [%{index: 0, delta: %{}, finish_reason: "tool_calls"}]})
-    :ok = event(peer, "[DONE]")
-    :gen_tcp.send(peer, "0\r\n\r\n")
+
+    :gen_tcp.send(peer, [
+      Enum.map(fragments, &sse_chunk(chat_args(&1))),
+      sse_chunk(%{choices: [%{index: 0, delta: %{}, finish_reason: "tool_calls"}]}),
+      sse_chunk("[DONE]"),
+      "0\r\n\r\n"
+    ])
   end
 
   defp complete(peer, :finish) do
     await_finish()
     complete = function_item("structured_output", @first <> @second, "completed")
+    :ok = event(peer, tool_item("interleaved", 2))
+    :ok = event(peer, tool_delta("interleaved", 2, ~s({"ignore":"later"})))
     :ok = event(peer, tool_delta("structured_output", 1, @second))
 
     :ok =
