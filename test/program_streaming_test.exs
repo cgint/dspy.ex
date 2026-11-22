@@ -441,6 +441,94 @@ defmodule Dspy.ProgramStreamingTest do
              Enum.to_list(Dspy.streamify(program, stream_listeners: [:answer]).(@inputs))
   end
 
+  test "final prediction can be omitted only after selected field text is emitted" do
+    opts = [stream_listeners: [:answer], include_final_prediction_in_output_stream: false]
+    program = predict(scripted("omit-final", [@answer_header, @answer]))
+
+    assert Enum.to_list(Dspy.streamify(program, opts).(@inputs)) == [
+             field_event("self", :answer, @answer, false),
+             field_event("self", :answer, "", true)
+           ]
+  end
+
+  test "a final prediction is retained when no selected field text is emitted" do
+    opts = [stream_listeners: [:answer], include_final_prediction_in_output_stream: false]
+    json = predict(scripted("json-fallback-no-final", [~s({"answer":"Four."})]))
+
+    assert [%Prediction{attrs: %{answer: @answer}}] =
+             Enum.to_list(Dspy.streamify(json, opts).(@inputs))
+
+    empty = predict(scripted("empty-answer", [@answer_header]))
+
+    assert [closing, %Prediction{attrs: %{answer: ""}}] =
+             Enum.to_list(Dspy.streamify(empty, opts).(@inputs))
+
+    assert closing == field_event("self", :answer, "", true)
+  end
+
+  test "field-only streams bind the original consumer before the first pull" do
+    program = predict(scripted("owned-before-pull", [@answer_header, @answer]))
+
+    stream =
+      Dspy.streamify(program,
+        stream_listeners: [:answer],
+        include_final_prediction_in_output_stream: false
+      ).(@inputs)
+
+    reducer = fn _event, acc -> {:cont, acc} end
+    assert {:suspended, nil, resume} = Enumerable.reduce(stream, {:suspend, nil}, reducer)
+    refute_received {:stream_call, "owned-before-pull", _, _, _}
+
+    assert {:raised, %ArgumentError{message: message}} = resume_in_another_process(resume)
+    assert message =~ "original consumer"
+    refute_received {:stream_call, "owned-before-pull", _, _, _}
+  end
+
+  test "omitting the final prediction preserves errors, raw streams, and status-only streams" do
+    opts = [include_final_prediction_in_output_stream: false]
+
+    failed =
+      Predict.new("question -> answer, detail",
+        lm: scripted("fail-after-chunk", [@answer_header, @answer]),
+        adapter: ChatAdapter
+      )
+
+    assert [event, {:error, {:output_parse_failed, _, _}}] =
+             Enum.to_list(Dspy.streamify(failed, opts ++ [stream_listeners: [:answer]]).(@inputs))
+
+    assert event == field_event("self", :answer, @answer, false)
+
+    program = predict(scripted("raw-final", [@answer_header, @answer]))
+
+    assert [{:delta, @answer_header}, {:delta, @answer}, %Prediction{}] =
+             Enum.to_list(Dspy.streamify(program, opts).(@inputs))
+
+    assert [_, _, {:delta, @answer_header}, {:delta, @answer}, _, _, %Prediction{}] =
+             Enum.to_list(
+               Dspy.streamify(program, opts ++ [status_message_provider: Progress]).(@inputs)
+             )
+
+    assert [_, _, _, _, %Prediction{}] =
+             Enum.to_list(
+               Dspy.streamify(
+                 program,
+                 opts ++ [stream_listeners: :none, status_message_provider: Progress]
+               ).(@inputs)
+             )
+  end
+
+  test "include_final_prediction_in_output_stream requires a boolean eagerly" do
+    program = predict(scripted("invalid-final-option", [@answer_header, @answer]))
+
+    for value <- [nil, :invalid, 0, "false"] do
+      assert_raise ArgumentError, ~r/include_final_prediction_in_output_stream/, fn ->
+        Dspy.streamify(program, include_final_prediction_in_output_stream: value)
+      end
+    end
+
+    refute_received {:stream_call, "invalid-final-option", _, _, _}
+  end
+
   test "listeners reject signatures using Chat's distinct structured-tool marker format" do
     signature = Dspy.Signature.define("question -> answer")
 
@@ -722,6 +810,7 @@ defmodule Dspy.ProgramStreamingTest do
     stream =
       Dspy.streamify(loopback_predict(url),
         stream_listeners: [:answer],
+        include_final_prediction_in_output_stream: false,
         status_message_provider: Progress
       ).(@inputs)
 

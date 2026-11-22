@@ -469,8 +469,13 @@ defmodule Dspy do
   send field end markers. A conflicting prefix ends the stream with
   `{:error, {:streamed_field_mismatch, field}}`.
   Omitting `:stream_listeners` or passing `[]` yields raw deltas.
-  A JSONAdapter predictor with a supported ReqLLM OpenAI binding streams
+  A JSONAdapter predictor with a supported ReqLLM binding streams
   raw JSON deltas under its output contract.
+
+  Set `:include_final_prediction_in_output_stream` to `false` to omit the
+  final prediction after a selected field delivers nonempty text. Field end
+  markers still appear. Without field text, the prediction is the fallback.
+  Errors and other terminal results are always delivered.
 
   For a composite program, an output atom must identify a unique predictor.
   Use `{predict_name, field}` to select a slot explicitly by its name from

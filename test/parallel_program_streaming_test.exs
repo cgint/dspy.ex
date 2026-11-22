@@ -157,6 +157,31 @@ defmodule Dspy.ParallelProgramStreamingTest do
            ) == ["FIRST_PAYLOAD/tail", "SECOND_PAYLOAD/tail"]
   end
 
+  test "a field-only stream preserves managed invocation chunks and end markers" do
+    stream =
+      %{"first?" => "First", "second?" => "Second"}
+      |> program(gated?: false)
+      |> Dspy.streamify(
+        stream_listeners: [:answer],
+        include_final_prediction_in_output_stream: false
+      )
+
+    events = Enum.to_list(stream.(%{questions: ["first?", "second?"]}))
+
+    assert Enum.all?(
+             events,
+             &match?(%StreamResponse{invocation_id: ref} when is_reference(ref), &1)
+           )
+
+    results =
+      for {_id, chunks} <- Enum.group_by(events, & &1.invocation_id) do
+        assert List.last(chunks).is_last_chunk
+        Enum.map_join(chunks, & &1.chunk)
+      end
+
+    assert Enum.sort(results) == ["First/tail", "Second/tail"]
+  end
+
   test "dead delivered and queued producers do not block the later selected call or terminal" do
     timeout = 2_000
 

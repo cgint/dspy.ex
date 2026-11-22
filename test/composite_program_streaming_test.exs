@@ -40,6 +40,18 @@ defmodule Dspy.CompositeProgramStreamingTest do
     end
   end
 
+  defmodule MapResultProgram do
+    @behaviour Dspy.Module
+    defstruct [:child]
+
+    @impl true
+    def forward(program, inputs) do
+      with {:ok, prediction} <- Dspy.call(program.child, inputs) do
+        {:ok, prediction.attrs}
+      end
+    end
+  end
+
   defmodule RecoveringProgram do
     @behaviour Dspy.Module
     defstruct [:broken, :fallback]
@@ -197,6 +209,42 @@ defmodule Dspy.CompositeProgramStreamingTest do
       assert_received {:lm_call, "only-second", :stream}
       refute_received {:lm_call, _, _}
     end
+  end
+
+  test "final prediction is omitted only when a selected composite slot emits text" do
+    first = predict(scripted("selected-final", [@answer_header, @answer]))
+    second = predict(scripted("skipped-final", [@answer_header, "Second."]))
+    program = %Sequence{slots: %{first: first, second: second}, order: [:first, :second]}
+
+    opts = [
+      stream_listeners: [{"slots[:first]", :answer}],
+      include_final_prediction_in_output_stream: false
+    ]
+
+    assert Enum.to_list(Dspy.streamify(program, opts).(@inputs)) ==
+             field_chunks("slots[:first]", :answer, @answer)
+  end
+
+  test "final prediction is retained when the selected composite slot is skipped" do
+    first = predict(scripted("selected-final-skipped", [@answer_header, @answer]))
+    second = predict(scripted("only-second-final", [@answer_header, "Second."]))
+    skipped = %Sequence{slots: %{first: first, second: second}, order: [:second]}
+
+    opts = [
+      stream_listeners: [{"slots[:first]", :answer}],
+      include_final_prediction_in_output_stream: false
+    ]
+
+    assert [%Prediction{attrs: %{steps: [%{answer: "Second."}]}}] =
+             Enum.to_list(Dspy.streamify(skipped, opts).(@inputs))
+  end
+
+  test "a selected composite stream retains a non-prediction result" do
+    program = %MapResultProgram{child: predict(scripted("map-result", [@answer_header, @answer]))}
+    opts = [stream_listeners: [:answer], include_final_prediction_in_output_stream: false]
+
+    assert Enum.to_list(Dspy.streamify(program, opts).(@inputs)) ==
+             field_chunks("child", :answer, @answer) ++ [%{answer: @answer}]
   end
 
   test "a recovered parse failure leaves its field open and the next selected slot starts cleanly" do
