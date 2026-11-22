@@ -8,6 +8,17 @@ This repo ships in **small, user-usable slices**.
 
 ## Consumer notes
 
+### BootstrapFinetune optimizer
+
+`Dspy.Teleprompt.BootstrapFinetune` prepares Chat training conversations
+from successful teacher traces. It groups training jobs by the student's
+bound LM in multitask mode or by predictor slot in separate mode. Each
+multitask job receives all compatible teacher traces. A caller-supplied
+LM implements `finetune/3` and returns the trained LM. The optimizer runs
+the jobs in order and binds the returned LMs after all jobs succeed.
+The built-in Chat formatter accepts text conversations and checks that
+the assistant target parses back to the recorded outputs.
+
 ### InferRules optimizer
 
 `Dspy.Teleprompt.InferRules` bootstraps one program, induces natural-language

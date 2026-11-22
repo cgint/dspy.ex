@@ -50,6 +50,11 @@
 > on held-out rows. A context-limit retry removes the last training row
 > and uses a fresh induction rollout.
 
+> **M6, BootstrapFinetune.** Teacher traces produce Chat training
+> conversations attributed by exact predictor slot. A caller-supplied
+> LM training callback handles each group, and the student receives
+> the trained bindings as one immutable update.
+
 > **M4, multipart image splicing.** Separate marker-bearing text parts
 > share one ordered stream of typed images. A count mismatch strips the
 > markers and appends each supplied image once before new attachments.
