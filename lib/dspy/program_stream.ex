@@ -22,17 +22,36 @@ defmodule Dspy.ProgramStream do
   def wrap(program, opts) do
     unless Keyword.keyword?(opts), do: raise(ArgumentError, "expected streamify call options")
     {fields, opts} = Keyword.pop(opts, :stream_listeners, [])
-    {provider, call_opts} = Keyword.pop(opts, :status_message_provider)
+    {provider, opts} = Keyword.pop(opts, :status_message_provider)
+
+    {include_final?, call_opts} =
+      Keyword.pop(opts, :include_final_prediction_in_output_stream, true)
+
+    unless is_boolean(include_final?) do
+      raise ArgumentError, "include_final_prediction_in_output_stream must be a boolean"
+    end
+
     validate_status_provider!(provider)
     listeners = listeners(program, fields)
 
     fn inputs ->
-      Stream.resource(
-        fn -> start(program, inputs, call_opts, listeners, provider) end,
-        &next_event/1,
-        &stop/1
-      )
+      stream =
+        Stream.resource(
+          fn -> start(program, inputs, call_opts, listeners, provider) end,
+          &next_event/1,
+          &stop/1
+        )
+
+      if include_final?, do: stream, else: omit_streamed_prediction(stream)
     end
+  end
+
+  defp omit_streamed_prediction(stream) do
+    Stream.transform(stream, false, fn
+      %StreamResponse{chunk: chunk} = event, _streamed? when chunk != "" -> {[event], true}
+      %Prediction{}, true -> {[], true}
+      event, streamed? -> {[event], streamed?}
+    end)
   end
 
   def take_delta, do: Process.delete(@delta_key)

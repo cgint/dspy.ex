@@ -265,6 +265,11 @@ process. Streaming makes one DSPy generation attempt and uses the ordinary
 adapter to parse the final prediction. Field listeners and status events
 remain in M5.
 
+Set `include_final_prediction_in_output_stream: false` to omit the final
+prediction when a selected field delivers text. End markers and errors
+still reach the consumer. The prediction remains the fallback when no
+selected field delivers text.
+
 ### XML output field streaming
 
 Select plain string outputs when the effective adapter is `XMLAdapter`.
