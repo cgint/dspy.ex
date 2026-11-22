@@ -8,6 +8,14 @@ This repo ships in **small, user-usable slices**.
 
 ## Consumer notes
 
+### Zoi compatibility
+
+Fresh installs require Zoi `>= 0.14.0 and < 0.20.0` while dspy.ex uses
+LLMDB 2026.5.2 through ReqLLM. Zoi 0.20 rejects duplicate provider keys
+during LLMDB startup. Applications that require Zoi 0.20 or newer will
+see a dependency resolution conflict. Existing compatible locks can
+keep their selected Zoi version.
+
 ### BetterTogether optimizer
 
 `Dspy.Teleprompt.BetterTogether` composes named prompt and weight optimizers

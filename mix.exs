@@ -61,7 +61,13 @@ defmodule Dspy.MixProject do
       # fixed versions (lib/ calls none of Req/Mint/HPAX directly).
       {:req, ">= 0.6.1 and < 1.0.0"},
       {:mint, ">= 1.11.0 and < 2.0.0"},
-      {:hpax, ">= 1.1.0 and < 2.0.0"}
+      {:hpax, ">= 1.1.0 and < 2.0.0"},
+
+      # LLMDB 2026.5.2 emits atom and string runtime keys that Zoi 0.20
+      # rejects at startup. Keep the pinned ReqLLM floor.
+      # Remove after an upstream graph provides its own compatible constraint
+      # or fixes the collision, verified by a fresh Extras resolution.
+      {:zoi, ">= 0.14.0 and < 0.20.0"}
 
       # NOTE: Local inference deps (Bumblebee/Nx/EXLA) are intentionally NOT
       # dependencies of core `:dspy`. See `docs/BUMBLEBEE.md`.
