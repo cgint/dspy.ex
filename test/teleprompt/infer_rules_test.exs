@@ -60,6 +60,22 @@ defmodule Dspy.Teleprompt.InferRulesTest do
     end
   end
 
+  defmodule PermissiveAdapter do
+    @behaviour Dspy.Signature.Adapter
+
+    @impl true
+    defdelegate format_instructions(signature, opts), to: Dspy.Signature.Adapters.Default
+
+    @impl true
+    def parse_outputs(_signature, text, _opts) do
+      case Jason.decode!(text)["natural_language_rules"] do
+        "missing" -> %{}
+        "numeric" -> %{natural_language_rules: 2}
+        "invalid UTF-8" -> %{natural_language_rules: <<255>>}
+      end
+    end
+  end
+
   test "bootstraps the composite once and evaluates stable rule candidates on the ordered held-out half" do
     student = program(:student)
     teacher = program(:teacher)
@@ -212,6 +228,24 @@ defmodule Dspy.Teleprompt.InferRulesTest do
                  InferRules.compile(optimizer, program(:student), trainset,
                    teacher: program(:teacher),
                    valset: [row("explicit validation")]
+                 )
+      end)
+
+      assert_received {:induction, 906_691_059, 1.0, _}
+      refute_received {:induction, _, _, _}
+      refute_received {:student, _, _, _}
+    end
+  end
+
+  test "rejects invalid rule values from a custom signature adapter" do
+    for value <- ["missing", "numeric", "invalid UTF-8"] do
+      optimizer = optimizer(rules_lm: rules_lm([value]))
+
+      Dspy.context([adapter: PermissiveAdapter, cache: false], fn ->
+        assert {:error, {:rules_induction_failed, [{:field, :slots}, {:key, 1}], :invalid_rules}} =
+                 InferRules.compile(optimizer, program(:student), [row("training")],
+                   teacher: program(:teacher),
+                   valset: [row("validation")]
                  )
       end)
 

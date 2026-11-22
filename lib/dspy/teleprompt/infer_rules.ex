@@ -206,7 +206,11 @@ defmodule Dspy.Teleprompt.InferRules do
 
     case result do
       {:ok, %Prediction{} = prediction} ->
-        {:ok, prediction[:natural_language_rules] |> String.trim(), random}
+        rules = prediction[:natural_language_rules]
+
+        if is_binary(rules) and String.valid?(rules),
+          do: {:ok, String.trim(rules), random},
+          else: {:error, :invalid_rules}
 
       {:error, reason} = error ->
         case {context_limit?(reason), reversed_rows} do
