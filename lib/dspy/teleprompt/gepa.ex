@@ -34,12 +34,17 @@ defmodule Dspy.Teleprompt.GEPA do
   Failed attempts use `:failure_score` without running the metric.
   This option defaults to `false`.
 
+  The default `component_selector: :round_robin` selects one observed slot.
+  Set `component_selector: :all` to propose updates to every eligible
+  observed slot in the same training minibatch and score one joint candidate.
+  Built-in reflection generates one proposal per selected slot.
+
   A custom `:instruction_proposer` gets the current instructions, bounded
-  observations for the selected slot, and a list containing that slot.
+  observations for the selected slots, and their ordered paths.
   Both maps and the selection list use typed paths with `{:field, name}`,
   `{:index, index}`, and `{:key, key}` segments. Each observation has
-  `:inputs`, `:outputs`, and `:feedback` keys. Return a map with the selected
-  slot's new instruction, or an empty map to keep the current instruction.
+  `:inputs`, `:outputs`, and `:feedback` keys. Return updates for any subset of
+  the selected slots, or an empty map to keep the current instructions.
   An explicit `:reflection_lm` is scoped to the callback. With no binding,
   the callback inherits the calling context. Omit the callback or pass
   `nil` to use the built-in proposer with `:reflection_lm`.
@@ -62,6 +67,7 @@ defmodule Dspy.Teleprompt.GEPA do
 
   @search_defaults [
     candidate_selection_strategy: :current_best,
+    component_selector: :round_robin,
     failure_score: 0,
     perfect_score: 1,
     skip_perfect_score: true,
@@ -99,6 +105,7 @@ defmodule Dspy.Teleprompt.GEPA do
           reflection_minibatch_size: pos_integer() | nil,
           num_threads: pos_integer() | nil,
           candidate_selection_strategy: :current_best | :pareto,
+          component_selector: :round_robin | :all,
           failure_score: number(),
           perfect_score: number(),
           skip_perfect_score: boolean(),
@@ -214,6 +221,7 @@ defmodule Dspy.Teleprompt.GEPA do
       reflection_minibatch_size: batch,
       num_threads: num_threads,
       candidate_selection_strategy: opts[:candidate_selection_strategy],
+      component_selector: opts[:component_selector],
       failure_score: opts[:failure_score],
       perfect_score: opts[:perfect_score],
       skip_perfect_score: opts[:skip_perfect_score],
@@ -226,6 +234,10 @@ defmodule Dspy.Teleprompt.GEPA do
   defp validate_search_options!(opts) do
     unless opts[:candidate_selection_strategy] in [:current_best, :pareto] do
       raise ArgumentError, ":candidate_selection_strategy must be :current_best or :pareto"
+    end
+
+    unless opts[:component_selector] in [:round_robin, :all] do
+      raise ArgumentError, ":component_selector must be :round_robin or :all"
     end
 
     for key <- [:failure_score, :perfect_score] do
