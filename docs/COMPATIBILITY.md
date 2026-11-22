@@ -575,7 +575,7 @@ Evidence:
 | `ColBERTv2` | `Dspy.Retrieve.ColBERTv2.search/3` | Configured server queries via GET or POST, with an optional passage-only result. Local index construction remains open. | [Loopback HTTP tests](../test/retrieve/colbert_http_test.exs) |
 | `Retrieve` | `Dspy.Retrieve.new/1` and `Dspy.call/2` | Retrieval-only predictions use a local, scoped, or global retriever. The module participates in the ordinary lifecycle callbacks. | [Retrieval module tests](../test/retrieve/retrieve_module_test.exs) |
 | retrieval + RAG | `Dspy.Retrieve.*` | RAG pipeline with mocked embeddings provider; includes built-in `Dspy.Retrieve.InMemoryRetriever` | `test/acceptance/retrieve_rag_with_embeddings_acceptance_test.exs`, `test/acceptance/retrieve_rag_in_memory_retriever_acceptance_test.exs` |
-| `Embeddings` and `EmbeddingsWithScores` | `Dspy.Embeddings.query/2` and `query_with_scores/2` | Exact search over one immutable corpus index. Equal scores follow corpus order. Approximate search and index persistence are outside the current API. | [Corpus retrieval tests](../test/embeddings_test.exs) |
+| `Embeddings` and `EmbeddingsWithScores` | `Dspy.Embeddings.query/2`, `query_with_scores/2`, `save/2`, and `from_saved/2` | Exact search over one immutable corpus index. Equal scores follow corpus order. Native JSON checkpoints retain prepared vectors. Python NumPy and FAISS index formats remain open. | [Retrieval tests](../test/embeddings_test.exs), [checkpoint tests](../test/embeddings_checkpoint_test.exs) |
 
 ### Providers
 

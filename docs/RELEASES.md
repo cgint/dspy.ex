@@ -24,6 +24,10 @@ matching passages and their zero-based indices in a prediction.
 exact, with earlier corpus positions first on ties. Vectors are normalized
 by default. Pass `normalize: false` for raw dot products.
 
+`Dspy.Embeddings.save/2` writes a versioned JSON checkpoint for the
+corpus index. `from_saved/2` accepts a caller-supplied embedder and
+restores the stored vectors, settings, and corpus order.
+
 ### Named submodules
 
 `Dspy.Module.named_sub_modules/1` lists a program and its nested modules in
