@@ -8,6 +8,15 @@ This repo ships in **small, user-usable slices**.
 
 ## Consumer notes
 
+### InferRules optimizer
+
+`Dspy.Teleprompt.InferRules` bootstraps one program, induces natural-language
+rules for each predictor, and picks the candidate with the highest validation
+score. Pass `rules_lm:` to bind the induction model, or let it use the LM in
+the current teacher settings. With no `valset:`, the optimizer uses the first
+half of the trainset for induction and the rest for validation, in order.
+A recognized context-limit error retries with one fewer training row.
+
 ### Per-query nearest-neighbor demos
 
 `Dspy.Teleprompt.new(:knn_few_shot, k: k, vectorizer: embedder)` builds an
