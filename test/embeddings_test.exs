@@ -153,6 +153,128 @@ defmodule Dspy.EmbeddingsTest do
     assert Embeddings.query(raw, "large query") == {:error, :embedding_score_overflow}
   end
 
+  test "query batches follow embedder boundaries and preserve query order and duplicates" do
+    embedder =
+      recording_embedder(
+        %{
+          "axis" => [1, 0],
+          "wide" => [2, 2],
+          "opposite" => [-1, 0],
+          "forwards" => [2, 0],
+          "backwards" => [-1, 0]
+        },
+        batch_size: 2
+      )
+
+    assert {:ok, index} = Embeddings.new(["axis", "wide", "axis", "opposite"], embedder, k: 3)
+    assert_received {:embedded, ["axis", "wide"]}
+    assert_received {:embedded, ["axis", "opposite"]}
+
+    queries = ["backwards", "forwards", "backwards"]
+
+    assert {:ok, plain_results} = Embeddings.query_batch(index, queries)
+    assert_received {:embedded, first_batch}
+    assert first_batch == ["backwards", "forwards"]
+    assert_received {:embedded, second_batch}
+    assert second_batch == ["backwards"]
+    refute_received {:embedded, _}
+
+    assert Enum.map(plain_results, & &1[:indices]) == [[3, 1, 0], [0, 2, 1], [3, 1, 0]]
+
+    assert {:ok, scored_results} = Embeddings.query_batch(index, queries, include_scores: true)
+    assert_received {:embedded, ["backwards", "forwards"]}
+    assert_received {:embedded, ["backwards"]}
+    refute_received {:embedded, _}
+
+    expected_plain =
+      for query <- queries do
+        assert {:ok, prediction} = Embeddings.query(index, query)
+        prediction
+      end
+
+    expected_scored =
+      for query <- queries do
+        assert {:ok, prediction} = Embeddings.query_with_scores(index, query)
+        prediction
+      end
+
+    assert plain_results === expected_plain
+    assert scored_results === expected_scored
+  end
+
+  test "query batches validate the entire input before embedding and accept an empty list" do
+    embedder = recording_embedder(%{"a" => [1]}, batch_size: 1)
+    assert {:ok, index} = Embeddings.new(["a"], embedder)
+    assert_received {:embedded, ["a"]}
+
+    assert Embeddings.query_batch(index, []) == {:ok, []}
+    assert Embeddings.query_batch(index, [], include_scores: true) == {:ok, []}
+
+    for queries <- ["a", nil, ["a", 0], ["a" | :improper]] do
+      assert Embeddings.query_batch(index, queries) == {:error, :invalid_queries}
+    end
+
+    for options <- [
+          nil,
+          %{include_scores: true},
+          [include_scores: nil],
+          [k: 1],
+          [:include_scores]
+        ] do
+      assert Embeddings.query_batch(index, ["a"], options) == {:error, :invalid_options}
+    end
+
+    assert Embeddings.query_batch(index, [], [{:include_scores, true} | :improper]) ==
+             {:error, :invalid_options}
+
+    refute_received {:embedded, _}
+  end
+
+  test "query batches stop on a provider error and discard earlier results" do
+    embedder =
+      Embedder.new(
+        fn texts ->
+          send(self(), {:embedded, texts})
+
+          case texts do
+            ["unavailable", "b"] -> {:error, :unavailable}
+            _ -> Enum.map(texts, fn _ -> [1] end)
+          end
+        end,
+        batch_size: 2
+      )
+
+    assert {:ok, index} = Embeddings.new(["a"], embedder)
+    assert_received {:embedded, ["a"]}
+
+    queries = ["a", "b", "unavailable", "b", "later"]
+    assert Embeddings.query_batch(index, queries) == {:error, :unavailable}
+    assert_received {:embedded, ["a", "b"]}
+    assert_received {:embedded, ["unavailable", "b"]}
+    refute_received {:embedded, _}
+  end
+
+  test "query batches propagate response shape failures and later ranking overflow" do
+    embedder =
+      Embedder.new(fn
+        ["a"] -> [[1.0e200]]
+        ["ok", "overflow"] -> [[1], [1.0e200]]
+        ["wrong", "wrong"] -> [[1, 0], [1, 0]]
+        ["short", "short"] -> [[1]]
+      end)
+
+    assert {:ok, index} = Embeddings.new(["a"], embedder, normalize: false)
+
+    assert Embeddings.query_batch(index, ["wrong", "wrong"]) ==
+             {:error, {:embedding_dimension_mismatch, expected: 1, got: 2}}
+
+    assert Embeddings.query_batch(index, ["short", "short"]) ==
+             {:error, {:embedding_count_mismatch, expected: 2, got: 1}}
+
+    assert Embeddings.query_batch(index, ["ok", "overflow"], include_scores: true) ==
+             {:error, :embedding_score_overflow}
+  end
+
   defp recording_embedder(vectors, opts \\ []) do
     Embedder.new(
       fn texts ->
