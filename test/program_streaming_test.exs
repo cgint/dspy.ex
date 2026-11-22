@@ -829,6 +829,26 @@ defmodule Dspy.ProgramStreamingTest do
     assert {:error, :closed} = Task.await(fixture, @wait)
   end
 
+  test "halting an SSE response after a field frame closes the provider socket" do
+    {server, url} = fixture(:close, @answer_header <> @answer, "unread")
+    wrapped = Dspy.streamify(loopback_predict(url), stream_listeners: [:answer])
+    response = Dspy.streaming_response(wrapped.(@inputs))
+
+    assert [<<"data: ", json::binary>>] = Enum.take(response, 1)
+
+    assert %{
+             "field" => %{
+               "predict_name" => "self",
+               "signature_field_name" => "answer",
+               "chunk" => @answer,
+               "is_last_chunk" => false,
+               "invocation_id" => nil
+             }
+           } = Jason.decode!(json)
+
+    assert {:error, :closed} = Task.await(server, @wait)
+  end
+
   test "killing a consumer waiting on a real stream closes the provider socket" do
     {fixture, url} = fixture(:close, @answer_header, @answer)
     owner = self()

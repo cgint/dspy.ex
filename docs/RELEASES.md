@@ -275,6 +275,13 @@ the final prediction and emit no deltas or field end markers. Cache keys
 include the same request and rollout ID as batch calls. Direct
 `Dspy.LM.stream_generate/3` continues to bypass the cache.
 
+### Server-sent event responses
+
+`Dspy.streaming_response/1` lazily frames program deltas, selected field
+chunks, status messages, and prediction attributes for `text/event-stream`.
+It forwards trusted preframed data and sends a single `[DONE]` marker at
+normal completion. Halting the response also halts the program stream.
+
 ### XML output field streaming
 
 Select plain string outputs when the effective adapter is `XMLAdapter`.
