@@ -503,6 +503,7 @@ defmodule Dspy do
   Pass `stream_listeners: :none` to receive progress and the terminal result
   through ordinary inference. This preserves the program's adapters, retries,
   and cache behavior and supports batch-only LMs and structured tool requests.
+  Managed parallel and evaluation tasks stop when the stream consumer exits.
 
   The remaining options are the per-call options accepted by `call/3`.
   """

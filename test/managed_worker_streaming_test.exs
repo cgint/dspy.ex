@@ -27,6 +27,12 @@ defmodule Dspy.ManagedWorkerStreamingTest do
       Dspy.Module.parallel([program.first, program.second]).(inputs)
     end
 
+    def forward(%{mode: :executor} = program, inputs) do
+      pairs = Enum.map([program.first, program.second], &{&1, inputs})
+      {:ok, predictions} = Dspy.Parallel.run(Dspy.Parallel.new(num_threads: 2), pairs)
+      {:ok, Prediction.new(answers: Enum.map(predictions, &Prediction.get(&1, :answer)))}
+    end
+
     def forward(%{mode: :evaluate} = program, _inputs) do
       examples = Enum.map(["FIRST", "SECOND"], &Example.new(question: &1))
       selector = %Selector{first: program.first, second: program.second}
@@ -69,7 +75,68 @@ defmodule Dspy.ManagedWorkerStreamingTest do
     end
   end
 
+  defmodule BlockingBatchLM do
+    @behaviour LM
+    defstruct [:observer]
+
+    @impl true
+    def generate(lm, _) do
+      Process.flag(:trap_exit, true)
+      send(lm.observer, {:batch_worker, self()})
+
+      receive do
+        :release -> {:ok, "[[ ## answer ## ]]\nDone"}
+      end
+    end
+
+    @impl true
+    def stream_generate(_, _, _), do: {:error, :unexpected_stream}
+  end
+
   defp predictor(lm), do: Predict.new("question -> answer", lm: lm, adapter: ChatAdapter)
+
+  for mode <- [:executor, :parallel, :evaluate] do
+    test "status-only #{mode} kills blocked trapping batch workers when the consumer dies" do
+      lm = %BlockingBatchLM{observer: self()}
+      program = %Program{first: predictor(lm), second: predictor(lm), mode: unquote(mode)}
+      stream = Dspy.streamify(program, stream_listeners: :none)
+      consumer = spawn(fn -> Enum.to_list(stream.(%{question: "input"})) end)
+      on_exit(fn -> Process.exit(consumer, :kill) end)
+
+      assert_receive {:batch_worker, first}, @wait
+      assert_receive {:batch_worker, second}, @wait
+      assert first != second
+
+      on_exit(fn ->
+        Process.exit(first, :kill)
+        Process.exit(second, :kill)
+      end)
+
+      first_ref = Process.monitor(first)
+      second_ref = Process.monitor(second)
+      Process.exit(consumer, :kill)
+      assert_receive {:DOWN, ^first_ref, :process, ^first, :killed}, @wait
+      assert_receive {:DOWN, ^second_ref, :process, ^second, :killed}, @wait
+    end
+
+    test "status-only #{mode} preserves ordinary batch results" do
+      program = %Program{
+        first: predictor(%ScriptedLM{answer: "One"}),
+        second: predictor(%ScriptedLM{answer: "Two"}),
+        mode: unquote(mode)
+      }
+
+      result =
+        program
+        |> Dspy.streamify(stream_listeners: :none)
+        |> then(&Enum.to_list(&1.(%{question: "input"})))
+
+      expected =
+        if unquote(mode) == :parallel, do: %{answer: "One"}, else: %{answers: ["One", "Two"]}
+
+      assert [%Prediction{attrs: ^expected}] = result
+    end
+  end
 
   for mode <- [:parallel, :evaluate] do
     test "#{mode} streams distinct selected invocations and preserves results" do

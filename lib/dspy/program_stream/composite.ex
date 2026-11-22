@@ -83,6 +83,8 @@ defmodule Dspy.ProgramStream.Composite do
 
   def capture_scope, do: Process.get(@scope_key)
 
+  def with_lifetime_scope(run), do: with_scope(:lifetime_only, run)
+
   def with_worker_scope(nil, _owner, run), do: run.()
 
   def with_worker_scope(scope, owner, run) do
