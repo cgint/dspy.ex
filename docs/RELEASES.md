@@ -36,6 +36,12 @@ returns that caller's prediction. Use `stop/1` when the group is done.
 corpus index. `from_saved/2` accepts a caller-supplied embedder and
 restores the stored vectors, settings, and corpus order.
 
+### Named submodules
+
+`Dspy.Module.named_sub_modules/1` lists a program and its nested modules in
+breadth-first order. Paths begin at `self` and identify each occurrence,
+including equal module values stored at different paths.
+
 ### BetterTogether optimizer
 
 `Dspy.Teleprompt.BetterTogether` composes named prompt and weight optimizers
@@ -54,6 +60,13 @@ LM implements `finetune/3` and returns the trained LM. The optimizer runs
 the jobs in order and binds the returned LMs after all jobs succeed.
 The built-in Chat formatter accepts text conversations and checks that
 the assistant target parses back to the recorded outputs.
+
+### Typed bounding boxes
+
+Use `Dspy.BoundingBox` as a JSON signature schema for a rectangular image
+region. Its edges are normalized to `[0, 1]`, and validation requires
+positive width and height. Chat, JSON, and XML predictor tests cover
+prompt rendering and typed outputs.
 
 ### InferRules optimizer
 
