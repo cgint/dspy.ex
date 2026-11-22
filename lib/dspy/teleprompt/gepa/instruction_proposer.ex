@@ -19,7 +19,9 @@ defmodule Dspy.Teleprompt.GEPA.InstructionProposer do
     :max_chars,
     skills: [],
     adapter: JSONAdapter,
-    include_observation_images: false
+    include_observation_images: false,
+    include_observation_history: false,
+    truncate_history_outputs: false
   ]
 
   @opaque t :: %__MODULE__{
@@ -28,7 +30,9 @@ defmodule Dspy.Teleprompt.GEPA.InstructionProposer do
             max_chars: pos_integer() | nil,
             skills: [String.t()],
             adapter: module(),
-            include_observation_images: boolean()
+            include_observation_images: boolean(),
+            include_observation_history: boolean(),
+            truncate_history_outputs: boolean()
           }
 
   @doc """
@@ -51,6 +55,14 @@ defmodule Dspy.Teleprompt.GEPA.InstructionProposer do
     fields and image lists keep their order within each observation. A proposal
     sends up to eight images and eight MiB of encoded image URLs. Fields that
     would exceed either limit stay omitted. Defaults to `false`.
+  - `:include_observation_history` includes declared history from selected
+    training observations as ordered JSON data. Each turn contains declared
+    field previews and any completed tool exchanges. History media stays
+    omitted. History counts toward the existing encoded report budget.
+    Defaults to `false`.
+  - `:truncate_history_outputs` opts into the history above and limits each
+    tool result to its first 500 Unicode code points, followed by a cut count
+    when shortened. Defaults to `false`.
   """
   @spec new(keyword()) :: t()
   def new(opts \\ []) do
@@ -61,7 +73,9 @@ defmodule Dspy.Teleprompt.GEPA.InstructionProposer do
         skills: [],
         max_chars: nil,
         adapter: JSONAdapter,
-        include_observation_images: false
+        include_observation_images: false,
+        include_observation_history: false,
+        truncate_history_outputs: false
       )
 
     %__MODULE__{
@@ -71,7 +85,12 @@ defmodule Dspy.Teleprompt.GEPA.InstructionProposer do
       max_chars: char_limit!(opts[:max_chars]),
       adapter: adapter!(opts[:adapter]),
       skills: load_skills!(opts[:skills]),
-      include_observation_images: observation_images!(opts[:include_observation_images])
+      include_observation_images:
+        boolean!(opts[:include_observation_images], :include_observation_images),
+      include_observation_history:
+        boolean!(opts[:include_observation_history], :include_observation_history),
+      truncate_history_outputs:
+        boolean!(opts[:truncate_history_outputs], :truncate_history_outputs)
     }
   end
 
@@ -207,10 +226,9 @@ defmodule Dspy.Teleprompt.GEPA.InstructionProposer do
   defp char_limit!(_limit),
     do: raise(ArgumentError, ":max_chars must be a positive integer or nil")
 
-  defp observation_images!(value) when is_boolean(value), do: value
+  defp boolean!(value, _key) when is_boolean(value), do: value
 
-  defp observation_images!(_value),
-    do: raise(ArgumentError, ":include_observation_images must be a boolean")
+  defp boolean!(_value, key), do: raise(ArgumentError, "#{inspect(key)} must be a boolean")
 
   defp adapter!(nil), do: JSONAdapter
 

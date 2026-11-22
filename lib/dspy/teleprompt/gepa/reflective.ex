@@ -7,7 +7,14 @@ defmodule Dspy.Teleprompt.GEPA.Reflective do
   alias Dspy.Signature.Adapters.JSONAdapter
   alias Dspy.Signature.PromptPreview
   alias Dspy.Teleprompt.BootstrapTrace
-  alias Dspy.Teleprompt.GEPA.{CandidatePool, InstructionProposer, Merger, ObservationMedia}
+
+  alias Dspy.Teleprompt.GEPA.{
+    CandidatePool,
+    InstructionProposer,
+    Merger,
+    ObservationHistory,
+    ObservationMedia
+  }
 
   @report_bytes 16_384
   @instruction_bytes 4_096
@@ -357,12 +364,12 @@ defmodule Dspy.Teleprompt.GEPA.Reflective do
   end
 
   defp reflection_report(optimizer, predictor, name, observations) do
+    proposer = Map.get(optimizer, :instruction_proposer)
+    history_mode = ObservationHistory.mode(proposer)
+
     media =
-      if match?(
-           %InstructionProposer{include_observation_images: true},
-           Map.get(optimizer, :instruction_proposer)
-         ),
-         do: %ObservationMedia{}
+      if match?(%InstructionProposer{include_observation_images: true}, proposer),
+        do: %ObservationMedia{}
 
     {records, _remaining, media} =
       Enum.reduce_while(observations, {[], @report_bytes - 2, media}, fn {record, step},
@@ -376,6 +383,7 @@ defmodule Dspy.Teleprompt.GEPA.Reflective do
           feedback: feedback
         }
 
+        item = ObservationHistory.annotate(history_mode, predictor.signature, step, item)
         {item, updated_media} = ObservationMedia.annotate(media, predictor.signature, step, item)
         bytes = byte_size(Jason.encode!(item)) + 1
 
