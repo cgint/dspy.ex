@@ -1,5 +1,10 @@
 # Status
 
+> **S059 and S060, corpus embedding retrieval.** An immutable index
+> uses `Dspy.Embedder` for exact text retrieval. Results carry passages
+> and corpus indices, with similarity scores in the scored view.
+> Approximate search, query coalescing, and index persistence remain open.
+
 > **M6, KNNFewShot.** The optimizer builds one neighbor index and
 > prepares demos for each query. Bootstrap acceptance metrics receive
 > the original training labels. The [offline example](../../examples/offline/knn_few_shot_offline.exs)
