@@ -186,6 +186,27 @@ defmodule Dspy.JSONProgramStreamingTest do
     end
   end
 
+  test "a later prefix conflict withholds completion of an earlier matching field" do
+    bare = ~s({"answer":"first","detail":"kept"})
+    fenced = ~s( ```json {"answer":"later","detail":"kept"} ```)
+    signature = "question -> detail, answer"
+
+    good = scripted(signature, bare, 1)
+    {chunks, [%Prediction{}]} = selected(good, [:answer, :detail]) |> Enum.split(-1)
+
+    assert Enum.map(Enum.filter(chunks, & &1.is_last_chunk), & &1.signature_field_name) == [
+             :detail,
+             :answer
+           ]
+
+    conflicting = scripted(signature, bare <> fenced, 1)
+
+    {chunks, terminal} = selected(conflicting, [:answer, :detail]) |> Enum.split(-1)
+    assert terminal == [{:error, {:streamed_field_mismatch, :answer}}]
+    assert Enum.all?(chunks, &match?(%StreamResponse{is_last_chunk: false}, &1))
+    assert Enum.dedup(Enum.map(chunks, & &1.signature_field_name)) == [:answer, :detail]
+  end
+
   test "malformed JSON preserves the ordinary parse error without a completion marker" do
     wire = ~S({"answer":"Visible\uD83D)
     predictor = scripted("question -> answer", wire, 1)
