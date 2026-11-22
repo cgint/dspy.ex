@@ -117,7 +117,9 @@ defmodule Dspy.Signature.Adapters.XMLStream do
 
       nil ->
         if Regex.match?(@first_line_pending, text) do
-          {%{state | buffer: :binary.copy(text)}, events}
+          # Leading horizontal space is only framing. Keep a split CR for CRLF.
+          pending = if String.ends_with?(text, "\r"), do: "\r", else: ""
+          {%{state | buffer: pending}, events}
         else
           scan(%{state | phase: {:scalar, name, field, :inline}, buffer: ""}, text, events)
         end
