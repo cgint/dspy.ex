@@ -24,7 +24,8 @@ defmodule Dspy.Teleprompt.BootstrapTrace do
     :capture?,
     :capture_failed_parses?,
     :format_failure_score,
-    :strict_metric?
+    :strict_metric?,
+    :capture_score_metadata?
   ]
 
   def collect(program, dataset, opts, controls \\ []) do
@@ -59,7 +60,8 @@ defmodule Dspy.Teleprompt.BootstrapTrace do
       capture?: Keyword.get(controls, :capture?, true),
       capture_failed_parses?: opts[:capture_failed_parses],
       format_failure_score: opts[:format_failure_score],
-      strict_metric?: Keyword.get(controls, :strict_metric?, false)
+      strict_metric?: Keyword.get(controls, :strict_metric?, false),
+      capture_score_metadata?: Keyword.get(controls, :capture_score_metadata?, false)
     }
 
     pairs = Enum.map(dataset, &{attempt, &1})
@@ -133,14 +135,24 @@ defmodule Dspy.Teleprompt.BootstrapTrace do
   defp score_record(%{prediction: nil} = record, %{format_failure_score: score}),
     do: {:ok, Map.put(record, :score, score)}
 
-  defp score_record(record, %{metric: metric, strict_metric?: strict?}) do
+  defp score_record(record, %{metric: metric, strict_metric?: strict?} = attempt) do
     case Teleprompt.run_metric(metric, record.example, record.prediction, record.trace) do
-      score when is_number(score) -> {:ok, Map.put(record, :score, score)}
-      :error -> {:error, {:metric_error, :raised}}
-      score when strict? -> {:ok, {:invalid_metric_result, score}}
-      score -> {:error, {:invalid_metric_result, score}}
+      {:score_with_metadata, score, metadata} when attempt.capture_score_metadata? ->
+        record_score(Map.put(record, :score_metadata, metadata), score, strict?)
+
+      score ->
+        record_score(record, score, strict?)
     end
   end
+
+  defp record_score(record, score, _strict?) when is_number(score),
+    do: {:ok, Map.put(record, :score, score)}
+
+  defp record_score(record, true, _strict?), do: {:ok, Map.put(record, :score, 1.0)}
+  defp record_score(record, false, _strict?), do: {:ok, Map.put(record, :score, 0.0)}
+  defp record_score(_record, :error, _strict?), do: {:error, {:metric_error, :raised}}
+  defp record_score(_record, score, true), do: {:ok, {:invalid_metric_result, score}}
+  defp record_score(_record, score, _strict?), do: {:error, {:invalid_metric_result, score}}
 
   defp index_record({:invalid_metric_result, value}, index) do
     raise Dspy.Evaluate.InvalidMetricResult, value: value, example_index: index

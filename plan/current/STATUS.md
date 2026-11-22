@@ -28,7 +28,9 @@
 > keeps candidates that improve held-out scores. The offline example
 > verifies that improvement. Opt-in Pareto selection can revisit a
 > lower-mean validation specialist after it improves a shared training
-> minibatch. Opt-in merges combine compatible candidates with a common
+> minibatch. The objective frontier uses named metric means to find
+> specialists and still returns the highest scalar validation score.
+> Opt-in merges combine compatible candidates with a common
 > ancestor and compare both parents on a shared validation subset.
 > Opt-in format feedback can revise the failed predictor using a bounded
 > malformed completion and adapter guidance. A custom instruction
@@ -37,8 +39,8 @@
 > instructions and adapters, and one correction for oversized drafts.
 > It can also include declared training images with numbered references
 > or typed training history with shortened tool results in the reflection
-> request. Custom component selectors and additional frontier objectives
-> remain open.
+> request. Custom component selectors, hybrid frontiers, and per-row
+> objective frontiers remain open.
 
 > **M4, multipart image splicing.** Separate marker-bearing text parts
 > share one ordered stream of typed images. A count mismatch strips the

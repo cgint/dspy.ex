@@ -24,12 +24,15 @@ defmodule Dspy.Teleprompt.GEPA.Reflective do
     with :ok <- validate_examples(trainset, :trainset),
          :ok <- validate_examples(valset, :valset),
          :ok <- validate_budget(optimizer, length(valset)),
-         [_ | _] = slots <- PredictorSlots.list(program) do
+         [_ | _] = slots <- PredictorSlots.list(program),
+         valset = Enum.with_index(valset),
+         {:ok, {scores, objective_rows}} <- validation_batch(optimizer, program, valset),
+         {:ok, objectives} <- frontier_scores(optimizer.frontier_type, objective_rows) do
       {random, _seed} = Random.seed(optimizer.seed)
       {random, paths} = Random.shuffle(random, Enum.map(slots, &elem(&1, 0)))
 
       state = %{
-        pool: CandidatePool.new(program, validation_scores(optimizer, program, valset)),
+        pool: CandidatePool.new(program, scores, objectives),
         remaining: optimizer.max_metric_calls - length(valset),
         random: random,
         paths: paths,
@@ -48,6 +51,7 @@ defmodule Dspy.Teleprompt.GEPA.Reflective do
     case maybe_merge(optimizer, valset, state) do
       {:attempted, state} -> search(optimizer, trainset, valset, state)
       {:skip, state} -> search_reflection(optimizer, trainset, valset, state)
+      {:error, _reason} = error -> error
     end
   end
 
@@ -95,8 +99,8 @@ defmodule Dspy.Teleprompt.GEPA.Reflective do
         end
       end)
 
-    with {:ok, updates} <- propose(optimizer, slots, reports) do
-      state = evaluate_proposal(optimizer, valset, state, round, updates)
+    with {:ok, updates} <- propose(optimizer, slots, reports),
+         {:ok, state} <- evaluate_proposal(optimizer, valset, state, round, updates) do
       paths = advance_paths(optimizer.component_selector, state.paths, selected)
       search(optimizer, trainset, valset, %{state | paths: paths})
     end
@@ -108,7 +112,7 @@ defmodule Dspy.Teleprompt.GEPA.Reflective do
   defp advance_paths(:all, paths, _selected), do: paths
 
   defp evaluate_proposal(_optimizer, _valset, state, _round, updates) when map_size(updates) == 0,
-    do: state
+    do: {:ok, state}
 
   defp evaluate_proposal(optimizer, valset, state, round, updates) do
     candidate =
@@ -125,12 +129,13 @@ defmodule Dspy.Teleprompt.GEPA.Reflective do
     {evaluate?, state} = passes_minibatch?(optimizer, candidate, round, state)
 
     if evaluate? do
-      scores = validation_scores(optimizer, candidate, valset)
-      state = %{state | remaining: state.remaining - length(valset)}
-
-      update_pool(optimizer, state, candidate, scores, round.parent_id)
+      with {:ok, {scores, objective_rows}} <- validation_batch(optimizer, candidate, valset),
+           {:ok, objectives} <- frontier_scores(optimizer.frontier_type, objective_rows) do
+        state = %{state | remaining: state.remaining - length(valset)}
+        {:ok, update_pool(optimizer, state, candidate, scores, round.parent_id, objectives)}
+      end
     else
-      state
+      {:ok, state}
     end
   end
 
@@ -139,11 +144,12 @@ defmodule Dspy.Teleprompt.GEPA.Reflective do
          state,
          candidate,
          scores,
-         parent_id
+         parent_id,
+         objectives
        ) do
     %{
       state
-      | pool: CandidatePool.add(state.pool, candidate, scores, [parent_id]),
+      | pool: CandidatePool.add(state.pool, candidate, scores, [parent_id], objectives),
         merge_pending?: optimizer.use_merge
     }
   end
@@ -153,7 +159,8 @@ defmodule Dspy.Teleprompt.GEPA.Reflective do
          state,
          candidate,
          scores,
-         _parent_id
+         _parent_id,
+         _objectives
        ),
        do: %{state | pool: CandidatePool.keep_best(state.pool, candidate, scores)}
 
@@ -166,7 +173,7 @@ defmodule Dspy.Teleprompt.GEPA.Reflective do
          MapSet.size(state.attempted_merges) < optimizer.max_merge_invocations do
       case Merger.propose(state.pool, state.attempted_merges, state.random) do
         nil -> {:skip, state}
-        proposal -> {:attempted, evaluate_merge(optimizer, valset, state, proposal)}
+        proposal -> evaluate_merge(optimizer, valset, state, proposal)
       end
     else
       {:skip, state}
@@ -181,11 +188,8 @@ defmodule Dspy.Teleprompt.GEPA.Reflective do
     selected = MapSet.new(indices)
 
     {sample, rest} =
-      valset
-      |> Enum.with_index()
-      |> Enum.split_with(fn {_example, index} -> MapSet.member?(selected, index) end)
+      Enum.split_with(valset, fn {_example, index} -> MapSet.member?(selected, index) end)
 
-    sample_scores = validation_scores(optimizer, proposal.program, Enum.map(sample, &elem(&1, 0)))
     left_total = Enum.sum_by(sample, fn {_example, index} -> elem(left, index) end)
     right_total = Enum.sum_by(sample, fn {_example, index} -> elem(right, index) end)
 
@@ -196,26 +200,42 @@ defmodule Dspy.Teleprompt.GEPA.Reflective do
         attempted_merges: MapSet.put(state.attempted_merges, proposal.key)
     }
 
-    if Enum.sum(sample_scores) >= max(left_total, right_total) do
-      scores = finish_merge_validation(optimizer, proposal, sample, sample_scores, rest)
-      pool = CandidatePool.add(state.pool, proposal.program, scores, proposal.parents)
-      %{state | pool: pool, remaining: state.remaining - length(rest), merge_pending?: true}
-    else
-      state
+    with {:ok, {sample_scores, _objective_rows} = sample_result} <-
+           validation_batch(optimizer, proposal.program, sample) do
+      if Enum.sum(sample_scores) >= max(left_total, right_total) do
+        with {:ok, {scores, objective_rows}} <-
+               finish_merge_validation(optimizer, proposal, sample, sample_result, rest),
+             {:ok, objectives} <- frontier_scores(optimizer.frontier_type, objective_rows) do
+          pool =
+            CandidatePool.add(state.pool, proposal.program, scores, proposal.parents, objectives)
+
+          {:attempted,
+           %{state | pool: pool, remaining: state.remaining - length(rest), merge_pending?: true}}
+        end
+      else
+        {:attempted, state}
+      end
     end
   end
 
-  defp finish_merge_validation(_optimizer, _proposal, _sample, sample_scores, []),
-    do: sample_scores
+  defp finish_merge_validation(
+         optimizer,
+         proposal,
+         sample,
+         {sample_scores, sample_objectives},
+         rest
+       ) do
+    with {:ok, {rest_scores, rest_objectives}} <-
+           validation_batch(optimizer, proposal.program, rest) do
+      scores =
+        sample
+        |> Enum.zip(sample_scores)
+        |> Kernel.++(Enum.zip(rest, rest_scores))
+        |> Enum.sort_by(fn {{_example, index}, _score} -> index end)
+        |> Enum.map(&elem(&1, 1))
 
-  defp finish_merge_validation(optimizer, proposal, sample, sample_scores, rest) do
-    rest_scores = validation_scores(optimizer, proposal.program, Enum.map(rest, &elem(&1, 0)))
-
-    sample
-    |> Enum.zip(sample_scores)
-    |> Kernel.++(Enum.zip(rest, rest_scores))
-    |> Enum.sort_by(fn {{_example, index}, _score} -> index end)
-    |> Enum.map(&elem(&1, 1))
+      {:ok, {scores, Map.merge(sample_objectives, rest_objectives)}}
+    end
   end
 
   defp passes_minibatch?(
@@ -270,9 +290,58 @@ defmodule Dspy.Teleprompt.GEPA.Reflective do
     {%{record | trace: successful}, Map.merge(steps, failures)}
   end
 
-  defp validation_scores(optimizer, program, valset) do
+  defp validation_batch(_optimizer, _program, []), do: {:ok, {[], %{}}}
+
+  defp validation_batch(optimizer, program, indexed_rows) do
+    {valset, indices} = Enum.unzip(indexed_rows)
     records = collect(optimizer, program, valset, :validation)
-    ordered_scores(records, length(valset), optimizer.failure_score)
+
+    with {:ok, objectives} <- validation_objectives(optimizer.frontier_type, records, indices) do
+      {:ok, {ordered_scores(records, length(valset), optimizer.failure_score), objectives}}
+    end
+  end
+
+  defp validation_objectives(:instance, _records, _indices), do: {:ok, %{}}
+
+  defp validation_objectives(:objective, records, indices) do
+    indices = List.to_tuple(indices)
+
+    Enum.reduce_while(records, {:ok, %{}}, fn record, {:ok, rows} ->
+      index = elem(indices, record.example_index)
+      objectives = record.score_metadata
+
+      cond do
+        is_nil(objectives) or objectives == %{} -> {:cont, {:ok, rows}}
+        valid_objectives?(objectives) -> {:cont, {:ok, Map.put(rows, index, objectives)}}
+        true -> {:halt, {:error, {:invalid_objective_scores, index}}}
+      end
+    end)
+  end
+
+  defp valid_objectives?(objectives) when is_map(objectives) and not is_struct(objectives) do
+    Enum.all?(objectives, fn {name, value} ->
+      is_binary(name) and String.valid?(name) and String.trim(name) != "" and is_number(value)
+    end)
+  end
+
+  defp valid_objectives?(_objectives), do: false
+
+  defp frontier_scores(:instance, _rows), do: {:ok, nil}
+
+  defp frontier_scores(:objective, rows) when map_size(rows) == 0,
+    do: {:error, :missing_objective_scores}
+
+  defp frontier_scores(:objective, rows) do
+    totals =
+      rows
+      |> Enum.sort()
+      |> Enum.reduce(%{}, fn {_index, objectives}, totals ->
+        Enum.reduce(objectives, totals, fn {name, score}, totals ->
+          Map.update(totals, name, {score, 1}, fn {sum, count} -> {sum + score, count + 1} end)
+        end)
+      end)
+
+    {:ok, Map.new(totals, fn {name, {sum, count}} -> {name, sum / count} end)}
   end
 
   defp ordered_scores(records, count, fallback) do
@@ -284,13 +353,22 @@ defmodule Dspy.Teleprompt.GEPA.Reflective do
     capture_failed_parses? =
       mode == :reflection and Map.get(optimizer, :add_format_failure_as_feedback, false)
 
+    capture_objectives? = mode == :validation and optimizer.frontier_type == :objective
+
     metric = fn example, prediction, trace ->
       trace =
         if capture_failed_parses?,
           do: Enum.filter(trace, &Map.has_key?(&1, :prediction)),
           else: trace
 
-      optimizer.metric.(example, prediction, trace, nil, nil) |> score()
+      result = optimizer.metric.(example, prediction, trace, nil, nil)
+
+      if capture_objectives? do
+        objectives = if is_map(result), do: Attrs.get(result, :objective_scores)
+        {:score_with_metadata, score(result), objectives}
+      else
+        score(result)
+      end
     end
 
     BootstrapTrace.collect(
@@ -304,7 +382,8 @@ defmodule Dspy.Teleprompt.GEPA.Reflective do
         format_failure_score: optimizer.failure_score
       ],
       capture?: mode != :validation,
-      strict_metric?: true
+      strict_metric?: true,
+      capture_score_metadata?: capture_objectives?
     )
   end
 
