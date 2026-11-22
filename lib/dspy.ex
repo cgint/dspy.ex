@@ -456,7 +456,7 @@ defmodule Dspy do
   Call the returned function with the program's inputs. Each enumeration uses
   the enumerating process's DSPy context and yields `{:delta, text}` events
   followed by the ordinary `Dspy.Prediction` or a terminal `{:error, reason}`.
-  Halting the enumeration cancels the run. Streamed calls make one attempt.
+  Halting the enumeration cancels the run. LM text streaming makes one attempt.
   The original enumerating process must resume or halt an active continuation.
 
   With ordinary ChatAdapter markers, `stream_listeners: [:answer]` selects
@@ -474,7 +474,13 @@ defmodule Dspy do
 
   Set `:status_message_provider` to a module implementing
   `Dspy.StatusMessageProvider` to receive `Dspy.StatusMessage` progress events
-  alongside raw deltas or selected field chunks.
+  alongside raw deltas or selected field chunks. Implement optional
+  `tool_message/2` to format tool events, or use
+  `Dspy.StatusMessageProvider.ToolProgress` for generic tool messages.
+
+  Pass `stream_listeners: :none` to receive progress and the terminal result
+  through ordinary inference. This preserves the program's adapters, retries,
+  and cache behavior and supports batch-only LMs and structured tool requests.
 
   The remaining options are the per-call options accepted by `call/3`.
   """

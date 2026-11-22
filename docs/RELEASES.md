@@ -208,6 +208,14 @@ and the final prediction share one demand-driven enumeration.
 The [offline ChainOfThought example](../examples/offline/chain_of_thought_streaming_offline.exs)
 shows progress beside answer chunks and verifies cleanup after an early halt.
 
+Providers can implement optional `tool_message/2` for tool start and end
+events. Pass `Dspy.StatusMessageProvider.ToolProgress` as the status
+provider for generic tool messages. Tool events carry the same bounded
+metadata as the other progress events.
+Use `stream_listeners: :none` to receive progress and the final prediction
+through ordinary inference, including for batch-only models and structured
+tool requests.
+
 ### Chat field listeners
 
 Pass `stream_listeners: [:answer]` to `Dspy.streamify/2` to receive selected
