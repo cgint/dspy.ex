@@ -32,5 +32,9 @@ defmodule Dspy.Signature.Adapter do
   @callback parse_outputs(Dspy.Signature.t(), String.t(), keyword()) ::
               map() | {:error, term()}
 
-  @optional_callbacks [format_request: 4]
+  @doc "Format one observed predictor call as a training row."
+  @callback format_finetune_data(Dspy.Signature.t(), [Dspy.Example.t()], map(), map()) ::
+              {:ok, map()} | {:error, term()}
+
+  @optional_callbacks [format_request: 4, format_finetune_data: 4]
 end

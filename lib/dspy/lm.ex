@@ -271,7 +271,16 @@ defmodule Dspy.LM do
   """
   @callback supports?(lm :: t(), feature :: atom()) :: boolean()
 
-  @optional_callbacks [supports?: 2, stream_generate: 3]
+  @doc """
+  Train on adapter-formatted examples and return the trained LM binding.
+
+  Implement this callback to opt an LM into `Dspy.Teleprompt.BootstrapFinetune`.
+  The callback receives the training rows and caller-supplied training options.
+  """
+  @callback finetune(lm :: t(), training_rows :: [map()], train_kwargs :: keyword() | map()) ::
+              {:ok, t()} | {:error, term()}
+
+  @optional_callbacks [supports?: 2, stream_generate: 3, finetune: 3]
 
   @doc false
   def validate_binding!(nil), do: nil

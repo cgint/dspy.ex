@@ -17,7 +17,8 @@ defmodule Dspy.Signature.Adapters.ChatAdapter do
 
   @behaviour Dspy.Signature.Adapter
 
-  alias Dspy.History
+  alias Dspy.{Attrs, Example, History, Signature}
+  alias Dspy.Signature.AdapterPipeline
   alias Dspy.Signature.Adapters.HistoryReplay
 
   @marker_regex ~r/\[\[\s*##\s*([A-Za-z0-9_]+)\s*##\s*\]\]/
@@ -85,6 +86,99 @@ defmodule Dspy.Signature.Adapters.ChatAdapter do
         maybe_fallback_to_json(signature, text, reason)
     end
   end
+
+  @impl true
+  def format_finetune_data(%Signature{} = signature, demos, inputs, outputs)
+      when is_integer(length(demos)) and is_map(inputs) and is_map(outputs) do
+    output_fields = Enum.filter(signature.output_fields, &Attrs.has_key?(outputs, &1.name))
+
+    expected = Map.new(output_fields, &{&1.name, Attrs.get(outputs, &1.name)})
+
+    with :ok <- validate_finetune_content(signature, demos, inputs, expected),
+         %{messages: messages} <- format_request(signature, inputs, demos),
+         true <- Enum.all?(messages, &plain_finetune_message?/1),
+         {:ok, target} <- finetune_target(signature, output_fields, expected) do
+      {:ok, %{messages: messages ++ [%{role: "assistant", content: target}]}}
+    else
+      false -> {:error, :unsupported_finetune_content}
+      {:error, _} = error -> error
+    end
+  end
+
+  defp finetune_target(signature, fields, expected) when map_size(expected) > 0 do
+    target = render_field_sections(fields, expected, &finetune_output_text/1)
+
+    if finetune_target_matches?(signature, target, expected) do
+      {:ok, target}
+    else
+      target = Jason.encode!(expected, maps: :strict)
+
+      if finetune_target_matches?(signature, target, expected),
+        do: {:ok, target},
+        else: {:error, :invalid_finetune_target}
+    end
+  rescue
+    Jason.EncodeError -> {:error, :invalid_finetune_target}
+  end
+
+  defp finetune_target(_signature, _fields, _expected), do: {:error, :invalid_finetune_target}
+
+  defp finetune_target_matches?(signature, target, expected),
+    do: plain_finetune_text?(target) and parse_outputs(signature, target) === expected
+
+  defp finetune_output_text(value) when is_binary(value), do: value
+  defp finetune_output_text(value), do: Jason.encode!(value, maps: :strict)
+
+  defp validate_finetune_content(signature, demos, inputs, outputs) do
+    fields = signature.input_fields ++ signature.output_fields
+
+    supported? =
+      Enum.all?(fields, &(&1.type not in [:image, :history, :tool, :tools, :tool_calls]))
+
+    if supported? and finetune_fields?(signature.input_fields, inputs) and
+         finetune_fields?(signature.output_fields, outputs) and
+         Enum.all?(demos, &finetune_demo?(signature, &1)) do
+      :ok
+    else
+      {:error, :unsupported_finetune_content}
+    end
+  end
+
+  defp finetune_demo?(signature, %Example{} = demo),
+    do:
+      finetune_fields?(signature.input_fields, Example.inputs(demo)) and
+        finetune_fields?(signature.output_fields, demo.attrs)
+
+  defp finetune_demo?(_signature, _demo), do: false
+
+  defp finetune_fields?(fields, attrs),
+    do: Enum.all?(fields, &plain_finetune_value?(Attrs.get(attrs, &1.name)))
+
+  defp plain_finetune_value?(value) when is_binary(value), do: plain_finetune_text?(value)
+  defp plain_finetune_value?(value) when is_atom(value) or is_number(value), do: true
+
+  defp plain_finetune_value?(value) when is_integer(length(value)),
+    do: Enum.all?(value, &plain_finetune_value?/1)
+
+  defp plain_finetune_value?(value) when is_map(value) and not is_struct(value) do
+    Enum.all?(value, fn {key, item} ->
+      (is_atom(key) or (is_binary(key) and plain_finetune_text?(key))) and
+        plain_finetune_value?(item)
+    end)
+  end
+
+  defp plain_finetune_value?(_value), do: false
+
+  defp plain_finetune_message?(%{role: role, content: content})
+       when role in ["system", "user", "assistant"] and is_binary(content),
+       do: plain_finetune_text?(content)
+
+  defp plain_finetune_message?(_message), do: false
+
+  defp plain_finetune_text?(text),
+    do:
+      String.valid?(text) and
+        not String.contains?(text, [AdapterPipeline.image_ref_token(), "<attachments>"])
 
   # --- formatting helpers ---
 
