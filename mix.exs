@@ -43,26 +43,11 @@ defmodule Dspy.MixProject do
       # LLM provider access (unified client; no provider maintenance in `dspy.ex`)
       {:req_llm, "~> 1.31"},
 
-      # Security floors (SEC-1, 2026-09-28): req/mint/hpax reach :dspy transitively
-      # through req_llm/finch. These direct floors pin consumers to advisory-fixed
-      # versions so `mix deps` can never resolve a vulnerable version through the
-      # wider transitive ranges. ReqLLM 1.31 requires req ~> 0.7, so the req
-      # floor is redundant at that version; Finch still permits mint below 1.11,
-      # and older permitted Mint versions can permit hpax below 1.1.
-      #   req  >= 0.6.1: EEF-CVE-2026-49755 (decompression bomb) + EEF-CVE-2026-49756
-      #                  (multipart header injection)
-      #   mint >= 1.11.0: 10+ advisories incl. HTTP/2 smuggling + request splitting
-      #                   + EEF-CVE-2026-91043 (HPACK cookie field memory exhaustion)
-      #   hpax >= 1.1.0:  EEF-CVE-2026-58226 (unbounded HPACK integer decoding DoS);
-      #                   mint 1.11.0 requires hpax ~> 1.1, so floor moves with it
-      # NOTE (req >= 0.6.0): automatic response archive/compressed decoding was
-      # removed and auto-decompression is off — both are opt-in (`decoders:`,
-      # `compressed: true`). :dspy itself never relies on either.
-      # REMOVE these three direct deps once req_llm/finch themselves require the
-      # fixed versions (lib/ calls none of Req/Mint/HPAX directly).
-      {:req, ">= 0.6.1 and < 1.0.0"},
+      # Security floors: Finch permits older Mint and HPAX versions.
+      # Keep these floors until its transitive requirements include the fixes.
       {:mint, ">= 1.11.0 and < 2.0.0"},
-      {:hpax, ">= 1.1.0 and < 2.0.0"}
+      {:hpax, ">= 1.1.0 and < 2.0.0"},
+      {:credo, "~> 1.7", only: [:dev, :test], runtime: false}
 
       # NOTE: Local inference deps (Bumblebee/Nx/EXLA) are intentionally NOT
       # dependencies of core `:dspy`. See `docs/BUMBLEBEE.md`.
