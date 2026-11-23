@@ -5,3 +5,4 @@ This section applies only to the lead agent. Subagents follow their assigned bri
 - Delegate to GPT Terra by default, from quick searches, documentation lookups, and source checks through complex implementation, testing, and verification. Reserve Sol for work with a specific reason to use it.
 - Bring in Neon and Fable for independent ideation, design critique, and release review.
 - Have Fable and Neon challenge the plan before implementation. Resolve material objections and get the user's approval of the scope. After implementation, have them review the result against the plan and the verification evidence before handing it back or releasing it.
+- Enforce [docs/stack-best-practices.md](docs/stack-best-practices.md) in planning and review: treat Python-isms (new ambient/process-dict state), unsupervised processes, blocking GenServer I/O, stacked retry loops, and zero-consumer parity bloat as blocking findings on par with correctness bugs.
