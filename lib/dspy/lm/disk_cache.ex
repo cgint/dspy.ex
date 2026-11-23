@@ -266,11 +266,23 @@ defmodule Dspy.LM.DiskCache do
 
   defp publish_record(state, key, entry, temporary, path, memory_table) do
     if Cache.table_ref() == memory_table and File.rename(temporary, path) == :ok do
-      updated = state |> drop_entry(key) |> add_entry(key, entry)
+      if Cache.table_ref() == memory_table do
+        updated = state |> drop_entry(key) |> add_entry(key, entry)
 
-      case evict_to_fit(updated, state.limit, key) do
-        {:ok, result} -> result
-        {:error, _reason, result} -> result
+        case evict_to_fit(updated, state.limit, key) do
+          {:ok, result} ->
+            result
+
+          {:error, _reason, result} when result.bytes > state.limit ->
+            File.rm(path)
+            drop_entry(result, key)
+
+          {:error, _reason, result} ->
+            result
+        end
+      else
+        File.rm(path)
+        state
       end
     else
       state
