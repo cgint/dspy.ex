@@ -209,17 +209,9 @@ defmodule Dspy.LM.DiskCacheTest do
 
     memory_table = Dspy.LM.Cache.table_ref()
     disk_epoch = Dspy.LM.DiskCache.context()
-    temporary = Path.join(dir, "staged.json")
-    destination = Path.join(dir, "published.json")
-    File.write!(temporary, "staged")
-
     assert :ok = Dspy.LM.Cache.clear()
-
-    assert {:error, :stale_cache} =
-             Dspy.LM.Cache.publish_disk_record(memory_table, disk_epoch, temporary, destination)
-
-    refute File.exists?(destination)
-    assert File.exists?(temporary)
+    assert :ok = Dspy.LM.DiskCache.put(disk_epoch, String.duplicate("a", 64), %{}, memory_table)
+    assert records(dir) == []
     send(provider, :respond)
     assert %{choices: [_]} = Task.await(task)
     assert records(dir) == []

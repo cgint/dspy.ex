@@ -20,12 +20,6 @@ defmodule Dspy.LM.Cache do
   @spec clear() :: :ok
   def clear, do: call(:clear, :ok)
 
-  def publish_disk_record(tid, epoch, temporary, destination) do
-    call({:publish_disk_record, tid, epoch, temporary, destination}, {:error, :cache_unavailable})
-  end
-
-  def await_disk_publications, do: call(:disk_publication_barrier, :ok)
-
   @doc """
   Fetch a cached value for `{lm, request}`.
 
@@ -38,7 +32,19 @@ defmodule Dspy.LM.Cache do
   def fetch(lm, request, opts \\ []) do
     with_table(Keyword.get_lazy(opts, :table, &table_ref/0), :miss, fn tid ->
       key = cache_key(lm, request, Keyword.get(opts, :rollout_id))
-      call({:fetch, tid, key}, :miss)
+
+      try do
+        case :ets.lookup(tid, key) do
+          [{^key, value, _age}] ->
+            GenServer.cast(__MODULE__, {:touch, tid, key})
+            {:hit, value}
+
+          [] ->
+            :miss
+        end
+      rescue
+        ArgumentError -> :miss
+      end
     end)
   end
 
@@ -64,33 +70,6 @@ defmodule Dspy.LM.Cache do
   def handle_call(:clear, _from, state),
     do: {:reply, :ok, replace_table(state.table, state.limit)}
 
-  def handle_call({:publish_disk_record, tid, epoch, temporary, destination}, _from, state) do
-    result =
-      if state.table == tid and Dspy.LM.DiskCache.context() == epoch do
-        File.rename(temporary, destination)
-      else
-        {:error, :stale_cache}
-      end
-
-    {:reply, result, state}
-  end
-
-  def handle_call(:disk_publication_barrier, _from, state), do: {:reply, :ok, state}
-
-  def handle_call({:fetch, tid, key}, _from, %{table: tid} = state) do
-    case :ets.lookup(tid, key) do
-      [{^key, value, age}] ->
-        state = visit(state, key, :gb_trees.delete(age, state.order))
-        true = :ets.update_element(tid, key, {3, state.sequence})
-        {:reply, {:hit, value}, state}
-
-      [] ->
-        {:reply, :miss, state}
-    end
-  end
-
-  def handle_call({:fetch, _tid, _key}, _from, state), do: {:reply, :miss, state}
-
   def handle_call({:put, tid, key, value}, _from, %{table: tid} = state) do
     order =
       if :ets.member(tid, key) do
@@ -107,6 +86,21 @@ defmodule Dspy.LM.Cache do
 
   def handle_call({:put, _tid, _key, _value}, _from, state), do: {:reply, :ok, state}
 
+  @impl true
+  def handle_cast({:touch, tid, key}, %{table: tid} = state) do
+    case :ets.lookup(tid, key) do
+      [{^key, _value, age}] ->
+        state = visit(state, key, :gb_trees.delete(age, state.order))
+        true = :ets.update_element(tid, key, {3, state.sequence})
+        {:noreply, state}
+
+      [] ->
+        {:noreply, state}
+    end
+  end
+
+  def handle_cast({:touch, _tid, _key}, state), do: {:noreply, state}
+
   defp configured_limit do
     case Application.get_env(:dspy, @limit_key) do
       limit when is_integer(limit) and limit > 0 -> limit
@@ -115,7 +109,7 @@ defmodule Dspy.LM.Cache do
   end
 
   defp empty_cache(limit) do
-    :ets.new(@table, [:named_table, :set, :protected])
+    :ets.new(@table, [:named_table, :set, :protected, read_concurrency: true])
     %{table: table_ref(), limit: limit, order: :gb_trees.empty(), sequence: 0}
   end
 
