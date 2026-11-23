@@ -154,7 +154,10 @@ defmodule Dspy.Embeddings.Batcher do
   defp flush(state) do
     if state.timer, do: Process.cancel_timer(state.timer)
     {batch, rest} = state.pending |> Enum.reverse() |> Enum.split(state.max_batch_size)
-    batch = Enum.filter(batch, fn {_text, {pid, _}} -> Process.alive?(pid) end)
+
+    batch =
+      Enum.filter(batch, fn {_text, {pid, _}} -> node(pid) != node() or Process.alive?(pid) end)
+
     state = %{state | pending: Enum.reverse(rest), count: length(rest), timer: nil}
 
     case batch do
@@ -163,9 +166,11 @@ defmodule Dspy.Embeddings.Batcher do
 
       _ ->
         {queries, callers} = Enum.unzip(batch)
+        batcher_pid = self()
 
         task =
           Task.Supervisor.async_nolink(Dspy.TaskSupervisor, fn ->
+            Dspy.ProcessOwnership.watch(batcher_pid, self(), :kill)
             run_batch(state.index, queries, state.include_scores)
           end)
 

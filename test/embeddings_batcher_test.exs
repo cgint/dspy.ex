@@ -139,6 +139,15 @@ defmodule Dspy.EmbeddingsBatcherTest do
     refute_received {:embedded, ["west"]}
   end
 
+  test "killing the batcher kills its blocked worker" do
+    batcher = start_batcher(max_wait_ms: 0)
+    spawn(fn -> Batcher.query(batcher, "slow") end)
+    assert_receive {:blocked, worker}, 2_000
+    ref = Process.monitor(worker)
+    Process.exit(batcher, :kill)
+    assert_receive {:DOWN, ^ref, :process, ^worker, :killed}, 2_000
+  end
+
   defp start_batcher(opts) do
     batcher =
       start_supervised!(%{
