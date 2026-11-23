@@ -55,7 +55,12 @@ defmodule Dspy.LM do
 
   @doc "Returns whether the LM handles transport retries itself."
   @spec owns_transport_retries?(term()) :: boolean()
-  def owns_transport_retries?(%Dspy.LM.ReqLLM{}), do: true
+  def owns_transport_retries?(%Dspy.LM.ReqLLM{
+        client_module: ReqLLM,
+        generation_module: ReqLLM.Generation
+      }),
+      do: true
+
   def owns_transport_retries?(_), do: false
 
   @doc """
