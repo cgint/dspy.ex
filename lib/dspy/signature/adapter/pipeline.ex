@@ -912,14 +912,11 @@ defmodule Dspy.Signature.Adapter.Pipeline do
     end
   end
 
-  defp invoke_lm(request, %{lm: bound_lm, on_delta: on_delta} = options)
+  defp invoke_lm(_request, %{lm: nil}), do: {:error, :no_lm_configured}
+
+  defp invoke_lm(request, %{lm: lm, on_delta: on_delta} = options)
        when is_function(on_delta, 1) do
-    lm = if is_nil(bound_lm), do: Settings.get(:lm), else: bound_lm
-
     case {lm, options.on_cache_hit} do
-      {nil, _} ->
-        {:error, :no_lm_configured}
-
       {lm, nil} ->
         LM.stream_generate(lm, request, on_delta)
 
