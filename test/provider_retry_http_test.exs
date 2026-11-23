@@ -39,6 +39,10 @@ defmodule Dspy.ProviderRetryHTTPTest do
       do: ~s({"error":{"message":"Offline response","type":"probe"}})
   end
 
+  defmodule UnsupportedGeneration do
+    def generate_object(_, _, _, _), do: {:error, :unsupported_schema}
+  end
+
   setup do
     previous_sleep = Application.fetch_env(:dspy, :predict_retry_sleep_ms)
     Application.put_env(:dspy, :predict_retry_sleep_ms, 0)
@@ -78,6 +82,35 @@ defmodule Dspy.ProviderRetryHTTPTest do
 
   test "mixed ReqLLM uses the text client retry budget" do
     assert {:error, %ReqLLM.Error.API.Request{status: 429}} = predict([429], 3, [], __MODULE__)
+    for _ <- 1..4, do: assert_received({:http_attempt, 429})
+    refute_received {:http_attempt, _}
+  end
+
+  test "native schema fallback uses only the text client retry budget" do
+    Process.put(OfflineHTTP, [429])
+
+    lm =
+      Dspy.LM.ReqLLM.new(
+        model: "openai:gpt-4.1-mini",
+        generation_module: UnsupportedGeneration,
+        default_opts: [
+          api_key: "fake-offline-key",
+          base_url: "http://127.0.0.1:1",
+          req_http_options: [adapter: OfflineHTTP]
+        ]
+      )
+
+    predictor =
+      Dspy.predict(Signature,
+        lm: lm,
+        adapter: Dspy.Signature.Adapters.JSONAdapter,
+        max_retries: 3,
+        max_output_retries: 0
+      )
+
+    assert {:error, %ReqLLM.Error.API.Request{status: 429}} =
+             Dspy.context([cache: false], fn -> Dspy.call(predictor, %{question: "Offline"}) end)
+
     for _ <- 1..4, do: assert_received({:http_attempt, 429})
     refute_received {:http_attempt, _}
   end

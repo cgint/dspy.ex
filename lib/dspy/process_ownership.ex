@@ -22,11 +22,7 @@ defmodule Dspy.ProcessOwnership do
       end
     end
 
-    if Process.whereis(Dspy.TaskSupervisor) do
-      {:ok, pid} = Task.Supervisor.start_child(Dspy.TaskSupervisor, watcher)
-      pid
-    else
-      spawn(watcher)
-    end
+    {:ok, pid} = Task.Supervisor.start_child(Dspy.TaskSupervisor, watcher)
+    pid
   end
 end

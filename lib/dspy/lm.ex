@@ -66,7 +66,7 @@ defmodule Dspy.LM do
   @doc false
   def owns_transport_retries?(%Dspy.LM.ReqLLM{} = lm, request) do
     case Dspy.LM.ReqLLM.native_object_contract(request, lm.model) do
-      {:ok, _} -> lm.generation_module == ReqLLM.Generation
+      {:ok, _} -> lm.generation_module == ReqLLM.Generation or lm.client_module == ReqLLM
       _ -> lm.client_module == ReqLLM
     end
   end
