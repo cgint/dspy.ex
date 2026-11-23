@@ -76,7 +76,7 @@ defmodule Dspy.Signature.Adapter.Pipeline do
     resolved_lm = lm || if(Process.whereis(Settings), do: Settings.get(:lm))
 
     lm_options = %{
-      lm: lm,
+      lm: resolved_lm,
       on_delta: on_delta,
       on_cache_hit: on_cache_hit,
       count: count,
