@@ -33,7 +33,8 @@ defmodule Dspy.SettingsRestartTest do
     ref = Process.monitor(old_pid)
     Process.exit(old_pid, :kill)
     assert_receive {:DOWN, ^ref, :process, ^old_pid, :killed}
-    assert eventually_restarted(old_pid, 100)
+    assert pid = eventually_restarted(old_pid, 100)
+    :sys.get_state(pid)
 
     assert %Dspy.Settings{
              lm: {:boot_lm, [api_key: "key", model: "model"]},
@@ -47,7 +48,7 @@ defmodule Dspy.SettingsRestartTest do
   defp eventually_restarted(old, attempts) do
     case Process.whereis(Dspy.Settings) do
       pid when is_pid(pid) and pid != old ->
-        true
+        pid
 
       _ ->
         Process.sleep(10)

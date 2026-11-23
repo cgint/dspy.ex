@@ -10,8 +10,8 @@ defmodule Dspy.Application do
       {DynamicSupervisor, name: Dspy.HistoryCaptureSupervisor, strategy: :one_for_one},
       {Dspy.LM.Cache, []},
       {Dspy.LM.DiskCache, []},
-      {Dspy.Settings, []},
-      {Dspy.LM.History, []}
+      {Dspy.LM.History, []},
+      {Dspy.Settings, []}
     ]
 
     opts = [strategy: :one_for_one, name: Dspy.Supervisor]

@@ -61,7 +61,7 @@ defmodule Dspy.Settings do
   @doc """
   Configure global DSPy settings.
   """
-  @spec configure(keyword()) :: :ok
+  @spec configure(keyword() | map()) :: :ok
   def configure(opts) do
     GenServer.call(__MODULE__, {:configure, opts})
   end
@@ -80,6 +80,8 @@ defmodule Dspy.Settings do
   Process-scoped overrides (see `context/2` / `with_overrides/2`) are
   merged on top of the global settings, and the returned value keeps
   the `%__MODULE__{}` struct type.
+
+  When `Dspy.Settings` is not started, defaults plus scoped overrides are returned.
   """
   @spec get() :: t()
   def get do
@@ -92,6 +94,8 @@ defmodule Dspy.Settings do
 
   Process-scoped overrides (see `context/2` / `with_overrides/2`) take
   precedence over the global setting for this key.
+
+  When `Dspy.Settings` is not started, defaults plus scoped overrides are returned.
   """
   @spec get(atom()) :: term()
   def get(key) do
