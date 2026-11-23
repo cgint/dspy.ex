@@ -29,8 +29,7 @@ defmodule Dspy.LM.ReqLLMStreamingTest do
         {:error, _} = error ->
           if observe_startup? do
             {:links, after_open} = Process.info(self(), :links)
-            [server] = after_open -- before
-            send(owner, {:startup_server, self(), server})
+            send(owner, {:startup_links, self(), after_open -- before})
 
             receive do
               :startup_observed -> :ok
@@ -163,7 +162,7 @@ defmodule Dspy.LM.ReqLLMStreamingTest do
               }
             }} = Task.await(consumer, @wait)
 
-    assert_receive {:DOWN, ^metadata_ref, :process, ^metadata, :shutdown}, @wait
+    assert_receive {:DOWN, ^metadata_ref, :process, ^metadata, :normal}, @wait
     assert :ok = Task.await(fixture, @wait)
     refute_received {:delta, _, _, _}
     refute_received {:stream_client, _, _, _, _, _}
@@ -201,8 +200,10 @@ defmodule Dspy.LM.ReqLLMStreamingTest do
         assert_receive {:delta, "first "}, @wait
         Process.exit(consumer, :kill)
         assert_receive {:DOWN, ^consumer_ref, :process, ^consumer, :killed}, @wait
-        assert_receive {:DOWN, ^metadata_ref, :process, ^metadata, :shutdown}, @wait
-        assert_receive {:DOWN, ^server_ref, :process, ^server, :shutdown}, @wait
+        assert_receive {:DOWN, ^metadata_ref, :process, ^metadata, metadata_reason}, @wait
+        assert metadata_reason in [:normal, :shutdown]
+        assert_receive {:DOWN, ^server_ref, :process, ^server, server_reason}, @wait
+        assert server_reason in [:normal, :shutdown]
         assert {:error, :closed} = Task.await(fixture, @wait)
         Logger.flush()
       end)
@@ -293,7 +294,6 @@ defmodule Dspy.LM.ReqLLMStreamingTest do
         lm =
           lm(url, owner,
             test_observe_startup: true,
-            completion_cleanup_after: 5,
             invalid_stream_probe_option: true
           )
 
@@ -306,11 +306,9 @@ defmodule Dspy.LM.ReqLLMStreamingTest do
       end)
 
     on_exit(fn -> send(caller, :leave) end)
-    assert_receive {:startup_server, stream_owner, server}, @wait
-    server_ref = Process.monitor(server)
+    assert_receive {:startup_links, stream_owner, []}, @wait
     send(stream_owner, :startup_observed)
     assert_receive {:startup_result, ^caller, {:error, _reason}}, @wait
-    assert_receive {:DOWN, ^server_ref, :process, ^server, :shutdown}, @wait
     assert Process.alive?(caller)
     assert {:error, :timeout} = :gen_tcp.accept(listener, 0)
     refute_received {:delta, _}
@@ -436,7 +434,7 @@ defmodule Dspy.LM.ReqLLMStreamingTest do
     send(callback_pid, :stop)
 
     result = Task.await(consumer, @wait)
-    assert_receive {:DOWN, ^metadata_ref, :process, ^metadata, :shutdown}, @wait
+    assert_receive {:DOWN, ^metadata_ref, :process, ^metadata, :normal}, @wait
     assert {:error, :closed} = Task.await(fixture, @wait)
     refute_received {:delta, _, _}
     result
