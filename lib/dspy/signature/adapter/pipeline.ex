@@ -73,6 +73,7 @@ defmodule Dspy.Signature.Adapter.Pipeline do
 
     count = Map.get(request_options, :n)
     lm = choice_lm(Keyword.get(opts, :lm), count)
+    resolved_lm = lm || if(Process.whereis(Settings), do: Settings.get(:lm))
 
     lm_options = %{
       lm: lm,
@@ -80,7 +81,11 @@ defmodule Dspy.Signature.Adapter.Pipeline do
       on_cache_hit: on_cache_hit,
       count: count,
       prediction_signature: Keyword.get(opts, :prediction_signature, signature),
-      max_retries: if(on_delta, do: 0, else: Keyword.get(opts, :max_retries, 3)),
+      max_retries:
+        if(on_delta || LM.owns_transport_retries?(resolved_lm),
+          do: 0,
+          else: Keyword.get(opts, :max_retries, 3)
+        ),
       request_options: force_tool(request_options, Keyword.get(opts, :forced_tool)),
       prompt_advice: Keyword.get(opts, :prompt_advice),
       on_terminal_parse_failure: Keyword.get(opts, :on_terminal_parse_failure),

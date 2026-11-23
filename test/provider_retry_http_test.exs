@@ -69,6 +69,13 @@ defmodule Dspy.ProviderRetryHTTPTest do
     refute_received {:http_attempt, _}
   end
 
+  test "persistent 429 uses only the ReqLLM transport retry budget" do
+    assert {:error, %ReqLLM.Error.API.Request{status: 429}} = predict([429], 3)
+
+    for _ <- 1..4, do: assert_received({:http_attempt, 429})
+    refute_received {:http_attempt, _}
+  end
+
   test "the predictor retries a 503 once and parses the successful HTTP response" do
     assert {:ok, %Dspy.Prediction{attrs: %{answer: "ok"}}} = predict([503, 200], 1)
 
