@@ -43,6 +43,11 @@ defmodule Dspy.MixProject do
       # LLM provider access (unified client; no provider maintenance in `dspy.ex`)
       {:req_llm, "~> 1.31"},
 
+      # RetryPolicy matches Req.TransportError and Req.HTTPError directly.
+      {:req, "~> 0.7"},
+      # DiskCache.Identity inspects LLMDB.provider/1 and LLMDB.Model directly.
+      {:llm_db, "~> 2026.11"},
+
       # Security floors: Finch permits older Mint and HPAX versions.
       # Keep these floors until its transitive requirements include the fixes.
       {:mint, ">= 1.11.0 and < 2.0.0"},
