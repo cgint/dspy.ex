@@ -8,6 +8,8 @@ defmodule Dspy.Application do
   @impl true
   def start(_type, _args) do
     children = [
+      {Task.Supervisor, name: Dspy.TaskSupervisor},
+      {DynamicSupervisor, name: Dspy.HistoryCaptureSupervisor, strategy: :one_for_one},
       {Dspy.LM.Cache, []},
       {Dspy.LM.DiskCache, []},
       {Dspy.Settings, []},

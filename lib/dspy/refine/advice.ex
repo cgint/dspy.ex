@@ -107,8 +107,8 @@ defmodule Dspy.Refine.Advice do
     caller = self()
     reply = make_ref()
 
-    {coordinator, monitor} =
-      spawn_monitor(fn ->
+    {:ok, coordinator} =
+      Task.Supervisor.start_child(Dspy.TaskSupervisor, fn ->
         advice =
           run_advisor(caller, fn ->
             Context.with_context(context, fn ->
@@ -118,6 +118,8 @@ defmodule Dspy.Refine.Advice do
 
         send(caller, {reply, advice})
       end)
+
+    monitor = Process.monitor(coordinator)
 
     receive do
       {^reply, advice} ->
@@ -133,7 +135,13 @@ defmodule Dspy.Refine.Advice do
     caller_monitor = Process.monitor(caller)
     coordinator = self()
     reply = make_ref()
-    {worker, monitor} = spawn_monitor(fn -> send(coordinator, {reply, run.()}) end)
+
+    {:ok, worker} =
+      Task.Supervisor.start_child(Dspy.TaskSupervisor, fn ->
+        send(coordinator, {reply, run.()})
+      end)
+
+    monitor = Process.monitor(worker)
 
     receive do
       {^reply, advice} -> advice

@@ -32,7 +32,11 @@ defmodule Dspy.LM.HistoryCapture do
     unless is_boolean(include_payloads),
       do: raise(ArgumentError, "expected :include_payloads to be a boolean")
 
-    {:ok, collector} = GenServer.start(__MODULE__, {self(), max_entries})
+    {:ok, collector} =
+      DynamicSupervisor.start_child(
+        Dspy.HistoryCaptureSupervisor,
+        {__MODULE__, {self(), max_entries}}
+      )
 
     try do
       with_scopes([{collector, include_payloads}], fun)
@@ -81,6 +85,13 @@ defmodule Dspy.LM.HistoryCapture do
     # A worker can outlive the capture it inherited.
     :exit, _reason -> :ok
   end
+
+  @spec child_spec(term()) :: Supervisor.child_spec()
+  def child_spec(args),
+    do: %{id: __MODULE__, start: {__MODULE__, :start_link, [args]}, restart: :temporary}
+
+  @spec start_link(term()) :: GenServer.on_start()
+  def start_link(args), do: GenServer.start_link(__MODULE__, args)
 
   @impl true
   def init({owner, max_entries}) do
