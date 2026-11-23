@@ -14,6 +14,7 @@ defmodule Dspy.LM.DiskCache.Record do
     prompt_tokens_details completion_tokens_details
     cost total tokens tools images storage input_cost output_cost reasoning_cost total_cost
     line_items count id kind component quantity tool_usage image_usage
+    currency per rate pricing status priced usage_reported tool_use_input_tokens billing_usage_complete cache_read_tokens cache_write_tokens cache_write_tokens_by_ttl
   ]a
   @known_atoms Map.new(@atoms, &{Atom.to_string(&1), &1})
 
