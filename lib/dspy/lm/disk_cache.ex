@@ -274,8 +274,10 @@ defmodule Dspy.LM.DiskCache do
             result
 
           {:error, _reason, result} when result.bytes > state.limit ->
-            File.rm(path)
-            drop_entry(result, key)
+            case remove_record(result, key) do
+              {:ok, updated} -> updated
+              {:error, _reason} -> result
+            end
 
           {:error, _reason, result} ->
             result
