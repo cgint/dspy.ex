@@ -15,7 +15,6 @@ defmodule Dspy.LM.ReqLLMStreamingTest do
   defmodule ObservedClient do
     def stream_text(model, input, opts) do
       {owner, opts} = Keyword.pop!(opts, :test_observer)
-      {observe_startup?, opts} = Keyword.pop(opts, :test_observe_startup, false)
       {:links, before} = Process.info(self(), :links)
       send(owner, {:stream_client, model, input, opts, self(), Dspy.Settings.get(:temperature)})
 
@@ -27,17 +26,6 @@ defmodule Dspy.LM.ReqLLMStreamingTest do
           result
 
         {:error, _} = error ->
-          if observe_startup? do
-            {:links, after_open} = Process.info(self(), :links)
-            send(owner, {:startup_links, self(), after_open -- before})
-
-            receive do
-              :startup_observed -> :ok
-            after
-              5_000 -> raise "test never observed the startup failure"
-            end
-          end
-
           error
       end
     end
@@ -289,13 +277,20 @@ defmodule Dspy.LM.ReqLLMStreamingTest do
     {listener, url} = listener()
     owner = self()
 
+    hook = fn _request ->
+      send(owner, {:startup_server, self()})
+
+      receive do
+        :fail_startup -> raise "synthetic startup failure"
+      after
+        5_000 -> raise "test never released startup"
+      end
+    end
+
     {caller, caller_ref} =
       spawn_monitor(fn ->
         lm =
-          lm(url, owner,
-            test_observe_startup: true,
-            invalid_stream_probe_option: true
-          )
+          lm(url, owner, on_finch_request: hook)
 
         result = LM.stream_generate(lm, @request, fn delta -> send(owner, {:delta, delta}) end)
         send(owner, {:startup_result, self(), result})
@@ -306,9 +301,11 @@ defmodule Dspy.LM.ReqLLMStreamingTest do
       end)
 
     on_exit(fn -> send(caller, :leave) end)
-    assert_receive {:startup_links, stream_owner, []}, @wait
-    send(stream_owner, :startup_observed)
+    assert_receive {:startup_server, server}, @wait
+    server_ref = Process.monitor(server)
+    send(server, :fail_startup)
     assert_receive {:startup_result, ^caller, {:error, _reason}}, @wait
+    assert_receive {:DOWN, ^server_ref, :process, ^server, _reason}, @wait
     assert Process.alive?(caller)
     assert {:error, :timeout} = :gen_tcp.accept(listener, 0)
     refute_received {:delta, _}

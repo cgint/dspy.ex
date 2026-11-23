@@ -46,7 +46,9 @@ defmodule Dspy.MixProject do
       # Security floors (SEC-1, 2026-09-28): req/mint/hpax reach :dspy transitively
       # through req_llm/finch. These direct floors pin consumers to advisory-fixed
       # versions so `mix deps` can never resolve a vulnerable version through the
-      # wider transitive ranges (req_llm allows req >= 0.5.0).
+      # wider transitive ranges. ReqLLM 1.31 requires req ~> 0.7, so the req
+      # floor is redundant at that version; Finch still permits mint below 1.11,
+      # and older permitted Mint versions can permit hpax below 1.1.
       #   req  >= 0.6.1: EEF-CVE-2026-49755 (decompression bomb) + EEF-CVE-2026-49756
       #                  (multipart header injection)
       #   mint >= 1.11.0: 10+ advisories incl. HTTP/2 smuggling + request splitting
