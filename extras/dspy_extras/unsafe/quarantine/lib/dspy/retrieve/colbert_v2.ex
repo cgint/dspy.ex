@@ -190,18 +190,18 @@ defmodule Dspy.Retrieve.ColBERTv2 do
   @impl true
   def retrieve(_query, _opts \\ []) do
     {:error,
-     "ColBERTv2 is a placeholder in core :dspy (use a custom Retriever + RAGPipeline; see docs/OVERVIEW.md)"}
+     "ColBERTv2 is a quarantined extras placeholder (use a custom Retriever + RAGPipeline; see docs/OVERVIEW.md)"}
   end
 
   @impl true
   def index_documents(_documents, _opts \\ []) do
     {:error,
-     "ColBERTv2 is a placeholder in core :dspy (indexing not implemented; see docs/OVERVIEW.md)"}
+     "ColBERTv2 is a quarantined extras placeholder (indexing not implemented; see docs/OVERVIEW.md)"}
   end
 
   @impl true
   def clear_index(_opts \\ []) do
     {:error,
-     "ColBERTv2 is a placeholder in core :dspy (clear_index not implemented; see docs/OVERVIEW.md)"}
+     "ColBERTv2 is a quarantined extras placeholder (clear_index not implemented; see docs/OVERVIEW.md)"}
   end
 end

@@ -1,7 +1,7 @@
 defmodule Dspy.Retrieve.ColBERTv2StubTest do
   use ExUnit.Case, async: true
 
-  test "ColBERTv2 placeholder does not crash when Retrieve.VectorStore is not started" do
+  test "quarantined ColBERTv2 placeholder returns errors" do
     assert {:error, msg} = Dspy.Retrieve.ColBERTv2.retrieve("hello")
     assert is_binary(msg)
     assert msg =~ "placeholder"

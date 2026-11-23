@@ -408,8 +408,7 @@ defmodule Dspy.RefineFeedbackTest do
     on_exit(fn -> if Process.alive?(caller), do: Process.exit(caller, :kill) end)
     assert_receive {:request, :advisor, _, _, worker}, 1_000
     on_exit(fn -> if Process.alive?(worker), do: Process.exit(worker, :kill) end)
-    {:monitors, monitors} = Process.info(caller, :monitors)
-    [{:process, coordinator}] = monitors
+    coordinator = await_coordinator(caller, 100)
     monitor = Process.monitor(worker)
     Process.exit(coordinator, :kill)
     assert_receive {:DOWN, ^monitor, :process, ^worker, :killed}, 1_000
@@ -439,6 +438,19 @@ defmodule Dspy.RefineFeedbackTest do
       assert_received {:request, :program, ^first, _, _}
     end
   end
+
+  defp await_coordinator(caller, attempts) when attempts > 0 do
+    case Process.info(caller, :monitors) do
+      {:monitors, [{:process, coordinator}]} ->
+        coordinator
+
+      _ ->
+        Process.sleep(10)
+        await_coordinator(caller, attempts - 1)
+    end
+  end
+
+  defp await_coordinator(_caller, 0), do: flunk("caller did not monitor coordinator")
 
   defp report(request), do: request |> primary() |> Jason.decode!()
   defp primary(request), do: elem(AdapterPipeline.primary_prompt_text(request), 1)
