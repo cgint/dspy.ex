@@ -62,4 +62,36 @@ defmodule Dspy.Evaluate.SupervisedConcurrencyTest do
     assert_receive {:budget, 1}, 1000
     refute Process.alive?(first)
   end
+
+  for kind <- [:evaluate, :parallel] do
+    test "caller death stops an unscoped #{kind} worker" do
+      parent = self()
+
+      caller =
+        spawn(fn ->
+          program = %KillProgram{test_pid: parent}
+
+          case unquote(kind) do
+            :evaluate ->
+              Dspy.Evaluate.evaluate(
+                program,
+                [Dspy.Example.new(%{question: "q"})],
+                fn _, _ -> 1 end,
+                timeout: :infinity
+              )
+
+            :parallel ->
+              Dspy.Parallel.run(Dspy.Parallel.new(timeout: :infinity), [
+                {program, %{question: "q"}}
+              ])
+          end
+        end)
+
+      assert_receive {:worker, worker}, 1000
+      on_exit(fn -> if Process.alive?(worker), do: Process.exit(worker, :kill) end)
+      monitor = Process.monitor(worker)
+      Process.exit(caller, :kill)
+      assert_receive {:DOWN, ^monitor, :process, ^worker, :killed}, 1000
+    end
+  end
 end

@@ -392,6 +392,29 @@ defmodule Dspy.RefineFeedbackTest do
     assert_receive {:DOWN, ^monitor, :process, ^worker, :killed}, 1_000
   end
 
+  test "a killed coordinator stops its advisor" do
+    predictor =
+      Predict.new(QA, adapter: ChatAdapter, lm: lm(:program, fn _, _ -> answer("low") end))
+
+    advisor =
+      lm(:advisor, fn _, _ ->
+        receive do
+          :never_sent -> {:ok, "{}"}
+        end
+      end)
+
+    refiner = refiner(predictor, advisor)
+    caller = spawn(fn -> call(refiner, %{question: "q"}) end)
+    on_exit(fn -> if Process.alive?(caller), do: Process.exit(caller, :kill) end)
+    assert_receive {:request, :advisor, _, _, worker}, 1_000
+    on_exit(fn -> if Process.alive?(worker), do: Process.exit(worker, :kill) end)
+    {:monitors, monitors} = Process.info(caller, :monitors)
+    [{:process, coordinator}] = monitors
+    monitor = Process.monitor(worker)
+    Process.exit(coordinator, :kill)
+    assert_receive {:DOWN, ^monitor, :process, ^worker, :killed}, 1_000
+  end
+
   test "invalid replies have no effect on the next prompt" do
     predictor =
       Predict.new(QA, adapter: ChatAdapter, lm: lm(:program, fn _, _ -> answer("low") end))

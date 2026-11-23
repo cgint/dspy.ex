@@ -1,7 +1,7 @@
 defmodule Dspy.Refine.Advice do
   @moduledoc false
 
-  alias Dspy.{Context, LM, Settings}
+  alias Dspy.{Context, LM, ProcessOwnership, Settings}
   alias Dspy.Module.PredictorSlots
   alias Dspy.Signature.{AdapterPipeline, PromptPreview}
 
@@ -138,6 +138,8 @@ defmodule Dspy.Refine.Advice do
 
     {:ok, worker} =
       Task.Supervisor.start_child(Dspy.TaskSupervisor, fn ->
+        ProcessOwnership.watch(coordinator, self(), :kill)
+        ProcessOwnership.watch(caller, self(), :kill)
         send(coordinator, {reply, run.()})
       end)
 
