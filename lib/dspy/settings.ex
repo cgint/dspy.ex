@@ -61,6 +61,7 @@ defmodule Dspy.Settings do
   @doc """
   Configure global DSPy settings.
   """
+  @spec configure(keyword()) :: :ok
   def configure(opts) do
     GenServer.call(__MODULE__, {:configure, opts})
   end
@@ -80,8 +81,9 @@ defmodule Dspy.Settings do
   merged on top of the global settings, and the returned value keeps
   the `%__MODULE__{}` struct type.
   """
+  @spec get() :: t()
   def get do
-    base = GenServer.call(__MODULE__, :get)
+    base = read_settings()
     apply_overrides(base)
   end
 
@@ -91,60 +93,38 @@ defmodule Dspy.Settings do
   Process-scoped overrides (see `context/2` / `with_overrides/2`) take
   precedence over the global setting for this key.
   """
+  @spec get(atom()) :: term()
   def get(key) do
     overrides = Process.get(@overrides_key)
 
     if is_map(overrides) and Map.has_key?(overrides, key) do
       Map.get(overrides, key)
     else
-      GenServer.call(__MODULE__, {:get, key})
+      Map.get(read_settings(), key)
     end
   end
 
   @doc false
+  @spec module_observability() :: {term(), term(), boolean()}
   def module_observability do
-    case current_overrides() do
-      %{track_usage: track_usage, callbacks: callbacks} = overrides ->
-        {track_usage, callbacks, telemetry_enabled?(overrides)}
-
-      overrides ->
-        {track_usage, callbacks, telemetry} = GenServer.call(__MODULE__, :module_observability)
-
-        {Map.get(overrides, :track_usage, track_usage), Map.get(overrides, :callbacks, callbacks),
-         Map.get(overrides, :telemetry, telemetry) == true}
-    end
+    settings = get()
+    {settings.track_usage, settings.callbacks, settings.telemetry == true}
   end
 
   @doc false
+  @spec lifecycle_observability() :: {term(), boolean()}
   def lifecycle_observability do
-    case current_overrides() do
-      %{callbacks: callbacks} = overrides ->
-        {callbacks, telemetry_enabled?(overrides)}
-
-      overrides ->
-        {callbacks, telemetry} =
-          if Process.whereis(__MODULE__),
-            do: GenServer.call(__MODULE__, :lifecycle_observability),
-            else: {[], false}
-
-        {Map.get(overrides, :callbacks, callbacks),
-         Map.get(overrides, :telemetry, telemetry) == true}
-    end
+    settings = get()
+    {settings.callbacks, settings.telemetry == true}
   end
 
-  defp telemetry_enabled?(overrides) do
-    case Map.fetch(overrides, :telemetry) do
-      {:ok, value} -> value == true
-      :error -> read_telemetry_flag()
+  defp read_settings do
+    case :ets.lookup(@telemetry_table, :settings) do
+      [{:settings, settings}] -> settings
+      [] -> %__MODULE__{}
     end
-  end
-
-  # When all the other settings are scoped, preserve their server-free lookup.
-  # This table belongs to Settings and disappears with its owner.
-  defp read_telemetry_flag do
-    :ets.lookup(@telemetry_table, :enabled) == [{:enabled, true}]
   rescue
-    ArgumentError -> false
+    ArgumentError -> %__MODULE__{}
   end
 
   @doc false
@@ -262,9 +242,9 @@ defmodule Dspy.Settings do
 
   @impl true
   def init(opts) do
-    settings = struct(__MODULE__, opts)
+    settings = struct(__MODULE__, Keyword.merge(boot_options(), opts))
     :ets.new(@telemetry_table, [:named_table, :set, :protected, read_concurrency: true])
-    :ets.insert(@telemetry_table, {:enabled, settings.telemetry == true})
+    :ets.insert(@telemetry_table, {:settings, settings})
     {:ok, settings}
   end
 
@@ -276,30 +256,34 @@ defmodule Dspy.Settings do
       :ok = Dspy.LM.Cache.clear()
     end
 
-    if settings.telemetry != new_settings.telemetry do
-      :ets.insert(@telemetry_table, {:enabled, new_settings.telemetry == true})
-    end
+    :ets.insert(@telemetry_table, {:settings, new_settings})
 
     {:reply, :ok, new_settings}
   end
 
-  @impl true
-  def handle_call(:get, _from, settings) do
-    {:reply, settings, settings}
-  end
+  defp boot_options do
+    case Application.get_env(:dspy, :lm) do
+      %{module: module, api_key: api_key, model: model} = config ->
+        opts = [
+          lm: module.new(api_key: api_key, model: model),
+          max_tokens: Map.get(config, :max_tokens),
+          max_completion_tokens: Map.get(config, :max_completion_tokens),
+          temperature: Map.get(config, :temperature)
+        ]
 
-  @impl true
-  def handle_call({:get, key}, _from, settings) do
-    value = Map.get(settings, key)
-    {:reply, value, settings}
-  end
+        case Application.get_env(:dspy, :adapter) do
+          nil -> opts
+          adapter -> Keyword.put(opts, :adapter, adapter)
+        end
 
-  def handle_call(:module_observability, _from, settings) do
-    {:reply, {settings.track_usage, settings.callbacks, settings.telemetry}, settings}
-  end
-
-  def handle_call(:lifecycle_observability, _from, settings) do
-    {:reply, {settings.callbacks, settings.telemetry}, settings}
+      _ ->
+        []
+    end
+  rescue
+    error ->
+      require Logger
+      Logger.error("Failed to configure LM:\n" <> Exception.format(:error, error, __STACKTRACE__))
+      []
   end
 
   defp should_clear_cache?(old_settings, new_settings, opts) do
