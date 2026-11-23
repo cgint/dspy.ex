@@ -10,7 +10,9 @@ defmodule Dspy.ProgramStream.Channel do
     end
   end
 
-  # Keep the event in the producer until granted. The next consumer pull acknowledges it.
+  # Composite streams have concurrent producers, unlike the direct worker. Granting
+  # one offer at a time bounds delivery and monitoring that producer lets us retry
+  # if it dies before sending its event. The next consumer pull acknowledges it.
   defp publish(inbox, tag, owner, event) do
     producer = self()
     nonce = make_ref()

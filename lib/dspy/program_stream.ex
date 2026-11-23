@@ -319,18 +319,20 @@ defmodule Dspy.ProgramStream do
   defp stop(%{worker: {worker, worker_ref}, cancel_reason: cancel_reason} = state) do
     close_channel(state)
     Process.exit(worker, cancel_reason)
-    await_stop(worker, worker_ref)
+
+    receive do
+      {:DOWN, ^worker_ref, :process, ^worker, _reason} -> :ok
+    after
+      200 ->
+        Process.exit(worker, :kill)
+        await_stop(worker, worker_ref)
+    end
   end
 
   defp close_channel(%{channel: nil}), do: :ok
   defp close_channel(%{tag: tag, worker: {_worker, inbox}}), do: Channel.close(tag, inbox)
 
-  defp reject_foreign_consumer!(%{worker: worker, cancel_reason: cancel_reason}) do
-    case worker do
-      {pid, _ref} -> Process.exit(pid, cancel_reason)
-      nil -> :ok
-    end
-
+  defp reject_foreign_consumer!(_state) do
     raise ArgumentError, "streamify continuations belong to their original consumer"
   end
 
