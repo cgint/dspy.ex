@@ -3,7 +3,7 @@ defmodule Dspy.Embeddings.Batcher do
   Coalesce concurrent queries against one corpus embedding index.
 
   The batcher is a caller-owned process linked to its starter. It runs one
-  batch at a time in its own process using the index's configured embedder.
+  batch at a time in a supervised worker using the index's configured embedder.
   Call `stop/1` when finished. A normal exit of the starter leaves the
   batcher running.
   """
@@ -19,7 +19,8 @@ defmodule Dspy.Embeddings.Batcher do
   measures how long to collect queries from the first query accepted into
   a batch. Zero runs accepted queries immediately. The embedder's runtime
   is additional. Set `:include_scores` to `true` to include similarity scores
-  in each caller's prediction.
+  in each caller's prediction. `:max_pending` limits queued requests (default
+  1024); additional requests return `{:error, :batcher_overloaded}`.
   """
   @spec start_link(Embeddings.t(), keyword()) :: GenServer.on_start()
   def start_link(%Embeddings{} = index, opts \\ []) do
@@ -51,7 +52,7 @@ defmodule Dspy.Embeddings.Batcher do
   @doc """
   Stop the batcher and release pending callers.
 
-  If an embedder is running, stop waits for that batch to finish. Calling
+  An in-flight worker is stopped with the batcher. Calling
   `stop/1` after the batcher has exited raises a process exit.
   """
   @spec stop(pid()) :: :ok
@@ -59,17 +60,25 @@ defmodule Dspy.Embeddings.Batcher do
 
   @impl GenServer
   def init({index, opts}) do
-    state = %{index: index, pending: [], count: 0, timer: nil}
+    state = %{index: index, pending: [], count: 0, timer: nil, worker: nil}
     {:ok, Map.merge(state, Map.new(opts))}
   end
 
   @impl GenServer
   def handle_call({:query, text}, from, state) do
+    if state.count >= state.max_pending do
+      {:reply, {:error, :batcher_overloaded}, state}
+    else
+      admit(text, from, state)
+    end
+  end
+
+  defp admit(text, from, state) do
     state = %{state | pending: [{text, from} | state.pending], count: state.count + 1}
 
     state =
       cond do
-        state.count == state.max_batch_size or state.max_wait_ms == 0 ->
+        state.count >= state.max_batch_size or state.max_wait_ms == 0 ->
           flush(state)
 
         state.count == 1 ->
@@ -87,14 +96,40 @@ defmodule Dspy.Embeddings.Batcher do
   def handle_info({:timeout, timer, :flush}, %{timer: timer} = state) when is_reference(timer),
     do: {:noreply, flush(state)}
 
+  def handle_info({ref, result}, %{worker: %{ref: ref, callers: callers}} = state) do
+    Process.demonitor(ref, [:flush])
+    reply_batch(callers, result)
+    {:noreply, flush(%{state | worker: nil})}
+  end
+
+  def handle_info(
+        {:DOWN, ref, :process, _pid, _reason},
+        %{worker: %{ref: ref, callers: callers}} = state
+      ) do
+    reply_batch(callers, {:error, :embedding_batch_failed})
+    {:noreply, flush(%{state | worker: nil})}
+  end
+
   def handle_info(_message, state), do: {:noreply, state}
+
+  @impl GenServer
+  def terminate(_reason, %{worker: worker}) do
+    if worker, do: Task.shutdown(worker.task, :brutal_kill)
+    :ok
+  end
 
   defp validate_options(opts) when is_integer(length(opts)) do
     with true <- Keyword.keyword?(opts),
          {:ok, opts} <-
-           Keyword.validate(opts, max_batch_size: 32, max_wait_ms: 100, include_scores: false),
+           Keyword.validate(opts,
+             max_batch_size: 32,
+             max_wait_ms: 100,
+             include_scores: false,
+             max_pending: 1024
+           ),
          size when is_integer(size) and size > 0 <- opts[:max_batch_size],
          true <- valid_wait?(opts[:max_wait_ms]),
+         pending when is_integer(pending) and pending > 0 <- opts[:max_pending],
          true <- is_boolean(opts[:include_scores]) do
       {:ok, opts}
     else
@@ -113,22 +148,39 @@ defmodule Dspy.Embeddings.Batcher do
     System.convert_time_unit(:erlang.system_info(:end_time), :native, :millisecond)
   end
 
+  defp flush(%{worker: worker} = state) when not is_nil(worker), do: state
+  defp flush(%{count: 0} = state), do: state
+
   defp flush(state) do
     if state.timer, do: Process.cancel_timer(state.timer)
-    {queries, callers} = state.pending |> Enum.reverse() |> Enum.unzip()
+    {batch, rest} = state.pending |> Enum.reverse() |> Enum.split(state.max_batch_size)
+    batch = Enum.filter(batch, fn {_text, {pid, _}} -> Process.alive?(pid) end)
+    state = %{state | pending: Enum.reverse(rest), count: length(rest), timer: nil}
 
-    case run_batch(state.index, queries, state.include_scores) do
-      {:ok, predictions} ->
-        Enum.each(Enum.zip(callers, predictions), fn {from, prediction} ->
-          GenServer.reply(from, {:ok, prediction})
-        end)
+    case batch do
+      [] ->
+        flush(state)
 
-      {:error, _reason} = error ->
-        Enum.each(callers, &GenServer.reply(&1, error))
+      _ ->
+        {queries, callers} = Enum.unzip(batch)
+
+        task =
+          Task.Supervisor.async_nolink(Dspy.TaskSupervisor, fn ->
+            run_batch(state.index, queries, state.include_scores)
+          end)
+
+        %{state | worker: %{ref: task.ref, task: task, callers: callers}}
     end
-
-    %{state | pending: [], count: 0, timer: nil}
   end
+
+  defp reply_batch(callers, {:ok, predictions}) do
+    Enum.each(Enum.zip(callers, predictions), fn {from, prediction} ->
+      GenServer.reply(from, {:ok, prediction})
+    end)
+  end
+
+  defp reply_batch(callers, {:error, _} = error),
+    do: Enum.each(callers, &GenServer.reply(&1, error))
 
   defp run_batch(index, queries, include_scores) do
     Embeddings.query_batch(index, queries, include_scores: include_scores)
