@@ -41,8 +41,7 @@ defmodule Dspy.MixProject do
       {:nimble_csv, "~> 1.2"},
 
       # LLM provider access (unified client; no provider maintenance in `dspy.ex`)
-      # Keep the revision already tested in mix.lock when consumers resolve dspy.ex.
-      {:req_llm, github: "agentjido/req_llm", ref: "66b40425a79d85a284dd99edbe1769d364c42066"},
+      {:req_llm, "~> 1.31"},
 
       # Security floors (SEC-1, 2026-09-28): req/mint/hpax reach :dspy transitively
       # through req_llm/finch. These direct floors pin consumers to advisory-fixed
@@ -61,13 +60,7 @@ defmodule Dspy.MixProject do
       # fixed versions (lib/ calls none of Req/Mint/HPAX directly).
       {:req, ">= 0.6.1 and < 1.0.0"},
       {:mint, ">= 1.11.0 and < 2.0.0"},
-      {:hpax, ">= 1.1.0 and < 2.0.0"},
-
-      # LLMDB 2026.5.2 emits atom and string runtime keys that Zoi 0.20
-      # rejects at startup. Keep the pinned ReqLLM floor.
-      # Remove after an upstream graph provides its own compatible constraint
-      # or fixes the collision, verified by a fresh Extras resolution.
-      {:zoi, ">= 0.14.0 and < 0.20.0"}
+      {:hpax, ">= 1.1.0 and < 2.0.0"}
 
       # NOTE: Local inference deps (Bumblebee/Nx/EXLA) are intentionally NOT
       # dependencies of core `:dspy`. See `docs/BUMBLEBEE.md`.
