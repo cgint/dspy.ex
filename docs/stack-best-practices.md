@@ -37,4 +37,3 @@ Every implementation slice (internal or delegated to Terra) must satisfy:
 3. **Typespecs & Static Checks:** Add `@spec` to every new or modified public function; keep `mix compile --warnings-as-errors` and `mix format --check-formatted` 100% clean (plus Credo/Dialyzer once enabled in `mix.exs`).
 4. **Async-First Tests:** Default new tests to `async: true` using explicit structs/opts or scoped `Dspy.context/2` — never mutate global `Dspy.configure/1` in new tests.
 5. **Evidence-Gated Acceptance:** No slice is accepted without passing focused tests, full `mix test`, and clean `git diff --stat` scoped strictly to the brief.
-

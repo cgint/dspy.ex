@@ -76,6 +76,12 @@ defmodule Dspy.ProviderRetryHTTPTest do
     refute_received {:http_attempt, _}
   end
 
+  test "mixed ReqLLM uses the text client retry budget" do
+    assert {:error, %ReqLLM.Error.API.Request{status: 429}} = predict([429], 3, [], __MODULE__)
+    for _ <- 1..4, do: assert_received({:http_attempt, 429})
+    refute_received {:http_attempt, _}
+  end
+
   test "ambient ReqLLM uses only its transport retry budget for persistent 429" do
     Process.put(OfflineHTTP, [429])
 
@@ -113,12 +119,13 @@ defmodule Dspy.ProviderRetryHTTPTest do
     refute_received {:http_attempt, _}
   end
 
-  defp predict(statuses, max_retries, http_opts \\ []) do
+  defp predict(statuses, max_retries, http_opts \\ [], generation_module \\ ReqLLM.Generation) do
     Process.put(OfflineHTTP, statuses)
 
     lm =
       Dspy.LM.ReqLLM.new(
         model: "openai:gpt-4.1-mini",
+        generation_module: generation_module,
         default_opts: [
           api_key: "fake-offline-key",
           base_url: "http://127.0.0.1:1",

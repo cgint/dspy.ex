@@ -63,6 +63,16 @@ defmodule Dspy.LM do
 
   def owns_transport_retries?(_), do: false
 
+  @doc false
+  def owns_transport_retries?(%Dspy.LM.ReqLLM{} = lm, request) do
+    case Dspy.LM.ReqLLM.native_object_contract(request, lm.model) do
+      {:ok, _} -> lm.generation_module == ReqLLM.Generation
+      _ -> lm.client_module == ReqLLM
+    end
+  end
+
+  def owns_transport_retries?(_, _), do: false
+
   @doc """
   Create an LM instance from a model string.
 

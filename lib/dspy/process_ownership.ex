@@ -3,7 +3,7 @@ defmodule Dspy.ProcessOwnership do
 
   @spec watch(pid(), pid(), term()) :: pid()
   def watch(owner, worker, exit_reason) do
-    spawn(fn ->
+    watcher = fn ->
       owner_ref = Process.monitor(owner)
       worker_ref = Process.monitor(worker)
 
@@ -20,6 +20,13 @@ defmodule Dspy.ProcessOwnership do
         {:DOWN, ^worker_ref, :process, ^worker, _reason} ->
           :ok
       end
-    end)
+    end
+
+    if Process.whereis(Dspy.TaskSupervisor) do
+      {:ok, pid} = Task.Supervisor.start_child(Dspy.TaskSupervisor, watcher)
+      pid
+    else
+      spawn(watcher)
+    end
   end
 end

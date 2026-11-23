@@ -82,7 +82,7 @@ defmodule Dspy.Signature.Adapter.Pipeline do
       count: count,
       prediction_signature: Keyword.get(opts, :prediction_signature, signature),
       max_retries:
-        if(on_delta || LM.owns_transport_retries?(resolved_lm),
+        if(on_delta,
           do: 0,
           else: Keyword.get(opts, :max_retries, 3)
         ),
@@ -882,6 +882,7 @@ defmodule Dspy.Signature.Adapter.Pipeline do
 
   defp call_with_retry_log(request, %{max_retries: max_retries} = lm_options, call_id)
        when is_map(request) and is_integer(max_retries) and max_retries >= 0 do
+    max_retries = if LM.owns_transport_retries?(lm_options.lm, request), do: 0, else: max_retries
     do_call_with_retry_log(request, lm_options, 1, max_retries + 1, call_id)
   end
 

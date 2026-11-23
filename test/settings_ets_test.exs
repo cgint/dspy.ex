@@ -1,5 +1,5 @@
 defmodule Dspy.SettingsETSTest do
-  use ExUnit.Case, async: true
+  use ExUnit.Case, async: false
 
   test "reads remain available while the settings server is suspended" do
     pid = Process.whereis(Dspy.Settings)
