@@ -18,7 +18,7 @@ defmodule Dspy.Retrieve.ColBERTv2HTTPTest do
     ]
 
     port = serve(200, %{"topk" => rows, "error" => false})
-    client = Dspy.Retrieve.colbert(url: endpoint(port) <> "?collection=archive", k: 2)
+    client = ColBERTv2.new(url: endpoint(port) <> "?collection=archive", k: 2)
 
     assert {:ok, results} = ColBERTv2.search(client, "雪 + tea & milk?")
     assert results == Enum.map(Enum.take(rows, 2), &Map.put(&1, "long_text", "first"))
@@ -33,7 +33,7 @@ defmodule Dspy.Retrieve.ColBERTv2HTTPTest do
 
   test "GET can use an explicit port override and simplify the server's text" do
     port = serve(200, %{"topk" => [%{"text" => "passage", "long_text" => "stale"}]})
-    client = Dspy.Retrieve.colbert(url: endpoint(1), port: port, k: 5)
+    client = ColBERTv2.new(url: endpoint(1), port: port, k: 5)
 
     assert {:ok, ["passage"]} = ColBERTv2.search(client, "topic", k: 100, simplify: true)
     assert_receive {:wire, "GET /search?query=topic&k=100 HTTP/1.1", _, ""}, @wire_timeout
@@ -41,10 +41,10 @@ defmodule Dspy.Retrieve.ColBERTv2HTTPTest do
 
   test "a scoped ColBERTv2 binding returns a retrieval module prediction through Dspy.call" do
     rows = [%{"text" => "first", "pid" => 10}, %{"text" => "second", "pid" => 11}]
-    client = Dspy.Retrieve.colbert(url: endpoint(serve(200, %{"topk" => rows})))
+    client = ColBERTv2.new(url: endpoint(serve(200, %{"topk" => rows})))
     retrieve = Dspy.Retrieve.new(k: 5)
 
-    Dspy.context([rm: client], fn ->
+    Dspy.context([rm: fn query, opts -> ColBERTv2.search(client, query, opts) end], fn ->
       assert {:ok, %Dspy.Prediction{attrs: attrs}} =
                Dspy.call(retrieve, %{"query" => "first + second", "k" => 1})
 
@@ -58,7 +58,7 @@ defmodule Dspy.Retrieve.ColBERTv2HTTPTest do
   test "POST sends JSON, allows k above the GET maximum, and preserves its raw rows" do
     rows = [%{"opaque" => [7, 8]}, %{"text" => "short", "long_text" => "full", "pid" => 4}]
     port = serve(200, %{"topk" => rows})
-    client = Dspy.Retrieve.colbert(url: endpoint(port), post_requests: true)
+    client = ColBERTv2.new(url: endpoint(port), post_requests: true)
 
     assert {:ok, ^rows} = ColBERTv2.search(client, "first + second", k: 101)
     assert_receive {:wire, "POST /search HTTP/1.1", headers, body}, @wire_timeout
@@ -69,13 +69,13 @@ defmodule Dspy.Retrieve.ColBERTv2HTTPTest do
   test "POST simplify selects long_text and rejects a row missing it" do
     rows = [%{"long_text" => "full", "text" => "short"}, "outside requested results"]
     port = serve(200, %{"topk" => rows})
-    client = Dspy.Retrieve.colbert(url: endpoint(port), post_requests: true)
+    client = ColBERTv2.new(url: endpoint(port), post_requests: true)
 
     assert {:ok, ["full"]} = ColBERTv2.search(client, "needle", k: 1, simplify: true)
     assert_receive {:wire, "POST /search HTTP/1.1", _, _}, @wire_timeout
 
     port = serve(200, %{"topk" => [%{"text" => "short"}]})
-    client = Dspy.Retrieve.colbert(url: endpoint(port), post_requests: true)
+    client = ColBERTv2.new(url: endpoint(port), post_requests: true)
 
     assert {:error, :invalid_response} = ColBERTv2.search(client, "needle", simplify: true)
     assert_receive {:wire, "POST /search HTTP/1.1", _, _}, @wire_timeout
@@ -84,10 +84,10 @@ defmodule Dspy.Retrieve.ColBERTv2HTTPTest do
   test "rejects invalid inputs before connecting and keeps the legacy constructor fields" do
     port = closed_port()
     url = endpoint(port)
-    client = Dspy.Retrieve.colbert(url: url, k: 6)
+    client = ColBERTv2.new(url: url, k: 6)
 
     assert %ColBERTv2{url: ^url, port: 8893, k: 6, collection: "default"} = client
-    assert %ColBERTv2{url: "http://localhost", port: 8893, k: 10} = Dspy.Retrieve.colbert()
+    assert %ColBERTv2{url: "http://localhost", port: 8893, k: 10} = ColBERTv2.new()
 
     for query <- [[:none], <<255>>] do
       assert {:error, :invalid_query} = ColBERTv2.search(client, query)
@@ -106,11 +106,11 @@ defmodule Dspy.Retrieve.ColBERTv2HTTPTest do
           "http://user@127.0.0.1:#{port}/search",
           "http://127.0.0.1:65536/search"
         ] do
-      invalid = Dspy.Retrieve.colbert(url: bad_url)
+      invalid = ColBERTv2.new(url: bad_url)
       assert {:error, :invalid_endpoint} = ColBERTv2.search(invalid, "needle")
     end
 
-    invalid = Dspy.Retrieve.colbert(url: url, post_requests: :sometimes)
+    invalid = ColBERTv2.new(url: url, post_requests: :sometimes)
     assert {:error, :invalid_method} = ColBERTv2.search(invalid, "needle")
   end
 
@@ -122,7 +122,7 @@ defmodule Dspy.Retrieve.ColBERTv2HTTPTest do
           {%{"topk" => [%{"long_text" => @private}]}, :invalid_response},
           {"invalid JSON with #{@private}", :invalid_response}
         ] do
-      client = Dspy.Retrieve.colbert(url: endpoint(serve(200, body)))
+      client = ColBERTv2.new(url: endpoint(serve(200, body)))
       assert ColBERTv2.search(client, "needle") == {:error, reason}
       assert_receive {:wire, _, _, _}, @wire_timeout
     end
@@ -134,12 +134,12 @@ defmodule Dspy.Retrieve.ColBERTv2HTTPTest do
           {503, []}
         ] do
       port = serve(status, @private, headers)
-      client = Dspy.Retrieve.colbert(url: endpoint(port))
+      client = ColBERTv2.new(url: endpoint(port))
       assert ColBERTv2.search(client, "needle") == {:error, {:http_status, status}}
       assert_receive {:wire, _, _, _}, @wire_timeout
     end
 
-    client = Dspy.Retrieve.colbert(url: endpoint(serve(200, :disconnect)))
+    client = ColBERTv2.new(url: endpoint(serve(200, :disconnect)))
     assert ColBERTv2.search(client, "needle") == {:error, :transport}
     assert_receive {:wire, _, _, _}, @wire_timeout
   end

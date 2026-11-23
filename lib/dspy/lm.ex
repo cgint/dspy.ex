@@ -277,7 +277,7 @@ defmodule Dspy.LM do
   @doc """
   Train on adapter-formatted examples and return the trained LM binding.
 
-  Implement this callback to opt an LM into `Dspy.Teleprompt.BootstrapFinetune`.
+  Implement this optional callback to support fine-tuning.
   The callback receives the training rows and caller-supplied training options.
   """
   @callback finetune(lm :: t(), training_rows :: [map()], train_kwargs :: keyword() | map()) ::

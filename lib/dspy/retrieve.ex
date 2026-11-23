@@ -5,11 +5,7 @@ defmodule Dspy.Retrieve do
   Proven (deterministic tests / offline examples):
   - `Dspy.Retrieve.DocumentProcessor` (chunking + embedding hook)
   - `Dspy.Retrieve.Embeddings.ReqLLM` (provider-agnostic embeddings via `req_llm`, mockable)
-  - `Dspy.Retrieve.InMemoryRetriever` (GenServer-backed cosine retriever; easy adoption)
   - `Dspy.Retrieve.RAGPipeline` (retrieval-augmented generation over a user-supplied `Retriever`)
-
-  Some retriever backends in this module (e.g. ColBERTv2/ChromaDB stubs) are placeholders and not
-  yet production-ready.
 
   See `docs/OVERVIEW.md` for the current stable surface + evidence.
   """
@@ -60,150 +56,6 @@ defmodule Dspy.Retrieve do
             chunk_id: String.t() | nil,
             source: String.t() | nil
           }
-  end
-
-  defmodule VectorStore do
-    @moduledoc """
-    In-memory vector store for embeddings and similarity search.
-    """
-
-    use GenServer
-
-    defstruct [
-      :documents,
-      :embeddings,
-      :index,
-      :dimension,
-      :distance_metric
-    ]
-
-    def start_link(opts \\ []) do
-      GenServer.start_link(__MODULE__, opts, name: __MODULE__)
-    end
-
-    def init(opts) do
-      {:ok,
-       %__MODULE__{
-         documents: %{},
-         embeddings: %{},
-         index: [],
-         dimension: opts[:dimension] || 1536,
-         distance_metric: opts[:distance_metric] || :cosine
-       }}
-    end
-
-    def add_documents(documents) do
-      safe_call({:add_documents, documents}, default: {:error, :vector_store_not_started})
-    end
-
-    def search(query_embedding, opts \\ []) do
-      safe_call({:search, query_embedding, opts}, default: {:error, :vector_store_not_started})
-    end
-
-    def clear do
-      safe_call(:clear, default: {:error, :vector_store_not_started})
-    end
-
-    defp safe_call(message, opts) do
-      default = Keyword.fetch!(opts, :default)
-
-      try do
-        GenServer.call(__MODULE__, message)
-      catch
-        :exit, {:noproc, _} -> default
-      end
-    end
-
-    def handle_call({:add_documents, documents}, _from, state) do
-      {new_docs, new_embeddings} =
-        Enum.reduce(documents, {state.documents, state.embeddings}, fn doc, {docs_acc, emb_acc} ->
-          docs_with_id = Map.put(docs_acc, doc.id, doc)
-
-          emb_with_id =
-            if doc.embedding do
-              Map.put(emb_acc, doc.id, doc.embedding)
-            else
-              emb_acc
-            end
-
-          {docs_with_id, emb_with_id}
-        end)
-
-      new_index = build_index(new_embeddings)
-
-      new_state = %{state | documents: new_docs, embeddings: new_embeddings, index: new_index}
-
-      {:reply, :ok, new_state}
-    end
-
-    def handle_call({:search, query_embedding, opts}, _from, state) do
-      k = opts[:k] || 10
-      threshold = opts[:threshold] || 0.0
-
-      similarities =
-        calculate_similarities(query_embedding, state.embeddings, state.distance_metric)
-
-      results =
-        similarities
-        |> Enum.filter(fn {_id, score} -> score >= threshold end)
-        |> Enum.sort_by(fn {_id, score} -> score end, :desc)
-        |> Enum.take(k)
-        |> Enum.map(fn {doc_id, score} ->
-          doc = Map.get(state.documents, doc_id)
-          %{doc | score: score}
-        end)
-
-      {:reply, {:ok, results}, state}
-    end
-
-    def handle_call(:clear, _from, state) do
-      new_state = %{state | documents: %{}, embeddings: %{}, index: []}
-      {:reply, :ok, new_state}
-    end
-
-    defp build_index(embeddings) do
-      # Simple linear index - could be replaced with more sophisticated indexing
-      Map.keys(embeddings)
-    end
-
-    defp calculate_similarities(query_embedding, embeddings, distance_metric) do
-      Enum.map(embeddings, fn {doc_id, doc_embedding} ->
-        similarity =
-          case distance_metric do
-            :cosine -> cosine_similarity(query_embedding, doc_embedding)
-            :euclidean -> euclidean_distance(query_embedding, doc_embedding)
-            :dot_product -> dot_product(query_embedding, doc_embedding)
-          end
-
-        {doc_id, similarity}
-      end)
-    end
-
-    defp cosine_similarity(a, b) do
-      dot_prod = dot_product(a, b)
-      norm_a = :math.sqrt(Enum.reduce(a, 0, fn x, acc -> acc + x * x end))
-      norm_b = :math.sqrt(Enum.reduce(b, 0, fn x, acc -> acc + x * x end))
-
-      if norm_a == 0 or norm_b == 0 do
-        0.0
-      else
-        dot_prod / (norm_a * norm_b)
-      end
-    end
-
-    defp euclidean_distance(a, b) do
-      sum_sq_diff =
-        Enum.zip(a, b)
-        |> Enum.reduce(0, fn {x, y}, acc -> acc + :math.pow(x - y, 2) end)
-
-      # Negative so higher values are better
-      -:math.sqrt(sum_sq_diff)
-    end
-
-    defp dot_product(a, b) do
-      Enum.zip(a, b)
-      |> Enum.reduce(0, fn {x, y}, acc -> acc + x * y end)
-    end
   end
 
   defmodule EmbeddingProvider do
@@ -262,283 +114,6 @@ defmodule Dspy.Retrieve do
     defp valid_vector?(_vector), do: false
   end
 
-  defmodule OpenAIEmbeddings do
-    @moduledoc """
-    OpenAI embeddings provider.
-    """
-
-    @behaviour Dspy.Retrieve.EmbeddingProvider
-
-    @impl true
-    def embed_text(_text, _opts \\ []) do
-      {:error,
-       "OpenAIEmbeddings is not available in core :dspy (use :dspy_extras or provide a custom embedding provider)"}
-    end
-
-    @impl true
-    def embed_batch(_texts, _opts \\ []) do
-      {:error,
-       "OpenAIEmbeddings is not available in core :dspy (use :dspy_extras or provide a custom embedding provider)"}
-    end
-  end
-
-  defmodule ColBERTv2 do
-    @moduledoc """
-    Search a configured ColBERTv2 server using `search/3`.
-
-    The legacy retriever callbacks are placeholders. Use the value returned by
-    `Dspy.Retrieve.colbert/1` to run a remote search.
-    """
-
-    @behaviour Dspy.Retrieve.Retriever
-
-    @timeout 10_000
-
-    defstruct [
-      :url,
-      :collection,
-      :port,
-      :embedding_provider,
-      :k,
-      :search_port,
-      post_requests: false
-    ]
-
-    def new(opts \\ []) do
-      url = opts[:url]
-      port = opts[:port] || 8893
-
-      %__MODULE__{
-        url: url || "http://localhost",
-        collection: opts[:collection] || "default",
-        port: port,
-        embedding_provider: opts[:embedding_provider] || OpenAIEmbeddings,
-        k: opts[:k] || 10,
-        search_port: if(url, do: opts[:port], else: port),
-        post_requests: Access.get(opts, :post_requests, false)
-      }
-    end
-
-    @doc """
-    Query the configured URL and return up to `:k` ranked results.
-
-    Supply a complete `:url` when constructing the client. An explicit
-    `:port` overrides the URL's port. Construction without a URL uses
-    `http://localhost:8893` by default. The client uses GET unless constructed
-    with `post_requests: true`. GET supports at most 100 results.
-
-    Results are maps with string keys, in server order. GET sets
-    `"long_text"` from the server's `"text"`. Set `simplify: true` to return
-    just the `"long_text"` strings.
-    """
-    def search(%__MODULE__{} = client, query, opts \\ []) do
-      with :ok <- validate_query(query),
-           {:ok, opts} <- search_options(opts, client.k),
-           {:ok, method} <- request_method(Map.get(client, :post_requests, false)),
-           :ok <- validate_k(opts[:k], method),
-           {:ok, uri} <- search_uri(client),
-           {:ok, body} <- request(uri, method, query, opts[:k]) do
-        decode_results(body, method, opts)
-      end
-    end
-
-    defp validate_query(query) do
-      if is_binary(query) and String.valid?(query), do: :ok, else: {:error, :invalid_query}
-    end
-
-    defp search_options(opts, default_k) when is_integer(length(opts)) do
-      with true <- Keyword.keyword?(opts),
-           {:ok, options} <- Keyword.validate(opts, k: default_k, simplify: false),
-           true <- is_boolean(options[:simplify]) do
-        {:ok, options}
-      else
-        _ -> {:error, :invalid_options}
-      end
-    end
-
-    defp search_options(_opts, _default_k), do: {:error, :invalid_options}
-
-    defp request_method(false), do: {:ok, :get}
-    defp request_method(true), do: {:ok, :post}
-    defp request_method(_value), do: {:error, :invalid_method}
-
-    defp validate_k(k, method) when is_integer(k) and k >= 0 and (method == :post or k <= 100),
-      do: :ok
-
-    defp validate_k(_k, _method), do: {:error, :invalid_k}
-
-    defp search_uri(%{url: url} = client) when is_binary(url) do
-      with true <- String.valid?(url),
-           {:ok, %URI{scheme: scheme, host: host, userinfo: nil, fragment: nil} = uri}
-           when scheme in ["http", "https"] and is_binary(host) and host != "" <- URI.new(url),
-           {:ok, port} <- resolve_port(Map.get(client, :search_port), uri.port) do
-        {:ok, %{uri | port: port}}
-      else
-        _ -> {:error, :invalid_endpoint}
-      end
-    end
-
-    defp search_uri(_client), do: {:error, :invalid_endpoint}
-
-    defp resolve_port(nil, default) when is_integer(default), do: resolve_port(default, nil)
-    defp resolve_port(port, _default) when is_integer(port) and port in 1..65535, do: {:ok, port}
-
-    defp resolve_port(port, _default) when is_binary(port) do
-      case Integer.parse(port) do
-        {value, ""} when value in 1..65535 -> {:ok, value}
-        _ -> :error
-      end
-    end
-
-    defp resolve_port(_port, _default), do: :error
-
-    defp request(uri, method, query, k) do
-      request = Req.Request.new() |> Req.Steps.attach()
-
-      options = [
-        method: method,
-        connect_options: [timeout: @timeout],
-        receive_timeout: @timeout,
-        retry: false,
-        redirect: false,
-        decode_body: false
-      ]
-
-      payload = [query: query, k: k]
-
-      case Req.request(request, options ++ request_options(method, uri, payload)) do
-        {:ok, %{status: status, body: body}} when status in 200..299 -> {:ok, body}
-        {:ok, %{status: status}} -> {:error, {:http_status, status}}
-        {:error, %Req.TransportError{reason: :timeout}} -> {:error, :timeout}
-        {:error, _reason} -> {:error, :transport}
-      end
-    rescue
-      ArgumentError -> {:error, :invalid_endpoint}
-    catch
-      :exit, {:timeout, _} -> {:error, :timeout}
-      :exit, _reason -> {:error, :transport}
-    end
-
-    defp request_options(:get, uri, payload),
-      do: [url: URI.append_query(uri, URI.encode_query(payload))]
-
-    defp request_options(:post, uri, payload) do
-      [
-        url: uri,
-        json: Map.new(payload),
-        headers: [{"content-type", "application/json; charset=utf-8"}]
-      ]
-    end
-
-    defp decode_results(body, method, opts) do
-      case Jason.decode(body) do
-        {:ok, %{"error" => error}} when error not in [nil, false, "", 0, 0.0, [], %{}] ->
-          {:error, :server_error}
-
-        {:ok, %{"topk" => rows}} when is_list(rows) ->
-          rows
-          |> Enum.take(opts[:k])
-          |> render_results(method, opts[:simplify])
-
-        _ ->
-          {:error, :invalid_response}
-      end
-    end
-
-    defp render_results(rows, method, simplify?) do
-      rows
-      |> Enum.reduce_while({:ok, []}, fn row, {:ok, results} ->
-        with {:ok, row} <- normalize_row(method, row),
-             {:ok, result} <- render_row(row, simplify?) do
-          {:cont, {:ok, [result | results]}}
-        else
-          :error -> {:halt, {:error, :invalid_response}}
-        end
-      end)
-      |> case do
-        {:ok, results} -> {:ok, Enum.reverse(results)}
-        {:error, _reason} = error -> error
-      end
-    end
-
-    defp normalize_row(:get, %{"text" => text} = row) when is_binary(text),
-      do: {:ok, Map.put(row, "long_text", text)}
-
-    defp normalize_row(:post, row) when is_map(row), do: {:ok, row}
-    defp normalize_row(_method, _row), do: :error
-
-    defp render_row(row, false), do: {:ok, row}
-    defp render_row(%{"long_text" => text}, true) when is_binary(text), do: {:ok, text}
-    defp render_row(_row, true), do: :error
-
-    @impl true
-    def retrieve(_query, _opts \\ []) do
-      {:error,
-       "ColBERTv2 is a placeholder in core :dspy (use a custom Retriever + RAGPipeline; see docs/OVERVIEW.md)"}
-    end
-
-    @impl true
-    def index_documents(_documents, _opts \\ []) do
-      {:error,
-       "ColBERTv2 is a placeholder in core :dspy (indexing not implemented; see docs/OVERVIEW.md)"}
-    end
-
-    @impl true
-    def clear_index(_opts \\ []) do
-      {:error,
-       "ColBERTv2 is a placeholder in core :dspy (clear_index not implemented; see docs/OVERVIEW.md)"}
-    end
-  end
-
-  defmodule ChromaDB do
-    @moduledoc """
-    (Experimental / placeholder) ChromaDB retriever stub.
-
-    Core `:dspy` does not ship a ChromaDB client; this module currently returns
-    `{:error, ...}` for all operations.
-
-    For the proven retrieval workflow, prefer a custom `Dspy.Retrieve.Retriever` paired with
-    `Dspy.Retrieve.RAGPipeline` (see `docs/OVERVIEW.md`).
-    """
-
-    @behaviour Dspy.Retrieve.Retriever
-
-    defstruct [
-      :host,
-      :port,
-      :collection_name,
-      :embedding_function
-    ]
-
-    def new(opts \\ []) do
-      %__MODULE__{
-        host: opts[:host] || "localhost",
-        port: opts[:port] || 8000,
-        collection_name: opts[:collection_name] || "default",
-        embedding_function: opts[:embedding_function] || OpenAIEmbeddings
-      }
-    end
-
-    @impl true
-    def retrieve(_query, opts \\ []) do
-      # Mock ChromaDB implementation
-      _k = opts[:k] || 10
-
-      # Would make HTTP requests to ChromaDB server
-      {:error, "ChromaDB integration not fully implemented"}
-    end
-
-    @impl true
-    def index_documents(_documents, _opts \\ []) do
-      {:error, "ChromaDB integration not fully implemented"}
-    end
-
-    @impl true
-    def clear_index(_opts \\ []) do
-      {:error, "ChromaDB integration not fully implemented"}
-    end
-  end
-
   defmodule DocumentProcessor do
     @moduledoc """
     Document processing utilities for chunking and preparation.
@@ -595,7 +170,7 @@ defmodule Dspy.Retrieve do
     Process documents for indexing.
 
     Options:
-    - `:embedding_provider` - module implementing `Dspy.Retrieve.EmbeddingProvider` (default: `OpenAIEmbeddings`)
+    - `:embedding_provider` - module implementing `Dspy.Retrieve.EmbeddingProvider`
     - `:embedding_provider_opts` - options passed to the provider (e.g. `model:` when using `Dspy.Retrieve.Embeddings.ReqLLM`)
     - `:chunk_size` / `:overlap` - chunking controls (word-based)
     - `:timeout_ms` - per-document processing timeout (default: 30_000)
@@ -605,7 +180,7 @@ defmodule Dspy.Retrieve do
     - if a document task errors/exits/times out, chunks are returned with `embedding: nil` and `metadata[:document_error]`
     """
     def process_documents(documents, opts \\ []) do
-      embedding_provider = opts[:embedding_provider] || OpenAIEmbeddings
+      embedding_provider = opts[:embedding_provider]
       embedding_provider_opts = opts[:embedding_provider_opts] || []
       chunk_size = opts[:chunk_size] || 512
       overlap = opts[:overlap] || 50
@@ -920,8 +495,7 @@ defmodule Dspy.Retrieve do
   # Main API
 
   @type rm ::
-          %ColBERTv2{}
-          | module()
+          module()
           | (String.t(), keyword() -> list() | {:ok, list()} | {:error, term()})
 
   @type t :: %__MODULE__{
@@ -934,7 +508,7 @@ defmodule Dspy.Retrieve do
   Create a retrieval module that returns a prediction of ordered passages.
 
   Set `k:` to the default result limit, which starts at 3. Set `rm:` to a
-  configured ColBERTv2 value, a module exporting `retrieve/2`, or a function
+  module exporting `retrieve/2`, or a function
   accepting a query and keyword options. A local binding takes precedence
   over process-scoped and global `:rm` settings. Set `callbacks:` to register
   module lifecycle handlers.
@@ -1015,7 +589,6 @@ defmodule Dspy.Retrieve do
   defp retriever_options(_opts, _k), do: {:error, :invalid_rm_opts}
 
   defp valid_rm?(nil), do: true
-  defp valid_rm?(%ColBERTv2{}), do: true
   defp valid_rm?(rm) when is_function(rm, 2), do: true
 
   defp valid_rm?(module) when is_atom(module),
@@ -1033,9 +606,6 @@ defmodule Dspy.Retrieve do
   defp valid_callbacks?(_callbacks), do: false
 
   defp run_retriever(nil, _query, _opts), do: {:error, :no_rm_configured}
-
-  defp run_retriever(%ColBERTv2{} = client, query, opts),
-    do: ColBERTv2.search(client, query, opts)
 
   defp run_retriever(rm, query, opts) when is_function(rm, 2), do: rm.(query, opts)
 
@@ -1067,20 +637,6 @@ defmodule Dspy.Retrieve do
   defp passage_text(_row), do: nil
 
   @doc """
-  Create a new ColBERTv2 retriever.
-  """
-  def colbert(opts \\ []) do
-    ColBERTv2.new(opts)
-  end
-
-  @doc """
-  Create a new ChromaDB retriever.
-  """
-  def chroma(opts \\ []) do
-    ChromaDB.new(opts)
-  end
-
-  @doc """
   Create a RAG pipeline.
   """
   def rag(retriever, generator, opts \\ []) do
@@ -1093,16 +649,5 @@ defmodule Dspy.Retrieve do
   def index_documents(documents, retriever, opts \\ []) do
     processed_docs = DocumentProcessor.process_documents(documents, opts)
     retriever.index_documents(processed_docs, opts)
-  end
-
-  @doc """
-  Initialize the retrieval system.
-  """
-  def start_link(opts \\ []) do
-    children = [
-      {VectorStore, opts}
-    ]
-
-    Supervisor.start_link(children, strategy: :one_for_one)
   end
 end

@@ -24,7 +24,6 @@ These should run without network calls:
   - `mix run examples/offline/ensemble_offline.exs`
 - Retrieval + RAG (offline):
   - `mix run examples/offline/retrieve_rag_offline.exs`
-  - `mix run examples/offline/retrieve_rag_genserver_offline.exs`
 - Tools + ReAct + callbacks (offline):
   - `mix run examples/offline/react_tool_logging_offline.exs`
 - Debug: settings defaults applied to request maps (offline):

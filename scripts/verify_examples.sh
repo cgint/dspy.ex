@@ -17,7 +17,6 @@ examples=(
   examples/offline/chain_of_thought_copro_persistence_offline.exs
   examples/offline/ensemble_offline.exs
   examples/offline/retrieve_rag_offline.exs
-  examples/offline/retrieve_rag_genserver_offline.exs
   examples/offline/react_tool_logging_offline.exs
   examples/offline/structured_react_refine_offline.exs
   examples/offline/request_defaults_offline.exs
