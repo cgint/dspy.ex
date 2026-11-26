@@ -14,6 +14,7 @@ defmodule Dspy.Signature.Adapter.Pipeline do
   alias Dspy.{Lifecycle, LM, Prediction, PredictorConfig, Settings, Signature, Telemetry}
   alias Dspy.Refine.Advice
   alias Dspy.Signature.Adapter.Callbacks
+  alias Dspy.Signature.Adapter.ToolCalls
   alias Dspy.Signature.AdapterPipeline
   require Logger
 
@@ -34,12 +35,16 @@ defmodule Dspy.Signature.Adapter.Pipeline do
         ]
 
   @doc false
+  @spec run_prediction(Signature.t(), map(), [Dspy.Example.t()], opts()) ::
+          {:ok, Prediction.t()} | {:error, term()}
   def run_prediction(signature, inputs, demos, opts),
     do: run_prediction(signature, inputs, demos, nil, opts)
 
   @doc false
+  @spec run_prediction(Signature.t(), map(), [Dspy.Example.t()], term(), opts()) ::
+          {:ok, Prediction.t()} | {:error, term()}
   def run_prediction(signature, inputs, demos, on_delta, opts) do
-    case run(signature, inputs, demos, on_delta, opts) do
+    case run_internal(signature, inputs, demos, {on_delta, opts}) do
       {:ok, {:parsed_choices, prediction}} -> {:ok, prediction}
       {:ok, outputs} -> {:ok, Prediction.new(outputs)}
       {:error, _} = error -> error
@@ -50,9 +55,9 @@ defmodule Dspy.Signature.Adapter.Pipeline do
           {:ok, map() | {:parsed_choices, Prediction.t()}} | {:error, term()}
   def run(%Signature{} = signature, inputs, demos, opts \\ [])
       when is_map(inputs) and is_list(demos) and is_list(opts),
-      do: run(signature, inputs, demos, nil, opts)
+      do: run_internal(signature, inputs, demos, {nil, opts})
 
-  defp run(%Signature{} = signature, inputs, demos, stream_callbacks, opts)
+  defp run_internal(%Signature{} = signature, inputs, demos, {stream_callbacks, opts})
        when is_map(inputs) and is_list(demos) and is_list(opts) do
     adapter = AdapterPipeline.active_adapter(adapter: Keyword.get(opts, :adapter))
 
@@ -116,17 +121,17 @@ defmodule Dspy.Signature.Adapter.Pipeline do
     run = fn ->
       with :ok <- validate_streaming_adapter(adapter, on_delta),
            :ok <- validate_choice_request(count, lm, adapter, signature) do
-        do_run_attempt(
-          signature,
-          inputs,
-          demos,
-          adapter,
-          callbacks,
-          meta,
-          lm_options,
-          max_output_retries,
-          max_output_attempts
-        )
+        do_run_attempt(%{
+          signature: signature,
+          inputs: inputs,
+          demos: demos,
+          adapter: adapter,
+          callbacks: callbacks,
+          meta: meta,
+          lm_options: lm_options,
+          output_retries_left: max_output_retries,
+          max_output_attempts: max_output_attempts
+        })
       end
     end
 
@@ -201,15 +206,17 @@ defmodule Dspy.Signature.Adapter.Pipeline do
   end
 
   defp do_run_attempt(
-         %Signature{} = signature,
-         inputs,
-         demos,
-         adapter,
-         callbacks,
-         meta,
-         %{lm: lm, max_retries: max_retries} = lm_options,
-         output_retries_left,
-         max_output_attempts
+         %{
+           signature: %Signature{} = signature,
+           inputs: inputs,
+           demos: demos,
+           adapter: adapter,
+           callbacks: callbacks,
+           meta: meta,
+           lm_options: %{lm: lm, max_retries: max_retries} = lm_options,
+           output_retries_left: output_retries_left,
+           max_output_attempts: max_output_attempts
+         } = run_ctx
        )
        when is_map(inputs) and is_list(demos) and is_atom(adapter) and is_list(callbacks) and
               is_integer(max_retries) and
@@ -234,18 +241,12 @@ defmodule Dspy.Signature.Adapter.Pipeline do
 
     with {:ok, request, base_prompt} <- formatted do
       do_call_and_parse(
-        signature,
-        inputs,
-        demos,
-        adapter,
-        callbacks,
-        meta,
-        lm_options,
-        output_retries_left,
-        max_output_attempts,
-        request,
-        request,
-        base_prompt
+        Map.merge(run_ctx, %{
+          callbacks: callbacks,
+          base_request: request,
+          base_prompt: base_prompt
+        }),
+        request
       )
     end
   end
@@ -264,18 +265,17 @@ defmodule Dspy.Signature.Adapter.Pipeline do
   end
 
   defp do_call_and_parse(
-         %Signature{} = signature,
-         inputs,
-         demos,
-         adapter,
-         callbacks,
-         %{call_id: call_id} = meta,
-         %{lm: lm, count: count} = lm_options,
-         output_retries_left,
-         max_output_attempts,
-         request,
-         base_request,
-         base_prompt
+         %{
+           signature: %Signature{} = signature,
+           adapter: adapter,
+           callbacks: callbacks,
+           meta: %{call_id: call_id} = meta,
+           lm_options: %{lm: lm, count: count} = lm_options,
+           max_output_attempts: max_output_attempts,
+           base_request: base_request,
+           base_prompt: base_prompt
+         } = run_ctx,
+         request
        )
        when is_map(request) and is_map(base_request) and is_binary(base_prompt) and
               is_integer(max_output_attempts) and max_output_attempts >= 1 do
@@ -333,19 +333,9 @@ defmodule Dspy.Signature.Adapter.Pipeline do
 
         {:error, reason, response_text, choice_index} ->
           maybe_retry_output(
-            signature,
-            inputs,
-            demos,
-            adapter,
-            callbacks,
-            meta,
-            lm_options,
-            output_retries_left,
-            max_output_attempts,
-            base_request,
-            base_prompt,
-            response_text,
+            %{run_ctx | callbacks: callbacks},
             reason,
+            response_text,
             choice_index
           )
       end
@@ -358,7 +348,8 @@ defmodule Dspy.Signature.Adapter.Pipeline do
         is_binary(choice.text) ->
           {:ok, [choice]}
 
-        structured_tool_calls?(signature) and is_nil(tool_value(choice.raw, :content)) ->
+        ToolCalls.structured_tool_calls?(signature) and
+            is_nil(ToolCalls.tool_value(choice.raw, :content)) ->
           {:ok, [%{choice | text: ""}]}
 
         true ->
@@ -395,12 +386,22 @@ defmodule Dspy.Signature.Adapter.Pipeline do
   end
 
   defp parse_choice(adapter, signature, choice) do
-    parse_signature = tool_parse_signature(signature, choice)
+    parse_signature = ToolCalls.tool_parse_signature(signature, choice)
 
-    case parse_text_outputs(adapter, parse_signature, choice, structured_tool_calls?(signature)) do
-      outputs when is_map(outputs) -> merge_tool_call_outputs(signature, outputs, choice)
-      {:error, _} = error -> error
-      other -> {:error, {:parse_failed, other}}
+    case parse_text_outputs(
+           adapter,
+           parse_signature,
+           choice,
+           ToolCalls.structured_tool_calls?(signature)
+         ) do
+      outputs when is_map(outputs) ->
+        ToolCalls.merge_tool_call_outputs(signature, outputs, choice)
+
+      {:error, _} = error ->
+        error
+
+      other ->
+        {:error, {:parse_failed, other}}
     end
   end
 
@@ -416,7 +417,7 @@ defmodule Dspy.Signature.Adapter.Pipeline do
              structured_tool_calls: true
            ) do
         {:error, {:missing_required_outputs, []}} ->
-          if has_native_tool_calls?(choice),
+          if ToolCalls.has_native_tool_calls?(choice),
             do: %{},
             else: {:error, {:missing_required_outputs, []}}
 
@@ -462,19 +463,20 @@ defmodule Dspy.Signature.Adapter.Pipeline do
   defp with_choice_index(payload, index), do: Map.put(payload, :choice_index, index)
 
   defp maybe_retry_output(
-         signature,
-         inputs,
-         demos,
-         adapter,
-         callbacks,
-         %{call_id: call_id, attempt: attempt} = meta,
-         %{lm: lm} = lm_options,
-         output_retries_left,
-         max_output_attempts,
-         base_request,
-         base_prompt,
-         response_text,
+         %{
+           signature: signature,
+           inputs: inputs,
+           adapter: adapter,
+           callbacks: callbacks,
+           meta: %{call_id: call_id, attempt: attempt} = meta,
+           lm_options: %{lm: lm} = lm_options,
+           output_retries_left: output_retries_left,
+           max_output_attempts: max_output_attempts,
+           base_request: base_request,
+           base_prompt: base_prompt
+         } = run_ctx,
          reason,
+         response_text,
          choice_index
        )
        when is_map(base_request) and is_binary(base_prompt) and is_integer(max_output_attempts) and
@@ -506,18 +508,13 @@ defmodule Dspy.Signature.Adapter.Pipeline do
             end)
 
           do_call_and_parse(
-            signature,
-            inputs,
-            demos,
-            adapter,
-            callbacks,
-            meta,
-            lm_options,
-            output_retries_left - 1,
-            max_output_attempts,
-            retry_request,
-            base_request,
-            base_prompt
+            %{
+              run_ctx
+              | callbacks: callbacks,
+                meta: meta,
+                output_retries_left: output_retries_left - 1
+            },
+            retry_request
           )
         end
 
@@ -668,225 +665,13 @@ defmodule Dspy.Signature.Adapter.Pipeline do
     "- #{inspect(other)}"
   end
 
-  defp structured_tool_calls?(%Signature{} = signature),
-    do: Enum.any?(signature.output_fields, &structured_tool_field?/1)
-
-  # The internal ReAct signature opts into ID-preserving call records.
-  defp structured_tool_field?(%{type: :tool_calls, tool_call_format: :structured}), do: true
-  defp structured_tool_field?(_field), do: false
-
-  defp tool_parse_signature(%Signature{} = signature, choice) do
-    fields =
-      Enum.flat_map(signature.output_fields, fn
-        %{type: :tool_calls, tool_call_format: :structured} = field ->
-          if has_native_tool_calls?(choice), do: [], else: [%{field | type: :string}]
-
-        %{type: :tool_calls} ->
-          []
-
-        field ->
-          [field]
-      end)
-
-    %{signature | output_fields: fields}
-  end
-
-  defp merge_tool_call_outputs(%Signature{} = signature, outputs, choice) do
-    fields = Enum.filter(signature.output_fields, &(&1.type == :tool_calls))
-
-    fields
-    |> Enum.reduce_while({:ok, outputs}, fn field, {:ok, acc} ->
-      case merge_tool_call_field(field, acc, choice) do
-        {:ok, enriched} -> {:cont, {:ok, enriched}}
-        {:error, _} = error -> {:halt, error}
-      end
-    end)
-    |> case do
-      {:ok, enriched} ->
-        missing =
-          for %{name: name, required: true} <- fields, not Map.has_key?(enriched, name), do: name
-
-        if missing == [],
-          do: {:ok, enriched},
-          else: {:error, {:missing_required_outputs, missing}}
-
-      {:error, _} = error ->
-        error
-    end
-  end
-
-  defp merge_tool_call_field(%{tool_call_format: :structured, name: name}, outputs, choice) do
-    case {structured_native_calls(choice), Map.fetch(outputs, name)} do
-      {native, _text} when native not in [nil, []] ->
-        put_structured_tool_calls(outputs, name, native)
-
-      {_native, {:ok, text}} ->
-        with {:ok, calls} <- decode_tool_call_list(text) do
-          put_structured_tool_calls(outputs, name, calls)
-        end
-
-      {_native, :error} ->
-        {:ok, outputs}
-    end
-  end
-
-  defp merge_tool_call_field(%{name: name}, outputs, choice) do
-    with {:ok, parsed} <- parse_tool_calls(choice.tool_calls, &normalize_tool_call/1) do
-      if parsed == [], do: {:ok, outputs}, else: {:ok, Map.put_new(outputs, name, parsed)}
-    end
-  end
-
-  defp structured_native_calls(choice), do: tool_value(choice.raw, :tool_calls)
-  defp has_native_tool_calls?(choice), do: structured_native_calls(choice) not in [nil, []]
-
-  defp put_structured_tool_calls(outputs, name, calls) do
-    with {:ok, parsed} <- parse_tool_calls(calls, &normalize_structured_tool_call/1) do
-      {:ok, Map.put(outputs, name, parsed)}
-    end
-  end
-
-  defp decode_tool_call_list(text) do
-    case decode_tool_json(text) do
-      {:ok, calls} when is_list(calls) -> {:ok, calls}
-      {:ok, _} -> {:error, {:invalid_tool_calls, :expected_list}}
-      {:error, reason} -> {:error, {:invalid_tool_calls, reason}}
-    end
-  end
-
-  defp parse_tool_calls(nil, _normalize), do: {:ok, []}
-
-  defp parse_tool_calls(tool_calls, normalize) when is_integer(length(tool_calls)) do
-    tool_calls
-    |> Enum.reduce_while({:ok, []}, fn tool_call, {:ok, acc} ->
-      case normalize.(tool_call) do
-        {:ok, normalized} -> {:cont, {:ok, [normalized | acc]}}
-        {:error, _} = error -> {:halt, error}
-      end
-    end)
-    |> case do
-      {:ok, calls} -> {:ok, Enum.reverse(calls)}
-      {:error, _} = error -> error
-    end
-  end
-
-  defp parse_tool_calls(other, _normalize), do: {:error, {:invalid_tool_calls, other}}
-
-  defp normalize_structured_tool_call(call) when is_map(call) do
-    function = tool_value(call, :function, call)
-
-    with :ok <- validate_tool_call_type(tool_value(call, :type, "function")),
-         true <- is_map(function),
-         name <- tool_value(function, :name),
-         true <- nonblank_tool_string?(name),
-         {:ok, id} <- structured_tool_id(name, tool_value(call, :id)),
-         raw_args = tool_value(function, :arguments, tool_value(function, :args, %{})),
-         {:ok, args} <- structured_tool_arguments(name, raw_args) do
-      {:ok, %{id: id, name: name, args: args}}
-    else
-      false -> {:error, {:invalid_tool_call, %{reason: :missing_name}}}
-      {:error, _} = error -> error
-    end
-  end
-
-  defp normalize_structured_tool_call(_other),
-    do: {:error, {:invalid_tool_call, %{reason: :not_a_map}}}
-
-  defp validate_tool_call_type(type) when type in [:function, "function"], do: :ok
-
-  defp validate_tool_call_type(_type),
-    do: {:error, {:invalid_tool_call, %{reason: :unsupported_type}}}
-
-  defp tool_value(map, key, default \\ nil),
-    do: Map.get(map, key, Map.get(map, Atom.to_string(key), default))
-
-  defp nonblank_tool_string?(value),
-    do: is_binary(value) and String.valid?(value) and String.trim(value) != ""
-
-  defp structured_tool_id(_name, nil), do: {:ok, nil}
-
-  defp structured_tool_id(name, id) do
-    if nonblank_tool_string?(id),
-      do: {:ok, id},
-      else: {:error, {:invalid_tool_call_id, %{name: name}}}
-  end
-
-  defp structured_tool_arguments(name, raw_args) do
-    case tool_argument_object(raw_args) do
-      {:ok, args} when is_map(args) and not is_struct(args) -> {:ok, args}
-      _ -> {:error, {:invalid_tool_call_arguments, %{name: name}}}
-    end
-  end
-
-  defp tool_argument_object(json) when is_binary(json), do: decode_tool_json(json)
-
-  defp tool_argument_object(args) when is_map(args) do
-    with {:ok, _} <- Dspy.History.encode_tool_value(args), do: {:ok, args}
-  end
-
-  defp tool_argument_object(_value), do: {:error, :expected_object}
-
-  defp decode_tool_json(text) when is_binary(text) do
-    with {:ok, ordered} <- Jason.decode(text, objects: :ordered_objects),
-         {:ok, _} <- Dspy.History.encode_tool_value(ordered) do
-      {:ok, tool_json_maps(ordered)}
-    else
-      {:error, %Jason.EncodeError{}} -> {:error, :duplicate_json_key}
-      {:error, _} -> {:error, :invalid_json}
-    end
-  end
-
-  defp decode_tool_json(_text), do: {:error, :invalid_json}
-
-  defp tool_json_maps(%Jason.OrderedObject{values: pairs}),
-    do: Map.new(pairs, fn {key, value} -> {key, tool_json_maps(value)} end)
-
-  defp tool_json_maps(values) when is_list(values), do: Enum.map(values, &tool_json_maps/1)
-  defp tool_json_maps(value), do: value
-
-  defp normalize_tool_call(tool_call) when is_map(tool_call) do
-    function = Map.get(tool_call, :function) || Map.get(tool_call, "function") || %{}
-
-    name =
-      Map.get(function, :name) || Map.get(function, "name") ||
-        Map.get(tool_call, :name) || Map.get(tool_call, "name")
-
-    raw_arguments =
-      Map.get(function, :arguments) || Map.get(function, "arguments") ||
-        Map.get(tool_call, :arguments) || Map.get(tool_call, "arguments")
-
-    with true <- is_binary(name) and name != "",
-         {:ok, args} <- decode_tool_call_arguments(name, raw_arguments) do
-      {:ok, %{name: name, args: args}}
-    else
-      false -> {:error, {:invalid_tool_call, %{reason: :missing_name, tool_call: tool_call}}}
-      {:error, _} = error -> error
-    end
-  end
-
-  defp normalize_tool_call(other),
-    do: {:error, {:invalid_tool_call, %{reason: :not_a_map, tool_call: other}}}
-
-  defp decode_tool_call_arguments(_name, nil), do: {:ok, %{}}
-  defp decode_tool_call_arguments(_name, args) when is_map(args), do: {:ok, args}
-  defp decode_tool_call_arguments(_name, args) when is_list(args), do: {:ok, args}
-
-  defp decode_tool_call_arguments(name, args) when is_binary(args) do
-    case Jason.decode(args) do
-      {:ok, decoded} -> {:ok, decoded}
-      {:error, _reason} -> {:error, {:invalid_tool_call_arguments, %{name: name}}}
-    end
-  end
-
-  defp decode_tool_call_arguments(name, _args),
-    do: {:error, {:invalid_tool_call_arguments, %{name: name}}}
-
   defp call_with_retry_log(request, %{max_retries: max_retries} = lm_options, call_id)
        when is_map(request) and is_integer(max_retries) and max_retries >= 0 do
     max_retries = if LM.owns_transport_retries?(lm_options.lm, request), do: 0, else: max_retries
-    do_call_with_retry_log(request, lm_options, 1, max_retries + 1, call_id)
+    do_call_with_retry_log(request, lm_options, 1, {max_retries + 1, call_id})
   end
 
-  defp do_call_with_retry_log(request, lm_options, attempt, max_attempts, call_id) do
+  defp do_call_with_retry_log(request, lm_options, attempt, {max_attempts, call_id} = retry_ctx) do
     result =
       with {:ok, advised_request} <- append_advice(request, lm_options.prompt_advice) do
         if lm_options.telemetry?, do: Telemetry.count_transport_attempt()
@@ -906,7 +691,7 @@ defmodule Dspy.Signature.Adapter.Pipeline do
           )
 
           Process.sleep(retry_sleep_ms())
-          do_call_with_retry_log(request, lm_options, next_attempt, max_attempts, call_id)
+          do_call_with_retry_log(request, lm_options, next_attempt, retry_ctx)
         else
           {:error, reason, attempt}
         end
