@@ -1,12 +1,13 @@
 defmodule Dspy.Evaluate.InvalidMetricResult do
   @moduledoc """
   Raised by `Dspy.Evaluate.evaluate/4` when a metric result is neither a
-  number nor a boolean (Q2, H0b-2).
+  number, boolean, or Prediction with a numeric or boolean score.
 
   Mirrors upstream DSPy 3.4.0, where a non-numeric metric result crashes the
   whole evaluation with a `TypeError` in `sum()` (after all LM calls had
   completed; probe: `tmp/pyck/ck.py`). We raise earlier — at the first bad
-  result — with the inspected value and the example index.
+  result — with the example index. Prediction payloads are not inspected in
+  the error message.
 
   Fields:
 
@@ -18,10 +19,18 @@ defmodule Dspy.Evaluate.InvalidMetricResult do
   `MaxErrorsExceeded`, so `compile/3` surfaces it to the caller.
   """
 
+  @type t :: %__MODULE__{value: term(), example_index: non_neg_integer()}
+
   @enforce_keys [:value, :example_index]
   defexception [:value, :example_index]
 
   @impl true
+  @spec message(t()) :: String.t()
+  def message(%{value: %Dspy.Prediction{}, example_index: example_index}) do
+    "Invalid metric result at example index #{example_index}: " <>
+      "expected a Prediction with a numeric or boolean score"
+  end
+
   def message(%{value: value, example_index: example_index}) do
     "Invalid metric result at example index #{example_index}: " <>
       "expected a number or boolean, got #{inspect(value)}"

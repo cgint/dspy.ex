@@ -34,7 +34,9 @@ defmodule Dspy.Teleprompt do
   alias Dspy.Teleprompt.{LabeledFewShot, BootstrapFewShot, COPRO, MIPROv2, SIMBA, Ensemble, GEPA}
   alias Dspy.Teleprompt.{BootstrapFewShotWithRandomSearch, BootstrapTrace, InferRules, KNNFewShot}
 
-  @type metric_fun :: (Example.t() -> number()) | (Example.t(), Dspy.Prediction.t() -> number())
+  @type metric_result :: number() | boolean() | Dspy.Prediction.t()
+  @type metric_fun ::
+          (Example.t() -> metric_result()) | (Example.t(), Dspy.Prediction.t() -> metric_result())
 
   @typedoc """
   One predictor call in a bootstrap teacher attempt.
@@ -245,10 +247,12 @@ defmodule Dspy.Teleprompt do
 
   ## Returns
 
-  Numeric score (boolean results normalized to 1.0/0.0) or `:error` when
-  the metric raised. Non-numeric, non-boolean results are returned as-is:
-  callers that need the upstream raise-on-invalid-score behaviour must
-  check for them themselves (Q2, H0b-2 — Evaluate raises
+  Numeric score (boolean results normalized to 1.0/0.0, and `Dspy.Prediction`
+  results with a numeric or boolean `:score` / `"score"` attribute extracted
+  and normalized) or `:error` when the metric raised. Other non-numeric,
+  non-boolean results (including malformed `Dspy.Prediction` values) are
+  returned as-is: callers that need the upstream raise-on-invalid-score
+  behaviour must check for them themselves (Q2, H0b-2 — Evaluate raises
   `Dspy.Evaluate.InvalidMetricResult`; bootstrap/mipro treat them as
   "no hit").
 
@@ -300,12 +304,21 @@ defmodule Dspy.Teleprompt do
   end
 
   # Boolean metric results map to 1.0 / 0.0 (Python bool arithmetic,
-  # upstream `evaluate.py:183` — Python sums `True`/`False` as 1/0). Anything
-  # else is passed through unchanged: `Evaluate` raises
+  # upstream `evaluate.py:183` — Python sums `True`/`False` as 1/0).
+  # Valid Prediction scores are extracted; other values pass through unchanged:
+  # `Evaluate` raises
   # `Dspy.Evaluate.InvalidMetricResult` on it (Q2, H0b-2), while
   # bootstrap/mipro treat a non-number as "no hit" (upstream bootstrap
   # treats `nil` as "no hit").
   defp normalize_score(true), do: 1.0
   defp normalize_score(false), do: 0.0
+
+  defp normalize_score(%Dspy.Prediction{attrs: attrs} = prediction) when is_map(attrs) do
+    case Dspy.Attrs.fetch_map(attrs, :score) do
+      {:ok, score} when is_number(score) or is_boolean(score) -> normalize_score(score)
+      _ -> prediction
+    end
+  end
+
   defp normalize_score(score), do: score
 end
