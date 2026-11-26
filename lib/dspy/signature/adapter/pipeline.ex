@@ -35,10 +35,14 @@ defmodule Dspy.Signature.Adapter.Pipeline do
         ]
 
   @doc false
+  @spec run_prediction(Signature.t(), map(), [Dspy.Example.t()], opts()) ::
+          {:ok, Prediction.t()} | {:error, term()}
   def run_prediction(signature, inputs, demos, opts),
     do: run_prediction(signature, inputs, demos, nil, opts)
 
   @doc false
+  @spec run_prediction(Signature.t(), map(), [Dspy.Example.t()], term(), opts()) ::
+          {:ok, Prediction.t()} | {:error, term()}
   def run_prediction(signature, inputs, demos, on_delta, opts) do
     case run_internal(signature, inputs, demos, {on_delta, opts}) do
       {:ok, {:parsed_choices, prediction}} -> {:ok, prediction}
