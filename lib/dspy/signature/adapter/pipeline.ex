@@ -40,7 +40,7 @@ defmodule Dspy.Signature.Adapter.Pipeline do
 
   @doc false
   def run_prediction(signature, inputs, demos, on_delta, opts) do
-    case run(signature, inputs, demos, on_delta, opts) do
+    case run_internal(signature, inputs, demos, {on_delta, opts}) do
       {:ok, {:parsed_choices, prediction}} -> {:ok, prediction}
       {:ok, outputs} -> {:ok, Prediction.new(outputs)}
       {:error, _} = error -> error
@@ -51,9 +51,9 @@ defmodule Dspy.Signature.Adapter.Pipeline do
           {:ok, map() | {:parsed_choices, Prediction.t()}} | {:error, term()}
   def run(%Signature{} = signature, inputs, demos, opts \\ [])
       when is_map(inputs) and is_list(demos) and is_list(opts),
-      do: run(signature, inputs, demos, nil, opts)
+      do: run_internal(signature, inputs, demos, {nil, opts})
 
-  defp run(%Signature{} = signature, inputs, demos, stream_callbacks, opts)
+  defp run_internal(%Signature{} = signature, inputs, demos, {stream_callbacks, opts})
        when is_map(inputs) and is_list(demos) and is_list(opts) do
     adapter = AdapterPipeline.active_adapter(adapter: Keyword.get(opts, :adapter))
 
@@ -117,17 +117,17 @@ defmodule Dspy.Signature.Adapter.Pipeline do
     run = fn ->
       with :ok <- validate_streaming_adapter(adapter, on_delta),
            :ok <- validate_choice_request(count, lm, adapter, signature) do
-        do_run_attempt(
-          signature,
-          inputs,
-          demos,
-          adapter,
-          callbacks,
-          meta,
-          lm_options,
-          max_output_retries,
-          max_output_attempts
-        )
+        do_run_attempt(%{
+          signature: signature,
+          inputs: inputs,
+          demos: demos,
+          adapter: adapter,
+          callbacks: callbacks,
+          meta: meta,
+          lm_options: lm_options,
+          output_retries_left: max_output_retries,
+          max_output_attempts: max_output_attempts
+        })
       end
     end
 
@@ -202,15 +202,17 @@ defmodule Dspy.Signature.Adapter.Pipeline do
   end
 
   defp do_run_attempt(
-         %Signature{} = signature,
-         inputs,
-         demos,
-         adapter,
-         callbacks,
-         meta,
-         %{lm: lm, max_retries: max_retries} = lm_options,
-         output_retries_left,
-         max_output_attempts
+         %{
+           signature: %Signature{} = signature,
+           inputs: inputs,
+           demos: demos,
+           adapter: adapter,
+           callbacks: callbacks,
+           meta: meta,
+           lm_options: %{lm: lm, max_retries: max_retries} = lm_options,
+           output_retries_left: output_retries_left,
+           max_output_attempts: max_output_attempts
+         } = run_ctx
        )
        when is_map(inputs) and is_list(demos) and is_atom(adapter) and is_list(callbacks) and
               is_integer(max_retries) and
@@ -235,18 +237,12 @@ defmodule Dspy.Signature.Adapter.Pipeline do
 
     with {:ok, request, base_prompt} <- formatted do
       do_call_and_parse(
-        signature,
-        inputs,
-        demos,
-        adapter,
-        callbacks,
-        meta,
-        lm_options,
-        output_retries_left,
-        max_output_attempts,
-        request,
-        request,
-        base_prompt
+        Map.merge(run_ctx, %{
+          callbacks: callbacks,
+          base_request: request,
+          base_prompt: base_prompt
+        }),
+        request
       )
     end
   end
@@ -265,18 +261,17 @@ defmodule Dspy.Signature.Adapter.Pipeline do
   end
 
   defp do_call_and_parse(
-         %Signature{} = signature,
-         inputs,
-         demos,
-         adapter,
-         callbacks,
-         %{call_id: call_id} = meta,
-         %{lm: lm, count: count} = lm_options,
-         output_retries_left,
-         max_output_attempts,
-         request,
-         base_request,
-         base_prompt
+         %{
+           signature: %Signature{} = signature,
+           adapter: adapter,
+           callbacks: callbacks,
+           meta: %{call_id: call_id} = meta,
+           lm_options: %{lm: lm, count: count} = lm_options,
+           max_output_attempts: max_output_attempts,
+           base_request: base_request,
+           base_prompt: base_prompt
+         } = run_ctx,
+         request
        )
        when is_map(request) and is_map(base_request) and is_binary(base_prompt) and
               is_integer(max_output_attempts) and max_output_attempts >= 1 do
@@ -334,19 +329,9 @@ defmodule Dspy.Signature.Adapter.Pipeline do
 
         {:error, reason, response_text, choice_index} ->
           maybe_retry_output(
-            signature,
-            inputs,
-            demos,
-            adapter,
-            callbacks,
-            meta,
-            lm_options,
-            output_retries_left,
-            max_output_attempts,
-            base_request,
-            base_prompt,
-            response_text,
+            %{run_ctx | callbacks: callbacks},
             reason,
+            response_text,
             choice_index
           )
       end
@@ -474,19 +459,20 @@ defmodule Dspy.Signature.Adapter.Pipeline do
   defp with_choice_index(payload, index), do: Map.put(payload, :choice_index, index)
 
   defp maybe_retry_output(
-         signature,
-         inputs,
-         demos,
-         adapter,
-         callbacks,
-         %{call_id: call_id, attempt: attempt} = meta,
-         %{lm: lm} = lm_options,
-         output_retries_left,
-         max_output_attempts,
-         base_request,
-         base_prompt,
-         response_text,
+         %{
+           signature: signature,
+           inputs: inputs,
+           adapter: adapter,
+           callbacks: callbacks,
+           meta: %{call_id: call_id, attempt: attempt} = meta,
+           lm_options: %{lm: lm} = lm_options,
+           output_retries_left: output_retries_left,
+           max_output_attempts: max_output_attempts,
+           base_request: base_request,
+           base_prompt: base_prompt
+         } = run_ctx,
          reason,
+         response_text,
          choice_index
        )
        when is_map(base_request) and is_binary(base_prompt) and is_integer(max_output_attempts) and
@@ -518,18 +504,13 @@ defmodule Dspy.Signature.Adapter.Pipeline do
             end)
 
           do_call_and_parse(
-            signature,
-            inputs,
-            demos,
-            adapter,
-            callbacks,
-            meta,
-            lm_options,
-            output_retries_left - 1,
-            max_output_attempts,
-            retry_request,
-            base_request,
-            base_prompt
+            %{
+              run_ctx
+              | callbacks: callbacks,
+                meta: meta,
+                output_retries_left: output_retries_left - 1
+            },
+            retry_request
           )
         end
 
@@ -683,10 +664,10 @@ defmodule Dspy.Signature.Adapter.Pipeline do
   defp call_with_retry_log(request, %{max_retries: max_retries} = lm_options, call_id)
        when is_map(request) and is_integer(max_retries) and max_retries >= 0 do
     max_retries = if LM.owns_transport_retries?(lm_options.lm, request), do: 0, else: max_retries
-    do_call_with_retry_log(request, lm_options, 1, max_retries + 1, call_id)
+    do_call_with_retry_log(request, lm_options, 1, {max_retries + 1, call_id})
   end
 
-  defp do_call_with_retry_log(request, lm_options, attempt, max_attempts, call_id) do
+  defp do_call_with_retry_log(request, lm_options, attempt, {max_attempts, call_id} = retry_ctx) do
     result =
       with {:ok, advised_request} <- append_advice(request, lm_options.prompt_advice) do
         if lm_options.telemetry?, do: Telemetry.count_transport_attempt()
@@ -706,7 +687,7 @@ defmodule Dspy.Signature.Adapter.Pipeline do
           )
 
           Process.sleep(retry_sleep_ms())
-          do_call_with_retry_log(request, lm_options, next_attempt, max_attempts, call_id)
+          do_call_with_retry_log(request, lm_options, next_attempt, retry_ctx)
         else
           {:error, reason, attempt}
         end
