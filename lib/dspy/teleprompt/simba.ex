@@ -166,11 +166,15 @@ defmodule Dspy.Teleprompt.SIMBA do
     # D5: this is the OUTER wrap required for the nested Evaluate — without it,
     # the inner Evaluate's tasks would see no overrides.
     ctx = Dspy.Context.capture()
+    caller = self()
 
     best =
-      candidates
-      |> Task.async_stream(
+      Task.Supervisor.async_stream_nolink(
+        Dspy.TaskSupervisor,
+        candidates,
         fn cand ->
+          Dspy.ProcessOwnership.watch(caller, self(), :kill)
+
           Dspy.Context.with_context(ctx, fn ->
             try do
               score = Evaluate.evaluate(cand, eval_batch, teleprompt.metric, progress: false).mean

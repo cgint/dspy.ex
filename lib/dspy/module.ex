@@ -361,6 +361,7 @@ defmodule Dspy.Module do
     deadline are killed via `Task.shutdown/2` and reported as
     `{:error, :timeout}` in that slot.
   """
+  @spec parallel([term()], keyword()) :: (map() -> {:ok, Dspy.Prediction.t()} | {:error, term()})
   def parallel(modules, opts \\ []) when is_list(modules) do
     timeout = Keyword.get(opts, :timeout, :infinity)
 
@@ -391,7 +392,7 @@ defmodule Dspy.Module do
       tasks =
         modules
         |> Enum.map(fn module ->
-          Task.async(fn ->
+          Task.Supervisor.async_nolink(Dspy.TaskSupervisor, fn ->
             Composite.with_worker_scope(stream_scope, caller, fn ->
               Dspy.Context.with_context(ctx, fn ->
                 try do

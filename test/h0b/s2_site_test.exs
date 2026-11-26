@@ -560,10 +560,15 @@ defmodule H0b.S2SiteTest do
 
     Enum.each(files, fn {file, expected_sites} ->
       content = File.read!(file)
-      sites = content |> String.split("Task.async_stream(") |> length() |> Kernel.-(1)
+
+      sites =
+        content
+        |> String.split("Task.Supervisor.async_stream_nolink(")
+        |> length()
+        |> Kernel.-(1)
 
       assert sites == expected_sites,
-             "#{file}: expected #{expected_sites} Task.async_stream sites, found #{sites}"
+             "#{file}: expected #{expected_sites} Task.Supervisor.async_stream_nolink sites, found #{sites}"
 
       kill_task_count =
         content |> String.split("on_timeout: :kill_task") |> length() |> Kernel.-(1)

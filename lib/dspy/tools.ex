@@ -752,7 +752,7 @@ defmodule Dspy.Tools do
     context = Context.capture()
 
     task =
-      Task.async(fn ->
+      Task.Supervisor.async_nolink(Dspy.TaskSupervisor, fn ->
         ProcessOwnership.watch(caller, self(), :kill)
 
         Context.with_context(context, fn ->
