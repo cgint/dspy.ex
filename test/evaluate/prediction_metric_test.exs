@@ -53,8 +53,10 @@ defmodule Dspy.Evaluate.PredictionMetricTest do
   end
 
   test "invalid predictions retain their entire value and do not consume error budget" do
-    for attrs <- [nil, %{}, %{score: nil}, %{score: "1"}, %{:score => :bad, "score" => 1}] do
+    for attrs <- [nil, %{}, %URI{}, %{score: nil}, %{score: "1"}, %{:score => :bad, "score" => 1}] do
       value = %Prediction{attrs: attrs}
+
+      assert Teleprompt.run_metric(fn _, _ -> value end, Example.new(), nil) === value
 
       error =
         assert_raise Dspy.Evaluate.InvalidMetricResult, fn ->

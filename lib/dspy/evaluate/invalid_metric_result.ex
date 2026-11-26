@@ -19,10 +19,13 @@ defmodule Dspy.Evaluate.InvalidMetricResult do
   `MaxErrorsExceeded`, so `compile/3` surfaces it to the caller.
   """
 
+  @type t :: %__MODULE__{value: term(), example_index: non_neg_integer()}
+
   @enforce_keys [:value, :example_index]
   defexception [:value, :example_index]
 
   @impl true
+  @spec message(t()) :: String.t()
   def message(%{value: %Dspy.Prediction{}, example_index: example_index}) do
     "Invalid metric result at example index #{example_index}: " <>
       "expected a Prediction with a numeric or boolean score"

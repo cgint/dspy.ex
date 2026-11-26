@@ -300,7 +300,7 @@ defmodule Dspy.Teleprompt do
   end
 
   # Boolean metric results map to 1.0 / 0.0 (Python bool arithmetic,
-  # upstream `evaluate.py:183` — Python sums `True`/`False` as 1/0). Anything
+  # upstream `evaluate.py:183` — Python sums `True`/`False` as 1/0).
   # Valid Prediction scores are extracted; other values pass through unchanged:
   # `Evaluate` raises
   # `Dspy.Evaluate.InvalidMetricResult` on it (Q2, H0b-2), while
@@ -310,7 +310,11 @@ defmodule Dspy.Teleprompt do
   defp normalize_score(false), do: 0.0
 
   defp normalize_score(%Dspy.Prediction{attrs: attrs} = prediction) when is_map(attrs) do
-    score = if Map.has_key?(attrs, :score), do: attrs[:score], else: attrs["score"]
+    score =
+      case Map.fetch(attrs, :score) do
+        {:ok, value} -> value
+        :error -> Map.get(attrs, "score")
+      end
 
     if is_number(score) or is_boolean(score), do: normalize_score(score), else: prediction
   end
