@@ -24,6 +24,7 @@ defmodule Dspy.Tools.TaskOwnershipTest do
     tool = blocking_tool(self())
     {caller, caller_ref} = start_invocation(tool, :cancelled)
     {worker, worker_ref} = arm_tool(:cancelled)
+    assert worker in Task.Supervisor.children(Dspy.TaskSupervisor)
     {other_caller, other_caller_ref} = start_invocation(tool, :independent)
     {other_worker, other_worker_ref} = arm_tool(:independent)
 

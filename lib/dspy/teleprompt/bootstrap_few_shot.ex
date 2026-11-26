@@ -284,11 +284,15 @@ defmodule Dspy.Teleprompt.BootstrapFewShot do
 
     chunk_size = max(1, div(length(examples), num_threads))
     chunks = Enum.chunk_every(examples, chunk_size)
+    caller = self()
 
     results =
-      chunks
-      |> Task.async_stream(
+      Task.Supervisor.async_stream_nolink(
+        Dspy.TaskSupervisor,
+        chunks,
         fn chunk ->
+          Dspy.ProcessOwnership.watch(caller, self(), :kill)
+
           Dspy.Context.with_context(ctx, fn ->
             try do
               {:ok, bootstrap_chunk(teacher, chunk, metric, max_errors)}
@@ -455,10 +459,15 @@ defmodule Dspy.Teleprompt.BootstrapFewShot do
     ctx = Dspy.Context.capture()
 
     # Evaluate each candidate on validation set
+    caller = self()
+
     evaluations =
-      candidates
-      |> Task.async_stream(
+      Task.Supervisor.async_stream_nolink(
+        Dspy.TaskSupervisor,
+        candidates,
         fn candidate ->
+          Dspy.ProcessOwnership.watch(caller, self(), :kill)
+
           Dspy.Context.with_context(ctx, fn ->
             try do
               result =

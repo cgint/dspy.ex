@@ -14,6 +14,7 @@ defmodule Dspy.Teleprompt.Ensemble.Program do
         }
 
   @impl true
+  @spec forward(t(), map()) :: {:ok, Prediction.t()} | {:error, term()}
   def forward(%__MODULE__{} = ensemble, inputs) when is_map(inputs) do
     members = ensemble.members || []
 
@@ -31,15 +32,19 @@ defmodule Dspy.Teleprompt.Ensemble.Program do
       # Capture process-local DSPy state (overrides + callback stack) in the
       # caller; reinstall it in each task (tasks do not inherit the dictionary).
       ctx = Dspy.Context.capture()
+      caller = self()
 
       # Keep each surviving prediction paired with ITS OWN weight so a failed
       # member cannot shift the weight alignment (E4): the stream emits results
       # in input order, so pairing positionally with `weights` stays correct
       # even when a middle member is dropped.
       surviving =
-        members
-        |> Task.async_stream(
+        Task.Supervisor.async_stream_nolink(
+          Dspy.TaskSupervisor,
+          members,
           fn member ->
+            Dspy.ProcessOwnership.watch(caller, self(), :kill)
+
             Dspy.Context.with_context(ctx, fn ->
               try do
                 # `forward/2` returns `{:ok, prediction}` on success; on
@@ -383,12 +388,15 @@ defmodule Dspy.Teleprompt.Ensemble do
     # Capture process-local DSPy state (overrides + callback stack) in the
     # caller; reinstall it in each task (tasks do not inherit the dictionary).
     ctx = Dspy.Context.capture()
+    caller = self()
 
     members =
-      training_configs
-      |> Enum.with_index(1)
-      |> Task.async_stream(
+      Task.Supervisor.async_stream_nolink(
+        Dspy.TaskSupervisor,
+        Enum.with_index(training_configs, 1),
         fn {config, idx} ->
+          Dspy.ProcessOwnership.watch(caller, self(), :kill)
+
           Dspy.Context.with_context(ctx, fn ->
             try do
               Dspy.Teleprompt.Util.log(teleprompt, "  Training member #{idx}/#{size}")
@@ -546,11 +554,15 @@ defmodule Dspy.Teleprompt.Ensemble do
     # D5: this is the OUTER wrap required for the nested Evaluate — without it,
     # the inner Evaluate's tasks would see no overrides.
     ctx = Dspy.Context.capture()
+    caller = self()
 
     performances =
-      members
-      |> Task.async_stream(
+      Task.Supervisor.async_stream_nolink(
+        Dspy.TaskSupervisor,
+        members,
         fn member ->
+          Dspy.ProcessOwnership.watch(caller, self(), :kill)
+
           Dspy.Context.with_context(ctx, fn ->
             try do
               result = Evaluate.evaluate(member, val_data, metric, progress: false)

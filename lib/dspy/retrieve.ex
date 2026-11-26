@@ -179,6 +179,7 @@ defmodule Dspy.Retrieve do
     - if embedding fails, chunks are returned with `embedding: nil` and `metadata[:embedding_error]`
     - if a document task errors/exits/times out, chunks are returned with `embedding: nil` and `metadata[:document_error]`
     """
+    @spec process_documents(list(), keyword()) :: list()
     def process_documents(documents, opts \\ []) do
       embedding_provider = opts[:embedding_provider]
       embedding_provider_opts = opts[:embedding_provider_opts] || []
@@ -190,11 +191,15 @@ defmodule Dspy.Retrieve do
       # Capture process-local DSPy state (overrides + callback stack) in the
       # caller; reinstall it in each task (tasks do not inherit the dictionary).
       ctx = Dspy.Context.capture()
+      caller = self()
 
       results =
-        Task.async_stream(
+        Task.Supervisor.async_stream_nolink(
+          Dspy.TaskSupervisor,
           documents,
           fn doc ->
+            Dspy.ProcessOwnership.watch(caller, self(), :kill)
+
             Dspy.Context.with_context(ctx, fn ->
               safe_process_single_document(
                 doc,

@@ -296,11 +296,15 @@ defmodule Dspy.Teleprompt.MIPROv2 do
     # Capture process-local DSPy state (overrides + callback stack) in the
     # caller; reinstall it in each task (tasks do not inherit the dictionary).
     ctx = Dspy.Context.capture()
+    caller = self()
 
     bootstrapped =
-      candidate_examples
-      |> Task.async_stream(
+      Task.Supervisor.async_stream_nolink(
+        Dspy.TaskSupervisor,
+        candidate_examples,
         fn %Example{} = gold ->
+          Dspy.ProcessOwnership.watch(caller, self(), :kill)
+
           Dspy.Context.with_context(ctx, fn ->
             try do
               inputs = Example.inputs(gold)
