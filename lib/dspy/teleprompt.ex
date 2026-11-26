@@ -301,11 +301,19 @@ defmodule Dspy.Teleprompt do
 
   # Boolean metric results map to 1.0 / 0.0 (Python bool arithmetic,
   # upstream `evaluate.py:183` — Python sums `True`/`False` as 1/0). Anything
-  # else is passed through unchanged: `Evaluate` raises
+  # Valid Prediction scores are extracted; other values pass through unchanged:
+  # `Evaluate` raises
   # `Dspy.Evaluate.InvalidMetricResult` on it (Q2, H0b-2), while
   # bootstrap/mipro treat a non-number as "no hit" (upstream bootstrap
   # treats `nil` as "no hit").
   defp normalize_score(true), do: 1.0
   defp normalize_score(false), do: 0.0
+
+  defp normalize_score(%Dspy.Prediction{attrs: attrs} = prediction) when is_map(attrs) do
+    score = if Map.has_key?(attrs, :score), do: attrs[:score], else: attrs["score"]
+
+    if is_number(score) or is_boolean(score), do: normalize_score(score), else: prediction
+  end
+
   defp normalize_score(score), do: score
 end
