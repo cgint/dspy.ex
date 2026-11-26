@@ -16,6 +16,12 @@ defmodule Dspy.SupervisedTasksOwnershipTest do
     end
   end
 
+  defp cleanup_on_exit(pid) when is_pid(pid) do
+    on_exit(fn ->
+      if Process.alive?(pid), do: Process.exit(pid, :kill)
+    end)
+  end
+
   test "Module.parallel/2 runs workers under Dspy.TaskSupervisor and kills them on caller death" do
     parent = self()
     parallel_fn = Dspy.Module.parallel([%BlockingModule{notify: parent}])
@@ -25,7 +31,10 @@ defmodule Dspy.SupervisedTasksOwnershipTest do
         parallel_fn.(%{question: "q"})
       end)
 
+    cleanup_on_exit(caller)
+
     assert_receive {:worker_started, worker}, 1_000
+    cleanup_on_exit(worker)
     assert worker in Task.Supervisor.children(Dspy.TaskSupervisor)
 
     worker_ref = Process.monitor(worker)
@@ -50,7 +59,10 @@ defmodule Dspy.SupervisedTasksOwnershipTest do
         Dspy.Teleprompt.Ensemble.Program.forward(ensemble, %{question: "q"})
       end)
 
+    cleanup_on_exit(caller)
+
     assert_receive {:worker_started, worker}, 1_000
+    cleanup_on_exit(worker)
     assert worker in Task.Supervisor.children(Dspy.TaskSupervisor)
 
     worker_ref = Process.monitor(worker)
@@ -85,7 +97,10 @@ defmodule Dspy.SupervisedTasksOwnershipTest do
         )
       end)
 
+    cleanup_on_exit(caller)
+
     assert_receive {:worker_started, worker}, 1_000
+    cleanup_on_exit(worker)
     assert worker in Task.Supervisor.children(Dspy.TaskSupervisor)
 
     worker_ref = Process.monitor(worker)

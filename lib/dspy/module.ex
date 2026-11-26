@@ -393,8 +393,6 @@ defmodule Dspy.Module do
         modules
         |> Enum.map(fn module ->
           Task.Supervisor.async_nolink(Dspy.TaskSupervisor, fn ->
-            Dspy.ProcessOwnership.watch(caller, self(), :kill)
-
             Composite.with_worker_scope(stream_scope, caller, fn ->
               Dspy.Context.with_context(ctx, fn ->
                 try do
