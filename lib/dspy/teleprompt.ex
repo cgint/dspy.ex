@@ -34,7 +34,9 @@ defmodule Dspy.Teleprompt do
   alias Dspy.Teleprompt.{LabeledFewShot, BootstrapFewShot, COPRO, MIPROv2, SIMBA, Ensemble, GEPA}
   alias Dspy.Teleprompt.{BootstrapFewShotWithRandomSearch, BootstrapTrace, InferRules, KNNFewShot}
 
-  @type metric_fun :: (Example.t() -> number()) | (Example.t(), Dspy.Prediction.t() -> number())
+  @type metric_result :: number() | boolean() | Dspy.Prediction.t()
+  @type metric_fun ::
+          (Example.t() -> metric_result()) | (Example.t(), Dspy.Prediction.t() -> metric_result())
 
   @typedoc """
   One predictor call in a bootstrap teacher attempt.
@@ -245,10 +247,12 @@ defmodule Dspy.Teleprompt do
 
   ## Returns
 
-  Numeric score (boolean results normalized to 1.0/0.0) or `:error` when
-  the metric raised. Non-numeric, non-boolean results are returned as-is:
-  callers that need the upstream raise-on-invalid-score behaviour must
-  check for them themselves (Q2, H0b-2 — Evaluate raises
+  Numeric score (boolean results normalized to 1.0/0.0, and `Dspy.Prediction`
+  results with a numeric or boolean `:score` / `"score"` attribute extracted
+  and normalized) or `:error` when the metric raised. Other non-numeric,
+  non-boolean results (including malformed `Dspy.Prediction` values) are
+  returned as-is: callers that need the upstream raise-on-invalid-score
+  behaviour must check for them themselves (Q2, H0b-2 — Evaluate raises
   `Dspy.Evaluate.InvalidMetricResult`; bootstrap/mipro treat them as
   "no hit").
 
@@ -310,13 +314,10 @@ defmodule Dspy.Teleprompt do
   defp normalize_score(false), do: 0.0
 
   defp normalize_score(%Dspy.Prediction{attrs: attrs} = prediction) when is_map(attrs) do
-    score =
-      case Map.fetch(attrs, :score) do
-        {:ok, value} -> value
-        :error -> Map.get(attrs, "score")
-      end
-
-    if is_number(score) or is_boolean(score), do: normalize_score(score), else: prediction
+    case Dspy.Attrs.fetch_map(attrs, :score) do
+      {:ok, score} when is_number(score) or is_boolean(score) -> normalize_score(score)
+      _ -> prediction
+    end
   end
 
   defp normalize_score(score), do: score
