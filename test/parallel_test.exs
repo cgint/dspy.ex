@@ -409,7 +409,8 @@ defmodule Dspy.ParallelTest do
       Parallel.run(Parallel.new(num_threads: 2, max_errors: 3), pairs)
 
     assert info.errors == 3
-    assert info.failed_indices == [0, 1, 2]
+    assert length(info.failed_indices) == 3
+    assert Enum.all?(info.failed_indices, &(&1 in 0..9))
 
     # Remaining pairs are not scheduled: at most 3 failures + num_threads in flight ran.
     test_pid = self()

@@ -25,7 +25,8 @@ Dspy.context([cache: true], fn ->
         {"native", Map.put(request, :output_contract, contract)}
       ] do
     {:ok, response} = Dspy.LM.generate(lm, request)
-    %{usage: %{cost: %{line_items: [%{kind: :tokens} | _]}}} = response
+    %{usage: %{cost: %{line_items: line_items}}} = response
+    true = Enum.any?(line_items, &(&1.kind == :tokens))
 
     File.write!(
       Path.join(dir, "#{route}-#{mode}.etf"),

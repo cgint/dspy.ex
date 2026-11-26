@@ -126,6 +126,28 @@ defmodule Dspy.EmbeddingsBatcherTest do
     assert_receive {:embedded, ["east"]}, 2_000
   end
 
+  test "slow work permits bounded admissions and prunes dead callers" do
+    batcher = start_batcher(max_batch_size: 1, max_wait_ms: 0, max_pending: 1)
+    first = enqueue(batcher, "slow")
+    assert_receive {:blocked, worker}, 2_000
+    dead = enqueue(batcher, "west")
+    assert Batcher.query(batcher, "east") == {:error, :batcher_overloaded}
+    Task.shutdown(dead, :brutal_kill)
+    send(worker, :continue)
+    assert {:ok, _} = Task.await(first)
+    assert %{count: 0} = :sys.get_state(batcher)
+    refute_received {:embedded, ["west"]}
+  end
+
+  test "killing the batcher kills its blocked worker" do
+    batcher = start_batcher(max_wait_ms: 0)
+    spawn(fn -> Batcher.query(batcher, "slow") end)
+    assert_receive {:blocked, worker}, 2_000
+    ref = Process.monitor(worker)
+    Process.exit(batcher, :kill)
+    assert_receive {:DOWN, ^ref, :process, ^worker, :killed}, 2_000
+  end
+
   defp start_batcher(opts) do
     batcher =
       start_supervised!(%{
@@ -165,11 +187,24 @@ defmodule Dspy.EmbeddingsBatcherTest do
         send(owner, {:embedded, texts})
 
         case texts do
-          ["provider error", _] -> {:error, :unavailable}
-          ["raise", _] -> raise "private provider exception"
-          ["throw", _] -> throw("private provider throw")
-          ["exit", _] -> exit("private provider exit")
-          _ -> Enum.map(texts, &vector/1)
+          ["slow"] ->
+            send(owner, {:blocked, self()})
+            receive do: (:continue -> [[1]])
+
+          ["provider error", _] ->
+            {:error, :unavailable}
+
+          ["raise", _] ->
+            raise "private provider exception"
+
+          ["throw", _] ->
+            throw("private provider throw")
+
+          ["exit", _] ->
+            exit("private provider exit")
+
+          _ ->
+            Enum.map(texts, &vector/1)
         end
       end)
 

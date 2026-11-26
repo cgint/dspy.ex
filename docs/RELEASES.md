@@ -44,7 +44,7 @@ including equal module values stored at different paths.
 
 ### BetterTogether optimizer
 
-`Dspy.Teleprompt.BetterTogether` composes named prompt and weight optimizers
+`Dspy.Teleprompt.BetterTogether` (now quarantined in extras) composes named prompt and weight optimizers
 in a strategy such as `"p -> w -> p"`. Each stage receives the previous
 stage's program. The optimizer returns the best held-out candidate, or the
 latest completed program when validation is disabled. Use
@@ -52,7 +52,7 @@ latest completed program when validation is disabled. Use
 
 ### BootstrapFinetune optimizer
 
-`Dspy.Teleprompt.BootstrapFinetune` prepares Chat training conversations
+`Dspy.Teleprompt.BootstrapFinetune` (now quarantined in extras) prepares Chat training conversations
 from successful teacher traces. It groups training jobs by the student's
 bound LM in multitask mode or by predictor slot in separate mode. Each
 multitask job receives all compatible teacher traces. A caller-supplied
@@ -98,7 +98,7 @@ row. Scoring uses Elixir's native numeric representation.
 
 ### ColBERTv2 server search
 
-`Dspy.Retrieve.colbert/1` accepts a ColBERTv2 server URL. Pass the
+`Dspy.Retrieve.ColBERTv2.new/1` in extras accepts a ColBERTv2 server URL. Pass the
 configured value to `Dspy.Retrieve.ColBERTv2.search/3` for ranked results
 and server metadata. GET is the default and supports up to 100 results.
 Set `post_requests: true` for JSON POST or `simplify: true` on the
@@ -107,8 +107,8 @@ search for passage strings.
 ### Retrieval modules
 
 `Dspy.Retrieve.new/1` creates a module that returns a prediction
-with ordered passages. Bind a ColBERTv2 client, a retriever module,
-or a function with `rm:`. An unbound module uses the scoped or
+with ordered passages. Bind a retriever module or a function with `rm:`.
+For a ColBERTv2 client in extras, use a function that calls `search/3`. An unbound module uses the scoped or
 global `rm` setting. Pass `k` with the query to override the default.
 
 ### Trace-aware bootstrap metrics

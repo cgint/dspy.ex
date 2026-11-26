@@ -1,7 +1,7 @@
 defmodule Dspy.Teleprompt.BetterTogetherTest do
   use ExUnit.Case, async: true
 
-  alias Dspy.{Example, Module, Predict, Prediction, Teleprompt}
+  alias Dspy.{Example, Module, Predict, Prediction}
   alias Dspy.Signature.Adapters.ChatAdapter
   alias Dspy.Teleprompt.{BetterTogether, BootstrapFinetune, GEPA}
   alias Dspy.Teleprompt.BootstrapFewShotWithRandomSearch, as: BootstrapRS
@@ -59,7 +59,7 @@ defmodule Dspy.Teleprompt.BetterTogetherTest do
       )
 
     optimizer =
-      Teleprompt.new(:better_together,
+      BetterTogether.new(
         metric: fn _, prediction ->
           %{"baseline" => 0.5, "regressed" => 0, "trained" => 1}[prediction[:answer]]
         end,
@@ -152,9 +152,9 @@ defmodule Dspy.Teleprompt.BetterTogetherTest do
     refute_received {:evaluated, _}
   end
 
-  test "no validation returns the latest stage and the factory compile dispatch works" do
+  test "no validation returns the latest stage and direct compilation works" do
     optimizer =
-      Teleprompt.new(:better_together,
+      BetterTogether.new(
         metric: fn _, _ -> flunk("the rounded-zero split must skip evaluation") end,
         optimizers: %{
           p: stage(:p, fn student -> {:ok, %{student | version: :prompted}} end),
@@ -163,7 +163,7 @@ defmodule Dspy.Teleprompt.BetterTogetherTest do
       )
 
     assert {:ok, %Program{version: :prompted}} =
-             Teleprompt.compile(optimizer, program(), [row("train")])
+             BetterTogether.compile(optimizer, program(), [row("train")])
 
     assert_receive {:stage, :p, %Program{version: :baseline}, ["train"], []}
     assert_receive {:stage, :w, %Program{version: :prompted}, ["train"], []}

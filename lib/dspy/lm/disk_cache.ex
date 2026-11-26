@@ -30,7 +30,7 @@ defmodule Dspy.LM.DiskCache do
   def context do
     case :ets.lookup(@table, :epoch) do
       [{:epoch, epoch}] -> epoch
-      [] -> nil
+      [] -> call(:context, nil)
     end
   rescue
     ArgumentError -> nil
@@ -38,7 +38,15 @@ defmodule Dspy.LM.DiskCache do
 
   @spec fetch(reference() | nil, binary()) :: {:hit, map()} | :miss
   def fetch(epoch, key) when is_reference(epoch) and is_binary(key) do
-    if Regex.match?(@digest, key), do: call({:fetch, epoch, key}, :miss), else: :miss
+    with true <- Regex.match?(@digest, key),
+         [{:config, ^epoch, directory, limit}] <- :ets.lookup(@table, :config),
+         [{{:entry, ^epoch, ^key}, size}] <- :ets.lookup(@table, {:entry, epoch, key}) do
+      read_record(key, %{directory: directory, limit: limit, entries: %{key => {size, nil}}})
+    else
+      _ -> :miss
+    end
+  rescue
+    ArgumentError -> :miss
   end
 
   def fetch(_epoch, _key), do: :miss
@@ -46,11 +54,23 @@ defmodule Dspy.LM.DiskCache do
   @spec put(reference() | nil, binary(), term(), reference() | :undefined) :: :ok
   def put(epoch, key, response, memory_table)
       when is_reference(epoch) and is_binary(key) and is_reference(memory_table) do
-    if Regex.match?(@digest, key) do
-      call({:put, epoch, key, response, memory_table}, :ok)
-    else
-      :ok
+    with true <- Regex.match?(@digest, key),
+         [{:config, ^epoch, directory, limit}] <- :ets.lookup(@table, :config),
+         {:ok, encoded} <- Record.encode(response),
+         size = byte_size(encoded),
+         true <- size <= limit,
+         :ok <- require_directory(directory),
+         {:ok, temporary, mtime} <- write_temp(directory, encoded) do
+      try do
+        call({:publish, epoch, key, {size, mtime}, temporary, memory_table}, :ok)
+      after
+        File.rm(temporary)
+      end
     end
+
+    :ok
+  rescue
+    ArgumentError -> :ok
   end
 
   def put(_epoch, _key, _response, _memory_table), do: :ok
@@ -59,12 +79,14 @@ defmodule Dspy.LM.DiskCache do
   def init(:ok) do
     :ets.new(@table, [:named_table, :protected, read_concurrency: true])
 
+    {:ok, nil, {:continue, :load_policy}}
+  end
+
+  @impl true
+  def handle_continue(:load_policy, _state) do
     state =
       case Application.get_env(:dspy, @policy) do
         {directory, limit} when is_binary(directory) and is_integer(limit) and limit > 0 ->
-          # Resolve any publish call from the previous owner before scanning its directory.
-          :ok = Cache.await_disk_publications()
-
           case open_directory(directory, limit) do
             {:ok, state} -> activate(state)
             {:error, _reason} -> nil
@@ -74,10 +96,12 @@ defmodule Dspy.LM.DiskCache do
           nil
       end
 
-    {:ok, state}
+    {:noreply, state}
   end
 
   @impl true
+  def handle_call(:context, _from, state), do: {:reply, if(state, do: state.epoch), state}
+
   def handle_call({:configure, directory, limit}, _from, state) do
     case open_directory(directory, limit) do
       {:ok, configured} ->
@@ -92,28 +116,32 @@ defmodule Dspy.LM.DiskCache do
   def handle_call(:disable, _from, _state) do
     Application.delete_env(:dspy, @policy)
     true = :ets.delete(@table, :epoch)
+    true = :ets.delete_all_objects(@table)
     {:reply, :ok, nil}
   end
 
-  def handle_call({:fetch, epoch, key}, _from, %{epoch: epoch} = state) do
-    {:reply, read_record(key, state), state}
-  end
+  def handle_call(
+        {:publish, epoch, key, entry, temporary, memory_table},
+        _from,
+        %{epoch: epoch} = state
+      ) do
+    path = record_path(state, key)
 
-  def handle_call({:fetch, _epoch, _key}, _from, state), do: {:reply, :miss, state}
-
-  def handle_call({:put, epoch, key, response, memory_table}, _from, %{epoch: epoch} = state) do
-    if Cache.table_ref() == memory_table do
-      {:reply, :ok, write_record(key, response, state, memory_table)}
+    if Cache.table_ref() == memory_table and allow_replacement(path) == :ok do
+      {:reply, :ok, publish_record(state, key, entry, temporary, path, memory_table)}
     else
       {:reply, :ok, state}
     end
   end
 
-  def handle_call({:put, _epoch, _key, _response, _memory_table}, _from, state),
+  def handle_call({:publish, _epoch, _key, _entry, _temporary, _memory_table}, _from, state),
     do: {:reply, :ok, state}
 
   defp activate(state) do
     epoch = make_ref()
+    true = :ets.delete_all_objects(@table)
+    for {key, {size, _}} <- state.entries, do: :ets.insert(@table, {{:entry, epoch, key}, size})
+    true = :ets.insert(@table, {:config, epoch, state.directory, state.limit})
     true = :ets.insert(@table, {:epoch, epoch})
     Map.put(state, :epoch, epoch)
   end
@@ -218,21 +246,6 @@ defmodule Dspy.LM.DiskCache do
     File.close(device)
   end
 
-  defp write_record(key, response, state, memory_table) do
-    path = record_path(state, key)
-
-    with {:ok, encoded} <- Record.encode(response),
-         size = byte_size(encoded),
-         true <- size <= state.limit,
-         :ok <- require_directory(state.directory),
-         :ok <- allow_replacement(path),
-         {:ok, temporary, mtime} <- write_temp(state.directory, encoded) do
-      publish_record(state, key, {size, mtime}, temporary, path, memory_table)
-    else
-      _ -> state
-    end
-  end
-
   defp write_temp(directory, bytes) do
     suffix = Base.url_encode64(:crypto.strong_rand_bytes(18), padding: false)
     path = Path.join(directory, ".tmp-" <> suffix)
@@ -260,23 +273,27 @@ defmodule Dspy.LM.DiskCache do
     with :ok <- written, do: closed
   end
 
-  defp publish_record(state, key, {size, _mtime} = entry, temporary, path, memory_table) do
-    if Cache.table_ref() == memory_table do
-      {old_size, _old_mtime} = Map.get(state.entries, key, {0, nil})
+  defp publish_record(state, key, entry, temporary, path, memory_table) do
+    if Cache.table_ref() == memory_table and File.rename(temporary, path) == :ok do
+      if Cache.table_ref() == memory_table do
+        updated = state |> drop_entry(key) |> add_entry(key, entry)
 
-      case evict_to_fit(state, state.limit - size + old_size, key) do
-        {:ok, updated} ->
-          # Rename shares the memory owner's ordering with clear and reconfigure.
-          result = Cache.publish_disk_record(memory_table, state.epoch, temporary, path)
+        case evict_to_fit(updated, state.limit, key) do
+          {:ok, result} ->
+            result
 
-          if published?(result, temporary, path, size) do
-            updated |> drop_entry(key) |> add_entry(key, entry)
-          else
-            updated
-          end
+          {:error, _reason, result} when result.bytes > state.limit ->
+            case remove_record(result, key) do
+              {:ok, updated} -> updated
+              {:error, _reason} -> result
+            end
 
-        {:error, _reason, updated} ->
-          updated
+          {:error, _reason, result} ->
+            result
+        end
+      else
+        File.rm(path)
+        state
       end
     else
       state
@@ -284,16 +301,6 @@ defmodule Dspy.LM.DiskCache do
   after
     File.rm(temporary)
   end
-
-  defp published?(:ok, _temporary, _path, _size), do: true
-
-  defp published?({:error, :cache_unavailable}, temporary, path, size) do
-    # The memory owner can exit after rename and before replying.
-    record_stat(temporary) == {:error, :enoent} and
-      match?({:ok, %{type: :regular, size: ^size}}, record_stat(path))
-  end
-
-  defp published?({:error, _reason}, _temporary, _path, _size), do: false
 
   defp evict_to_fit(state, target, _protected_key) when state.bytes <= target, do: {:ok, state}
 
@@ -346,10 +353,12 @@ defmodule Dspy.LM.DiskCache do
   defp record_path(state, key), do: Path.join(state.directory, key <> ".json")
 
   defp add_entry(state, key, {size, _mtime} = entry) do
+    if Map.has_key?(state, :epoch), do: :ets.insert(@table, {{:entry, state.epoch, key}, size})
     %{state | entries: Map.put(state.entries, key, entry), bytes: state.bytes + size}
   end
 
   defp drop_entry(state, key) do
+    if Map.has_key?(state, :epoch), do: :ets.delete(@table, {:entry, state.epoch, key})
     {{size, _mtime}, entries} = Map.pop(state.entries, key, {0, nil})
     %{state | entries: entries, bytes: state.bytes - size}
   end

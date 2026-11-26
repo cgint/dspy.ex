@@ -22,7 +22,7 @@ defmodule Dspy.Evaluate do
 
   require Logger
 
-  alias Dspy.{Example, Lifecycle, Module, Prediction, ProcessOwnership, Random}
+  alias Dspy.{Example, Lifecycle, Module, Prediction, Random}
   alias Dspy.ProgramStream.Composite
   alias Dspy.Signature.Adapter.Callbacks
 
@@ -169,8 +169,8 @@ defmodule Dspy.Evaluate do
       Logger.info("Evaluating #{length(testset)} examples...")
     end
 
-    # Per-item tasks (H0b-2 D3): one `Task.async_stream` child per example,
-    # ordered, with `on_timeout: :kill_task`. Each child runs under the
+    # Supervised item tasks finish in completion order and are sorted before return.
+    # The stream uses `on_timeout: :kill_task`. Each child runs under the
     # caller's captured context. A child that raises/throws/exits returns a
     # failure item (its own catch-all); a child that is killed (timeout or
     # stream abort) surfaces as a non-`{:ok, _}` element and maps to a failure
@@ -184,100 +184,100 @@ defmodule Dspy.Evaluate do
     stream_scope = Composite.capture_scope()
     caller = self()
 
-    # Consumer process driving the stream (see the mechanism note above).
-    _consumer =
-      spawn_link(fn ->
-        coordinator = self()
-        if stream_scope, do: ProcessOwnership.watch(caller, coordinator, :kill)
+    outcome =
+      Task.Supervisor.async_stream_nolink(
+        Dspy.TaskSupervisor,
+        Enum.with_index(testset),
+        fn {example, index} ->
+          {index,
+           Composite.with_worker_scope(stream_scope, caller, fn ->
+             Dspy.Context.with_context(ctx, fn ->
+               # M1-a (upstream `provide_traceback`): the stacktrace is captured
+               # HERE, in the child process — it is lost across the task boundary
+               # otherwise. It is carried in the failure item ONLY for the log
+               # path (transient key, stripped below); the H0b-2 `error` tuple
+               # stays byte-identical (A5.1). The `throw`s from `evaluate_item`
+               # (TRAP 2 / D-U1) do NOT hit the `kind, reason` clause — a
+               # `throw` is not an `:exception`/`:exit`, so it still reaches its
+               # own labelled `catch` clauses, exactly as before.
+               try do
+                 evaluate_item(
+                   program,
+                   example,
+                   metric_fn,
+                   failure_score,
+                   index,
+                   provide_traceback
+                 )
+               catch
+                 # A raising metric (D-U1) must stay a failed example
+                 # (`failure_score`, counted toward `max_errors`) — not a hard
+                 # error. Rebuild the failure item here, outside the per-example
+                 # task, so `Task.async_stream` sees a `{:ok, item}` element.
+                 :throw, {:metric_raised, :error} ->
+                   %{
+                     example: example,
+                     prediction: nil,
+                     score: failure_score,
+                     error: {:metric_error, :raised}
+                   }
 
-        testset
-        |> Enum.with_index()
-        |> Task.async_stream(
-          fn {example, index} ->
-            Composite.with_worker_scope(stream_scope, coordinator, fn ->
-              Dspy.Context.with_context(ctx, fn ->
-                # M1-a (upstream `provide_traceback`): the stacktrace is captured
-                # HERE, in the child process — it is lost across the task boundary
-                # otherwise. It is carried in the failure item ONLY for the log
-                # path (transient key, stripped below); the H0b-2 `error` tuple
-                # stays byte-identical (A5.1). The `throw`s from `evaluate_item`
-                # (TRAP 2 / D-U1) do NOT hit the `kind, reason` clause — a
-                # `throw` is not an `:exception`/`:exit`, so it still reaches its
-                # own labelled `catch` clauses, exactly as before.
-                try do
-                  evaluate_item(
-                    program,
-                    example,
-                    metric_fn,
-                    failure_score,
-                    index,
-                    provide_traceback
-                  )
-                catch
-                  # A raising metric (D-U1) must stay a failed example
-                  # (`failure_score`, counted toward `max_errors`) — not a hard
-                  # error. Rebuild the failure item here, outside the per-example
-                  # task, so `Task.async_stream` sees a `{:ok, item}` element.
-                  :throw, {:metric_raised, :error} ->
-                    %{
-                      example: example,
-                      prediction: nil,
-                      score: failure_score,
-                      error: {:metric_error, :raised}
-                    }
+                 # Q2 (H0b-2): a non-numeric / non-boolean metric result must
+                 # not be swallowed by `Task` (which would convert an uncaught
+                 # throw to `{:exit, {:nocatch, _}}`). Return a tagged value so
+                 # the stream consumer can re-raise it (TRAP 2).
+                 :throw, {:invalid_metric_result, value, ex_index} ->
+                   {:invalid_metric_result, value, ex_index}
 
-                  # Q2 (H0b-2): a non-numeric / non-boolean metric result must
-                  # not be swallowed by `Task` (which would convert an uncaught
-                  # throw to `{:exit, {:nocatch, _}}`). Return a tagged value so
-                  # the stream consumer can re-raise it (TRAP 2).
-                  :throw, {:invalid_metric_result, value, ex_index} ->
-                    {:invalid_metric_result, value, ex_index}
-
-                  kind, reason ->
-                    item_error_from(
-                      kind,
-                      reason,
-                      example,
-                      failure_score,
-                      provide_traceback,
-                      __STACKTRACE__
-                    )
-                end
-              end)
-            end)
-          end,
-          max_concurrency: num_threads,
-          timeout: item_timeout,
-          on_timeout: :kill_task
-        )
-        |> Enum.reduce_while(
-          {[], 0},
-          fn element, {acc, failures} ->
-            case map_stream_element(element, failure_score) do
-              {:invalid_metric_result, value, example_index} ->
-                # Q2 (H0b-2): a non-numeric, non-boolean metric result is a
-                # caller error and does not count against the budget.
-                {:halt, {:invalid_metric_result, value, example_index}}
-
-              {item, failed?} ->
-                failures = failures + if(failed?, do: 1, else: 0)
-
-                if failed? and failures >= max_errors do
-                  {:halt, {:abort, failures, length(acc) + 1}}
-                else
-                  {:cont, {[item | acc], failures}}
-                end
+                 kind, reason ->
+                   item_error_from(
+                     kind,
+                     reason,
+                     example,
+                     failure_score,
+                     provide_traceback,
+                     __STACKTRACE__
+                   )
+               end
+             end)
+           end)}
+        end,
+        ordered: false,
+        zip_input_on_exit: true,
+        max_concurrency: num_threads,
+        timeout: item_timeout,
+        on_timeout: :kill_task
+      )
+      |> Enum.reduce_while(
+        {[], 0},
+        fn element, {acc, failures} ->
+          {index, element} =
+            case element do
+              {:ok, {index, item}} -> {index, {:ok, item}}
+              {:exit, {{_example, index}, reason}} -> {index, {:exit, reason}}
             end
-          end
-        )
-        |> case do
-          {items, _failures} -> send(caller, {:done, Enum.reverse(items)})
-          terminal -> send(caller, terminal)
-        end
-      end)
 
-    receive do
-      {:done, items} ->
+          case map_stream_element(element, failure_score) do
+            {:invalid_metric_result, value, example_index} ->
+              # Q2 (H0b-2): a non-numeric, non-boolean metric result is a
+              # caller error and does not count against the budget.
+              {:halt, {:invalid_metric_result, value, example_index}}
+
+            {item, failed?} ->
+              failures = failures + if(failed?, do: 1, else: 0)
+
+              if failed? and failures >= max_errors do
+                {:halt, {:abort, failures, length(acc) + 1}}
+              else
+                {:cont, {[{index, item} | acc], failures}}
+              end
+          end
+        end
+      )
+
+    case outcome do
+      {items, _failures} when is_list(items) ->
+        items = items |> Enum.sort_by(&elem(&1, 0)) |> Enum.map(&elem(&1, 1))
         # Budget was not reached: every item was observed (completed == count).
         finish_evaluation(items, testset, return_all, show_progress, %{
           provide_traceback: provide_traceback,

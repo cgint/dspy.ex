@@ -8,7 +8,7 @@ Intent:
 
 ## Safety note
 
-This package may contain **experimental/unsafe prototypes**. Anything under `extras/dspy_extras/unsafe/` is **not compiled** (it is intentionally kept out of `lib/`) and may contain patterns that are not production-safe (e.g. dynamic atom creation, runtime compilation).
+This package may contain **experimental/unsafe prototypes**. Modules under `extras/dspy_extras/unsafe/quarantine/lib/` are compiled by this package but remain experimental and may contain patterns that are not production-safe (e.g. dynamic atom creation or runtime compilation). ColBERTv2, BootstrapFinetune, and BetterTogether are quarantined there; call them directly rather than through core factories.
 
 This package is currently maintained in-tree for convenience.
 

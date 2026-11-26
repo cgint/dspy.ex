@@ -193,7 +193,7 @@ defmodule Dspy.ProgramStreamingTest do
     assert {:halted, nil} = finish.({:cont, nil})
   end
 
-  test "active continuations reject a foreign resume or halt and release the worker" do
+  test "active continuations reject a foreign resume or halt while preserving the owner" do
     stream = Dspy.streamify(predict(scripted("owned", [@answer_header, @answer]))).(@inputs)
     suspend = fn event, _acc -> {:suspend, event} end
 
@@ -210,6 +210,8 @@ defmodule Dspy.ProgramStreamingTest do
         end)
 
       assert %ArgumentError{} = Task.await(foreign, @wait)
+      assert Process.alive?(worker)
+      assert {:halted, nil} = resume.({:halt, nil})
       assert_receive {:DOWN, ^worker_ref, :process, ^worker, :shutdown}, @wait
     end
   end
@@ -375,7 +377,7 @@ defmodule Dspy.ProgramStreamingTest do
              Enum.to_list(Dspy.streamify(program, stream_listeners: []).(@inputs))
   end
 
-  test "a foreign continuation cannot consume buffered listener chunks and releases the worker" do
+  test "a foreign continuation cannot consume buffered listener chunks" do
     combined = @answer_header <> @answer <> "\n[[ ## detail ## ]] More"
     next_delta = " detail."
     lm = scripted("owned-listeners", [combined, next_delta])
@@ -392,6 +394,8 @@ defmodule Dspy.ProgramStreamingTest do
 
     assert {:raised, %ArgumentError{message: message}} = resume_in_another_process(resume)
     assert message =~ "original consumer"
+    assert Process.alive?(worker)
+    assert {:halted, nil} = resume.({:halt, nil})
     assert_receive {:DOWN, ^worker_ref, :process, ^worker, :shutdown}, @wait
   end
 

@@ -43,6 +43,7 @@ Recommended next order:
 Parity work runs as lead (Horst) + architect buddy (Greta) + controller→worker sub-teams. Read `plan/HOW_WE_WORK.md` before briefing or accepting any slice.
 
 The lead-only workflow is in [LEAD.md](LEAD.md).
+Elixir/OTP stack guardrails and red flags are in [docs/stack-best-practices.md](docs/stack-best-practices.md) (see [plan/research/2026-11-23-otp-architecture-audit.md](plan/research/2026-11-23-otp-architecture-audit.md) for the 2026-11-23 audit baseline).
 
 ## Directory intent
 - `docs/`

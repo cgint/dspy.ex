@@ -113,9 +113,11 @@ defmodule Dspy.Embeddings.Checkpoint do
 
   defp write_close_rename(device, json, temporary, path) do
     write_result = IO.binwrite(device, json)
+    sync_result = if write_result == :ok, do: :file.sync(device), else: write_result
     close_result = File.close(device)
 
     with :ok <- file_result(write_result, :write),
+         :ok <- file_result(sync_result, :write),
          :ok <- file_result(close_result, :write) do
       file_result(File.rename(temporary, path), :rename)
     end

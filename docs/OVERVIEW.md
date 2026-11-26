@@ -289,12 +289,11 @@ Proof: `test/dspy/image_input_pipeline_test.exs`
 
 A minimal Retrieval-Augmented Generation flow can be run deterministically by:
 - generating embeddings via `req_llm` (mocked in tests)
-- retrieving top-k by cosine similarity (built-in `Dspy.Retrieve.InMemoryRetriever`)
-- generating an answer with `Dspy.Retrieve.RAGPipeline`
+- retrieving top-k with `Dspy.Embeddings`
+- generating an answer with a language model
 
 Proof:
 - `test/acceptance/retrieve_rag_with_embeddings_acceptance_test.exs`
-- `test/acceptance/retrieve_rag_in_memory_retriever_acceptance_test.exs`
 
 Guide: `docs/RETRIEVE_RAG.md`
 
@@ -371,7 +370,6 @@ Example (offline):
 - `mix run examples/offline/chain_of_thought_copro_persistence_offline.exs`
 - `mix run examples/offline/ensemble_offline.exs`
 - `mix run examples/offline/retrieve_rag_offline.exs`
-- `mix run examples/offline/retrieve_rag_genserver_offline.exs`
 - `mix run examples/offline/react_tool_logging_offline.exs`
 - `mix run examples/offline/react_module_offline.exs` (signature-driven `Dspy.ReAct`)
 - `mix run examples/offline/request_defaults_offline.exs` (debugging/introspection; not a recommended config template)
@@ -400,7 +398,7 @@ Legend:
 | Signatures (incl. arrow strings) | 2 | Arrow parsing + `int` normalization; `one_of` constraints for enum-like outputs; accepts atom or string input keys | `test/acceptance/simplest_predict_test.exs`, `test/signature_test.exs`, `test/predict_test.exs`, `test/acceptance/classifier_credentials_acceptance_test.exs` |
 | Structured output parsing (JSON-ish) | 2 | JSON fenced output parsing + coercion (incl. list/map outputs via `:json`) | `test/acceptance/json_outputs_acceptance_test.exs`, `test/acceptance/knowledge_graph_triplets_test.exs` |
 | Evaluate | 2 | Deterministic golden path proven (incl. per-example return data via `return_all: true`) | `test/evaluate_golden_path_test.exs`, `test/evaluate_detailed_results_test.exs` |
-| Retrieve/RAG | 2 | Deterministic RAG pipeline with mocked embeddings provider (`req_llm`); built-in GenServer retriever `Dspy.Retrieve.InMemoryRetriever` | `test/acceptance/retrieve_rag_with_embeddings_acceptance_test.exs`, `test/acceptance/retrieve_rag_in_memory_retriever_acceptance_test.exs`, `test/retrieve/req_llm_embeddings_test.exs` |
+| Retrieve/RAG | 2 | Immutable embeddings search and a RAG pipeline with a user-supplied retriever | `test/embeddings_test.exs`, `test/acceptance/retrieve_rag_with_embeddings_acceptance_test.exs` |
 | Teleprompters | 2 | Parameter-based (no dynamic modules); proven for Predict-like programs (`Dspy.Predict` + `Dspy.ChainOfThought`) | `test/teleprompt/*` |
 | Tools/request map integration | 2 | Tool execution + ReAct are proven via `Dspy.Tools.React` (request maps; tool start/end callbacks supported). Guide: `docs/TOOLS_REACT.md`. Also available: signature-driven `Dspy.ReAct` (adapter-aware; deterministic offline example + unit tests). | `test/tools_request_map_test.exs`, `test/acceptance/simplest_tool_logging_acceptance_test.exs`, `test/react_module_characterization_test.exs`, `examples/offline/react_module_offline.exs` |
 | Provider support (real providers) | 2 | `Dspy.LM.ReqLLM` adapter proven (offline) incl. multipart/attachments request shape + safety gates; embeddings adapter via `req_llm` proven (offline); real network providers still considered prototype (opt-in smoke tests exist) | `test/lm/req_llm_multimodal_test.exs`, `lib/dspy/lm/req_llm.ex`, `test/retrieve/req_llm_embeddings_test.exs`, `test/integration/req_llm_predict_integration_test.exs`, `test/integration/req_llm_embeddings_integration_test.exs` |

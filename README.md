@@ -83,8 +83,7 @@ See details + evidence links in `docs/OVERVIEW.md`.
 ## Examples
 
 Offline (no network) Retrieval + RAG demos:
-- `mix run examples/retrieve_rag_offline.exs`
-- `mix run examples/retrieve_rag_genserver_offline.exs`
+- `mix run examples/offline/retrieve_rag_offline.exs`
 
 Offline (no network) Tools + ReAct demo:
 - `mix run examples/react_tool_logging_offline.exs`

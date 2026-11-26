@@ -73,14 +73,19 @@ defmodule Dspy.Signature.Adapter.Pipeline do
 
     count = Map.get(request_options, :n)
     lm = choice_lm(Keyword.get(opts, :lm), count)
+    resolved_lm = lm || if(Process.whereis(Settings), do: Settings.get(:lm))
 
     lm_options = %{
-      lm: lm,
+      lm: resolved_lm,
       on_delta: on_delta,
       on_cache_hit: on_cache_hit,
       count: count,
       prediction_signature: Keyword.get(opts, :prediction_signature, signature),
-      max_retries: if(on_delta, do: 0, else: Keyword.get(opts, :max_retries, 3)),
+      max_retries:
+        if(on_delta,
+          do: 0,
+          else: Keyword.get(opts, :max_retries, 3)
+        ),
       request_options: force_tool(request_options, Keyword.get(opts, :forced_tool)),
       prompt_advice: Keyword.get(opts, :prompt_advice),
       on_terminal_parse_failure: Keyword.get(opts, :on_terminal_parse_failure),
@@ -877,6 +882,7 @@ defmodule Dspy.Signature.Adapter.Pipeline do
 
   defp call_with_retry_log(request, %{max_retries: max_retries} = lm_options, call_id)
        when is_map(request) and is_integer(max_retries) and max_retries >= 0 do
+    max_retries = if LM.owns_transport_retries?(lm_options.lm, request), do: 0, else: max_retries
     do_call_with_retry_log(request, lm_options, 1, max_retries + 1, call_id)
   end
 
@@ -907,14 +913,11 @@ defmodule Dspy.Signature.Adapter.Pipeline do
     end
   end
 
-  defp invoke_lm(request, %{lm: bound_lm, on_delta: on_delta} = options)
+  defp invoke_lm(_request, %{lm: nil}), do: {:error, :no_lm_configured}
+
+  defp invoke_lm(request, %{lm: lm, on_delta: on_delta} = options)
        when is_function(on_delta, 1) do
-    lm = if is_nil(bound_lm), do: Settings.get(:lm), else: bound_lm
-
     case {lm, options.on_cache_hit} do
-      {nil, _} ->
-        {:error, :no_lm_configured}
-
       {lm, nil} ->
         LM.stream_generate(lm, request, on_delta)
 

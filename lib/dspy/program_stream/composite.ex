@@ -89,8 +89,6 @@ defmodule Dspy.ProgramStream.Composite do
 
   def with_lifetime_scope(run), do: with_scope(:lifetime_only, run)
 
-  def with_worker_scope(nil, _owner, run), do: run.()
-
   def with_worker_scope(scope, owner, run) do
     # A trapping task can outlive its linked owner.
     ProcessOwnership.watch(owner, self(), :kill)

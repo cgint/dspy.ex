@@ -301,11 +301,11 @@ defmodule Dspy.LM.ReqLLM do
      }}
   end
 
-  defp native_object_contract(%{output_contract: contract}, model) when is_map(contract) do
+  def native_object_contract(%{output_contract: contract}, model) when is_map(contract) do
     if native_structured_model?(model), do: {:ok, contract}, else: :fallback
   end
 
-  defp native_object_contract(_, _), do: :fallback
+  def native_object_contract(_, _), do: :fallback
 
   # ReqLLM exposes object generation for more providers, but this adapter keeps its
   # native path intentionally limited to providers covered by this contract slice.

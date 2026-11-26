@@ -53,6 +53,26 @@ defmodule Dspy.LM do
 
   @type t :: struct()
 
+  @doc "Returns whether the LM handles transport retries itself."
+  @spec owns_transport_retries?(term()) :: boolean()
+  def owns_transport_retries?(%Dspy.LM.ReqLLM{
+        client_module: ReqLLM,
+        generation_module: ReqLLM.Generation
+      }),
+      do: true
+
+  def owns_transport_retries?(_), do: false
+
+  @doc false
+  def owns_transport_retries?(%Dspy.LM.ReqLLM{} = lm, request) do
+    case Dspy.LM.ReqLLM.native_object_contract(request, lm.model) do
+      {:ok, _} -> lm.generation_module == ReqLLM.Generation or lm.client_module == ReqLLM
+      _ -> lm.client_module == ReqLLM
+    end
+  end
+
+  def owns_transport_retries?(_, _), do: false
+
   @doc """
   Create an LM instance from a model string.
 
@@ -277,7 +297,7 @@ defmodule Dspy.LM do
   @doc """
   Train on adapter-formatted examples and return the trained LM binding.
 
-  Implement this callback to opt an LM into `Dspy.Teleprompt.BootstrapFinetune`.
+  Implement this optional callback to support fine-tuning.
   The callback receives the training rows and caller-supplied training options.
   """
   @callback finetune(lm :: t(), training_rows :: [map()], train_kwargs :: keyword() | map()) ::

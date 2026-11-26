@@ -1,7 +1,7 @@
 defmodule Dspy.Teleprompt.BootstrapFinetuneTest do
   use ExUnit.Case, async: true
 
-  alias Dspy.{Example, Image, Module, Predict, Prediction, Signature, Teleprompt}
+  alias Dspy.{Example, Image, Module, Predict, Prediction, Signature}
   alias Dspy.Signature.AdapterPipeline
   alias Dspy.Signature.Adapters.{ChatAdapter, JSONAdapter}
   alias Dspy.Teleprompt.BootstrapFinetune
@@ -83,7 +83,7 @@ defmodule Dspy.Teleprompt.BootstrapFinetuneTest do
     teacher = program(lm("teacher"), lm("teacher"), "teacher demo")
 
     optimizer =
-      Teleprompt.new(:bootstrap_finetune,
+      BootstrapFinetune.new(
         metric: &metric/3,
         train_kwargs: [epochs: 2],
         num_threads: 1
@@ -163,7 +163,7 @@ defmodule Dspy.Teleprompt.BootstrapFinetuneTest do
 
     Dspy.context([cache: false], fn ->
       assert {:ok, trained} =
-               Teleprompt.compile(Teleprompt.new(:bootstrap_finetune), student, [row("all")])
+               BootstrapFinetune.compile(BootstrapFinetune.new(), student, [row("all")])
 
       assert_received {:job, "first", [], rows}
       assert_received {:job, "second", [], ^rows}

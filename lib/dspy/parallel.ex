@@ -41,7 +41,7 @@ defmodule Dspy.Parallel do
 
   Failures are counted in the **caller process** as each task's result is
   consumed, so no shared state is needed and the budget is enforced
-  deterministically in input order.
+  as tasks finish.
 
   ## Failure semantics
 
@@ -118,8 +118,7 @@ defmodule Dspy.Parallel do
     `{:invalid_example_type, term}` (treated like any other failure).
 
   Each pair runs `Dspy.Module.forward(module, input)` in a `Task` via
-  `Task.async_stream` (`max_concurrency: :num_threads`, `ordered: true` so
-  results come back in input order).
+  `Task.Supervisor.async_stream_nolink` and restores input order after execution.
 
   Pass a positive `num_threads:` count to override concurrency for this run.
   Omit it or pass `nil` to use the executor's stored count.
@@ -158,27 +157,42 @@ defmodule Dspy.Parallel do
     stream_scope = Composite.capture_scope()
     caller = self()
 
-    exec_pairs
-    |> Task.async_stream(
-      fn {module, input} ->
-        Composite.with_worker_scope(stream_scope, caller, fn ->
-          Context.with_context(ctx, fn -> run_pair(module, input, parallel) end)
-        end)
+    Task.Supervisor.async_stream_nolink(
+      Dspy.TaskSupervisor,
+      Enum.with_index(exec_pairs),
+      fn {{module, input}, index} ->
+        {index,
+         Composite.with_worker_scope(stream_scope, caller, fn ->
+           Context.with_context(ctx, fn -> run_pair(module, input, parallel) end)
+         end)}
       end,
       max_concurrency: num_threads,
-      ordered: true,
+      ordered: false,
+      zip_input_on_exit: true,
       timeout: parallel.timeout,
       on_timeout: :kill_task
     )
-    |> Stream.with_index()
     # The stream is lazy: halting stops scheduling of not-yet-started pairs.
-    |> Enum.reduce_while({[], []}, fn {stream_result, index}, {results, failed} ->
+    |> Enum.reduce_while({[], []}, fn element, {results, failed} ->
+      {index, stream_result} =
+        case element do
+          {:ok, {index, result}} -> {index, {:ok, result}}
+          {:exit, {{_pair, index}, reason}} -> {index, {:exit, reason}}
+        end
+
       {results, failed} =
         case stream_result do
-          {:ok, {:ok, prediction}} -> {[prediction | results], failed}
-          {:ok, {:failed, reason}} -> {[nil | results], [{index, reason} | failed]}
-          {:exit, :timeout} -> {[nil | results], [{index, {:timeout, parallel.timeout}} | failed]}
-          {:exit, reason} -> {[nil | results], [{index, {:exit, reason}} | failed]}
+          {:ok, {:ok, prediction}} ->
+            {[{index, prediction} | results], failed}
+
+          {:ok, {:failed, reason}} ->
+            {[{index, nil} | results], [{index, reason} | failed]}
+
+          {:exit, :timeout} ->
+            {[{index, nil} | results], [{index, {:timeout, parallel.timeout}} | failed]}
+
+          {:exit, reason} ->
+            {[{index, nil} | results], [{index, {:exit, reason}} | failed]}
         end
 
       if budget_exhausted?(failed, parallel) do
@@ -206,10 +220,10 @@ defmodule Dspy.Parallel do
   end
 
   defp finish(results, failed, parallel, exec_pairs) do
-    results = Enum.reverse(results)
+    results = results |> Enum.sort_by(&elem(&1, 0)) |> Enum.map(&elem(&1, 1))
 
     if parallel.return_failed_examples do
-      failed = Enum.reverse(failed)
+      failed = Enum.sort_by(failed, &elem(&1, 0))
       inputs = Enum.map(failed, fn {index, _} -> exec_pairs |> Enum.at(index) |> elem(1) end)
       {:ok, results, inputs, Enum.map(failed, fn {_, reason} -> reason end)}
     else

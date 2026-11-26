@@ -41,33 +41,18 @@ defmodule Dspy.MixProject do
       {:nimble_csv, "~> 1.2"},
 
       # LLM provider access (unified client; no provider maintenance in `dspy.ex`)
-      # Keep the revision already tested in mix.lock when consumers resolve dspy.ex.
-      {:req_llm, github: "agentjido/req_llm", ref: "66b40425a79d85a284dd99edbe1769d364c42066"},
+      {:req_llm, "~> 1.31"},
 
-      # Security floors (SEC-1, 2026-09-28): req/mint/hpax reach :dspy transitively
-      # through req_llm/finch. These direct floors pin consumers to advisory-fixed
-      # versions so `mix deps` can never resolve a vulnerable version through the
-      # wider transitive ranges (req_llm allows req >= 0.5.0).
-      #   req  >= 0.6.1: EEF-CVE-2026-49755 (decompression bomb) + EEF-CVE-2026-49756
-      #                  (multipart header injection)
-      #   mint >= 1.11.0: 10+ advisories incl. HTTP/2 smuggling + request splitting
-      #                   + EEF-CVE-2026-91043 (HPACK cookie field memory exhaustion)
-      #   hpax >= 1.1.0:  EEF-CVE-2026-58226 (unbounded HPACK integer decoding DoS);
-      #                   mint 1.11.0 requires hpax ~> 1.1, so floor moves with it
-      # NOTE (req >= 0.6.0): automatic response archive/compressed decoding was
-      # removed and auto-decompression is off — both are opt-in (`decoders:`,
-      # `compressed: true`). :dspy itself never relies on either.
-      # REMOVE these three direct deps once req_llm/finch themselves require the
-      # fixed versions (lib/ calls none of Req/Mint/HPAX directly).
-      {:req, ">= 0.6.1 and < 1.0.0"},
+      # RetryPolicy matches Req.TransportError and Req.HTTPError directly.
+      {:req, "~> 0.7"},
+      # DiskCache.Identity inspects LLMDB.provider/1 and LLMDB.Model directly.
+      {:llm_db, "~> 2026.11"},
+
+      # Security floors: Finch permits older Mint and HPAX versions.
+      # Keep these floors until its transitive requirements include the fixes.
       {:mint, ">= 1.11.0 and < 2.0.0"},
       {:hpax, ">= 1.1.0 and < 2.0.0"},
-
-      # LLMDB 2026.5.2 emits atom and string runtime keys that Zoi 0.20
-      # rejects at startup. Keep the pinned ReqLLM floor.
-      # Remove after an upstream graph provides its own compatible constraint
-      # or fixes the collision, verified by a fresh Extras resolution.
-      {:zoi, ">= 0.14.0 and < 0.20.0"}
+      {:credo, "~> 1.7", only: [:dev, :test], runtime: false}
 
       # NOTE: Local inference deps (Bumblebee/Nx/EXLA) are intentionally NOT
       # dependencies of core `:dspy`. See `docs/BUMBLEBEE.md`.
